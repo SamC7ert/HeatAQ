@@ -1,0 +1,111 @@
+/**
+ * Calendar Component Styles
+ */
+
+.calendar-item {
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow-sm);
+    transition: var(--transition);
+}
+
+.calendar-item:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-color);
+}
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.calendar-header .date-range,
+.calendar-header .date {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.calendar-header .priority {
+    font-size: 12px;
+    padding: 0.25rem 0.5rem;
+    background: var(--bg-light);
+    border-radius: 3px;
+    color: var(--text-secondary);
+}
+
+.calendar-body {
+    font-size: 14px;
+}
+
+.calendar-body p {
+    margin-bottom: 0.5rem;
+}
+
+.calendar-body p:last-child {
+    margin-bottom: 0;
+}
+
+.calendar-body strong {
+    color: var(--text-primary);
+}
+
+/* Calendar Grid View (for future implementation) */
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.calendar-day {
+    aspect-ratio: 1;
+    padding: 0.5rem;
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 13px;
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.calendar-day:hover {
+    background: var(--bg-light);
+    border-color: var(--primary-color);
+}
+
+.calendar-day.today {
+    background: rgba(0, 102, 204, 0.1);
+    border-color: var(--primary-color);
+    font-weight: 600;
+}
+
+.calendar-day.exception {
+    background: rgba(255, 193, 7, 0.1);
+    border-color: var(--warning-color);
+}
+
+.calendar-day.holiday {
+    background: rgba(220, 53, 69, 0.1);
+    border-color: var(--error-color);
+    color: var(--error-color);
+}
+
+/* Date Range Picker (for future implementation) */
+.date-range-picker {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.date-range-picker .separator {
+    color: var(--text-muted);
+}

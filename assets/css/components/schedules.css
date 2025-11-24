@@ -1,0 +1,118 @@
+/**
+ * Schedules Component Styles
+ */
+
+.schedules-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1.5rem;
+}
+
+.schedule-card {
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-sm);
+    transition: var(--transition);
+}
+
+.schedule-card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-color);
+}
+
+.schedule-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.schedule-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.schedule-body {
+    padding: 1rem 1.5rem;
+}
+
+.schedule-body .description {
+    margin-bottom: 0.75rem;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.schedule-body .meta {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.schedule-actions {
+    padding: 0.75rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* Week Schedule Specific */
+.week-schedule .week-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.week-grid .day-item {
+    font-size: 13px;
+    padding: 0.5rem;
+    background: var(--bg-light);
+    border-radius: 4px;
+}
+
+.week-grid .day-item strong {
+    color: var(--text-primary);
+}
+
+.week-grid .day-item span {
+    color: var(--text-secondary);
+}
+
+/* Schedule Editor (for future implementation) */
+.schedule-editor {
+    background: var(--bg-white);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+}
+
+.period-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.period-item {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr auto;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg-light);
+    border-radius: var(--border-radius);
+    align-items: center;
+}
+
+.period-item .time-range {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.period-item .temp-info {
+    font-size: 13px;
+    color: var(--text-secondary);
+}

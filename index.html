@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HeatAQ - Pool Energy Design</title>
+    <link rel="stylesheet" href="assets/css/bootstrap-utilities.css">
+    <link rel="stylesheet" href="assets/css/main.css">
+    <link rel="stylesheet" href="assets/css/components/sidebar.css">
+    <link rel="stylesheet" href="assets/css/components/schedules.css">
+    <link rel="stylesheet" href="assets/css/components/calendar.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>HeatAQ</h1>
+                <p id="project-name">Loading...</p>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-section="day-schedules">
+                    <span class="nav-icon">📅</span>
+                    <span class="nav-label">Day Schedules</span>
+                </a>
+                <a href="#" class="nav-item" data-section="week-schedules">
+                    <span class="nav-icon">📆</span>
+                    <span class="nav-label">Week Schedules</span>
+                </a>
+                <a href="#" class="nav-item" data-section="calendar">
+                    <span class="nav-icon">🗓️</span>
+                    <span class="nav-label">Calendar Rules</span>
+                </a>
+                <a href="#" class="nav-item" data-section="test">
+                    <span class="nav-icon">🔍</span>
+                    <span class="nav-label">Test Schedule</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <span id="user-name">User</span>
+                    <span id="user-role" class="role-badge">viewer</span>
+                </div>
+                <button id="logout-btn" class="btn-logout">Logout</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="content-header">
+                <h2 id="section-title">Day Schedules</h2>
+                <div class="header-actions">
+                    <button id="save-btn" class="btn btn-primary">Save Changes</button>
+                </div>
+            </div>
+
+            <div class="content-body">
+                <!-- Day Schedules Section -->
+                <section id="day-schedules-section" class="content-section active">
+                    <div class="section-description">
+                        <p>Define daily temperature schedules with multiple time periods.</p>
+                    </div>
+
+                    <div class="toolbar">
+                        <button class="btn btn-secondary" id="add-day-schedule">
+                            + Add Day Schedule
+                        </button>
+                    </div>
+
+                    <div id="day-schedules-list" class="schedules-list">
+                        <p class="loading">Loading schedules...</p>
+                    </div>
+                </section>
+
+                <!-- Week Schedules Section -->
+                <section id="week-schedules-section" class="content-section">
+                    <div class="section-description">
+                        <p>Assign day schedules to each day of the week.</p>
+                    </div>
+
+                    <div class="toolbar">
+                        <button class="btn btn-secondary" id="add-week-schedule">
+                            + Add Week Schedule
+                        </button>
+                    </div>
+
+                    <div id="week-schedules-list" class="schedules-list">
+                        <p class="loading">Loading schedules...</p>
+                    </div>
+                </section>
+
+                <!-- Calendar Rules Section -->
+                <section id="calendar-section" class="content-section">
+                    <div class="section-description">
+                        <p>Define date ranges, holidays, and exception days.</p>
+                    </div>
+
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="date-ranges">Date Ranges</button>
+                        <button class="tab-btn" data-tab="exceptions">Exception Days</button>
+                    </div>
+
+                    <div class="tab-content">
+                        <div id="date-ranges-tab" class="tab-pane active">
+                            <div class="toolbar">
+                                <button class="btn btn-secondary" id="add-date-range">
+                                    + Add Date Range
+                                </button>
+                            </div>
+                            <div id="date-ranges-list">
+                                <p class="loading">Loading date ranges...</p>
+                            </div>
+                        </div>
+
+                        <div id="exceptions-tab" class="tab-pane">
+                            <div class="toolbar">
+                                <button class="btn btn-secondary" id="add-exception">
+                                    + Add Exception Day
+                                </button>
+                            </div>
+                            <div id="exceptions-list">
+                                <p class="loading">Loading exceptions...</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Test Schedule Section -->
+                <section id="test-section" class="content-section">
+                    <div class="section-description">
+                        <p>Test which schedule applies to a specific date.</p>
+                    </div>
+
+                    <div class="test-panel">
+                        <div class="form-group">
+                            <label for="test-date">Select Date:</label>
+                            <input type="date" id="test-date" class="form-control">
+                        </div>
+
+                        <button class="btn btn-primary" id="test-date-btn">Test Date</button>
+
+                        <div id="test-result" class="test-result">
+                            <p class="placeholder">Select a date and click "Test Date" to see which schedule applies.</p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container"></div>
+
+    <!-- Load JavaScript Modules -->
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/modules/api.js"></script>
+    <script src="assets/js/modules/navigation.js"></script>
+    <script src="assets/js/modules/schedules.js"></script>
+    <script src="assets/js/modules/calendar.js"></script>
+    <script src="assets/js/app.js"></script>
+</body>
+</html>
