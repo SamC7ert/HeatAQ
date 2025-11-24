@@ -203,41 +203,45 @@ class PoolScheduler {
      * @return array Date ranges sorted by priority (highest first)
      */
     private function loadDateRanges() {
-        $stmt = $this->db->prepare("
-            SELECT
-                id,
-                name,
-                priority,
-                week_schedule_id,
-                start_date,
-                end_date,
-                is_active
-            FROM calendar_date_ranges
-            WHERE schedule_template_id = ? AND is_active = 1
-            ORDER BY priority DESC
-        ");
-        $stmt->execute([$this->templateId]);
-        $rows = $stmt->fetchAll();
+        try {
+            $stmt = $this->db->prepare("
+                SELECT
+                    id,
+                    name,
+                    priority,
+                    week_schedule_id,
+                    start_date,
+                    end_date,
+                    is_active
+                FROM calendar_date_ranges
+                WHERE schedule_template_id = ? AND is_active = 1
+                ORDER BY priority DESC
+            ");
+            $stmt->execute([$this->templateId]);
+            $rows = $stmt->fetchAll();
 
-        $dateRanges = [];
-        foreach ($rows as $row) {
-            $startDate = new DateTime($row['start_date']);
-            $endDate = new DateTime($row['end_date']);
+            $dateRanges = [];
+            foreach ($rows as $row) {
+                $startDate = new DateTime($row['start_date']);
+                $endDate = new DateTime($row['end_date']);
 
-            $dateRanges[] = [
-                'id' => $row['id'],
-                'name' => $row['name'],
-                'priority' => $row['priority'] ?? 0,
-                'week_schedule_id' => $row['week_schedule_id'],
-                'start_month' => (int) $startDate->format('n'),
-                'start_day' => (int) $startDate->format('j'),
-                'end_month' => (int) $endDate->format('n'),
-                'end_day' => (int) $endDate->format('j'),
-                'is_recurring' => true  // All date ranges are recurring annually
-            ];
+                $dateRanges[] = [
+                    'id' => $row['id'],
+                    'name' => $row['name'],
+                    'priority' => $row['priority'] ?? 0,
+                    'week_schedule_id' => $row['week_schedule_id'],
+                    'start_month' => (int) $startDate->format('n'),
+                    'start_day' => (int) $startDate->format('j'),
+                    'end_month' => (int) $endDate->format('n'),
+                    'end_day' => (int) $endDate->format('j'),
+                    'is_recurring' => true  // All date ranges are recurring annually
+                ];
+            }
+
+            return $dateRanges;
+        } catch (Exception $e) {
+            return [];
         }
-
-        return $dateRanges;
     }
 
     /**
@@ -246,41 +250,46 @@ class PoolScheduler {
      * @return array Exception days sorted by priority
      */
     private function loadExceptionDays() {
-        $stmt = $this->db->prepare("
-            SELECT
-                ce.id,
-                ce.name,
-                ce.day_schedule_id,
-                ds.name as day_schedule_name,
-                ce.fixed_month,
-                ce.fixed_day,
-                ce.is_moving,
-                ce.easter_offset_days,
-                ce.priority
-            FROM calendar_exception_days ce
-            LEFT JOIN day_schedules ds ON ce.day_schedule_id = ds.day_schedule_id
-            WHERE ce.schedule_template_id = ?
-            ORDER BY ce.priority DESC
-        ");
-        $stmt->execute([$this->templateId]);
-        $rows = $stmt->fetchAll();
+        try {
+            $stmt = $this->db->prepare("
+                SELECT
+                    ce.id,
+                    ce.name,
+                    ce.day_schedule_id,
+                    ds.name as day_schedule_name,
+                    ce.fixed_month,
+                    ce.fixed_day,
+                    ce.is_moving,
+                    ce.easter_offset_days,
+                    ce.priority
+                FROM calendar_exception_days ce
+                LEFT JOIN day_schedules ds ON ce.day_schedule_id = ds.day_schedule_id
+                WHERE ce.schedule_template_id = ?
+                ORDER BY ce.priority DESC
+            ");
+            $stmt->execute([$this->templateId]);
+            $rows = $stmt->fetchAll();
 
-        $exceptions = [];
-        foreach ($rows as $row) {
-            $exceptions[] = [
-                'id' => $row['id'],
-                'name' => $row['name'],
-                'day_schedule_id' => $row['day_schedule_id'],
-                'day_schedule_name' => $row['day_schedule_name'],
-                'fixed_month' => $row['fixed_month'] ? (int) $row['fixed_month'] : null,
-                'fixed_day' => $row['fixed_day'] ? (int) $row['fixed_day'] : null,
-                'is_moving' => (bool) $row['is_moving'],
-                'easter_offset' => $row['easter_offset_days'] !== null ? (int) $row['easter_offset_days'] : null,
-                'priority' => $row['priority'] ?? 50
-            ];
+            $exceptions = [];
+            foreach ($rows as $row) {
+                $exceptions[] = [
+                    'id' => $row['id'],
+                    'name' => $row['name'],
+                    'day_schedule_id' => $row['day_schedule_id'],
+                    'day_schedule_name' => $row['day_schedule_name'],
+                    'fixed_month' => $row['fixed_month'] ? (int) $row['fixed_month'] : null,
+                    'fixed_day' => $row['fixed_day'] ? (int) $row['fixed_day'] : null,
+                    'is_moving' => (bool) $row['is_moving'],
+                    'easter_offset' => $row['easter_offset_days'] !== null ? (int) $row['easter_offset_days'] : null,
+                    'priority' => $row['priority'] ?? 50
+                ];
+            }
+
+            return $exceptions;
+        } catch (Exception $e) {
+            // If query fails, return empty array
+            return [];
         }
-
-        return $exceptions;
     }
 
     /**
