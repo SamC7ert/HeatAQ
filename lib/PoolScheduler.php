@@ -289,21 +289,26 @@ class PoolScheduler {
      * @return array Easter dates indexed by year
      */
     private function loadHolidayDates() {
-        $stmt = $this->db->prepare("
-            SELECT year, easter_date
-            FROM holiday_reference_days
-            WHERE country = 'NO'
-            ORDER BY year
-        ");
-        $stmt->execute();
-        $rows = $stmt->fetchAll();
+        try {
+            // Try to get Easter dates from database
+            $stmt = $this->db->prepare("
+                SELECT year, easter_sunday
+                FROM holiday_reference_days
+                ORDER BY year
+            ");
+            $stmt->execute();
+            $rows = $stmt->fetchAll();
 
-        $holidays = [];
-        foreach ($rows as $row) {
-            $holidays[$row['year']] = new DateTime($row['easter_date']);
+            $holidays = [];
+            foreach ($rows as $row) {
+                $holidays[$row['year']] = new DateTime($row['easter_sunday']);
+            }
+
+            return $holidays;
+        } catch (Exception $e) {
+            // If table doesn't exist or has different columns, use algorithm fallback
+            return [];
         }
-
-        return $holidays;
     }
 
     /**
