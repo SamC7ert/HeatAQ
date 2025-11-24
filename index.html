@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HeatAQ Schedule Management</title>
+    <link rel="stylesheet" href="./assets/css/main.css">
+    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css">
+    <link rel="stylesheet" href="./assets/css/components/sidebar.css">
+    <link rel="stylesheet" href="./assets/css/components/schedules.css">
+    <link rel="stylesheet" href="./assets/css/components/calendar.css">
+    <style>
+        /* Logout button styles */
+        .user-info {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .user-name {
+            font-size: 14px;
+            color: #333;
+        }
+        
+        .project-name {
+            font-size: 12px;
+            color: #666;
+            border-right: 1px solid #ddd;
+            padding-right: 15px;
+            margin-right: 5px;
+        }
+        
+        .btn-logout {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 6px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+        
+        .btn-logout:hover {
+            background: #c82333;
+        }
+    </style>
+</head>
+<body>
+    <!-- Authentication Check -->
+    <script>
+        // Check if user is logged in
+        const session = localStorage.getItem('heataq_session');
+        const projectName = localStorage.getItem('heataq_project_name') || 'Project';
+        const userName = localStorage.getItem('heataq_user') || 'User';
+        
+        if (!session) {
+            // Redirect to login if no session
+            window.location.href = './login.html';
+        }
+    </script>
+    
+    <div class="app-container">
+        <!-- User Info and Logout -->
+        <div class="user-info">
+            <span class="project-name" id="current-project"></span>
+            <span class="user-name" id="current-user"></span>
+            <button onclick="logout()" class="btn-logout">Logout</button>
+        </div>
+        
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2>🏊 HeatAQ</h2>
+                <p>Pool Energy Management</p>
+            </div>
+            
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" onclick="app.navigation.switchSection('schedules')">
+                    <span class="nav-icon">📅</span>
+                    <span>Schedules</span>
+                </a>
+                <a href="#" class="nav-item" onclick="app.navigation.switchSection('scenarios')">
+                    <span class="nav-icon">⚡</span>
+                    <span>Scenarios</span>
+                </a>
+                <a href="#" class="nav-item" onclick="app.navigation.switchSection('configurations')">
+                    <span class="nav-icon">⚙️</span>
+                    <span>Configurations</span>
+                </a>
+                <a href="#" class="nav-item" onclick="app.navigation.switchSection('reports')">
+                    <span class="nav-icon">📊</span>
+                    <span>Reports</span>
+                </a>
+                <a href="#" class="nav-item" onclick="app.navigation.switchSection('simulations')">
+                    <span class="nav-icon">🔬</span>
+                    <span>Simulations</span>
+                </a>
+            </nav>
+        </aside>
+        
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <div class="content-wrapper">
+                <!-- Schedules Section (Default) -->
+                <section id="schedules-section" class="content-section active">
+                    <h2>Schedule Configuration</h2>
+                    
+                    <!-- Save Changes Button -->
+                    <div class="action-bar">
+                        <button class="btn btn-primary" onclick="app.saveChanges()">
+                            Save Changes
+                        </button>
+                    </div>
+                    
+                    <!-- Template Selector -->
+                    <div class="template-selector">
+                        <label for="schedule-template-selector">Select Template:</label>
+                        <select id="schedule-template-selector" onchange="app.schedules.loadTemplate()">
+                            <option value="1">Hisøy Default (v3.4.2)</option>
+                        </select>
+                        <button class="btn btn-secondary btn-sm" onclick="app.schedules.editTemplate()">
+                            Edit Template
+                        </button>
+                        <div id="template-description">
+                            Complex schedule with Norwegian holidays and seasonal variations
+                        </div>
+                    </div>
+                    
+                    <!-- Schedule Tabs -->
+                    <div class="schedule-tabs">
+                        <div class="tabs-header">
+                            <button class="tab-btn active" onclick="app.tabs.switch('day')">
+                                Day Schedules
+                            </button>
+                            <button class="tab-btn" onclick="app.tabs.switch('week')">
+                                Week Schedules
+                            </button>
+                            <button class="tab-btn" onclick="app.tabs.switch('calendar')">
+                                Calendar
+                            </button>
+                        </div>
+                        
+                        <!-- Day Schedules Tab -->
+                        <div id="day-tab" class="tab-content active">
+                            <div id="day-schedules-container">
+                                <!-- Day schedules will be loaded here -->
+                            </div>
+                        </div>
+                        
+                        <!-- Week Schedules Tab -->
+                        <div id="week-tab" class="tab-content">
+                            <div id="week-schedules-container">
+                                <!-- Week schedules will be loaded here -->
+                            </div>
+                        </div>
+                        
+                        <!-- Calendar Tab -->
+                        <div id="calendar-tab" class="tab-content">
+                            <!-- Calendar content will be loaded here -->
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- Scenarios Section -->
+                <section id="scenarios-section" class="content-section">
+                    <h2>Energy Scenarios</h2>
+                    <div class="placeholder-message">
+                        <h3>Scenario Management</h3>
+                        <p>Compare different heating strategies and configurations</p>
+                    </div>
+                </section>
+                
+                <!-- Configurations Section -->
+                <section id="configurations-section" class="content-section">
+                    <h2>System Configuration</h2>
+                    <div class="placeholder-message">
+                        <h3>System Settings</h3>
+                        <p>Configure pool parameters and equipment specifications</p>
+                    </div>
+                </section>
+                
+                <!-- Reports Section -->
+                <section id="reports-section" class="content-section">
+                    <h2>Energy Reports</h2>
+                    <div class="placeholder-message">
+                        <h3>Analysis Reports</h3>
+                        <p>View detailed energy consumption and cost reports</p>
+                    </div>
+                </section>
+                
+                <!-- Simulations Section -->
+                <section id="simulations-section" class="content-section">
+                    <h2>Run Simulations</h2>
+                    <div class="placeholder-message">
+                        <h3>Run Simulations</h3>
+                        <p>Execute pool energy simulations</p>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Logout Function -->
+    <script>
+        // Set user info in header
+        document.getElementById('current-project').textContent = projectName;
+        document.getElementById('current-user').textContent = userName;
+        
+        // Logout function
+        function logout() {
+            // Clear local storage
+            localStorage.removeItem('heataq_session');
+            localStorage.removeItem('heataq_project');
+            localStorage.removeItem('heataq_project_name');
+            localStorage.removeItem('heataq_user');
+            
+            // Clear session storage
+            sessionStorage.clear();
+            
+            // Redirect to login
+            window.location.href = './login.html';
+        }
+        
+        // Add session header to all API calls
+        const originalFetch = window.fetch;
+        window.fetch = function(...args) {
+            if (args[0] && args[0].includes('api/')) {
+                // Add session header to API calls
+                args[1] = args[1] || {};
+                args[1].headers = args[1].headers || {};
+                args[1].headers['X-Session-ID'] = localStorage.getItem('heataq_session');
+            }
+            return originalFetch.apply(this, args);
+        };
+    </script>
+    
+    <!-- Load JavaScript modules -->
+    <!-- Core configuration -->
+    <script src="./assets/js/config.js"></script>
+    <!-- Application modules -->
+    <script src="./assets/js/modules/api.js"></script>
+    <script src="./assets/js/modules/navigation.js"></script>
+    <script src="./assets/js/modules/schedules.js"></script>
+    <script src="./assets/js/modules/calendar.js"></script>
+    <script src="./assets/js/app.js"></script>
+</body>
+</html>

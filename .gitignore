@@ -1,0 +1,51 @@
+# HeatAQ Git Ignore File
+# Security - NEVER commit these files
+database.env
+/config_heataq/
+config.php
+auth.php
+login_api.php
+auth_secure.php
+login_api_secure.php
+
+# Sensitive configuration
+*.key
+*.pem
+.htpasswd
+*_credentials.php
+
+# Local development
+*.log
+*.tmp
+*.cache
+/temp/
+/tmp/
+/_setup/
+/debug/
+
+# Server-specific
+.htaccess
+php.ini
+error_log
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+*.old
+*~
+
+# Session files
+/sessions/
+
+# Keep example files
+!*.example
+!*.sample
