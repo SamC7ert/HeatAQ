@@ -483,7 +483,8 @@ class PoolScheduler {
         $scheduleName = $this->getScheduleForDate($date);
 
         if (!isset($this->schedules[$scheduleName])) {
-            throw new Exception("Schedule '$scheduleName' not found");
+            // Unknown schedule = treat as closed (empty periods)
+            return [];
         }
 
         return $this->schedules[$scheduleName]['periods'] ?? [];
