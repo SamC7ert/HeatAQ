@@ -23,6 +23,15 @@ login_api_secure.php
 /_setup/
 /debug/
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+venv/
+.venv/
+
 # Server-specific
 .htaccess
 php.ini
