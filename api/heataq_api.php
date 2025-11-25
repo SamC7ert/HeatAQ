@@ -1433,6 +1433,12 @@ class HeatAQAPI {
 
         $configJson = json_encode($configData);
 
+        // Extract individual values from config for legacy columns
+        $hpCapacity = $configData['equipment']['hp_capacity_kw'] ?? null;
+        $boilerCapacity = $configData['equipment']['boiler_capacity_kw'] ?? null;
+        $targetTemp = $configData['control']['target_temp'] ?? null;
+        $controlStrategy = $configData['control']['strategy'] ?? null;
+
         // Check if columns exist
         $hasConfigJson = $this->columnExists('config_templates', 'json_config');
         $hasUpdatedAt = $this->columnExists('config_templates', 'updated_at');
@@ -1441,43 +1447,47 @@ class HeatAQAPI {
         $updatedBy = $this->userId ?? 'system';
 
         if ($configId) {
-            // Update existing
+            // Update existing - include legacy columns
             if ($hasConfigJson && $hasUpdatedAt) {
                 $stmt = $this->db->prepare("
                     UPDATE config_templates
-                    SET template_name = ?, json_config = ?, updated_at = NOW(), updated_by = ?
+                    SET template_name = ?, json_config = ?,
+                        hp_capacity_kw = ?, boiler_capacity_kw = ?, target_temp = ?, control_strategy = ?,
+                        updated_at = NOW(), updated_by = ?
                     WHERE template_id = ?
                 ");
-                $stmt->execute([$name, $configJson, $updatedBy, $configId]);
+                $stmt->execute([$name, $configJson, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy, $updatedBy, $configId]);
             } elseif ($hasConfigJson) {
                 $stmt = $this->db->prepare("
                     UPDATE config_templates
-                    SET template_name = ?, json_config = ?
+                    SET template_name = ?, json_config = ?,
+                        hp_capacity_kw = ?, boiler_capacity_kw = ?, target_temp = ?, control_strategy = ?
                     WHERE template_id = ?
                 ");
-                $stmt->execute([$name, $configJson, $configId]);
+                $stmt->execute([$name, $configJson, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy, $configId]);
             } else {
                 $stmt = $this->db->prepare("
                     UPDATE config_templates
-                    SET template_name = ?
+                    SET template_name = ?,
+                        hp_capacity_kw = ?, boiler_capacity_kw = ?, target_temp = ?, control_strategy = ?
                     WHERE template_id = ?
                 ");
-                $stmt->execute([$name, $configId]);
+                $stmt->execute([$name, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy, $configId]);
             }
         } else {
             // Insert new
             if ($hasConfigJson) {
                 $stmt = $this->db->prepare("
-                    INSERT INTO config_templates (project_id, template_name, json_config)
-                    VALUES (?, ?, ?)
+                    INSERT INTO config_templates (project_id, template_name, json_config, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 ");
-                $stmt->execute([$this->projectId, $name, $configJson]);
+                $stmt->execute([$this->projectId, $name, $configJson, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy]);
             } else {
                 $stmt = $this->db->prepare("
-                    INSERT INTO config_templates (project_id, template_name)
-                    VALUES (?, ?)
+                    INSERT INTO config_templates (project_id, template_name, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 ");
-                $stmt->execute([$this->projectId, $name]);
+                $stmt->execute([$this->projectId, $name, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy]);
             }
             $configId = $this->db->lastInsertId();
         }
