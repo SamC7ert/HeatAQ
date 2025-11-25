@@ -205,10 +205,17 @@ class EnergySimulator {
             $date = substr($timestamp, 0, 10);
             $hourOfDay = (int) substr($timestamp, 11, 2);
 
-            // Get target temperature from scheduler
+            // Get temperature settings from scheduler (target, min, max)
             $targetTemp = null;
+            $minTemp = null;
+            $maxTemp = null;
             if ($this->scheduler) {
-                $targetTemp = $this->scheduler->getCurrentTemperature(new DateTime($timestamp));
+                $period = $this->scheduler->getCurrentPeriod(new DateTime($timestamp));
+                if ($period) {
+                    $targetTemp = $period['target_temp'];
+                    $minTemp = $period['min_temp'] ?? ($targetTemp - 2);  // Default: target - 2°C
+                    $maxTemp = $period['max_temp'] ?? ($targetTemp + 2);  // Default: target + 2°C
+                }
             }
 
             // Get solar for this day
@@ -230,12 +237,14 @@ class EnergySimulator {
             // Calculate net heat requirement
             $netRequirement = $losses['total'] - $solarGain;
 
-            // Determine heating strategy
+            // Determine heating strategy with temperature limits
             $heating = $this->calculateHeating(
                 $netRequirement,
                 (float) $hour['air_temperature'],
                 $targetTemp,
-                $currentWaterTemp
+                $currentWaterTemp,
+                $minTemp,
+                $maxTemp
             );
 
             // Update water temperature
@@ -612,8 +621,20 @@ class EnergySimulator {
 
     /**
      * Calculate heating from equipment
+     *
+     * Uses deadband control with min/max temperature limits:
+     * - Below minTemp: Heat up to target
+     * - Above maxTemp: Don't heat (allow to cool)
+     * - Between min and max: Only compensate for losses
+     *
+     * @param float $netRequirement Net heat loss (losses - solar gain) in kW
+     * @param float $airTemp Current air temperature
+     * @param float|null $targetTemp Target water temperature (null = closed)
+     * @param float $currentWaterTemp Current water temperature
+     * @param float|null $minTemp Minimum allowed temperature
+     * @param float|null $maxTemp Maximum allowed temperature
      */
-    private function calculateHeating($netRequirement, $airTemp, $targetTemp, $currentWaterTemp) {
+    private function calculateHeating($netRequirement, $airTemp, $targetTemp, $currentWaterTemp, $minTemp = null, $maxTemp = null) {
         $result = [
             'hp_heat' => 0,
             'hp_electricity' => 0,
@@ -627,17 +648,35 @@ class EnergySimulator {
         // If no target temp (closed), minimal heating to prevent freezing
         if ($targetTemp === null) {
             $targetTemp = 15; // Minimum maintenance temperature
+            $minTemp = 10;
+            $maxTemp = 20;
         }
 
-        // Calculate required heating
-        // Need to heat if water is below target OR to compensate for losses
-        $tempDeficit = $targetTemp - $currentWaterTemp;
-        $heatToRaiseTemp = $this->calculateHeatForTempRise($tempDeficit, 1.0);
+        // Default min/max if not provided
+        if ($minTemp === null) {
+            $minTemp = $targetTemp - 2;
+        }
+        if ($maxTemp === null) {
+            $maxTemp = $targetTemp + 2;
+        }
 
-        // Total heat needed = losses + temp rise (if needed)
-        $requiredHeat = $netRequirement;
-        if ($tempDeficit > 0) {
-            $requiredHeat += max(0, $heatToRaiseTemp);
+        // Deadband control logic:
+        // 1. If water temp > maxTemp: No heating (allow to cool naturally)
+        if ($currentWaterTemp >= $maxTemp) {
+            return $result;
+        }
+
+        // 2. Calculate required heating based on current state
+        $requiredHeat = 0;
+
+        if ($currentWaterTemp < $minTemp) {
+            // Below minimum: Heat aggressively to reach target
+            $tempDeficit = $targetTemp - $currentWaterTemp;
+            $heatToRaiseTemp = $this->calculateHeatForTempRise($tempDeficit, 1.0);
+            $requiredHeat = $netRequirement + max(0, $heatToRaiseTemp);
+        } else {
+            // Within deadband (minTemp to maxTemp): Just compensate for losses
+            $requiredHeat = max(0, $netRequirement);
         }
 
         // If negative (solar gain exceeds losses), no heating needed

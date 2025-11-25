@@ -144,11 +144,25 @@ class HeatAQAPI {
                     break;
                     
                 // WRITE operations
+                case 'save_template':
+                    if (!$this->canEdit()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->saveTemplate();
+                    break;
+
                 case 'save_day_schedule':
                     if (!$this->canEdit()) {
                         $this->sendError('Permission denied', 403);
                     }
                     $this->saveDaySchedule();
+                    break;
+
+                case 'save_week_schedule':
+                    if (!$this->canEdit()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->saveWeekSchedule();
                     break;
                     
                 // DELETE operations  
@@ -331,9 +345,154 @@ class HeatAQAPI {
         ]);
     }
     
+    private function saveTemplate() {
+        $input = json_decode(file_get_contents('php://input'), true);
+
+        $templateId = $input['template_id'] ?? null;
+        $name = trim($input['name'] ?? '');
+        $description = trim($input['description'] ?? '');
+        $defaultWeekScheduleId = $input['default_week_schedule_id'] ?? null;
+
+        if (empty($name)) {
+            $this->sendError('Template name is required');
+        }
+
+        if ($templateId) {
+            // Update existing
+            $stmt = $this->db->prepare("
+                UPDATE schedule_templates
+                SET name = ?, description = ?, default_week_schedule_id = ?
+                WHERE template_id = ?
+            ");
+            $stmt->execute([$name, $description, $defaultWeekScheduleId, $templateId]);
+        } else {
+            // Create new
+            $siteId = $this->siteId ?? 'arendal_aquatic';
+            $stmt = $this->db->prepare("
+                INSERT INTO schedule_templates (site_id, name, description, default_week_schedule_id)
+                VALUES (?, ?, ?, ?)
+            ");
+            $stmt->execute([$siteId, $name, $description, $defaultWeekScheduleId]);
+            $templateId = $this->db->lastInsertId();
+        }
+
+        $this->sendResponse(['success' => true, 'template_id' => $templateId]);
+    }
+
     private function saveDaySchedule() {
-        // TODO: Implement with proper validation
-        $this->sendError('Not yet implemented');
+        $input = json_decode(file_get_contents('php://input'), true);
+
+        $scheduleId = $input['day_schedule_id'] ?? null;
+        $name = trim($input['name'] ?? '');
+        $isClosed = $input['is_closed'] ?? 0;
+        $periods = $input['periods'] ?? [];
+
+        if (empty($name)) {
+            $this->sendError('Schedule name is required');
+        }
+
+        $this->db->beginTransaction();
+
+        try {
+            if ($scheduleId) {
+                // Update existing
+                $stmt = $this->db->prepare("
+                    UPDATE day_schedules SET name = ?, is_closed = ? WHERE day_schedule_id = ?
+                ");
+                $stmt->execute([$name, $isClosed, $scheduleId]);
+
+                // Delete existing periods
+                $stmt = $this->db->prepare("DELETE FROM day_schedule_periods WHERE day_schedule_id = ?");
+                $stmt->execute([$scheduleId]);
+            } else {
+                // Create new
+                $siteId = $this->siteId ?? 'arendal_aquatic';
+                $stmt = $this->db->prepare("
+                    INSERT INTO day_schedules (site_id, name, is_closed) VALUES (?, ?, ?)
+                ");
+                $stmt->execute([$siteId, $name, $isClosed]);
+                $scheduleId = $this->db->lastInsertId();
+            }
+
+            // Insert periods
+            if (!$isClosed && !empty($periods)) {
+                $stmt = $this->db->prepare("
+                    INSERT INTO day_schedule_periods
+                    (day_schedule_id, start_time, end_time, target_temp, min_temp, max_temp, period_order)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ");
+
+                foreach ($periods as $i => $period) {
+                    $stmt->execute([
+                        $scheduleId,
+                        $period['start_time'],
+                        $period['end_time'],
+                        $period['target_temp'] ?? 28.0,
+                        $period['min_temp'] ?? 26.0,
+                        $period['max_temp'] ?? 30.0,
+                        $period['period_order'] ?? ($i + 1)
+                    ]);
+                }
+            }
+
+            $this->db->commit();
+            $this->sendResponse(['success' => true, 'day_schedule_id' => $scheduleId]);
+
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+    }
+
+    private function saveWeekSchedule() {
+        $input = json_decode(file_get_contents('php://input'), true);
+
+        $scheduleId = $input['week_schedule_id'] ?? null;
+        $name = trim($input['name'] ?? '');
+
+        if (empty($name)) {
+            $this->sendError('Schedule name is required');
+        }
+
+        $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        $dayScheduleIds = [];
+        foreach ($days as $day) {
+            $dayScheduleIds[$day] = $input[$day . '_schedule_id'] ?? null;
+        }
+
+        if ($scheduleId) {
+            // Update existing
+            $stmt = $this->db->prepare("
+                UPDATE week_schedules SET
+                    name = ?,
+                    monday_schedule_id = ?, tuesday_schedule_id = ?, wednesday_schedule_id = ?,
+                    thursday_schedule_id = ?, friday_schedule_id = ?, saturday_schedule_id = ?, sunday_schedule_id = ?
+                WHERE week_schedule_id = ?
+            ");
+            $stmt->execute([
+                $name,
+                $dayScheduleIds['monday'], $dayScheduleIds['tuesday'], $dayScheduleIds['wednesday'],
+                $dayScheduleIds['thursday'], $dayScheduleIds['friday'], $dayScheduleIds['saturday'], $dayScheduleIds['sunday'],
+                $scheduleId
+            ]);
+        } else {
+            // Create new
+            $siteId = $this->siteId ?? 'arendal_aquatic';
+            $stmt = $this->db->prepare("
+                INSERT INTO week_schedules
+                (site_id, name, monday_schedule_id, tuesday_schedule_id, wednesday_schedule_id,
+                 thursday_schedule_id, friday_schedule_id, saturday_schedule_id, sunday_schedule_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([
+                $siteId, $name,
+                $dayScheduleIds['monday'], $dayScheduleIds['tuesday'], $dayScheduleIds['wednesday'],
+                $dayScheduleIds['thursday'], $dayScheduleIds['friday'], $dayScheduleIds['saturday'], $dayScheduleIds['sunday']
+            ]);
+            $scheduleId = $this->db->lastInsertId();
+        }
+
+        $this->sendResponse(['success' => true, 'week_schedule_id' => $scheduleId]);
     }
     
     private function deleteExceptionDay($exceptionId) {

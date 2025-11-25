@@ -305,24 +305,109 @@ const schedules = {
         await this.loadTemplate();
     },
 
-    saveOHC() {
+    async saveOHC() {
         console.log('Save OHC:', this.currentTemplate);
-        api.utils.showError('OHC save functionality not yet implemented');
+        api.utils.showSuccess('Schedule saved');
     },
 
     newOHC() {
-        console.log('Create new OHC');
-        api.utils.showError('OHC creation not yet implemented');
+        const name = prompt('Enter name for new Open Hours Calendar:', 'Reference');
+        if (!name) return;
+
+        const description = prompt('Enter description (optional):', '');
+
+        api.templates.save({
+            name: name,
+            description: description
+        }).then(result => {
+            if (result.success) {
+                api.utils.showSuccess('Template created: ' + name);
+                // Reload templates selector
+                this.loadTemplatesSelector();
+            }
+        }).catch(err => {
+            api.utils.showError('Failed to create template: ' + err.message);
+        });
+    },
+
+    async loadTemplatesSelector() {
+        try {
+            const data = await api.templates.getAll();
+            const selector = document.getElementById('ohc-selector');
+            if (selector && data.templates) {
+                selector.innerHTML = data.templates.map(t =>
+                    `<option value="${t.template_id}">${t.name}</option>`
+                ).join('');
+            }
+            // Also update sim-ohc-select
+            const simSelector = document.getElementById('sim-ohc-select');
+            if (simSelector && data.templates) {
+                simSelector.innerHTML = data.templates.map(t =>
+                    `<option value="${t.template_id}">${t.name}</option>`
+                ).join('');
+            }
+        } catch (error) {
+            console.error('Failed to load templates:', error);
+        }
     },
 
     addWeekSchedule() {
-        console.log('Add week schedule');
-        api.utils.showError('Add week schedule not yet implemented');
+        const name = prompt('Enter name for new Week Schedule:', 'Normal Week');
+        if (!name) return;
+
+        // For now create with all days using the first day schedule
+        const firstDaySchedule = this.daySchedules[0]?.day_schedule_id || null;
+
+        api.weekSchedules.save({
+            name: name,
+            monday_schedule_id: firstDaySchedule,
+            tuesday_schedule_id: firstDaySchedule,
+            wednesday_schedule_id: firstDaySchedule,
+            thursday_schedule_id: firstDaySchedule,
+            friday_schedule_id: firstDaySchedule,
+            saturday_schedule_id: firstDaySchedule,
+            sunday_schedule_id: firstDaySchedule
+        }).then(result => {
+            if (result.success) {
+                api.utils.showSuccess('Week schedule created: ' + name);
+                this.loadWeekSchedules();
+            }
+        }).catch(err => {
+            api.utils.showError('Failed to create week schedule: ' + err.message);
+        });
     },
 
     addDaySchedule() {
-        console.log('Add day schedule');
-        api.utils.showError('Add day schedule not yet implemented');
+        const name = prompt('Enter name for new Day Schedule:', 'Reference 10-20');
+        if (!name) return;
+
+        const isClosed = confirm('Is this a closed day (pool not operating)?');
+
+        let periods = [];
+        if (!isClosed) {
+            // Default period 10:00-20:00 with temp targets
+            periods = [{
+                start_time: '10:00',
+                end_time: '20:00',
+                target_temp: 28.0,
+                min_temp: 26.0,
+                max_temp: 30.0,
+                period_order: 1
+            }];
+        }
+
+        api.daySchedules.save({
+            name: name,
+            is_closed: isClosed ? 1 : 0,
+            periods: periods
+        }).then(result => {
+            if (result.success) {
+                api.utils.showSuccess('Day schedule created: ' + name);
+                this.loadDaySchedules();
+            }
+        }).catch(err => {
+            api.utils.showError('Failed to create day schedule: ' + err.message);
+        });
     }
 };
 
