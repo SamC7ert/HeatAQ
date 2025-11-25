@@ -381,7 +381,8 @@ const schedules = {
         const name = prompt('Enter name for new Day Schedule:', 'Reference 10-20');
         if (!name) return;
 
-        const isClosed = confirm('Is this a closed day (pool not operating)?');
+        // Only ask about closed if name suggests it (contains "closed")
+        const isClosed = name.toLowerCase().includes('closed');
 
         let periods = [];
         if (!isClosed) {
