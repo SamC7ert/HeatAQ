@@ -1325,8 +1325,8 @@ class HeatAQAPI {
 
     private function getProjectConfigs() {
         try {
-            // Try with config_json column first
-            $query = "SELECT template_id, template_name as name, config_json, created_at, updated_at
+            // Try with json_config column first
+            $query = "SELECT template_id, template_name as name, json_config, created_at, updated_at
                       FROM config_templates";
             $query = $this->addSiteFilter($query);
             $query .= " ORDER BY template_name";
@@ -1344,13 +1344,13 @@ class HeatAQAPI {
 
             // Decode JSON
             foreach ($configs as &$config) {
-                $config['config'] = json_decode($config['config_json'] ?? '{}', true);
-                unset($config['config_json']);
+                $config['config'] = json_decode($config['json_config'] ?? '{}', true);
+                unset($config['json_config']);
             }
 
             $this->sendResponse(['configs' => $configs]);
         } catch (PDOException $e) {
-            // Fallback: config_json column might not exist
+            // Fallback: json_config column might not exist
             try {
                 $query = "SELECT template_id, template_name as name, created_at, updated_at
                           FROM config_templates";
@@ -1368,12 +1368,12 @@ class HeatAQAPI {
                     $configs = $this->db->query($query)->fetchAll(PDO::FETCH_ASSOC);
                 }
 
-                // No config_json column - return empty config
+                // No json_config column - return empty config
                 foreach ($configs as &$config) {
                     $config['config'] = [];
                 }
 
-                $this->sendResponse(['configs' => $configs, 'note' => 'config_json column not found - run migration']);
+                $this->sendResponse(['configs' => $configs, 'note' => 'json_config column not found - run migration']);
             } catch (PDOException $e2) {
                 $this->sendError('Failed to load configs: ' . $e2->getMessage());
             }
@@ -1387,7 +1387,7 @@ class HeatAQAPI {
 
         try {
             $stmt = $this->db->prepare("
-                SELECT template_id, template_name as name, config_json
+                SELECT template_id, template_name as name, json_config
                 FROM config_templates
                 WHERE template_id = ?
             ");
@@ -1398,12 +1398,12 @@ class HeatAQAPI {
                 $this->sendError('Configuration not found', 404);
             }
 
-            $config['config'] = json_decode($config['config_json'] ?? '{}', true);
-            unset($config['config_json']);
+            $config['config'] = json_decode($config['json_config'] ?? '{}', true);
+            unset($config['json_config']);
 
             $this->sendResponse(['config' => $config]);
         } catch (PDOException $e) {
-            // Fallback without config_json
+            // Fallback without json_config
             $stmt = $this->db->prepare("
                 SELECT template_id, template_name as name
                 FROM config_templates
@@ -1417,7 +1417,7 @@ class HeatAQAPI {
             }
 
             $config['config'] = [];
-            $this->sendResponse(['config' => $config, 'note' => 'config_json column not found']);
+            $this->sendResponse(['config' => $config, 'note' => 'json_config column not found']);
         }
     }
 
@@ -1433,15 +1433,15 @@ class HeatAQAPI {
 
         $configJson = json_encode($configData);
 
-        // Check if config_json column exists
-        $hasConfigJson = $this->columnExists('config_templates', 'config_json');
+        // Check if json_config column exists
+        $hasConfigJson = $this->columnExists('config_templates', 'json_config');
 
         if ($configId) {
             // Update existing
             if ($hasConfigJson) {
                 $stmt = $this->db->prepare("
                     UPDATE config_templates
-                    SET template_name = ?, config_json = ?, updated_at = NOW()
+                    SET template_name = ?, json_config = ?, updated_at = NOW()
                     WHERE template_id = ?
                 ");
                 $stmt->execute([$name, $configJson, $configId]);
@@ -1457,7 +1457,7 @@ class HeatAQAPI {
             // Insert new
             if ($hasConfigJson) {
                 $stmt = $this->db->prepare("
-                    INSERT INTO config_templates (site_id, template_name, config_json)
+                    INSERT INTO config_templates (site_id, template_name, json_config)
                     VALUES (?, ?, ?)
                 ");
                 $stmt->execute([$this->siteId, $name, $configJson]);
@@ -1473,7 +1473,7 @@ class HeatAQAPI {
 
         $response = ['success' => true, 'config_id' => $configId];
         if (!$hasConfigJson) {
-            $response['warning'] = 'config_json column missing - run: ALTER TABLE config_templates ADD COLUMN config_json JSON;';
+            $response['warning'] = 'json_config column missing - run: ALTER TABLE config_templates ADD COLUMN json_config JSON;';
         }
         $this->sendResponse($response);
     }

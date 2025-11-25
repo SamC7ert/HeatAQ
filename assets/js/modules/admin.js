@@ -194,10 +194,10 @@ const AdminModule = {
     },
 
     deleteHolidayDefinition: async function(id) {
-        if (!confirm('Delete this holiday definition?')) return;
+        if (!confirm('Delete this exception day?')) return;
 
         try {
-            const response = await fetch(`./api/heataq_api.php?action=delete_holiday_definition&id=${id}`);
+            const response = await fetch(`./api/heataq_api.php?action=delete_holiday_definition&id=${encodeURIComponent(id)}`);
             const result = await response.json();
 
             if (result.success) {
@@ -206,8 +206,8 @@ const AdminModule = {
                 alert('Failed to delete: ' + (result.error || 'Unknown error'));
             }
         } catch (err) {
-            console.error('Failed to delete holiday definition:', err);
-            alert('Failed to delete holiday definition');
+            console.error('Failed to delete exception day:', err);
+            alert('Failed to delete exception day');
         }
     },
 
@@ -234,14 +234,11 @@ const AdminModule = {
             return;
         }
 
-        // Show last 10 years of Easter dates
-        const recentYears = this.referenceDays.slice(-10);
-
         let html = '<table class="data-table compact"><thead><tr>' +
-            '<th>Year</th><th>Easter Date</th>' +
+            '<th>Year</th><th>1. påskedag</th>' +
             '</tr></thead><tbody>';
 
-        recentYears.forEach(ref => {
+        this.referenceDays.forEach(ref => {
             html += `<tr>
                 <td>${ref.year}</td>
                 <td>${ref.easter_date}</td>
@@ -264,18 +261,31 @@ const AdminModule = {
             const stationsRes = await fetch('./api/heataq_api.php?action=get_weather_stations');
             const stationsData = await stationsRes.json();
 
+            if (stationsData.error) {
+                console.error('Weather stations API error:', stationsData.error);
+                document.getElementById('weather-stations-list').innerHTML =
+                    `<p class="error">Error: ${stationsData.error}</p>`;
+                return;
+            }
+
             if (stationsData.stations) {
                 this.weatherStations = stationsData.stations;
                 this.renderWeatherStations();
                 this.populateStationDropdown();
+
+                if (stationsData.summary) {
+                    this.renderWeatherSummary(stationsData.summary);
+                }
             }
 
-            // Load data for selected station (or all)
+            // Load yearly and monthly data
             await this.loadWeatherData();
         } catch (err) {
             console.error('Failed to load weather stations:', err);
-            document.getElementById('weather-stations-list').innerHTML =
-                '<p class="error">Failed to load weather stations</p>';
+            const container = document.getElementById('weather-stations-list');
+            if (container) {
+                container.innerHTML = '<p class="error">Failed to load weather stations</p>';
+            }
         }
     },
 
