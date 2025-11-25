@@ -162,16 +162,9 @@ try {
                 if ($configRow) {
                     $config = json_decode($configRow['json_config'] ?? '{}', true) ?: [];
 
-                    // Ensure nested arrays exist
+                    // Ensure nested arrays exist (values come from pool_configurations + JSON overrides)
                     if (!isset($config['equipment'])) $config['equipment'] = [];
                     if (!isset($config['control'])) $config['control'] = [];
-                    if (!isset($config['cover'])) $config['cover'] = [];
-                    if (!isset($config['solar'])) $config['solar'] = [];
-
-                    // Set cover defaults if not specified (benchmark values)
-                    if (!isset($config['cover']['has_cover'])) $config['cover']['has_cover'] = true;
-                    if (!isset($config['cover']['solar_transmittance'])) $config['cover']['solar_transmittance'] = 10;
-                    if (!isset($config['solar']['absorption'])) $config['solar']['absorption'] = 60;
 
                     // Override with legacy column values if set (legacy columns take precedence)
                     if ($configRow['hp_capacity_kw'] !== null) {
