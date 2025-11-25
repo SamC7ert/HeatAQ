@@ -212,6 +212,13 @@ class HeatAQAPI {
                     $this->deleteDaySchedule();
                     break;
 
+                case 'delete_week_schedule':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->deleteWeekSchedule();
+                    break;
+
                 default:
                     $this->sendError('Invalid action');
             }
@@ -575,28 +582,39 @@ class HeatAQAPI {
     private function saveExceptionDay() {
         $input = $this->getPostInput();
 
-        $exceptionId = $input['exception_id'] ?? null;
-        $templateId = $input['template_id'] ?? 1;
-        $name = trim($input['name'] ?? '');
+        // Debug: check what we received
+        if (empty($input)) {
+            $this->sendError('No input received');
+        }
+
+        $exceptionId = isset($input['exception_id']) ? (int)$input['exception_id'] : 0;
+
         // Convert empty string to null for foreign key
-        $dayScheduleId = !empty($input['day_schedule_id']) ? $input['day_schedule_id'] : null;
+        $dayScheduleId = null;
+        if (isset($input['day_schedule_id']) && $input['day_schedule_id'] !== '' && $input['day_schedule_id'] !== null) {
+            $dayScheduleId = (int)$input['day_schedule_id'];
+        }
 
         // For updates, just update the day_schedule_id (simple schedule change)
-        if ($exceptionId) {
-            $stmt = $this->db->prepare("
-                UPDATE calendar_exception_days
-                SET day_schedule_id = ?
-                WHERE id = ?
-            ");
-            $stmt->execute([$dayScheduleId, $exceptionId]);
-            $this->sendResponse(['success' => true, 'exception_id' => $exceptionId]);
+        if ($exceptionId > 0) {
+            try {
+                $stmt = $this->db->prepare("
+                    UPDATE calendar_exception_days
+                    SET day_schedule_id = ?
+                    WHERE id = ?
+                ");
+                $stmt->execute([$dayScheduleId, $exceptionId]);
+                $this->sendResponse(['success' => true, 'exception_id' => $exceptionId]);
+            } catch (Exception $e) {
+                $this->sendError('Database error: ' . $e->getMessage());
+            }
             return;
         }
 
         // For new exceptions, validate all fields
-        // Handle is_moving as int (could come as string "1" or "0")
+        $templateId = $input['template_id'] ?? 1;
+        $name = trim($input['name'] ?? '');
         $isMoving = (int)($input['is_moving'] ?? 0);
-        // Easter offset can be 0 (Easter Sunday itself), so check for key existence
         $easterOffsetDays = array_key_exists('easter_offset_days', $input) ? $input['easter_offset_days'] : null;
         $fixedMonth = $input['fixed_month'] ?? null;
         $fixedDay = $input['fixed_day'] ?? null;
@@ -614,14 +632,17 @@ class HeatAQAPI {
         }
 
         // Create new
-        $stmt = $this->db->prepare("
-            INSERT INTO calendar_exception_days (schedule_template_id, name, day_schedule_id, is_moving, easter_offset_days, fixed_month, fixed_day)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ");
-        $stmt->execute([$templateId, $name, $dayScheduleId, $isMoving, $easterOffsetDays, $fixedMonth, $fixedDay]);
-        $exceptionId = $this->db->lastInsertId();
-
-        $this->sendResponse(['success' => true, 'exception_id' => $exceptionId]);
+        try {
+            $stmt = $this->db->prepare("
+                INSERT INTO calendar_exception_days (schedule_template_id, name, day_schedule_id, is_moving, easter_offset_days, fixed_month, fixed_day)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([$templateId, $name, $dayScheduleId, $isMoving, $easterOffsetDays, $fixedMonth, $fixedDay]);
+            $exceptionId = $this->db->lastInsertId();
+            $this->sendResponse(['success' => true, 'exception_id' => $exceptionId]);
+        } catch (Exception $e) {
+            $this->sendError('Database error: ' . $e->getMessage());
+        }
     }
 
     private function deleteDateRange($rangeId) {
@@ -660,6 +681,21 @@ class HeatAQAPI {
 
         // Delete the schedule
         $stmt = $this->db->prepare("DELETE FROM day_schedules WHERE day_schedule_id = ?");
+        $stmt->execute([$scheduleId]);
+
+        $this->sendResponse(['success' => true]);
+    }
+
+    private function deleteWeekSchedule() {
+        $input = $this->getPostInput();
+        $scheduleId = $input['schedule_id'] ?? null;
+
+        if (!$this->validateId($scheduleId)) {
+            $this->sendError('Invalid schedule ID');
+        }
+
+        // Delete the week schedule
+        $stmt = $this->db->prepare("DELETE FROM week_schedules WHERE week_schedule_id = ?");
         $stmt->execute([$scheduleId]);
 
         $this->sendResponse(['success' => true]);
