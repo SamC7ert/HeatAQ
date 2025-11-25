@@ -130,8 +130,8 @@ const calendar = {
         let html = '';
 
         if (this.exceptionDays.length > 0) {
-            // Sort exception days
-            const sortedExceptions = [...this.exceptionDays].sort((a, b) => {
+            // Sort exception days and store for lookup
+            this.sortedExceptions = [...this.exceptionDays].sort((a, b) => {
                 if (a.is_moving != b.is_moving) {
                     return b.is_moving - a.is_moving;
                 }
@@ -154,7 +154,7 @@ const calendar = {
                     <tbody>
             `;
 
-            sortedExceptions.forEach(exception => {
+            this.sortedExceptions.forEach((exception, index) => {
                 let dateRef;
                 if (exception.is_moving) {
                     const offset = exception.easter_offset_days || 0;
@@ -167,14 +167,15 @@ const calendar = {
                 const exceptionId = exception.exception_id || exception.id;
                 const currentDayScheduleId = exception.day_schedule_id;
 
+                // Store exception data in data attributes for new exceptions without ID
                 html += `
-                    <tr data-exception-id="${exceptionId}">
+                    <tr data-exception-id="${exceptionId || ''}" data-index="${index}">
                         <td>${exception.name}</td>
                         <td>${dateRef}</td>
                         <td>
                             <select class="form-control form-control-sm exception-day-select"
-                                    data-exception-id="${exceptionId}"
-                                    onchange="app.calendar.updateExceptionSchedule(${exceptionId}, this.value)">
+                                    data-index="${index}"
+                                    onchange="app.calendar.updateExceptionSchedule(${index}, this.value)">
                                 <option value="" ${!currentDayScheduleId ? 'selected' : ''}>No Exception</option>
                                 ${this.daySchedules.map(ds =>
                                     `<option value="${ds.day_schedule_id}" ${ds.day_schedule_id == currentDayScheduleId ? 'selected' : ''}>${ds.name}</option>`
@@ -229,13 +230,34 @@ const calendar = {
         document.getElementById('exception-easter-inputs').style.display = type === 'easter' ? 'inline' : 'none';
     },
 
-    async updateExceptionSchedule(exceptionId, dayScheduleId) {
+    async updateExceptionSchedule(index, dayScheduleId) {
         try {
-            // For updates, only send exception_id and day_schedule_id
-            await api.calendar.saveExceptionDay({
-                exception_id: exceptionId,
-                day_schedule_id: dayScheduleId || null
-            });
+            // Look up the exception by index
+            const exception = this.sortedExceptions?.[index];
+            if (!exception) {
+                throw new Error('Exception not found');
+            }
+
+            const exceptionId = exception.exception_id || exception.id;
+
+            if (exceptionId) {
+                // Update existing exception - only send id and day_schedule_id
+                await api.calendar.saveExceptionDay({
+                    exception_id: exceptionId,
+                    day_schedule_id: dayScheduleId || null
+                });
+            } else {
+                // Create new exception with full details
+                await api.calendar.saveExceptionDay({
+                    template_id: this.currentTemplateId,
+                    name: exception.name,
+                    day_schedule_id: dayScheduleId || null,
+                    is_moving: exception.is_moving ? 1 : 0,
+                    easter_offset_days: exception.easter_offset_days,
+                    fixed_month: exception.fixed_month,
+                    fixed_day: exception.fixed_day
+                });
+            }
 
             api.utils.showSuccess('Exception updated');
             // Reload to show updated data

@@ -219,6 +219,13 @@ class HeatAQAPI {
                     $this->deleteWeekSchedule();
                     break;
 
+                case 'delete_template':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->deleteTemplate();
+                    break;
+
                 default:
                     $this->sendError('Invalid action');
             }
@@ -349,20 +356,99 @@ class HeatAQAPI {
         if (!$this->validateId($templateId)) {
             $this->sendError('Invalid template ID');
         }
-        
+
+        // Get saved exceptions for this template
         $stmt = $this->db->prepare("
-            SELECT 
+            SELECT
                 ce.id as exception_id,
                 ce.*,
                 ds.name as day_schedule_name
             FROM calendar_exception_days ce
             LEFT JOIN day_schedules ds ON ce.day_schedule_id = ds.day_schedule_id
             WHERE ce.schedule_template_id = ?
-            ORDER BY ce.is_moving, ce.fixed_month, ce.fixed_day, ce.easter_offset_days
         ");
         $stmt->execute([$templateId]);
-        
-        $this->sendResponse(['exceptions' => $stmt->fetchAll()]);
+        $savedExceptions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Standard Norwegian holidays - will be merged with saved exceptions
+        $standardHolidays = [
+            // Fixed date holidays
+            ['name' => 'New Year\'s Day', 'is_moving' => 0, 'fixed_month' => 1, 'fixed_day' => 1],
+            ['name' => 'May Day', 'is_moving' => 0, 'fixed_month' => 5, 'fixed_day' => 1],
+            ['name' => 'Constitution Day', 'is_moving' => 0, 'fixed_month' => 5, 'fixed_day' => 17],
+            ['name' => 'Christmas Eve', 'is_moving' => 0, 'fixed_month' => 12, 'fixed_day' => 24],
+            ['name' => 'Christmas Day', 'is_moving' => 0, 'fixed_month' => 12, 'fixed_day' => 25],
+            ['name' => 'Boxing Day', 'is_moving' => 0, 'fixed_month' => 12, 'fixed_day' => 26],
+            ['name' => 'New Year\'s Eve', 'is_moving' => 0, 'fixed_month' => 12, 'fixed_day' => 31],
+            // Easter-relative holidays
+            ['name' => 'Maundy Thursday', 'is_moving' => 1, 'easter_offset_days' => -3],
+            ['name' => 'Good Friday', 'is_moving' => 1, 'easter_offset_days' => -2],
+            ['name' => 'Easter Sunday', 'is_moving' => 1, 'easter_offset_days' => 0],
+            ['name' => 'Easter Monday', 'is_moving' => 1, 'easter_offset_days' => 1],
+            ['name' => 'Ascension Day', 'is_moving' => 1, 'easter_offset_days' => 39],
+            ['name' => 'Whit Sunday', 'is_moving' => 1, 'easter_offset_days' => 49],
+            ['name' => 'Whit Monday', 'is_moving' => 1, 'easter_offset_days' => 50],
+        ];
+
+        // Build lookup of saved exceptions by key (name + date info)
+        $savedLookup = [];
+        foreach ($savedExceptions as $ex) {
+            if ($ex['is_moving']) {
+                $key = 'easter:' . $ex['easter_offset_days'];
+            } else {
+                $key = 'fixed:' . $ex['fixed_month'] . ':' . $ex['fixed_day'];
+            }
+            $savedLookup[$key] = $ex;
+        }
+
+        // Merge standard holidays with saved exceptions
+        $result = [];
+        foreach ($standardHolidays as $holiday) {
+            if ($holiday['is_moving']) {
+                $key = 'easter:' . $holiday['easter_offset_days'];
+            } else {
+                $key = 'fixed:' . $holiday['fixed_month'] . ':' . $holiday['fixed_day'];
+            }
+
+            if (isset($savedLookup[$key])) {
+                // Use saved exception (has exception_id and possibly day_schedule_id)
+                $result[] = $savedLookup[$key];
+                unset($savedLookup[$key]); // Remove from lookup so we don't duplicate
+            } else {
+                // Create placeholder with no saved id (will need to be created when saved)
+                $result[] = [
+                    'exception_id' => null,
+                    'id' => null,
+                    'schedule_template_id' => $templateId,
+                    'name' => $holiday['name'],
+                    'day_schedule_id' => null,
+                    'day_schedule_name' => null,
+                    'is_moving' => $holiday['is_moving'],
+                    'easter_offset_days' => $holiday['easter_offset_days'] ?? null,
+                    'fixed_month' => $holiday['fixed_month'] ?? null,
+                    'fixed_day' => $holiday['fixed_day'] ?? null,
+                ];
+            }
+        }
+
+        // Add any custom exceptions that weren't in the standard list
+        foreach ($savedLookup as $ex) {
+            $result[] = $ex;
+        }
+
+        // Sort by is_moving (easter first), then by date
+        usort($result, function($a, $b) {
+            if ($a['is_moving'] != $b['is_moving']) {
+                return $b['is_moving'] - $a['is_moving'];
+            }
+            if ($a['is_moving']) {
+                return ($a['easter_offset_days'] ?? 0) - ($b['easter_offset_days'] ?? 0);
+            }
+            return (($a['fixed_month'] ?? 0) * 100 + ($a['fixed_day'] ?? 0)) -
+                   (($b['fixed_month'] ?? 0) * 100 + ($b['fixed_day'] ?? 0));
+        });
+
+        $this->sendResponse(['exceptions' => $result]);
     }
     
     private function getReferenceDays() {
@@ -697,6 +783,35 @@ class HeatAQAPI {
         // Delete the week schedule
         $stmt = $this->db->prepare("DELETE FROM week_schedules WHERE week_schedule_id = ?");
         $stmt->execute([$scheduleId]);
+
+        $this->sendResponse(['success' => true]);
+    }
+
+    private function deleteTemplate() {
+        $input = $this->getPostInput();
+        $templateId = $input['template_id'] ?? null;
+
+        if (!$this->validateId($templateId)) {
+            $this->sendError('Invalid template ID');
+        }
+
+        // Don't allow deleting template 1 (default)
+        if ($templateId == 1) {
+            $this->sendError('Cannot delete the default template');
+        }
+
+        // Delete related data first (cascading delete)
+        // Delete calendar date ranges
+        $stmt = $this->db->prepare("DELETE FROM calendar_date_ranges WHERE schedule_template_id = ?");
+        $stmt->execute([$templateId]);
+
+        // Delete calendar exception days
+        $stmt = $this->db->prepare("DELETE FROM calendar_exception_days WHERE schedule_template_id = ?");
+        $stmt->execute([$templateId]);
+
+        // Delete the template
+        $stmt = $this->db->prepare("DELETE FROM schedule_templates WHERE template_id = ?");
+        $stmt->execute([$templateId]);
 
         $this->sendResponse(['success' => true]);
     }

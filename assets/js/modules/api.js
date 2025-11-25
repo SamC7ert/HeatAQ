@@ -76,6 +76,10 @@ const api = {
         async save(data) {
             // Creates new or updates existing (based on template_id presence)
             return api.post('save_template', data);
+        },
+
+        async delete(templateId) {
+            return api.post('delete_template', { template_id: templateId });
         }
     },
 

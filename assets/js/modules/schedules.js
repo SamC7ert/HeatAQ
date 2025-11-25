@@ -725,8 +725,34 @@ const schedules = {
     },
 
     async saveOHC() {
-        console.log('Save OHC:', this.currentTemplate);
-        api.utils.showSuccess('Schedule saved');
+        // OHC saves are done automatically through individual operations
+        // This just confirms the current state
+        api.utils.showSuccess('All changes saved');
+    },
+
+    async deleteOHC() {
+        if (this.currentTemplate == 1) {
+            api.utils.showError('Cannot delete the default template');
+            return;
+        }
+
+        if (!confirm('Delete this template and all its calendar rules? This cannot be undone.')) {
+            return;
+        }
+
+        try {
+            await api.templates.delete(this.currentTemplate);
+            api.utils.showSuccess('Template deleted');
+            // Reload templates and select first one
+            await this.loadTemplatesSelector();
+            const selector = document.getElementById('ohc-selector');
+            if (selector) {
+                selector.value = 1;
+            }
+            await this.loadTemplate();
+        } catch (err) {
+            api.utils.showError('Failed to delete: ' + err.message);
+        }
     },
 
     toggleNewOHCForm() {
