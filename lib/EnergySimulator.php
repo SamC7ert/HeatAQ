@@ -78,18 +78,18 @@ class EnergySimulator {
         $config = $stmt->fetch();
 
         if (!$config) {
-            // Default configuration if not found
+            // Default configuration if not found (matches v3.6.0.3 benchmark)
             return [
                 'area_m2' => 312.5,      // 25m x 12.5m
                 'volume_m3' => 625,       // area × 2m depth
                 'depth_m' => 2.0,
                 'perimeter_m' => 75,      // 2×(25+12.5)
-                'has_cover' => false,
+                'has_cover' => true,      // Benchmark assumes pool has cover
                 'has_tunnel' => true,
-                'cover_r_value' => 0,
+                'cover_r_value' => 5.0,   // U=5.0 W/m²K from benchmark
                 'cover_solar_transmittance' => 0.10, // 10% solar passes through cover
                 'solar_absorption' => 0.60,          // 60% solar absorption (v3.6.0.3 benchmark)
-                'wind_exposure_factor' => 1.0
+                'wind_exposure_factor' => 0.535      // 53.5% from benchmark
             ];
         }
 
@@ -98,12 +98,12 @@ class EnergySimulator {
             'volume_m3' => (float) ($config['volume_m3'] ?? 625),
             'depth_m' => (float) ($config['depth_m'] ?? 2.0),
             'perimeter_m' => (float) ($config['perimeter_m'] ?? 75),
-            'has_cover' => (bool) ($config['has_cover'] ?? false),
+            'has_cover' => (bool) ($config['has_cover'] ?? true),
             'has_tunnel' => (bool) ($config['has_tunnel'] ?? true),
-            'cover_r_value' => (float) ($config['cover_r_value'] ?? 0),
+            'cover_r_value' => (float) ($config['cover_r_value'] ?? 5.0),
             'cover_solar_transmittance' => (float) ($config['cover_solar_transmittance'] ?? 0.10),
             'solar_absorption' => (float) ($config['solar_absorption'] ?? 0.60),
-            'wind_exposure_factor' => (float) ($config['wind_exposure_factor'] ?? 1.0)
+            'wind_exposure_factor' => (float) ($config['wind_exposure_factor'] ?? 0.535)
         ];
     }
 
