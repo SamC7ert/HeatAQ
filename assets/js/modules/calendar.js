@@ -66,6 +66,8 @@ const calendar = {
         `;
 
         // Seasonal date ranges
+        html += '<label class="form-label text-small" style="margin-top: 10px;"><strong>Seasonal Overrides:</strong></label>';
+
         if (seasonalRanges.length > 0) {
             html += `
                 <table class="data-table compact">
@@ -101,6 +103,23 @@ const calendar = {
             html += '<p class="text-muted text-small">No seasonal overrides</p>';
         }
 
+        // Inline form for adding seasonal range
+        html += `
+            <div style="margin-top: 10px; padding: 8px; background: var(--neutral-100); border-radius: 4px;">
+                <div style="display: flex; gap: 5px; flex-wrap: wrap; align-items: center;">
+                    <input type="date" id="new-range-start" class="form-control form-control-sm" style="width: 130px;" />
+                    <span>to</span>
+                    <input type="date" id="new-range-end" class="form-control form-control-sm" style="width: 130px;" />
+                    <select id="new-range-week-schedule" class="form-control form-control-sm" style="width: 140px;">
+                        ${this.weekSchedules.map(ws =>
+                            `<option value="${ws.week_schedule_id}">${ws.name}</option>`
+                        ).join('')}
+                    </select>
+                    <button class="btn btn-primary btn-sm" onclick="app.calendar.addDateRange()">Add</button>
+                </div>
+            </div>
+        `;
+
         container.innerHTML = html;
     },
 
@@ -108,72 +127,106 @@ const calendar = {
         const container = document.getElementById('exception-days-container');
         if (!container) return;
 
-        if (this.exceptionDays.length === 0) {
-            container.innerHTML = '<p class="text-muted text-small">No exception days configured</p>';
-            return;
-        }
+        let html = '';
 
-        // Sort exception days
-        const sortedExceptions = [...this.exceptionDays].sort((a, b) => {
-            if (a.is_moving != b.is_moving) {
-                return b.is_moving - a.is_moving;
-            }
-            if (a.is_moving) {
-                return (a.easter_offset_days || 0) - (b.easter_offset_days || 0);
-            }
-            return ((a.fixed_month || 0) * 100 + (a.fixed_day || 0)) -
-                   ((b.fixed_month || 0) * 100 + (b.fixed_day || 0));
-        });
-
-        let html = `
-            <table class="data-table compact">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Date</th>
-                        <th>Schedule</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-
-        sortedExceptions.forEach(exception => {
-            let dateRef;
-            if (exception.is_moving) {
-                const offset = exception.easter_offset_days || 0;
-                dateRef = offset === 0 ? 'Easter' :
-                          offset > 0 ? `Easter+${offset}` : `Easter${offset}`;
-            } else {
-                dateRef = `${exception.fixed_day}/${exception.fixed_month}`;
-            }
-
-            const exceptionId = exception.exception_id || exception.id;
-            const currentDayScheduleId = exception.day_schedule_id;
+        if (this.exceptionDays.length > 0) {
+            // Sort exception days
+            const sortedExceptions = [...this.exceptionDays].sort((a, b) => {
+                if (a.is_moving != b.is_moving) {
+                    return b.is_moving - a.is_moving;
+                }
+                if (a.is_moving) {
+                    return (a.easter_offset_days || 0) - (b.easter_offset_days || 0);
+                }
+                return ((a.fixed_month || 0) * 100 + (a.fixed_day || 0)) -
+                       ((b.fixed_month || 0) * 100 + (b.fixed_day || 0));
+            });
 
             html += `
-                <tr data-exception-id="${exceptionId}">
-                    <td>${exception.name}</td>
-                    <td>${dateRef}</td>
-                    <td>
-                        <select class="form-control form-control-sm exception-day-select"
-                                data-exception-id="${exceptionId}"
-                                onchange="app.calendar.updateExceptionSchedule(${exceptionId}, this.value)">
-                            <option value="" ${!currentDayScheduleId ? 'selected' : ''}>No Exception</option>
-                            ${this.daySchedules.map(ds =>
-                                `<option value="${ds.day_schedule_id}" ${ds.day_schedule_id == currentDayScheduleId ? 'selected' : ''}>${ds.name}</option>`
-                            ).join('')}
-                        </select>
-                    </td>
-                </tr>
+                <table class="data-table compact">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Date</th>
+                            <th>Schedule</th>
+                        </tr>
+                    </thead>
+                    <tbody>
             `;
-        });
 
+            sortedExceptions.forEach(exception => {
+                let dateRef;
+                if (exception.is_moving) {
+                    const offset = exception.easter_offset_days || 0;
+                    dateRef = offset === 0 ? 'Easter' :
+                              offset > 0 ? `Easter+${offset}` : `Easter${offset}`;
+                } else {
+                    dateRef = `${exception.fixed_day}/${exception.fixed_month}`;
+                }
+
+                const exceptionId = exception.exception_id || exception.id;
+                const currentDayScheduleId = exception.day_schedule_id;
+
+                html += `
+                    <tr data-exception-id="${exceptionId}">
+                        <td>${exception.name}</td>
+                        <td>${dateRef}</td>
+                        <td>
+                            <select class="form-control form-control-sm exception-day-select"
+                                    data-exception-id="${exceptionId}"
+                                    onchange="app.calendar.updateExceptionSchedule(${exceptionId}, this.value)">
+                                <option value="" ${!currentDayScheduleId ? 'selected' : ''}>No Exception</option>
+                                ${this.daySchedules.map(ds =>
+                                    `<option value="${ds.day_schedule_id}" ${ds.day_schedule_id == currentDayScheduleId ? 'selected' : ''}>${ds.name}</option>`
+                                ).join('')}
+                            </select>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                    </tbody>
+                </table>
+            `;
+        } else {
+            html += '<p class="text-muted text-small">No exception days configured</p>';
+        }
+
+        // Inline form for adding exception day
         html += `
-                </tbody>
-            </table>
+            <div style="margin-top: 10px; padding: 8px; background: var(--neutral-100); border-radius: 4px;">
+                <div style="display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin-bottom: 5px;">
+                    <input type="text" id="new-exception-name" class="form-control form-control-sm" placeholder="Name" style="width: 120px;" />
+                    <select id="new-exception-type" class="form-control form-control-sm" style="width: 100px;" onchange="app.calendar.toggleExceptionType()">
+                        <option value="fixed">Fixed</option>
+                        <option value="easter">Easter</option>
+                    </select>
+                    <span id="exception-fixed-inputs">
+                        <input type="number" id="new-exception-day" class="form-control form-control-sm" placeholder="Day" min="1" max="31" style="width: 55px;" />
+                        <span>/</span>
+                        <input type="number" id="new-exception-month" class="form-control form-control-sm" placeholder="Mon" min="1" max="12" style="width: 55px;" />
+                    </span>
+                    <span id="exception-easter-inputs" style="display: none;">
+                        <input type="number" id="new-exception-offset" class="form-control form-control-sm" placeholder="±days" style="width: 65px;" value="0" />
+                    </span>
+                    <select id="new-exception-schedule" class="form-control form-control-sm" style="width: 100px;">
+                        ${this.daySchedules.map(ds =>
+                            `<option value="${ds.day_schedule_id}" ${ds.name.toLowerCase().includes('closed') ? 'selected' : ''}>${ds.name}</option>`
+                        ).join('')}
+                    </select>
+                    <button class="btn btn-primary btn-sm" onclick="app.calendar.addExceptionDay()">Add</button>
+                </div>
+            </div>
         `;
 
         container.innerHTML = html;
+    },
+
+    toggleExceptionType() {
+        const type = document.getElementById('new-exception-type').value;
+        document.getElementById('exception-fixed-inputs').style.display = type === 'fixed' ? 'inline' : 'none';
+        document.getElementById('exception-easter-inputs').style.display = type === 'easter' ? 'inline' : 'none';
     },
 
     async updateExceptionSchedule(exceptionId, dayScheduleId) {
@@ -250,41 +303,45 @@ const calendar = {
         }
     },
 
-    // Add a seasonal date range
-    addDateRange() {
-        const startDate = prompt('Start date (YYYY-MM-DD):', '2024-06-01');
-        if (!startDate) return;
+    // Add a seasonal date range from inline form
+    async addDateRange() {
+        const startInput = document.getElementById('new-range-start');
+        const endInput = document.getElementById('new-range-end');
+        const wsSelect = document.getElementById('new-range-week-schedule');
 
-        const endDate = prompt('End date (YYYY-MM-DD):', '2024-08-31');
-        if (!endDate) return;
+        const startDate = startInput?.value;
+        const endDate = endInput?.value;
+        const weekScheduleId = wsSelect?.value;
 
-        // Show week schedule options
-        const options = this.weekSchedules.map((ws, i) => `${i + 1}. ${ws.name}`).join('\n');
-        const choice = prompt(`Select week schedule:\n${options}`, '1');
-        if (!choice) return;
-
-        const wsIndex = parseInt(choice) - 1;
-        if (wsIndex < 0 || wsIndex >= this.weekSchedules.length) {
-            api.utils.showError('Invalid selection');
+        if (!startDate || !endDate) {
+            api.utils.showError('Please select start and end dates');
             return;
         }
 
-        const weekScheduleId = this.weekSchedules[wsIndex].week_schedule_id;
+        if (!weekScheduleId) {
+            api.utils.showError('Please select a week schedule');
+            return;
+        }
 
-        api.calendar.saveDateRange({
-            template_id: this.currentTemplateId,
-            week_schedule_id: weekScheduleId,
-            start_date: startDate,
-            end_date: endDate,
-            priority: 1
-        }).then(result => {
+        try {
+            const result = await api.calendar.saveDateRange({
+                template_id: this.currentTemplateId,
+                week_schedule_id: parseInt(weekScheduleId),
+                start_date: startDate,
+                end_date: endDate,
+                priority: 1
+            });
+
             if (result.success) {
                 api.utils.showSuccess('Date range added');
-                this.loadCalendarRules(this.currentTemplateId);
+                // Clear inputs
+                startInput.value = '';
+                endInput.value = '';
+                await this.loadCalendarRules(this.currentTemplateId);
             }
-        }).catch(err => {
+        } catch (err) {
             api.utils.showError('Failed to add: ' + err.message);
-        });
+        }
     },
 
     async deleteRange(rangeId) {
@@ -299,58 +356,63 @@ const calendar = {
         }
     },
 
-    addExceptionDay() {
-        // Simple prompts for now
-        const name = prompt('Exception day name:', 'Christmas Day');
-        if (!name) return;
+    // Add exception day from inline form
+    async addExceptionDay() {
+        const nameInput = document.getElementById('new-exception-name');
+        const typeSelect = document.getElementById('new-exception-type');
+        const dayInput = document.getElementById('new-exception-day');
+        const monthInput = document.getElementById('new-exception-month');
+        const offsetInput = document.getElementById('new-exception-offset');
+        const scheduleSelect = document.getElementById('new-exception-schedule');
 
-        const isMoving = confirm('Is this a moving holiday (relative to Easter)?\n\nOK = Easter-relative\nCancel = Fixed date');
+        const name = nameInput?.value?.trim();
+        const type = typeSelect?.value;
+        const dayScheduleId = scheduleSelect?.value;
 
+        if (!name) {
+            api.utils.showError('Please enter a name');
+            return;
+        }
+
+        let isMoving = type === 'easter';
         let easterOffset = null;
         let fixedMonth = null;
         let fixedDay = null;
 
         if (isMoving) {
-            const offsetStr = prompt('Days offset from Easter Sunday:\n0 = Easter\n-2 = Good Friday\n1 = Easter Monday', '0');
-            if (offsetStr === null) return;
-            easterOffset = parseInt(offsetStr);
-            if (isNaN(easterOffset)) {
-                api.utils.showError('Invalid offset');
-                return;
-            }
+            easterOffset = parseInt(offsetInput?.value) || 0;
         } else {
-            const monthStr = prompt('Month (1-12):', '12');
-            if (!monthStr) return;
-            const dayStr = prompt('Day (1-31):', '25');
-            if (!dayStr) return;
-            fixedMonth = parseInt(monthStr);
-            fixedDay = parseInt(dayStr);
-            if (!fixedMonth || !fixedDay || fixedMonth < 1 || fixedMonth > 12 || fixedDay < 1 || fixedDay > 31) {
-                api.utils.showError('Invalid date');
+            fixedDay = parseInt(dayInput?.value);
+            fixedMonth = parseInt(monthInput?.value);
+            if (!fixedDay || !fixedMonth || fixedMonth < 1 || fixedMonth > 12 || fixedDay < 1 || fixedDay > 31) {
+                api.utils.showError('Please enter valid day/month');
                 return;
             }
         }
 
-        // Default to Closed day schedule
-        const closedSchedule = this.daySchedules.find(ds => ds.name.toLowerCase().includes('closed'));
-        const dayScheduleId = closedSchedule?.day_schedule_id || this.daySchedules[0]?.day_schedule_id;
+        try {
+            const result = await api.calendar.saveExceptionDay({
+                template_id: this.currentTemplateId,
+                name: name,
+                day_schedule_id: dayScheduleId || null,
+                is_moving: isMoving ? 1 : 0,
+                easter_offset_days: easterOffset,
+                fixed_month: fixedMonth,
+                fixed_day: fixedDay
+            });
 
-        api.calendar.saveExceptionDay({
-            template_id: this.currentTemplateId,
-            name: name,
-            day_schedule_id: dayScheduleId,
-            is_moving: isMoving ? 1 : 0,
-            easter_offset_days: easterOffset,
-            fixed_month: fixedMonth,
-            fixed_day: fixedDay
-        }).then(result => {
             if (result.success) {
                 api.utils.showSuccess('Exception added');
-                this.loadCalendarRules(this.currentTemplateId);
+                // Clear inputs
+                nameInput.value = '';
+                dayInput.value = '';
+                monthInput.value = '';
+                offsetInput.value = '0';
+                await this.loadCalendarRules(this.currentTemplateId);
             }
-        }).catch(err => {
+        } catch (err) {
             api.utils.showError('Failed: ' + err.message);
-        });
+        }
     },
 
     async deleteException(exceptionId) {
