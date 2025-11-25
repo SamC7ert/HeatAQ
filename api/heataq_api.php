@@ -580,6 +580,20 @@ class HeatAQAPI {
         $name = trim($input['name'] ?? '');
         // Convert empty string to null for foreign key
         $dayScheduleId = !empty($input['day_schedule_id']) ? $input['day_schedule_id'] : null;
+
+        // For updates, just update the day_schedule_id (simple schedule change)
+        if ($exceptionId) {
+            $stmt = $this->db->prepare("
+                UPDATE calendar_exception_days
+                SET day_schedule_id = ?
+                WHERE id = ?
+            ");
+            $stmt->execute([$dayScheduleId, $exceptionId]);
+            $this->sendResponse(['success' => true, 'exception_id' => $exceptionId]);
+            return;
+        }
+
+        // For new exceptions, validate all fields
         // Handle is_moving as int (could come as string "1" or "0")
         $isMoving = (int)($input['is_moving'] ?? 0);
         // Easter offset can be 0 (Easter Sunday itself), so check for key existence
@@ -591,34 +605,21 @@ class HeatAQAPI {
             $this->sendError('Exception name is required');
         }
 
-        // Only validate date fields for new exceptions (not updates)
-        if (!$exceptionId) {
-            if ($isMoving && $easterOffsetDays === null) {
-                $this->sendError('Easter offset is required for moving holidays');
-            }
-
-            if (!$isMoving && (!$fixedMonth || !$fixedDay)) {
-                $this->sendError('Fixed month and day are required for fixed holidays');
-            }
+        if ($isMoving && $easterOffsetDays === null) {
+            $this->sendError('Easter offset is required for moving holidays');
         }
 
-        if ($exceptionId) {
-            // Update existing
-            $stmt = $this->db->prepare("
-                UPDATE calendar_exception_days
-                SET name = ?, day_schedule_id = ?, is_moving = ?, easter_offset_days = ?, fixed_month = ?, fixed_day = ?
-                WHERE id = ?
-            ");
-            $stmt->execute([$name, $dayScheduleId, $isMoving, $easterOffsetDays, $fixedMonth, $fixedDay, $exceptionId]);
-        } else {
-            // Create new (column is 'schedule_template_id', not 'template_id')
-            $stmt = $this->db->prepare("
-                INSERT INTO calendar_exception_days (schedule_template_id, name, day_schedule_id, is_moving, easter_offset_days, fixed_month, fixed_day)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ");
-            $stmt->execute([$templateId, $name, $dayScheduleId, $isMoving, $easterOffsetDays, $fixedMonth, $fixedDay]);
-            $exceptionId = $this->db->lastInsertId();
+        if (!$isMoving && (!$fixedMonth || !$fixedDay)) {
+            $this->sendError('Fixed month and day are required for fixed holidays');
         }
+
+        // Create new
+        $stmt = $this->db->prepare("
+            INSERT INTO calendar_exception_days (schedule_template_id, name, day_schedule_id, is_moving, easter_offset_days, fixed_month, fixed_day)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ");
+        $stmt->execute([$templateId, $name, $dayScheduleId, $isMoving, $easterOffsetDays, $fixedMonth, $fixedDay]);
+        $exceptionId = $this->db->lastInsertId();
 
         $this->sendResponse(['success' => true, 'exception_id' => $exceptionId]);
     }

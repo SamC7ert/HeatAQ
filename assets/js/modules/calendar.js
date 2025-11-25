@@ -230,23 +230,16 @@ const calendar = {
     },
 
     async updateExceptionSchedule(exceptionId, dayScheduleId) {
-        // Find the exception to update
-        const exception = this.exceptionDays.find(e => (e.exception_id || e.id) == exceptionId);
-        if (!exception) return;
-
         try {
+            // For updates, only send exception_id and day_schedule_id
             await api.calendar.saveExceptionDay({
                 exception_id: exceptionId,
-                template_id: this.currentTemplateId,
-                name: exception.name,
-                day_schedule_id: dayScheduleId || null,
-                is_moving: exception.is_moving,
-                easter_offset_days: exception.easter_offset_days,
-                fixed_month: exception.fixed_month,
-                fixed_day: exception.fixed_day
+                day_schedule_id: dayScheduleId || null
             });
 
             api.utils.showSuccess('Exception updated');
+            // Reload to show updated data
+            await this.loadCalendarRules(this.currentTemplateId);
         } catch (err) {
             api.utils.showError('Failed: ' + err.message);
             // Reload to reset
