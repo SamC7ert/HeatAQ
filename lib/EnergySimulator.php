@@ -90,7 +90,8 @@ class EnergySimulator {
                 'cover_r_value' => 5.0,   // U-value when cover exists
                 'cover_solar_transmittance' => 0.10, // 10% solar passes through cover
                 'solar_absorption' => 0.60,          // 60% solar absorption
-                'wind_exposure_factor' => 1.0        // Default: full wind exposure
+                'wind_exposure_factor' => 1.0,       // Default: full wind exposure
+                'years_operating' => 3               // Years since startup (affects ground thermal)
             ];
         }
 
@@ -104,7 +105,8 @@ class EnergySimulator {
             'cover_r_value' => (float) ($config['cover_r_value'] ?? 5.0),
             'cover_solar_transmittance' => (float) ($config['cover_solar_transmittance'] ?? 0.10),
             'solar_absorption' => (float) ($config['solar_absorption'] ?? 0.60),
-            'wind_exposure_factor' => (float) ($config['wind_exposure_factor'] ?? 1.0)
+            'wind_exposure_factor' => (float) ($config['wind_exposure_factor'] ?? 1.0),
+            'years_operating' => (int) ($config['years_operating'] ?? 3)
         ];
     }
 
@@ -165,6 +167,7 @@ class EnergySimulator {
             $this->poolConfig['volume_m3'] = $uiConfig['pool']['volume_m3'] ?? $this->poolConfig['volume_m3'];
             $this->poolConfig['depth_m'] = $uiConfig['pool']['depth_m'] ?? $this->poolConfig['depth_m'];
             $this->poolConfig['wind_exposure_factor'] = $uiConfig['pool']['wind_exposure'] ?? $this->poolConfig['wind_exposure_factor'];
+            $this->poolConfig['years_operating'] = $uiConfig['pool']['years_operating'] ?? $this->poolConfig['years_operating'];
         }
 
         // Cover settings
@@ -712,7 +715,12 @@ class EnergySimulator {
 
     /**
      * Calculate conduction heat loss to ground
-     * Always use calculation - lookup table was unreliable
+     * Uses years_operating to adjust for ground thermal stabilization
+     *
+     * Ground around pool warms up over time:
+     * - Year 1: Cold ground, higher losses (factor ~1.5)
+     * - Year 2: Warming ground (factor ~1.2)
+     * - Year 3+: Steady state (factor 1.0)
      */
     private function calculateConductionLoss($waterTemp) {
         // Ground temperature assumed ~10°C year-round in Norway
@@ -723,13 +731,51 @@ class EnergySimulator {
         // Typical insulated pool: 0.3-0.5, uninsulated: 1.0-2.0
         $uValue = 0.5;
 
+        // Years operating affects ground thermal - ground warms up over time
+        $yearsOperating = $this->poolConfig['years_operating'] ?? 3;
+        $groundFactor = $this->getGroundThermalFactor($yearsOperating);
+
         // Calculate areas
         $bottomArea = $this->poolConfig['area_m2'];
         $perimeter = $this->poolConfig['perimeter_m'] ?? $this->calculatePerimeter();
         $sideArea = $perimeter * $this->poolConfig['depth_m'];
         $totalArea = $bottomArea + $sideArea;
 
-        return $uValue * $totalArea * $tempDiff / 1000; // kW
+        return $uValue * $totalArea * $tempDiff * $groundFactor / 1000; // kW
+    }
+
+    /**
+     * Get ground thermal factor based on years of operation
+     * Ground around pool warms up over time, reducing heat loss
+     */
+    private function getGroundThermalFactor($yearsOperating) {
+        // Try to get from lookup table first
+        try {
+            $stmt = $this->db->prepare("
+                SELECT q_total_kw FROM ground_thermal_lookup
+                WHERE year = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$yearsOperating]);
+            $row = $stmt->fetch();
+            if ($row && $row['q_total_kw'] > 0) {
+                // Normalize to year 3 baseline (factor of 1.0)
+                $stmt->execute([3]);
+                $baseline = $stmt->fetch();
+                if ($baseline && $baseline['q_total_kw'] > 0) {
+                    return $row['q_total_kw'] / $baseline['q_total_kw'];
+                }
+            }
+        } catch (\PDOException $e) {
+            // Table doesn't exist, use calculated factors
+        }
+
+        // Fallback: calculated factors if lookup fails
+        switch ($yearsOperating) {
+            case 1: return 1.5;  // Cold ground, 50% more loss
+            case 2: return 1.2;  // Warming ground, 20% more loss
+            default: return 1.0; // Year 3+: steady state
+        }
     }
 
     /**

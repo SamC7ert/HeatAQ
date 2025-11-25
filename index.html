@@ -74,7 +74,7 @@
         <div class="user-info">
             <span class="project-name" id="current-project"></span>
             <span class="user-name" id="current-user"></span>
-            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">v44</span>
+            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">v45</span>
             <button onclick="logout()" class="btn-logout">Logout</button>
         </div>
         
@@ -270,6 +270,16 @@
                                 <tr>
                                     <td><label for="cfg-wind-factor">Wind Exposure</label></td>
                                     <td><input type="number" id="cfg-wind-factor" step="0.01" value="0.535" min="0" max="1"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-years-operating">Years Operating</label></td>
+                                    <td>
+                                        <select id="cfg-years-operating">
+                                            <option value="1">1 - New pool (cold ground)</option>
+                                            <option value="2">2 - Warming ground</option>
+                                            <option value="3" selected>3+ - Steady state</option>
+                                        </select>
+                                    </td>
                                 </tr>
                             </table>
                         </div>
