@@ -149,6 +149,76 @@ class EnergySimulator {
     }
 
     /**
+     * Set configuration from UI format (config_templates.config_json)
+     *
+     * @param array $uiConfig Configuration object from UI
+     */
+    public function setConfigFromUI($uiConfig) {
+        // Pool physical parameters
+        if (isset($uiConfig['pool'])) {
+            $this->poolConfig['area_m2'] = $uiConfig['pool']['area_m2'] ?? $this->poolConfig['area_m2'];
+            $this->poolConfig['volume_m3'] = $uiConfig['pool']['volume_m3'] ?? $this->poolConfig['volume_m3'];
+            $this->poolConfig['depth_m'] = $uiConfig['pool']['depth_m'] ?? $this->poolConfig['depth_m'];
+            $this->poolConfig['wind_exposure_factor'] = $uiConfig['pool']['wind_exposure'] ?? $this->poolConfig['wind_exposure_factor'];
+        }
+
+        // Cover settings
+        if (isset($uiConfig['cover'])) {
+            $this->poolConfig['has_cover'] = $uiConfig['cover']['has_cover'] ?? $this->poolConfig['has_cover'];
+            $this->poolConfig['cover_r_value'] = $uiConfig['cover']['u_value'] ?? $this->poolConfig['cover_r_value'];
+        }
+
+        // Equipment - Heat Pump
+        if (isset($uiConfig['equipment'])) {
+            $this->equipment['heat_pump']['capacity_kw'] = $uiConfig['equipment']['hp_capacity_kw'] ?? $this->equipment['heat_pump']['capacity_kw'];
+            $this->equipment['heat_pump']['cop_nominal'] = $uiConfig['equipment']['hp_cop'] ?? $this->equipment['heat_pump']['cop_nominal'];
+            $this->equipment['boiler']['capacity_kw'] = $uiConfig['equipment']['boiler_capacity_kw'] ?? $this->equipment['boiler']['capacity_kw'];
+            $this->equipment['boiler']['efficiency'] = $uiConfig['equipment']['boiler_efficiency'] ?? $this->equipment['boiler']['efficiency'];
+        }
+
+        // Control settings
+        if (isset($uiConfig['control'])) {
+            $this->equipment['control_strategy'] = $uiConfig['control']['strategy'] ?? $this->equipment['control_strategy'];
+            $this->equipment['target_temp'] = $uiConfig['control']['target_temp'] ?? 28;
+            $this->equipment['temp_tolerance'] = $uiConfig['control']['temp_tolerance'] ?? 2;
+        }
+
+        // Energy costs
+        if (isset($uiConfig['costs'])) {
+            $this->equipment['electricity_cost_per_kwh'] = $uiConfig['costs']['electricity_nok_kwh'] ?? $this->equipment['electricity_cost_per_kwh'];
+            $this->equipment['boiler']['fuel_cost_per_kwh'] = $uiConfig['costs']['gas_nok_kwh'] ?? $this->equipment['boiler']['fuel_cost_per_kwh'];
+        }
+    }
+
+    /**
+     * Set equipment configuration
+     */
+    public function setEquipment($equipment) {
+        $this->equipment = array_merge($this->equipment, $equipment);
+    }
+
+    /**
+     * Get simulator version
+     */
+    public static function getVersion() {
+        return self::VERSION;
+    }
+
+    /**
+     * Get pool configuration
+     */
+    public function getPoolConfig() {
+        return $this->poolConfig;
+    }
+
+    /**
+     * Get equipment configuration
+     */
+    public function getEquipment() {
+        return $this->equipment;
+    }
+
+    /**
      * Run simulation for a date range
      *
      * @param string $startDate Start date (YYYY-MM-DD)

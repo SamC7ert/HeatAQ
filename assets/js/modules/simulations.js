@@ -136,6 +136,8 @@ const SimulationsModule = {
         const startDate = document.getElementById('sim-start-date').value;
         const endDate = document.getElementById('sim-end-date').value;
         const description = document.getElementById('sim-description').value || '';
+        const configId = document.getElementById('sim-config-select')?.value || null;
+        const ohcId = document.getElementById('sim-ohc-select')?.value || null;
 
         // Validation
         if (!startDate || !endDate) {
@@ -167,7 +169,9 @@ const SimulationsModule = {
                     scenario_name: scenarioName,
                     start_date: startDate,
                     end_date: endDate,
-                    description: description
+                    description: description,
+                    config_id: configId,
+                    template_id: ohcId
                 })
             });
 

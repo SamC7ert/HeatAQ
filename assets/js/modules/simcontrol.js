@@ -10,6 +10,8 @@ const SimControlModule = {
             this.initialized = true;
             // Load OHC options for the dropdown
             this.loadOHCOptions();
+            // Load configuration options
+            this.loadConfigOptions();
             // Load weather range info
             this.loadWeatherRange();
         }
@@ -72,6 +74,24 @@ const SimControlModule = {
             }
         } catch (err) {
             console.error('Failed to load OHC options:', err);
+        }
+    },
+
+    // Load configuration options
+    loadConfigOptions: async function() {
+        try {
+            const response = await fetch('./api/heataq_api.php?action=get_project_configs');
+            const data = await response.json();
+
+            const select = document.getElementById('sim-config-select');
+            if (select && data.configs) {
+                select.innerHTML = '<option value="">-- Use Project Config --</option>' +
+                    data.configs.map(c =>
+                        `<option value="${c.template_id}">${c.name}</option>`
+                    ).join('');
+            }
+        } catch (err) {
+            console.error('Failed to load config options:', err);
         }
     },
 
