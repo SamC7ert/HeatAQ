@@ -1326,30 +1326,52 @@ class HeatAQAPI {
 
     private function getProjectConfigs() {
         try {
-            // Only show configs for the current project
+            // Include legacy columns to merge with json_config
             if ($this->projectId) {
-                $query = "SELECT template_id, template_name as name, json_config, created_at
+                $query = "SELECT template_id, template_name as name, json_config, created_at,
+                                 hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy
                           FROM config_templates
                           WHERE project_id = :project_id
                           ORDER BY template_name";
                 $stmt = $this->db->prepare($query);
                 $stmt->execute([':project_id' => $this->projectId]);
             } else {
-                // No auth - show all configs
-                $query = "SELECT template_id, template_name as name, json_config, created_at
+                $query = "SELECT template_id, template_name as name, json_config, created_at,
+                                 hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy
                           FROM config_templates
                           ORDER BY template_name";
                 $stmt = $this->db->query($query);
             }
             $configs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            // Decode JSON
+            // Decode JSON and merge with legacy columns (legacy columns override)
             foreach ($configs as &$config) {
-                $config['config'] = json_decode($config['json_config'] ?? '{}', true);
-                unset($config['json_config']);
+                $jsonConfig = json_decode($config['json_config'] ?? '{}', true) ?: [];
+
+                // Ensure nested arrays exist
+                if (!isset($jsonConfig['equipment'])) $jsonConfig['equipment'] = [];
+                if (!isset($jsonConfig['control'])) $jsonConfig['control'] = [];
+
+                // Override with legacy column values if set
+                if ($config['hp_capacity_kw'] !== null) {
+                    $jsonConfig['equipment']['hp_capacity_kw'] = (float)$config['hp_capacity_kw'];
+                }
+                if ($config['boiler_capacity_kw'] !== null) {
+                    $jsonConfig['equipment']['boiler_capacity_kw'] = (float)$config['boiler_capacity_kw'];
+                }
+                if ($config['target_temp'] !== null) {
+                    $jsonConfig['control']['target_temp'] = (float)$config['target_temp'];
+                }
+                if ($config['control_strategy'] !== null) {
+                    $jsonConfig['control']['strategy'] = $config['control_strategy'];
+                }
+
+                $config['config'] = $jsonConfig;
+                unset($config['json_config'], $config['hp_capacity_kw'], $config['boiler_capacity_kw'],
+                      $config['target_temp'], $config['control_strategy']);
             }
 
-            $this->sendResponse(['configs' => $configs, 'debug_project_id' => $this->projectId]);
+            $this->sendResponse(['configs' => $configs]);
         } catch (PDOException $e) {
             // Fallback: json_config column might not exist
             try {
