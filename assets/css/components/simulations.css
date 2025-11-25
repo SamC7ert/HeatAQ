@@ -807,3 +807,95 @@ p.loading {
     border-radius: 4px;
     font-size: 14px;
 }
+
+/* ============================================
+   DEBUG HOUR TAB
+   ============================================ */
+
+.debug-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.debug-grid .card {
+    padding: 15px;
+}
+
+.debug-grid .card h4 {
+    margin: 0 0 10px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+}
+
+#debug-input {
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+#debug-input strong {
+    color: #555;
+}
+
+/* Debug tables - compact style */
+#debug-results .data-table.compact {
+    font-size: 12px;
+}
+
+#debug-results .data-table.compact td:first-child {
+    color: #666;
+    text-transform: capitalize;
+}
+
+#debug-results .data-table.compact td:last-child {
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    text-align: right;
+}
+
+#debug-results code {
+    background: #f4f4f4;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+/* Debug summary comparison table */
+#debug-summary .data-table {
+    margin-bottom: 10px;
+}
+
+#debug-summary .data-table th {
+    font-size: 12px;
+    text-align: center;
+}
+
+#debug-summary .data-table th:first-child {
+    text-align: left;
+}
+
+#debug-summary .data-table td {
+    text-align: center;
+}
+
+#debug-summary .data-table td:first-child {
+    text-align: left;
+}
+
+#debug-summary .data-table tr.total {
+    background: #f8f9fa;
+}
+
+#debug-summary .data-table tr.total td {
+    font-weight: 600;
+}
+
+/* Responsive debug grid */
+@media (max-width: 768px) {
+    .debug-grid {
+        grid-template-columns: 1fr;
+    }
+}

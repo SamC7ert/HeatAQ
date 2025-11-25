@@ -749,6 +749,179 @@ const SimulationsModule = {
                 </table>
             </div>
         `;
+    },
+
+    // ============================================
+    // DEBUG HOUR METHODS
+    // ============================================
+
+    /**
+     * Run debug calculation for a single hour
+     */
+    debugHour: async function() {
+        const date = document.getElementById('debug-date').value;
+        const hour = document.getElementById('debug-hour').value;
+        const waterTemp = document.getElementById('debug-water-temp').value;
+        const configId = document.getElementById('debug-config-select')?.value || null;
+
+        if (!date) {
+            alert('Please select a date');
+            return;
+        }
+
+        const resultsDiv = document.getElementById('debug-results');
+        resultsDiv.innerHTML = '<p class="loading">Calculating...</p>';
+        resultsDiv.style.display = 'block';
+
+        try {
+            let url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}`;
+            if (waterTemp) url += `&water_temp=${waterTemp}`;
+            if (configId) url += `&config_id=${configId}`;
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            this.renderDebugResults(data);
+
+        } catch (error) {
+            resultsDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+        }
+    },
+
+    /**
+     * Render debug calculation results
+     */
+    renderDebugResults: function(data) {
+        const resultsDiv = document.getElementById('debug-results');
+        resultsDiv.style.display = 'block';
+
+        // Helper to render a table from object
+        const renderTable = (obj) => {
+            let html = '<table class="data-table compact">';
+            for (const [key, value] of Object.entries(obj)) {
+                if (typeof value === 'object' && value !== null) continue; // Skip nested
+                const displayKey = key.replace(/_/g, ' ');
+                const displayVal = typeof value === 'number' ? value.toLocaleString() : value;
+                html += `<tr><td>${displayKey}</td><td><code>${displayVal}</code></td></tr>`;
+            }
+            html += '</table>';
+            return html;
+        };
+
+        // Input values
+        document.getElementById('debug-input').innerHTML = `
+            <strong>Weather:</strong> ${data.input?.weather?.air_temp_c}°C,
+            Wind: ${data.input?.weather?.wind_speed_ms} m/s,
+            Humidity: ${data.input?.weather?.humidity_pct}%,
+            GHI: ${data.input?.weather?.solar_ghi_wm2} W/m²<br>
+            <strong>Pool:</strong> ${data.input?.pool?.water_temp_c}°C,
+            Area: ${data.input?.pool?.area_m2} m²,
+            Volume: ${data.input?.pool?.volume_m3} m³<br>
+            <strong>Config:</strong> Wind factor: ${data.input?.config?.wind_factor},
+            Years operating: ${data.input?.config?.years_operating},
+            Has cover: ${data.input?.config?.has_cover ? 'Yes' : 'No'},
+            Is open: ${data.input?.config?.is_open ? 'Yes' : 'No'}
+        `;
+
+        // Evaporation
+        document.getElementById('debug-evaporation').innerHTML = renderTable(data.evaporation || {});
+
+        // Convection
+        document.getElementById('debug-convection').innerHTML = renderTable(data.convection || {});
+
+        // Radiation
+        document.getElementById('debug-radiation').innerHTML = renderTable(data.radiation || {});
+
+        // Solar
+        document.getElementById('debug-solar').innerHTML = renderTable(data.solar_gain || {});
+
+        // Conduction
+        document.getElementById('debug-conduction').innerHTML = renderTable(data.conduction || {});
+
+        // Summary comparison
+        const sum = data.summary || {};
+        const excel = data.excel_comparison || {};
+
+        const compareRow = (label, phpVal, excelVal, unit = 'kW') => {
+            const diff = phpVal - excelVal;
+            const pctDiff = excelVal !== 0 ? ((diff / excelVal) * 100).toFixed(1) : '-';
+            const status = Math.abs(diff) < 1 ? '✓' : (Math.abs(diff) < 5 ? '~' : '✗');
+            const color = status === '✓' ? 'green' : (status === '~' ? 'orange' : 'red');
+            return `
+                <tr>
+                    <td>${label}</td>
+                    <td><strong>${phpVal?.toFixed(3) || '-'}</strong> ${unit}</td>
+                    <td>${excelVal?.toFixed(3) || '-'} ${unit}</td>
+                    <td style="color:${color}">${diff?.toFixed(3) || '-'} (${pctDiff}%)</td>
+                    <td style="color:${color}">${status}</td>
+                </tr>
+            `;
+        };
+
+        document.getElementById('debug-summary').innerHTML = `
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Component</th>
+                        <th>PHP</th>
+                        <th>Excel Reference</th>
+                        <th>Difference</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${compareRow('Evaporation', sum.evaporation_kw, excel.excel_evaporation)}
+                    ${compareRow('Convection', sum.convection_kw, excel.excel_convection)}
+                    ${compareRow('Radiation', sum.radiation_kw, excel.excel_radiation)}
+                    ${compareRow('Wall Loss', sum.wall_loss_kw, excel.excel_wall_loss)}
+                    ${compareRow('Floor Loss', sum.floor_loss_kw, excel.excel_floor_loss)}
+                    ${compareRow('Solar Gain', sum.solar_gain_kw, Math.abs(excel.excel_solar_gain))}
+                    <tr class="total">
+                        <td><strong>Total Loss</strong></td>
+                        <td><strong>${sum.total_loss_kw?.toFixed(3) || '-'}</strong> kW</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                    </tr>
+                    <tr class="total">
+                        <td><strong>Net Requirement</strong></td>
+                        <td><strong>${sum.net_requirement_kw?.toFixed(3) || '-'}</strong> kW</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p class="text-muted" style="margin-top: 10px;">
+                ✓ = Match (&lt;1 kW diff), ~ = Close (1-5 kW), ✗ = Needs review (&gt;5 kW)<br>
+                Note: Excel reference values are for 2024-07-27 hour 1 with specific weather conditions.
+            </p>
+        `;
+    },
+
+    /**
+     * Initialize debug section
+     */
+    initDebug: async function() {
+        // Load configs for debug dropdown
+        try {
+            const response = await fetch('./api/heataq_api.php?action=get_project_configs');
+            const data = await response.json();
+            const select = document.getElementById('debug-config-select');
+            if (select && data.configs) {
+                let html = '<option value="">-- Use Project Defaults --</option>';
+                data.configs.forEach(c => {
+                    html += `<option value="${c.template_id}">${this.escapeHtml(c.name)}</option>`;
+                });
+                select.innerHTML = html;
+            }
+        } catch (err) {
+            console.error('Failed to load configs for debug:', err);
+        }
     }
 };
 
