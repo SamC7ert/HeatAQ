@@ -959,12 +959,4 @@ class EnergySimulator {
         // Temperature change
         return $energy / ($mass * self::WATER_SPECIFIC_HEAT / 1000);
     }
-
-    /**
-     * Get simulator version
-     * @return string Version string (e.g., "3.7.0")
-     */
-    public static function getVersion() {
-        return self::VERSION;
-    }
 }
