@@ -52,18 +52,19 @@ const SimulationsModule = {
             endInput.min = this.weatherRange.min_date;
             endInput.max = this.weatherRange.max_date;
 
-            // Set default values to last year of data
-            const maxDate = new Date(this.weatherRange.max_date);
-            const oneYearBefore = new Date(maxDate);
-            oneYearBefore.setFullYear(maxDate.getFullYear() - 1);
+            // Set default to last full year of data using string manipulation
+            // to avoid timezone issues
+            const maxDateStr = this.weatherRange.max_date; // "YYYY-MM-DD"
+            const maxYear = parseInt(maxDateStr.substring(0, 4));
 
-            startInput.value = oneYearBefore.toISOString().split('T')[0];
-            endInput.value = this.weatherRange.max_date;
+            // Default: full previous year (e.g., if max is 2023-12-31, use 2023-01-01 to 2023-12-31)
+            startInput.value = `${maxYear}-01-01`;
+            endInput.value = `${maxYear}-12-31`;
 
             // Update weather info display
             const rangeInfo = document.getElementById('weather-range-info');
             if (rangeInfo) {
-                rangeInfo.textContent = `Available: ${this.weatherRange.min_date} to ${this.weatherRange.max_date} (${this.weatherRange.days_count} days)`;
+                rangeInfo.textContent = `Weather data: ${this.weatherRange.min_date} to ${this.weatherRange.max_date} (${this.weatherRange.days_count} days)`;
             }
         }
     },
