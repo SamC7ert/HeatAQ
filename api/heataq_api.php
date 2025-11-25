@@ -578,7 +578,8 @@ class HeatAQAPI {
         $exceptionId = $input['exception_id'] ?? null;
         $templateId = $input['template_id'] ?? 1;
         $name = trim($input['name'] ?? '');
-        $dayScheduleId = $input['day_schedule_id'] ?? null;
+        // Convert empty string to null for foreign key
+        $dayScheduleId = !empty($input['day_schedule_id']) ? $input['day_schedule_id'] : null;
         // Handle is_moving as int (could come as string "1" or "0")
         $isMoving = (int)($input['is_moving'] ?? 0);
         // Easter offset can be 0 (Easter Sunday itself), so check for key existence
