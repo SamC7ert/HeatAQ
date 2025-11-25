@@ -22,7 +22,7 @@ const SimulationsModule = {
      */
     loadWeatherRange: async function() {
         try {
-            const response = await fetch(CONFIG.API_BASE + '/simulation_api.php?action=get_weather_range');
+            const response = await fetch('/api/simulation_api.php?action=get_weather_range');
             const data = await response.json();
             if (data.weather_range) {
                 this.weatherRange = data.weather_range;
@@ -67,7 +67,7 @@ const SimulationsModule = {
      */
     loadRuns: async function() {
         try {
-            const response = await fetch(CONFIG.API_BASE + '/simulation_api.php?action=get_runs&limit=20');
+            const response = await fetch('/api/simulation_api.php?action=get_runs&limit=20');
             const data = await response.json();
             if (data.runs) {
                 this.runs = data.runs;
@@ -151,7 +151,7 @@ const SimulationsModule = {
         progressDiv.style.display = 'block';
 
         try {
-            const response = await fetch(CONFIG.API_BASE + '/simulation_api.php?action=run_simulation', {
+            const response = await fetch('/api/simulation_api.php?action=run_simulation', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -200,7 +200,7 @@ const SimulationsModule = {
      */
     viewRun: async function(runId) {
         try {
-            const response = await fetch(CONFIG.API_BASE + `/simulation_api.php?action=get_run&run_id=${runId}`);
+            const response = await fetch(`/api/simulation_api.php?action=get_run&run_id=${runId}`);
             const data = await response.json();
 
             if (data.error) {
@@ -313,7 +313,7 @@ const SimulationsModule = {
      */
     loadDailyResults: async function(runId) {
         try {
-            const response = await fetch(CONFIG.API_BASE + `/simulation_api.php?action=get_daily_results&run_id=${runId}`);
+            const response = await fetch(`/api/simulation_api.php?action=get_daily_results&run_id=${runId}`);
             const data = await response.json();
 
             if (data.daily_results) {
@@ -452,7 +452,7 @@ const SimulationsModule = {
      */
     exportResults: async function(runId) {
         try {
-            const response = await fetch(CONFIG.API_BASE + `/simulation_api.php?action=get_daily_results&run_id=${runId}`);
+            const response = await fetch(`/api/simulation_api.php?action=get_daily_results&run_id=${runId}`);
             const data = await response.json();
 
             if (!data.daily_results || data.daily_results.length === 0) {
@@ -494,7 +494,7 @@ const SimulationsModule = {
         }
 
         try {
-            const response = await fetch(CONFIG.API_BASE + `/simulation_api.php?action=delete_run&run_id=${runId}`, {
+            const response = await fetch(`/api/simulation_api.php?action=delete_run&run_id=${runId}`, {
                 method: 'DELETE'
             });
             const data = await response.json();
