@@ -48,61 +48,103 @@ const schedules = {
     
     renderDayScheduleSelector() {
         const container = document.getElementById('day-schedules-container');
+        if (!container) return;
 
-        // Build list of existing schedules
-        let schedulesList = '';
+        // Build options with summary hours
+        let options = '<option value="">-- Select a schedule --</option>';
         this.daySchedules.forEach(schedule => {
-            const isClosed = schedule.is_closed == 1;
-            schedulesList += `
-                <div class="schedule-item ${this.selectedDaySchedule?.day_schedule_id === schedule.day_schedule_id ? 'selected' : ''}"
-                     onclick="app.schedules.selectDaySchedule(${schedule.day_schedule_id})">
-                    <span class="schedule-name">${schedule.name}</span>
-                    ${isClosed ? '<span class="badge badge-secondary">Closed</span>' : ''}
-                </div>
-            `;
+            const hours = this.getDayScheduleHours(schedule);
+            options += `<option value="${schedule.day_schedule_id}">${schedule.name} (${hours})</option>`;
         });
 
         let html = `
-            <div class="card">
-                <h3>Day Schedules</h3>
+            <div class="form-group">
+                <label class="form-label">Select Day Schedule:</label>
+                <select id="day-schedule-selector" class="form-control" onchange="app.schedules.selectDaySchedule(this.value)">
+                    ${options}
+                </select>
+            </div>
 
-                <!-- List of existing schedules -->
-                <div class="schedule-list" style="max-height: 150px; overflow-y: auto; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px;">
-                    ${schedulesList || '<p class="text-muted p-2">No day schedules</p>'}
+            <div id="day-schedule-editor" style="display: none;">
+                <h4 id="day-schedule-title">Schedule Periods</h4>
+                <div id="periods-container"></div>
+                <div style="margin-top: 10px;">
+                    <button class="btn btn-primary btn-sm" onclick="app.schedules.addPeriod()">+ Add Period</button>
+                    <button class="btn btn-success btn-sm" onclick="app.schedules.saveDaySchedule()">Save Schedule</button>
                 </div>
+            </div>
 
-                <!-- Create new form -->
-                <div class="new-schedule-form" style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-bottom: 10px;">
-                    <label class="form-label text-small"><strong>Create New:</strong></label>
-                    <div style="display: flex; gap: 5px;">
-                        <input type="text" id="new-day-schedule-name" class="form-control form-control-sm" placeholder="Schedule name" style="flex: 1;" />
-                        <button class="btn btn-primary btn-sm" onclick="app.schedules.createDaySchedule()">Create</button>
-                    </div>
-                </div>
-
-                <!-- Editor for selected schedule -->
-                <div id="day-schedule-editor" style="display: none;">
-                    <h4 id="day-schedule-title">Edit Schedule</h4>
-                    <div id="periods-container"></div>
-                    <div style="margin-top: 10px;">
-                        <button class="btn btn-primary btn-sm" onclick="app.schedules.addPeriod()">+ Add Period</button>
-                        <button class="btn btn-success btn-sm" onclick="app.schedules.saveDaySchedule()">Save</button>
-                    </div>
+            <hr style="margin: 15px 0;" />
+            <div class="form-group">
+                <label class="form-label text-small">Create New Day Schedule:</label>
+                <div style="display: flex; gap: 5px;">
+                    <input type="text" id="new-day-schedule-name" class="form-control form-control-sm" placeholder="Name" style="flex: 1;" />
+                    <button class="btn btn-primary btn-sm" onclick="app.schedules.createDaySchedule()">Create</button>
                 </div>
             </div>
         `;
 
         container.innerHTML = html;
+
+        // Re-select if we had one selected
+        if (this.selectedDaySchedule) {
+            const selector = document.getElementById('day-schedule-selector');
+            if (selector) {
+                selector.value = this.selectedDaySchedule.day_schedule_id;
+                this.loadDayScheduleEditor();
+            }
+        }
+    },
+
+    getDayScheduleHours(schedule) {
+        if (schedule.is_closed == 1) return 'Closed';
+
+        let periods = [];
+        if (schedule.periods) {
+            if (typeof schedule.periods === 'string') {
+                try {
+                    let periodStrings = schedule.periods.split('},{');
+                    periods = periodStrings.map((p, index) => {
+                        if (index === 0 && !p.startsWith('{')) p = '{' + p;
+                        if (index === periodStrings.length - 1 && !p.endsWith('}')) p = p + '}';
+                        if (!p.startsWith('{')) p = '{' + p;
+                        if (!p.endsWith('}')) p = p + '}';
+                        return JSON.parse(p);
+                    });
+                } catch (e) { }
+            } else if (Array.isArray(schedule.periods)) {
+                periods = schedule.periods;
+            }
+        }
+
+        if (periods.length === 0) return 'No periods';
+
+        // Sum up hours
+        let totalMinutes = 0;
+        periods.forEach(p => {
+            if (p.start_time && p.end_time) {
+                const [sh, sm] = p.start_time.split(':').map(Number);
+                const [eh, em] = p.end_time.split(':').map(Number);
+                totalMinutes += (eh * 60 + em) - (sh * 60 + sm);
+            }
+        });
+
+        const hours = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+        return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
     },
 
     selectDaySchedule(scheduleId) {
-        const schedule = this.daySchedules.find(s => s.day_schedule_id === scheduleId);
+        if (!scheduleId) {
+            this.selectedDaySchedule = null;
+            document.getElementById('day-schedule-editor').style.display = 'none';
+            return;
+        }
+
+        const schedule = this.daySchedules.find(s => s.day_schedule_id == scheduleId);
         if (!schedule) return;
 
         this.selectedDaySchedule = schedule;
-
-        // Re-render to show selection, then load the editor
-        this.renderDayScheduleSelector();
         this.loadDayScheduleEditor();
     },
 
@@ -294,65 +336,94 @@ const schedules = {
     
     renderWeekScheduleSelector() {
         const container = document.getElementById('week-schedules-container');
+        if (!container) return;
 
-        // Build list of existing week schedules
-        let schedulesList = '';
+        // Build options with weekly hours summary
+        let options = '<option value="">-- Select a schedule --</option>';
         this.weekSchedules.forEach(schedule => {
-            schedulesList += `
-                <div class="schedule-item ${this.selectedWeekSchedule?.week_schedule_id === schedule.week_schedule_id ? 'selected' : ''}"
-                     onclick="app.schedules.selectWeekSchedule(${schedule.week_schedule_id})">
-                    <span class="schedule-name">${schedule.name}</span>
-                </div>
-            `;
+            const hours = this.getWeekScheduleHours(schedule);
+            options += `<option value="${schedule.week_schedule_id}">${schedule.name} (${hours})</option>`;
         });
 
         let html = `
-            <div class="card">
-                <h3>Week Schedules</h3>
+            <div class="form-group">
+                <label class="form-label">Select Week Schedule:</label>
+                <select id="week-schedule-selector" class="form-control" onchange="app.schedules.selectWeekSchedule(this.value)">
+                    ${options}
+                </select>
+            </div>
 
-                <!-- List of existing schedules -->
-                <div class="schedule-list" style="max-height: 120px; overflow-y: auto; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px;">
-                    ${schedulesList || '<p class="text-muted p-2">No week schedules</p>'}
-                </div>
+            <div id="week-schedule-editor" style="display: none;">
+                <table class="table table-sm" id="week-schedule-table">
+                    <thead>
+                        <tr>
+                            <th>Day</th>
+                            <th>Day Schedule</th>
+                        </tr>
+                    </thead>
+                    <tbody id="week-schedule-tbody">
+                    </tbody>
+                </table>
+                <button class="btn btn-success btn-sm" onclick="app.schedules.saveWeekSchedule()">Save Week</button>
+            </div>
 
-                <!-- Create new form -->
-                <div class="new-schedule-form" style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-bottom: 10px;">
-                    <label class="form-label text-small"><strong>Create New:</strong></label>
-                    <div style="display: flex; gap: 5px;">
-                        <input type="text" id="new-week-schedule-name" class="form-control form-control-sm" placeholder="Week schedule name" style="flex: 1;" />
-                        <button class="btn btn-primary btn-sm" onclick="app.schedules.createWeekSchedule()">Create</button>
-                    </div>
-                </div>
-
-                <!-- Editor for selected schedule -->
-                <div id="week-schedule-editor" style="display: none;">
-                    <h4 id="week-schedule-title">Edit Week</h4>
-                    <table class="table table-sm" id="week-schedule-table">
-                        <thead>
-                            <tr>
-                                <th>Day</th>
-                                <th>Day Schedule</th>
-                            </tr>
-                        </thead>
-                        <tbody id="week-schedule-tbody">
-                        </tbody>
-                    </table>
-                    <button class="btn btn-success btn-sm" onclick="app.schedules.saveWeekSchedule()">Save</button>
+            <hr style="margin: 15px 0;" />
+            <div class="form-group">
+                <label class="form-label text-small">Create New Week Schedule:</label>
+                <div style="display: flex; gap: 5px;">
+                    <input type="text" id="new-week-schedule-name" class="form-control form-control-sm" placeholder="Name" style="flex: 1;" />
+                    <button class="btn btn-primary btn-sm" onclick="app.schedules.createWeekSchedule()">Create</button>
                 </div>
             </div>
         `;
 
         container.innerHTML = html;
+
+        // Re-select if we had one selected
+        if (this.selectedWeekSchedule) {
+            const selector = document.getElementById('week-schedule-selector');
+            if (selector) {
+                selector.value = this.selectedWeekSchedule.week_schedule_id;
+                this.loadWeekScheduleEditor();
+            }
+        }
+    },
+
+    getWeekScheduleHours(schedule) {
+        let totalMinutes = 0;
+        const dayKeys = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+        dayKeys.forEach(dayKey => {
+            const dayScheduleId = schedule[dayKey + '_schedule_id'];
+            if (dayScheduleId) {
+                const daySchedule = this.daySchedules.find(ds => ds.day_schedule_id == dayScheduleId);
+                if (daySchedule) {
+                    const hoursStr = this.getDayScheduleHours(daySchedule);
+                    // Parse hours from string like "10h" or "10h 30m"
+                    const match = hoursStr.match(/(\d+)h(?:\s*(\d+)m)?/);
+                    if (match) {
+                        totalMinutes += parseInt(match[1]) * 60 + (parseInt(match[2]) || 0);
+                    }
+                }
+            }
+        });
+
+        const hours = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+        return mins > 0 ? `${hours}h ${mins}m/week` : `${hours}h/week`;
     },
 
     selectWeekSchedule(scheduleId) {
-        const schedule = this.weekSchedules.find(s => s.week_schedule_id === scheduleId);
+        if (!scheduleId) {
+            this.selectedWeekSchedule = null;
+            document.getElementById('week-schedule-editor').style.display = 'none';
+            return;
+        }
+
+        const schedule = this.weekSchedules.find(s => s.week_schedule_id == scheduleId);
         if (!schedule) return;
 
         this.selectedWeekSchedule = schedule;
-
-        // Re-render to show selection, then load the editor
-        this.renderWeekScheduleSelector();
         this.loadWeekScheduleEditor();
     },
 
@@ -361,9 +432,6 @@ const schedules = {
 
         const schedule = this.selectedWeekSchedule;
         const editor = document.getElementById('week-schedule-editor');
-        const title = document.getElementById('week-schedule-title');
-
-        if (title) title.textContent = schedule.name;
         if (editor) editor.style.display = 'block';
 
         // Populate table

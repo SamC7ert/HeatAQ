@@ -129,8 +129,10 @@ const calendar = {
             <table class="data-table compact">
                 <thead>
                     <tr>
-                        <th>Exception</th>
-                        <th>Day Schedule</th>
+                        <th>Name</th>
+                        <th>Date</th>
+                        <th>Schedule</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -151,19 +153,19 @@ const calendar = {
 
             html += `
                 <tr data-exception-id="${exceptionId}">
-                    <td>
-                        <div class="text-small"><strong>${exception.name}</strong></div>
-                        <div class="text-muted text-xs">${dateRef}</div>
-                    </td>
+                    <td>${exception.name}</td>
+                    <td>${dateRef}</td>
                     <td>
                         <select class="form-control form-control-sm exception-day-select"
                                 data-exception-id="${exceptionId}"
                                 onchange="app.calendar.updateExceptionSchedule(${exceptionId}, this.value)">
-                            <option value="">-- No exception --</option>
                             ${this.daySchedules.map(ds =>
                                 `<option value="${ds.day_schedule_id}" ${ds.day_schedule_id == currentDayScheduleId ? 'selected' : ''}>${ds.name}</option>`
                             ).join('')}
                         </select>
+                    </td>
+                    <td>
+                        <button class="btn btn-danger btn-xs" onclick="app.calendar.deleteException(${exceptionId})" title="Delete">×</button>
                     </td>
                 </tr>
             `;
@@ -300,14 +302,70 @@ const calendar = {
         }
     },
 
-    // Exception days are managed in Settings, not here
-    // This just allows linking them to day schedules
     addExceptionDay() {
-        api.utils.showError('Exception days are configured in Settings');
+        // Simple prompts for now
+        const name = prompt('Exception day name:', 'Christmas Day');
+        if (!name) return;
+
+        const isMoving = confirm('Is this a moving holiday (relative to Easter)?\n\nOK = Easter-relative\nCancel = Fixed date');
+
+        let easterOffset = null;
+        let fixedMonth = null;
+        let fixedDay = null;
+
+        if (isMoving) {
+            const offsetStr = prompt('Days offset from Easter Sunday:\n0 = Easter\n-2 = Good Friday\n1 = Easter Monday', '0');
+            if (offsetStr === null) return;
+            easterOffset = parseInt(offsetStr);
+            if (isNaN(easterOffset)) {
+                api.utils.showError('Invalid offset');
+                return;
+            }
+        } else {
+            const monthStr = prompt('Month (1-12):', '12');
+            if (!monthStr) return;
+            const dayStr = prompt('Day (1-31):', '25');
+            if (!dayStr) return;
+            fixedMonth = parseInt(monthStr);
+            fixedDay = parseInt(dayStr);
+            if (!fixedMonth || !fixedDay || fixedMonth < 1 || fixedMonth > 12 || fixedDay < 1 || fixedDay > 31) {
+                api.utils.showError('Invalid date');
+                return;
+            }
+        }
+
+        // Default to Closed day schedule
+        const closedSchedule = this.daySchedules.find(ds => ds.name.toLowerCase().includes('closed'));
+        const dayScheduleId = closedSchedule?.day_schedule_id || this.daySchedules[0]?.day_schedule_id;
+
+        api.calendar.saveExceptionDay({
+            template_id: this.currentTemplateId,
+            name: name,
+            day_schedule_id: dayScheduleId,
+            is_moving: isMoving ? 1 : 0,
+            easter_offset_days: easterOffset,
+            fixed_month: fixedMonth,
+            fixed_day: fixedDay
+        }).then(result => {
+            if (result.success) {
+                api.utils.showSuccess('Exception added');
+                this.loadCalendarRules(this.currentTemplateId);
+            }
+        }).catch(err => {
+            api.utils.showError('Failed: ' + err.message);
+        });
     },
 
-    deleteException(exceptionId) {
-        api.utils.showError('Exception days are configured in Settings');
+    async deleteException(exceptionId) {
+        if (!confirm('Delete this exception day?')) return;
+
+        try {
+            await api.calendar.deleteExceptionDay(exceptionId);
+            api.utils.showSuccess('Exception deleted');
+            await this.loadCalendarRules(this.currentTemplateId);
+        } catch (err) {
+            api.utils.showError('Failed: ' + err.message);
+        }
     }
 };
 
