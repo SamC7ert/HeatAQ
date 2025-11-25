@@ -1335,6 +1335,7 @@ class HeatAQAPI {
                 $stmt = $this->db->prepare($query);
                 $stmt->execute([':project_id' => $this->projectId]);
             } else {
+                // No auth - show all configs
                 $query = "SELECT template_id, template_name as name, json_config, created_at, updated_at
                           FROM config_templates
                           ORDER BY template_name";
