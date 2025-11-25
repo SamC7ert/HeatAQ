@@ -264,6 +264,70 @@ JOIN simulation_daily_results sdr ON sr.run_id = sdr.run_id
 GROUP BY sr.run_id, YEAR(sdr.date);
 
 -- ============================================
+-- WEATHER STATIONS TABLE
+-- Stores weather station metadata
+-- May already exist in your database
+-- ============================================
+CREATE TABLE IF NOT EXISTS weather_stations (
+    station_id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    latitude DECIMAL(10, 6) NULL,
+    longitude DECIMAL(10, 6) NULL,
+    elevation DECIMAL(8, 2) NULL,
+    measurement_height_temp DECIMAL(5, 2) DEFAULT 2.0,
+    measurement_height_wind DECIMAL(5, 2) DEFAULT 10.0,
+    is_active TINYINT(1) DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================
+-- HOLIDAY DEFINITIONS TABLE
+-- Stores holiday definitions (fixed dates or Easter-relative)
+-- ============================================
+CREATE TABLE IF NOT EXISTS holiday_definitions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+
+    -- Type: 0 = fixed date, 1 = relative to Easter
+    is_moving TINYINT(1) NOT NULL DEFAULT 0,
+
+    -- For fixed dates
+    fixed_month INT NULL,
+    fixed_day INT NULL,
+
+    -- For Easter-relative dates (negative = before Easter)
+    easter_offset_days INT NULL,
+
+    -- Country code (for multi-country support)
+    country VARCHAR(10) DEFAULT 'NO',
+
+    -- Timestamps
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    -- Indexes
+    INDEX idx_country (country)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================
+-- SAMPLE NORWEGIAN HOLIDAYS
+-- ============================================
+INSERT IGNORE INTO holiday_definitions (name, is_moving, fixed_month, fixed_day, easter_offset_days, country) VALUES
+    ('1. nyttårsdag', 0, 1, 1, NULL, 'NO'),
+    ('1. mai', 0, 5, 1, NULL, 'NO'),
+    ('17. mai', 0, 5, 17, NULL, 'NO'),
+    ('1. juledag', 0, 12, 25, NULL, 'NO'),
+    ('2. juledag', 0, 12, 26, NULL, 'NO'),
+    ('Palmesøndag', 1, NULL, NULL, -7, 'NO'),
+    ('Skjærtorsdag', 1, NULL, NULL, -3, 'NO'),
+    ('Langfredag', 1, NULL, NULL, -2, 'NO'),
+    ('1. påskedag', 1, NULL, NULL, 0, 'NO'),
+    ('2. påskedag', 1, NULL, NULL, 1, 'NO'),
+    ('Kristi himmelfartsdag', 1, NULL, NULL, 39, 'NO'),
+    ('1. pinsedag', 1, NULL, NULL, 49, 'NO'),
+    ('2. pinsedag', 1, NULL, NULL, 50, 'NO');
+
+-- ============================================
 -- STORAGE ESTIMATES
 -- ============================================
 -- For 10 years of hourly data (87,672 rows):
