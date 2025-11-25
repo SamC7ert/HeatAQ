@@ -74,7 +74,7 @@
         <div class="user-info">
             <span class="project-name" id="current-project"></span>
             <span class="user-name" id="current-user"></span>
-            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">v12</span>
+            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">v14</span>
             <button onclick="logout()" class="btn-logout">Logout</button>
         </div>
         
@@ -646,9 +646,14 @@
                     </div>
 
                     <div class="card">
-                        <h3>Weather Data Summary</h3>
-                        <table class="data-table compact">
-                            <tr><td>Station</td><td id="weather-station-name">-</td></tr>
+                        <h3>Weather Data</h3>
+                        <div class="config-header" style="margin-bottom: 15px;">
+                            <label>Select Station:</label>
+                            <select id="weather-station-select" class="form-control" style="width: 250px;" onchange="app.admin.onStationChange()">
+                                <option value="">-- All Stations --</option>
+                            </select>
+                        </div>
+                        <table class="data-table compact" style="max-width: 400px;">
                             <tr><td>Date Range</td><td id="weather-date-range">-</td></tr>
                             <tr><td>Total Records</td><td id="weather-record-count">-</td></tr>
                         </table>

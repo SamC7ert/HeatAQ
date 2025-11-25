@@ -927,15 +927,33 @@ class HeatAQAPI {
     // ====================================
 
     private function getHolidayDefinitions() {
-        // Query without country column in case it doesn't exist in production
-        $stmt = $this->db->query("
-            SELECT id, name, is_moving, fixed_month, fixed_day, easter_offset_days
-            FROM holiday_definitions
-            ORDER BY COALESCE(fixed_month, 3), COALESCE(fixed_day, easter_offset_days + 100)
-        ");
-        $definitions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        $this->sendResponse(['definitions' => $definitions]);
+        try {
+            // Try with 'name' column first
+            $stmt = $this->db->query("
+                SELECT id, name, is_moving, fixed_month, fixed_day, easter_offset_days
+                FROM holiday_definitions
+                ORDER BY COALESCE(fixed_month, 3), COALESCE(fixed_day, easter_offset_days + 100)
+            ");
+            $definitions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $this->sendResponse(['definitions' => $definitions]);
+        } catch (PDOException $e) {
+            // Try with 'holiday_name' column (production might use different name)
+            try {
+                $stmt = $this->db->query("
+                    SELECT id, holiday_name as name, is_moving, fixed_month, fixed_day, easter_offset_days
+                    FROM holiday_definitions
+                    ORDER BY COALESCE(fixed_month, 3), COALESCE(fixed_day, easter_offset_days + 100)
+                ");
+                $definitions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $this->sendResponse(['definitions' => $definitions]);
+            } catch (PDOException $e2) {
+                $this->sendResponse([
+                    'definitions' => [],
+                    'error' => 'Holiday definitions table not found or has different structure',
+                    'debug' => $e2->getMessage()
+                ]);
+            }
+        }
     }
 
     private function saveHolidayDefinition() {
@@ -951,18 +969,22 @@ class HeatAQAPI {
             $this->sendError('Name is required');
         }
 
+        // Check which column name the table uses
+        $hasNameColumn = $this->columnExists('holiday_definitions', 'name');
+        $nameColumn = $hasNameColumn ? 'name' : 'holiday_name';
+
         if ($id) {
             // Update existing
             $stmt = $this->db->prepare("
                 UPDATE holiday_definitions
-                SET name = ?, is_moving = ?, fixed_month = ?, fixed_day = ?, easter_offset_days = ?
+                SET {$nameColumn} = ?, is_moving = ?, fixed_month = ?, fixed_day = ?, easter_offset_days = ?
                 WHERE id = ?
             ");
             $stmt->execute([$name, $isMoving, $fixedMonth, $fixedDay, $easterOffset, $id]);
         } else {
-            // Insert new (without country column in case it doesn't exist)
+            // Insert new
             $stmt = $this->db->prepare("
-                INSERT INTO holiday_definitions (name, is_moving, fixed_month, fixed_day, easter_offset_days)
+                INSERT INTO holiday_definitions ({$nameColumn}, is_moving, fixed_month, fixed_day, easter_offset_days)
                 VALUES (?, ?, ?, ?, ?)
             ");
             $stmt->execute([$name, $isMoving, $fixedMonth, $fixedDay, $easterOffset]);
@@ -988,6 +1010,8 @@ class HeatAQAPI {
     // ====================================
 
     private function getWeatherStations() {
+        $stationId = $_GET['station_id'] ?? null;
+
         // Query only basic columns that are guaranteed to exist
         $stmt = $this->db->query("
             SELECT station_id, station_name as name, latitude, longitude
@@ -996,18 +1020,26 @@ class HeatAQAPI {
         ");
         $stations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Get weather data summary
-        $summaryStmt = $this->db->query("
-            SELECT
-                ws.station_name as station_name,
-                MIN(DATE(wd.timestamp)) as min_date,
-                MAX(DATE(wd.timestamp)) as max_date,
-                COUNT(*) as record_count
-            FROM weather_data wd
-            JOIN weather_stations ws ON wd.station_id = ws.station_id
-            GROUP BY ws.station_id
-            LIMIT 1
-        ");
+        // Get weather data summary (filtered by station if specified)
+        if ($stationId) {
+            $summaryStmt = $this->db->prepare("
+                SELECT
+                    MIN(DATE(timestamp)) as min_date,
+                    MAX(DATE(timestamp)) as max_date,
+                    COUNT(*) as record_count
+                FROM weather_data
+                WHERE station_id = ?
+            ");
+            $summaryStmt->execute([$stationId]);
+        } else {
+            $summaryStmt = $this->db->query("
+                SELECT
+                    MIN(DATE(timestamp)) as min_date,
+                    MAX(DATE(timestamp)) as max_date,
+                    COUNT(*) as record_count
+                FROM weather_data
+            ");
+        }
         $summary = $summaryStmt->fetch(PDO::FETCH_ASSOC);
 
         $this->sendResponse([
@@ -1017,7 +1049,9 @@ class HeatAQAPI {
     }
 
     private function getWeatherYearlyAverages() {
-        $stmt = $this->db->query("
+        $stationId = $_GET['station_id'] ?? null;
+
+        $sql = "
             SELECT
                 YEAR(timestamp) as year,
                 ROUND(AVG(air_temperature), 1) as avg_temp,
@@ -1028,9 +1062,18 @@ class HeatAQAPI {
                 ROUND(SUM(solar_irradiance) / 1000, 0) as total_solar_kwh_m2,
                 COUNT(*) as hours_count
             FROM weather_data
-            GROUP BY YEAR(timestamp)
-            ORDER BY year
-        ");
+        ";
+
+        $params = [];
+        if ($stationId) {
+            $sql .= " WHERE station_id = ?";
+            $params[] = $stationId;
+        }
+
+        $sql .= " GROUP BY YEAR(timestamp) ORDER BY year";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
         $yearly = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $this->sendResponse([
@@ -1039,8 +1082,9 @@ class HeatAQAPI {
     }
 
     private function getWeatherMonthlyAverages() {
-        // Get averages across all years by month
-        $stmt = $this->db->query("
+        $stationId = $_GET['station_id'] ?? null;
+
+        $sql = "
             SELECT
                 MONTH(timestamp) as month,
                 ROUND(AVG(air_temperature), 1) as avg_temp,
@@ -1051,9 +1095,18 @@ class HeatAQAPI {
                 ROUND(AVG(solar_irradiance), 0) as avg_solar_w_m2,
                 COUNT(*) as hours_count
             FROM weather_data
-            GROUP BY MONTH(timestamp)
-            ORDER BY month
-        ");
+        ";
+
+        $params = [];
+        if ($stationId) {
+            $sql .= " WHERE station_id = ?";
+            $params[] = $stationId;
+        }
+
+        $sql .= " GROUP BY MONTH(timestamp) ORDER BY month";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
         $monthly = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Add month names
@@ -1223,29 +1276,60 @@ class HeatAQAPI {
     // ====================================
 
     private function getProjectConfigs() {
-        $query = "SELECT template_id, template_name as name, description, config_json, is_active, created_at, updated_at
-                  FROM config_templates";
-        $query = $this->addSiteFilter($query);
-        $query .= " ORDER BY template_name";
+        try {
+            // Try with config_json column first
+            $query = "SELECT template_id, template_name as name, config_json, is_active, created_at, updated_at
+                      FROM config_templates";
+            $query = $this->addSiteFilter($query);
+            $query .= " ORDER BY template_name";
 
-        $params = [];
-        $this->bindSiteParam($params);
+            $params = [];
+            $this->bindSiteParam($params);
 
-        if ($params) {
-            $stmt = $this->db->prepare($query);
-            $stmt->execute($params);
-            $configs = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } else {
-            $configs = $this->db->query($query)->fetchAll(PDO::FETCH_ASSOC);
+            if ($params) {
+                $stmt = $this->db->prepare($query);
+                $stmt->execute($params);
+                $configs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            } else {
+                $configs = $this->db->query($query)->fetchAll(PDO::FETCH_ASSOC);
+            }
+
+            // Decode JSON
+            foreach ($configs as &$config) {
+                $config['config'] = json_decode($config['config_json'] ?? '{}', true);
+                unset($config['config_json']);
+            }
+
+            $this->sendResponse(['configs' => $configs]);
+        } catch (PDOException $e) {
+            // Fallback: config_json column might not exist
+            try {
+                $query = "SELECT template_id, template_name as name, is_active, created_at, updated_at
+                          FROM config_templates";
+                $query = $this->addSiteFilter($query);
+                $query .= " ORDER BY template_name";
+
+                $params = [];
+                $this->bindSiteParam($params);
+
+                if ($params) {
+                    $stmt = $this->db->prepare($query);
+                    $stmt->execute($params);
+                    $configs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                } else {
+                    $configs = $this->db->query($query)->fetchAll(PDO::FETCH_ASSOC);
+                }
+
+                // No config_json column - return empty config
+                foreach ($configs as &$config) {
+                    $config['config'] = [];
+                }
+
+                $this->sendResponse(['configs' => $configs, 'note' => 'config_json column not found - run migration']);
+            } catch (PDOException $e2) {
+                $this->sendError('Failed to load configs: ' . $e2->getMessage());
+            }
         }
-
-        // Decode JSON
-        foreach ($configs as &$config) {
-            $config['config'] = json_decode($config['config_json'], true);
-            unset($config['config_json']);
-        }
-
-        $this->sendResponse(['configs' => $configs]);
     }
 
     private function getProjectConfig($configId) {
@@ -1253,22 +1337,40 @@ class HeatAQAPI {
             $this->sendError('Invalid config ID');
         }
 
-        $stmt = $this->db->prepare("
-            SELECT template_id, template_name as name, description, config_json, is_active
-            FROM config_templates
-            WHERE template_id = ?
-        ");
-        $stmt->execute([$configId]);
-        $config = $stmt->fetch(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $this->db->prepare("
+                SELECT template_id, template_name as name, config_json, is_active
+                FROM config_templates
+                WHERE template_id = ?
+            ");
+            $stmt->execute([$configId]);
+            $config = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$config) {
-            $this->sendError('Configuration not found', 404);
+            if (!$config) {
+                $this->sendError('Configuration not found', 404);
+            }
+
+            $config['config'] = json_decode($config['config_json'] ?? '{}', true);
+            unset($config['config_json']);
+
+            $this->sendResponse(['config' => $config]);
+        } catch (PDOException $e) {
+            // Fallback without config_json
+            $stmt = $this->db->prepare("
+                SELECT template_id, template_name as name, is_active
+                FROM config_templates
+                WHERE template_id = ?
+            ");
+            $stmt->execute([$configId]);
+            $config = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$config) {
+                $this->sendError('Configuration not found', 404);
+            }
+
+            $config['config'] = [];
+            $this->sendResponse(['config' => $config, 'note' => 'config_json column not found']);
         }
-
-        $config['config'] = json_decode($config['config_json'], true);
-        unset($config['config_json']);
-
-        $this->sendResponse(['config' => $config]);
     }
 
     private function saveProjectConfig() {
@@ -1283,25 +1385,49 @@ class HeatAQAPI {
 
         $configJson = json_encode($configData);
 
+        // Check if config_json column exists
+        $hasConfigJson = $this->columnExists('config_templates', 'config_json');
+
         if ($configId) {
             // Update existing
-            $stmt = $this->db->prepare("
-                UPDATE config_templates
-                SET template_name = ?, config_json = ?, updated_at = NOW()
-                WHERE template_id = ?
-            ");
-            $stmt->execute([$name, $configJson, $configId]);
+            if ($hasConfigJson) {
+                $stmt = $this->db->prepare("
+                    UPDATE config_templates
+                    SET template_name = ?, config_json = ?, updated_at = NOW()
+                    WHERE template_id = ?
+                ");
+                $stmt->execute([$name, $configJson, $configId]);
+            } else {
+                $stmt = $this->db->prepare("
+                    UPDATE config_templates
+                    SET template_name = ?, updated_at = NOW()
+                    WHERE template_id = ?
+                ");
+                $stmt->execute([$name, $configId]);
+            }
         } else {
             // Insert new
-            $stmt = $this->db->prepare("
-                INSERT INTO config_templates (site_id, template_name, config_json, is_active)
-                VALUES (?, ?, ?, 1)
-            ");
-            $stmt->execute([$this->siteId, $name, $configJson]);
+            if ($hasConfigJson) {
+                $stmt = $this->db->prepare("
+                    INSERT INTO config_templates (site_id, template_name, config_json, is_active)
+                    VALUES (?, ?, ?, 1)
+                ");
+                $stmt->execute([$this->siteId, $name, $configJson]);
+            } else {
+                $stmt = $this->db->prepare("
+                    INSERT INTO config_templates (site_id, template_name, is_active)
+                    VALUES (?, ?, 1)
+                ");
+                $stmt->execute([$this->siteId, $name]);
+            }
             $configId = $this->db->lastInsertId();
         }
 
-        $this->sendResponse(['success' => true, 'config_id' => $configId]);
+        $response = ['success' => true, 'config_id' => $configId];
+        if (!$hasConfigJson) {
+            $response['warning'] = 'config_json column missing - run: ALTER TABLE config_templates ADD COLUMN config_json JSON;';
+        }
+        $this->sendResponse($response);
     }
 
     private function deleteProjectConfig($configId) {
@@ -1337,6 +1463,21 @@ class HeatAQAPI {
         http_response_code($code);
         echo json_encode(['error' => $message]);
         exit;
+    }
+
+    private function columnExists($table, $column) {
+        try {
+            $stmt = $this->db->prepare("
+                SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME = ?
+                AND COLUMN_NAME = ?
+            ");
+            $stmt->execute([$table, $column]);
+            return $stmt->fetchColumn() > 0;
+        } catch (PDOException $e) {
+            return false;
+        }
     }
 }
 
