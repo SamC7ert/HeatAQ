@@ -132,7 +132,6 @@ const calendar = {
                         <th>Name</th>
                         <th>Date</th>
                         <th>Schedule</th>
-                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -159,13 +158,11 @@ const calendar = {
                         <select class="form-control form-control-sm exception-day-select"
                                 data-exception-id="${exceptionId}"
                                 onchange="app.calendar.updateExceptionSchedule(${exceptionId}, this.value)">
+                            <option value="" ${!currentDayScheduleId ? 'selected' : ''}>No Exception</option>
                             ${this.daySchedules.map(ds =>
                                 `<option value="${ds.day_schedule_id}" ${ds.day_schedule_id == currentDayScheduleId ? 'selected' : ''}>${ds.name}</option>`
                             ).join('')}
                         </select>
-                    </td>
-                    <td>
-                        <button class="btn btn-danger btn-xs" onclick="app.calendar.deleteException(${exceptionId})" title="Delete">×</button>
                     </td>
                 </tr>
             `;
