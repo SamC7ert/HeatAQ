@@ -1024,10 +1024,13 @@ class HeatAQAPI {
             $this->sendError('Invalid ID');
         }
 
-        $stmt = $this->db->prepare("DELETE FROM holiday_definitions WHERE holiday_code = ?");
-        $stmt->execute([$id]);
-
-        $this->sendResponse(['success' => true]);
+        try {
+            $stmt = $this->db->prepare("DELETE FROM holiday_definitions WHERE holiday_code = ?");
+            $stmt->execute([$id]);
+            $this->sendResponse(['success' => true]);
+        } catch (PDOException $e) {
+            $this->sendError($e->getMessage());
+        }
     }
 
     // ====================================
@@ -1323,22 +1326,21 @@ class HeatAQAPI {
 
     private function getProjectConfigs() {
         try {
-            // Try with json_config column first
-            $query = "SELECT template_id, template_name as name, json_config, created_at, updated_at
-                      FROM config_templates";
-            $query = $this->addSiteFilter($query);
-            $query .= " ORDER BY template_name";
-
-            $params = [];
-            $this->bindSiteParam($params);
-
-            if ($params) {
+            // Only show configs for the current project
+            if ($this->projectId) {
+                $query = "SELECT template_id, template_name as name, json_config, created_at, updated_at
+                          FROM config_templates
+                          WHERE project_id = :project_id
+                          ORDER BY template_name";
                 $stmt = $this->db->prepare($query);
-                $stmt->execute($params);
-                $configs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $stmt->execute([':project_id' => $this->projectId]);
             } else {
-                $configs = $this->db->query($query)->fetchAll(PDO::FETCH_ASSOC);
+                $query = "SELECT template_id, template_name as name, json_config, created_at, updated_at
+                          FROM config_templates
+                          ORDER BY template_name";
+                $stmt = $this->db->query($query);
             }
+            $configs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             // Decode JSON
             foreach ($configs as &$config) {
@@ -1350,21 +1352,20 @@ class HeatAQAPI {
         } catch (PDOException $e) {
             // Fallback: json_config column might not exist
             try {
-                $query = "SELECT template_id, template_name as name, created_at, updated_at
-                          FROM config_templates";
-                $query = $this->addSiteFilter($query);
-                $query .= " ORDER BY template_name";
-
-                $params = [];
-                $this->bindSiteParam($params);
-
-                if ($params) {
+                if ($this->projectId) {
+                    $query = "SELECT template_id, template_name as name, created_at, updated_at
+                              FROM config_templates
+                              WHERE project_id = :project_id
+                              ORDER BY template_name";
                     $stmt = $this->db->prepare($query);
-                    $stmt->execute($params);
-                    $configs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    $stmt->execute([':project_id' => $this->projectId]);
                 } else {
-                    $configs = $this->db->query($query)->fetchAll(PDO::FETCH_ASSOC);
+                    $query = "SELECT template_id, template_name as name, created_at, updated_at
+                              FROM config_templates
+                              ORDER BY template_name";
+                    $stmt = $this->db->query($query);
                 }
+                $configs = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
                 // No json_config column - return empty config
                 foreach ($configs as &$config) {
@@ -1455,16 +1456,16 @@ class HeatAQAPI {
             // Insert new
             if ($hasConfigJson) {
                 $stmt = $this->db->prepare("
-                    INSERT INTO config_templates (site_id, template_name, json_config)
+                    INSERT INTO config_templates (project_id, template_name, json_config)
                     VALUES (?, ?, ?)
                 ");
-                $stmt->execute([$this->siteId, $name, $configJson]);
+                $stmt->execute([$this->projectId, $name, $configJson]);
             } else {
                 $stmt = $this->db->prepare("
-                    INSERT INTO config_templates (site_id, template_name)
+                    INSERT INTO config_templates (project_id, template_name)
                     VALUES (?, ?)
                 ");
-                $stmt->execute([$this->siteId, $name]);
+                $stmt->execute([$this->projectId, $name]);
             }
             $configId = $this->db->lastInsertId();
         }
