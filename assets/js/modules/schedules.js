@@ -213,6 +213,12 @@ const schedules = {
                 api.utils.showSuccess('Created: ' + name);
                 nameInput.value = '';
                 await this.loadDaySchedules();
+                // Also refresh week schedules (dropdown options) and calendar
+                this.renderWeekScheduleSelector();
+                if (app.calendar) {
+                    app.calendar.daySchedules = this.daySchedules;
+                    app.calendar.renderExceptionDays();
+                }
                 // Select the new schedule
                 this.selectDaySchedule(result.day_schedule_id);
             }
@@ -220,7 +226,7 @@ const schedules = {
             api.utils.showError('Failed: ' + err.message);
         }
     },
-    
+
     loadDaySchedule() {
         const selector = document.getElementById('day-schedule-selector');
         const scheduleId = parseInt(selector.value);
@@ -665,6 +671,12 @@ const schedules = {
             api.utils.showSuccess('Day schedule deleted');
             this.selectedDaySchedule = null;
             await this.loadDaySchedules();
+            // Also refresh week schedules and calendar
+            this.renderWeekScheduleSelector();
+            if (app.calendar) {
+                app.calendar.daySchedules = this.daySchedules;
+                app.calendar.renderExceptionDays();
+            }
         } catch (err) {
             api.utils.showError('Failed to delete: ' + err.message);
         }

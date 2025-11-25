@@ -597,7 +597,7 @@ class HeatAQAPI {
             $stmt = $this->db->prepare("
                 UPDATE calendar_exception_days
                 SET name = ?, day_schedule_id = ?, is_moving = ?, easter_offset_days = ?, fixed_month = ?, fixed_day = ?
-                WHERE exception_id = ?
+                WHERE id = ?
             ");
             $stmt->execute([$name, $dayScheduleId, $isMoving, $easterOffsetDays, $fixedMonth, $fixedDay, $exceptionId]);
         } else {
