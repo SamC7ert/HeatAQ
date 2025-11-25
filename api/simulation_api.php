@@ -165,6 +165,7 @@ try {
                     'run_id' => $runId,
                     'simulator_version' => EnergySimulator::getVersion(),
                     'summary' => $results['summary'],
+                    'meta' => $results['meta'],
                     'daily_count' => count($results['daily']),
                     'hourly_count' => count($results['hourly']),
                 ]);

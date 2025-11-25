@@ -186,6 +186,14 @@ const SimulationsModule = {
                 </div>
             `;
 
+            // Show benchmark report
+            if (typeof SimControlModule !== 'undefined' && data.summary) {
+                SimControlModule.showBenchmarkReport({
+                    summary: data.summary,
+                    meta: data.meta || {}
+                });
+            }
+
             // Reload runs list
             this.loadRuns();
 
