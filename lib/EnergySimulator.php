@@ -87,6 +87,8 @@ class EnergySimulator {
                 'has_cover' => false,
                 'has_tunnel' => true,
                 'cover_r_value' => 0,
+                'cover_solar_transmittance' => 0.10, // 10% solar passes through cover
+                'solar_absorption' => 0.60,          // 60% solar absorption (v3.6.0.3 benchmark)
                 'wind_exposure_factor' => 1.0
             ];
         }
@@ -99,6 +101,8 @@ class EnergySimulator {
             'has_cover' => (bool) ($config['has_cover'] ?? false),
             'has_tunnel' => (bool) ($config['has_tunnel'] ?? true),
             'cover_r_value' => (float) ($config['cover_r_value'] ?? 0),
+            'cover_solar_transmittance' => (float) ($config['cover_solar_transmittance'] ?? 0.10),
+            'solar_absorption' => (float) ($config['solar_absorption'] ?? 0.60),
             'wind_exposure_factor' => (float) ($config['wind_exposure_factor'] ?? 1.0)
         ];
     }
@@ -166,6 +170,20 @@ class EnergySimulator {
         if (isset($uiConfig['cover'])) {
             $this->poolConfig['has_cover'] = $uiConfig['cover']['has_cover'] ?? $this->poolConfig['has_cover'];
             $this->poolConfig['cover_r_value'] = $uiConfig['cover']['u_value'] ?? $this->poolConfig['cover_r_value'];
+            // UI stores as percentage, convert to decimal
+            if (isset($uiConfig['cover']['solar_transmittance'])) {
+                $trans = (float) $uiConfig['cover']['solar_transmittance'];
+                $this->poolConfig['cover_solar_transmittance'] = $trans > 1 ? $trans / 100 : $trans;
+            }
+        }
+
+        // Solar settings
+        if (isset($uiConfig['solar'])) {
+            // UI stores as percentage, convert to decimal
+            if (isset($uiConfig['solar']['absorption'])) {
+                $absorb = (float) $uiConfig['solar']['absorption'];
+                $this->poolConfig['solar_absorption'] = $absorb > 1 ? $absorb / 100 : $absorb;
+            }
         }
 
         // Equipment - Heat Pump
@@ -726,23 +744,31 @@ class EnergySimulator {
 
     /**
      * Calculate solar heat gain
+     *
+     * Based on v3.6.0.3 benchmark:
+     * - Solar absorption: 60% (water absorptivity + reflection losses)
+     * - Cover solar transmittance: 10% (when covered)
+     *
+     * Values loaded from poolConfig (configurable in UI)
      */
     private function calculateSolarGain($solarIrradiance, $isOpen) {
         $area = $this->poolConfig['area_m2'];
 
         // Solar absorptivity of water (accounts for reflection)
-        $absorptivity = 0.85;
+        // Default 60% from v3.6.0.3 benchmark
+        $absorptivity = $this->poolConfig['solar_absorption'] ?? 0.60;
 
-        // Shading factor (could be from buildings, trees)
-        $shadingFactor = 0.9; // 10% shaded
+        // Cover solar transmittance (% of solar that passes through cover)
+        // Default 10% from v3.6.0.3 benchmark
+        $coverTransmittance = $this->poolConfig['cover_solar_transmittance'] ?? 0.10;
 
-        // When covered, no solar gain
+        // When covered, only a fraction of solar passes through
         if ($this->poolConfig['has_cover'] && !$isOpen) {
-            return 0;
+            return $solarIrradiance * $area * $absorptivity * $coverTransmittance;
         }
 
-        // Solar gain (kW)
-        return $solarIrradiance * $area * $absorptivity * $shadingFactor;
+        // Solar gain when uncovered (kW)
+        return $solarIrradiance * $area * $absorptivity;
     }
 
     /**
