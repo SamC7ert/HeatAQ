@@ -61,7 +61,28 @@ const ConfigurationModule = {
     // Load configuration page
     load: async function() {
         this.init();
+        await this.loadWeatherStations();
         await this.loadConfigs();
+    },
+
+    // Load weather stations for dropdown
+    loadWeatherStations: async function() {
+        try {
+            const response = await fetch('./api/heataq_api.php?action=get_weather_stations');
+            const data = await response.json();
+            const select = document.getElementById('cfg-weather-station');
+            if (select && data.stations) {
+                select.innerHTML = '<option value="">-- Select Station --</option>';
+                data.stations.forEach(station => {
+                    const option = document.createElement('option');
+                    option.value = station.station_id;
+                    option.textContent = station.name;
+                    select.appendChild(option);
+                });
+            }
+        } catch (err) {
+            console.error('Failed to load weather stations:', err);
+        }
     },
 
     // Load all configs from API
@@ -143,6 +164,11 @@ const ConfigurationModule = {
         }
         if (config.solar) {
             this.setVal('cfg-solar-absorb', config.solar.absorption);
+        }
+
+        // Weather Station
+        if (config.weather_station_id) {
+            this.setVal('cfg-weather-station', config.weather_station_id);
         }
 
         // Equipment
@@ -317,6 +343,7 @@ const ConfigurationModule = {
             solar: {
                 absorption: parseFloat(this.getVal('cfg-solar-absorb'))
             },
+            weather_station_id: this.getVal('cfg-weather-station') || null,
             equipment: {
                 hp_capacity_kw: parseFloat(this.getVal('cfg-hp-capacity')),
                 hp_cop: parseFloat(this.getVal('cfg-hp-cop')),

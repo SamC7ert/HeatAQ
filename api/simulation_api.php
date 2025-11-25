@@ -16,6 +16,24 @@
  * - GET ?action=get_version - Get simulator version
  */
 
+// Enable error output for debugging
+ini_set('display_errors', 0);
+error_reporting(E_ALL);
+
+// Custom error handler to return JSON errors
+set_error_handler(function($severity, $message, $file, $line) {
+    throw new ErrorException($message, 0, $severity, $file, $line);
+});
+
+// Catch fatal errors
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        header('Content-Type: application/json');
+        echo json_encode(['error' => $error['message'], 'file' => $error['file'], 'line' => $error['line']]);
+    }
+});
+
 // Include configuration
 require_once __DIR__ . '/../config.php';
 
