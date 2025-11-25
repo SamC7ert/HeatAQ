@@ -318,3 +318,27 @@
     padding: 2px 6px;
     font-size: 0.75rem;
 }
+
+/* Period table compact styles */
+#periods-table input[type="time"] {
+    width: 70px !important;
+    padding: 2px 4px;
+}
+
+#periods-table input[type="number"] {
+    width: 55px !important;
+    padding: 2px 4px;
+    -moz-appearance: textfield;
+}
+
+#periods-table input[type="number"]::-webkit-outer-spin-button,
+#periods-table input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+#periods-table th,
+#periods-table td {
+    padding: 4px 6px;
+    vertical-align: middle;
+}

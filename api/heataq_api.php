@@ -44,7 +44,8 @@ class HeatAQAPI {
     private $userId;
     private $projectId;
     private $userRole;
-    
+    private $postInput = null;  // Store POST body to avoid double-read
+
     public function __construct($siteId = null, $auth = null) {
         try {
             // Get database connection from Config
@@ -115,9 +116,12 @@ class HeatAQAPI {
         $action = $_GET['action'] ?? '';
 
         // If no action in query string, check POST body
-        if (empty($action) && $_SERVER['REQUEST_METHOD'] === 'POST') {
-            $input = json_decode(file_get_contents('php://input'), true);
-            $action = $input['action'] ?? '';
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            // Read and store POST body once (php://input can only be read once)
+            $this->postInput = json_decode(file_get_contents('php://input'), true);
+            if (empty($action)) {
+                $action = $this->postInput['action'] ?? '';
+            }
         }
 
         // Log API access if authenticated
@@ -381,7 +385,7 @@ class HeatAQAPI {
     }
     
     private function saveTemplate() {
-        $input = json_decode(file_get_contents('php://input'), true);
+        $input = $this->getPostInput();
 
         $templateId = $input['template_id'] ?? null;
         $name = trim($input['name'] ?? '');
@@ -415,7 +419,7 @@ class HeatAQAPI {
     }
 
     private function saveDaySchedule() {
-        $input = json_decode(file_get_contents('php://input'), true);
+        $input = $this->getPostInput();
 
         $scheduleId = $input['day_schedule_id'] ?? null;
         $name = trim($input['name'] ?? '');
@@ -480,7 +484,7 @@ class HeatAQAPI {
     }
 
     private function saveWeekSchedule() {
-        $input = json_decode(file_get_contents('php://input'), true);
+        $input = $this->getPostInput();
 
         $scheduleId = $input['week_schedule_id'] ?? null;
         $name = trim($input['name'] ?? '');
@@ -531,7 +535,7 @@ class HeatAQAPI {
     }
 
     private function saveDateRange() {
-        $input = json_decode(file_get_contents('php://input'), true);
+        $input = $this->getPostInput();
 
         $rangeId = $input['range_id'] ?? null;
         $templateId = $input['template_id'] ?? 1;
@@ -569,7 +573,7 @@ class HeatAQAPI {
     }
 
     private function saveExceptionDay() {
-        $input = json_decode(file_get_contents('php://input'), true);
+        $input = $this->getPostInput();
 
         $exceptionId = $input['exception_id'] ?? null;
         $templateId = $input['template_id'] ?? 1;
@@ -636,7 +640,7 @@ class HeatAQAPI {
     }
 
     private function deleteDaySchedule() {
-        $input = json_decode(file_get_contents('php://input'), true);
+        $input = $this->getPostInput();
         $scheduleId = $input['schedule_id'] ?? null;
 
         if (!$this->validateId($scheduleId)) {
@@ -657,7 +661,12 @@ class HeatAQAPI {
     // ====================================
     // UTILITY METHODS
     // ====================================
-    
+
+    private function getPostInput() {
+        // Return stored POST input (already parsed in handle())
+        return $this->postInput ?? [];
+    }
+
     private function validateId($id) {
         return is_numeric($id) && $id > 0;
     }

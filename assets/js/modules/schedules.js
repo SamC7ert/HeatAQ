@@ -286,16 +286,16 @@ const schedules = {
             html = '<div class="alert alert-info">This is a closed day - pool is not operating</div>';
         } else if (periods.length > 0) {
             html = `
-                <table class="table" id="periods-table">
+                <table class="table table-sm" id="periods-table" style="font-size: 0.85rem;">
                     <thead>
                         <tr>
-                            <th>#</th>
-                            <th>Start</th>
-                            <th>End</th>
-                            <th>Target °C</th>
-                            <th>Min °C</th>
-                            <th>Max °C</th>
-                            <th></th>
+                            <th style="width: 25px;">#</th>
+                            <th style="width: 75px;">Start</th>
+                            <th style="width: 75px;">End</th>
+                            <th style="width: 60px;">Target</th>
+                            <th style="width: 55px;">Min</th>
+                            <th style="width: 55px;">Max</th>
+                            <th style="width: 30px;"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -308,13 +308,13 @@ const schedules = {
                 html += `
                     <tr data-index="${index}">
                         <td>${index + 1}</td>
-                        <td><input type="time" class="form-control form-control-sm period-start" value="${period.start_time || '10:00'}" /></td>
-                        <td><input type="time" class="form-control form-control-sm period-end" value="${period.end_time || '20:00'}" /></td>
-                        <td><input type="number" class="form-control form-control-sm period-target" value="${target}" step="0.5" min="20" max="35" /></td>
-                        <td><input type="number" class="form-control form-control-sm period-min" value="${min}" step="0.5" min="20" max="35" /></td>
-                        <td><input type="number" class="form-control form-control-sm period-max" value="${max}" step="0.5" min="20" max="35" /></td>
+                        <td><input type="time" class="form-control form-control-sm period-start" value="${period.start_time || '10:00'}" style="width: 70px; padding: 2px 4px;" /></td>
+                        <td><input type="time" class="form-control form-control-sm period-end" value="${period.end_time || '20:00'}" style="width: 70px; padding: 2px 4px;" /></td>
+                        <td><input type="number" class="form-control form-control-sm period-target" value="${target}" step="0.5" min="20" max="35" style="width: 55px; padding: 2px 4px;" /></td>
+                        <td><input type="number" class="form-control form-control-sm period-min" value="${min}" step="0.5" min="20" max="35" style="width: 50px; padding: 2px 4px;" /></td>
+                        <td><input type="number" class="form-control form-control-sm period-max" value="${max}" step="0.5" min="20" max="35" style="width: 50px; padding: 2px 4px;" /></td>
                         <td>
-                            <button class="btn btn-danger btn-sm" onclick="app.schedules.removePeriod(${index})" title="Remove">×</button>
+                            <button class="btn btn-danger btn-xs" onclick="app.schedules.removePeriod(${index})" title="Remove period" style="padding: 1px 6px;">×</button>
                         </td>
                     </tr>
                 `;
