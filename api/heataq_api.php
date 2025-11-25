@@ -1067,35 +1067,9 @@ class HeatAQAPI {
             }
         }
 
-        // Get weather data summary (filtered by station if specified)
-        try {
-            if ($stationId) {
-                $summaryStmt = $this->db->prepare("
-                    SELECT
-                        MIN(DATE(timestamp)) as min_date,
-                        MAX(DATE(timestamp)) as max_date,
-                        COUNT(*) as record_count
-                    FROM weather_data
-                    WHERE station_id = ?
-                ");
-                $summaryStmt->execute([$stationId]);
-            } else {
-                $summaryStmt = $this->db->query("
-                    SELECT
-                        MIN(DATE(timestamp)) as min_date,
-                        MAX(DATE(timestamp)) as max_date,
-                        COUNT(*) as record_count
-                    FROM weather_data
-                ");
-            }
-            $summary = $summaryStmt->fetch(PDO::FETCH_ASSOC);
-        } catch (PDOException $e) {
-            $summary = [];
-        }
-
+        // Return stations only - skip slow summary query
         $this->sendResponse([
-            'stations' => $stations,
-            'summary' => $summary ?: []
+            'stations' => $stations
         ]);
     }
 
