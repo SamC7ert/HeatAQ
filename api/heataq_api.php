@@ -1256,7 +1256,6 @@ class HeatAQAPI {
         $input = $this->getPostInput();
         $configId = $input['config_id'] ?? null;
         $name = $input['name'] ?? '';
-        $description = $input['description'] ?? '';
         $configData = $input['config'] ?? [];
 
         if (empty($name)) {
@@ -1269,17 +1268,17 @@ class HeatAQAPI {
             // Update existing
             $stmt = $this->db->prepare("
                 UPDATE config_templates
-                SET template_name = ?, description = ?, config_json = ?, updated_at = NOW()
+                SET template_name = ?, config_json = ?, updated_at = NOW()
                 WHERE template_id = ?
             ");
-            $stmt->execute([$name, $description, $configJson, $configId]);
+            $stmt->execute([$name, $configJson, $configId]);
         } else {
             // Insert new
             $stmt = $this->db->prepare("
-                INSERT INTO config_templates (site_id, template_name, description, config_json, is_active)
-                VALUES (?, ?, ?, ?, 1)
+                INSERT INTO config_templates (site_id, template_name, config_json, is_active)
+                VALUES (?, ?, ?, 1)
             ");
-            $stmt->execute([$this->siteId, $name, $description, $configJson]);
+            $stmt->execute([$this->siteId, $name, $configJson]);
             $configId = $this->db->lastInsertId();
         }
 
