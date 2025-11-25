@@ -1326,12 +1326,11 @@ class HeatAQAPI {
 
     private function getProjectConfigs() {
         try {
-            // Try with json_config column first
-            // Include both site-specific configs AND global configs (site_id IS NULL)
+            // Only show configs for the current project (site_id = project_code)
             if ($this->siteId) {
                 $query = "SELECT template_id, template_name as name, json_config, created_at, updated_at
                           FROM config_templates
-                          WHERE site_id = :site_id OR site_id IS NULL
+                          WHERE site_id = :site_id
                           ORDER BY template_name";
                 $stmt = $this->db->prepare($query);
                 $stmt->execute([':site_id' => $this->siteId]);
@@ -1356,7 +1355,7 @@ class HeatAQAPI {
                 if ($this->siteId) {
                     $query = "SELECT template_id, template_name as name, created_at, updated_at
                               FROM config_templates
-                              WHERE site_id = :site_id OR site_id IS NULL
+                              WHERE site_id = :site_id
                               ORDER BY template_name";
                     $stmt = $this->db->prepare($query);
                     $stmt->execute([':site_id' => $this->siteId]);
