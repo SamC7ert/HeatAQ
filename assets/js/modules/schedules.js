@@ -48,36 +48,134 @@ const schedules = {
     
     renderDayScheduleSelector() {
         const container = document.getElementById('day-schedules-container');
-        
-        // Create the original structure with dropdown selector
+
+        // Build list of existing schedules
+        let schedulesList = '';
+        this.daySchedules.forEach(schedule => {
+            const isClosed = schedule.is_closed == 1;
+            schedulesList += `
+                <div class="schedule-item ${this.selectedDaySchedule?.day_schedule_id === schedule.day_schedule_id ? 'selected' : ''}"
+                     onclick="app.schedules.selectDaySchedule(${schedule.day_schedule_id})">
+                    <span class="schedule-name">${schedule.name}</span>
+                    ${isClosed ? '<span class="badge badge-secondary">Closed</span>' : ''}
+                </div>
+            `;
+        });
+
         let html = `
             <div class="card">
-                <h3>Day Schedule Configuration</h3>
-                <div class="form-group">
-                    <label class="form-label">Select Day Schedule:</label>
-                    <select id="day-schedule-selector" class="form-control" onchange="app.schedules.loadDaySchedule()">
-                        <option value="">-- Select a schedule --</option>
-        `;
-        
-        // Add options for each schedule
-        this.daySchedules.forEach(schedule => {
-            html += `<option value="${schedule.day_schedule_id}">${schedule.name}</option>`;
-        });
-        
-        html += `
-                    </select>
+                <h3>Day Schedules</h3>
+
+                <!-- List of existing schedules -->
+                <div class="schedule-list" style="max-height: 150px; overflow-y: auto; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                    ${schedulesList || '<p class="text-muted p-2">No day schedules</p>'}
                 </div>
-                
+
+                <!-- Create new form -->
+                <div class="new-schedule-form" style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-bottom: 10px;">
+                    <label class="form-label text-small"><strong>Create New:</strong></label>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="text" id="new-day-schedule-name" class="form-control form-control-sm" placeholder="Schedule name" style="flex: 1;" />
+                        <button class="btn btn-primary btn-sm" onclick="app.schedules.createDaySchedule()">Create</button>
+                    </div>
+                </div>
+
+                <!-- Editor for selected schedule -->
                 <div id="day-schedule-editor" style="display: none;">
-                    <h4>Schedule Periods</h4>
+                    <h4 id="day-schedule-title">Edit Schedule</h4>
                     <div id="periods-container"></div>
-                    <button class="btn btn-primary btn-sm" onclick="app.schedules.addPeriod()">+ Add Period</button>
-                    <button class="btn btn-success btn-sm" onclick="app.schedules.saveDaySchedule()">Save Schedule</button>
+                    <div style="margin-top: 10px;">
+                        <button class="btn btn-primary btn-sm" onclick="app.schedules.addPeriod()">+ Add Period</button>
+                        <button class="btn btn-success btn-sm" onclick="app.schedules.saveDaySchedule()">Save</button>
+                    </div>
                 </div>
             </div>
         `;
-        
+
         container.innerHTML = html;
+    },
+
+    selectDaySchedule(scheduleId) {
+        const schedule = this.daySchedules.find(s => s.day_schedule_id === scheduleId);
+        if (!schedule) return;
+
+        this.selectedDaySchedule = schedule;
+
+        // Re-render to show selection, then load the editor
+        this.renderDayScheduleSelector();
+        this.loadDayScheduleEditor();
+    },
+
+    loadDayScheduleEditor() {
+        if (!this.selectedDaySchedule) return;
+
+        const schedule = this.selectedDaySchedule;
+        const editor = document.getElementById('day-schedule-editor');
+        const title = document.getElementById('day-schedule-title');
+
+        if (title) title.textContent = schedule.name;
+        if (editor) editor.style.display = 'block';
+
+        // Parse periods
+        let periods = [];
+        if (schedule.periods) {
+            if (typeof schedule.periods === 'string') {
+                try {
+                    let periodStrings = schedule.periods.split('},{');
+                    periods = periodStrings.map((p, index) => {
+                        if (index === 0 && !p.startsWith('{')) p = '{' + p;
+                        if (index === periodStrings.length - 1 && !p.endsWith('}')) p = p + '}';
+                        if (!p.startsWith('{')) p = '{' + p;
+                        if (!p.endsWith('}')) p = p + '}';
+                        return JSON.parse(p);
+                    });
+                } catch (e) {
+                    console.error('Error parsing periods:', e);
+                }
+            } else if (Array.isArray(schedule.periods)) {
+                periods = schedule.periods;
+            }
+        }
+
+        this.currentPeriods = periods;
+        this.renderPeriods();
+    },
+
+    async createDaySchedule() {
+        const nameInput = document.getElementById('new-day-schedule-name');
+        const name = nameInput?.value?.trim();
+
+        if (!name) {
+            api.utils.showError('Please enter a schedule name');
+            return;
+        }
+
+        const periods = [{
+            start_time: '10:00',
+            end_time: '20:00',
+            target_temp: 28.0,
+            min_temp: 26.0,
+            max_temp: 30.0,
+            period_order: 1
+        }];
+
+        try {
+            const result = await api.daySchedules.save({
+                name: name,
+                is_closed: 0,
+                periods: periods
+            });
+
+            if (result.success) {
+                api.utils.showSuccess('Created: ' + name);
+                nameInput.value = '';
+                await this.loadDaySchedules();
+                // Select the new schedule
+                this.selectDaySchedule(result.day_schedule_id);
+            }
+        } catch (err) {
+            api.utils.showError('Failed: ' + err.message);
+        }
     },
     
     loadDaySchedule() {
@@ -197,25 +295,39 @@ const schedules = {
     renderWeekScheduleSelector() {
         const container = document.getElementById('week-schedules-container');
 
-        let html = `
-            <div class="card">
-                <h3>Week Schedule Configuration</h3>
-                <div class="form-group">
-                    <label class="form-label">Select Week Schedule:</label>
-                    <select id="week-schedule-selector" class="form-control" onchange="app.schedules.loadWeekSchedule()">
-                        <option value="">-- Select a schedule --</option>
-        `;
-
+        // Build list of existing week schedules
+        let schedulesList = '';
         this.weekSchedules.forEach(schedule => {
-            html += `<option value="${schedule.week_schedule_id}">${schedule.name}</option>`;
+            schedulesList += `
+                <div class="schedule-item ${this.selectedWeekSchedule?.week_schedule_id === schedule.week_schedule_id ? 'selected' : ''}"
+                     onclick="app.schedules.selectWeekSchedule(${schedule.week_schedule_id})">
+                    <span class="schedule-name">${schedule.name}</span>
+                </div>
+            `;
         });
 
-        html += `
-                    </select>
+        let html = `
+            <div class="card">
+                <h3>Week Schedules</h3>
+
+                <!-- List of existing schedules -->
+                <div class="schedule-list" style="max-height: 120px; overflow-y: auto; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                    ${schedulesList || '<p class="text-muted p-2">No week schedules</p>'}
                 </div>
 
+                <!-- Create new form -->
+                <div class="new-schedule-form" style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-bottom: 10px;">
+                    <label class="form-label text-small"><strong>Create New:</strong></label>
+                    <div style="display: flex; gap: 5px;">
+                        <input type="text" id="new-week-schedule-name" class="form-control form-control-sm" placeholder="Week schedule name" style="flex: 1;" />
+                        <button class="btn btn-primary btn-sm" onclick="app.schedules.createWeekSchedule()">Create</button>
+                    </div>
+                </div>
+
+                <!-- Editor for selected schedule -->
                 <div id="week-schedule-editor" style="display: none;">
-                    <table class="table" id="week-schedule-table">
+                    <h4 id="week-schedule-title">Edit Week</h4>
+                    <table class="table table-sm" id="week-schedule-table">
                         <thead>
                             <tr>
                                 <th>Day</th>
@@ -223,10 +335,9 @@ const schedules = {
                             </tr>
                         </thead>
                         <tbody id="week-schedule-tbody">
-                            <!-- Will be populated -->
                         </tbody>
                     </table>
-                    <button class="btn btn-success btn-sm" onclick="app.schedules.saveWeekSchedule()">Save Week Schedule</button>
+                    <button class="btn btn-success btn-sm" onclick="app.schedules.saveWeekSchedule()">Save</button>
                 </div>
             </div>
         `;
@@ -234,23 +345,26 @@ const schedules = {
         container.innerHTML = html;
     },
 
-    loadWeekSchedule() {
-        const selector = document.getElementById('week-schedule-selector');
-        const scheduleId = parseInt(selector.value);
-
-        if (!scheduleId) {
-            document.getElementById('week-schedule-editor').style.display = 'none';
-            return;
-        }
-
-        // Find the selected schedule
+    selectWeekSchedule(scheduleId) {
         const schedule = this.weekSchedules.find(s => s.week_schedule_id === scheduleId);
         if (!schedule) return;
 
         this.selectedWeekSchedule = schedule;
 
-        // Show editor
-        document.getElementById('week-schedule-editor').style.display = 'block';
+        // Re-render to show selection, then load the editor
+        this.renderWeekScheduleSelector();
+        this.loadWeekScheduleEditor();
+    },
+
+    loadWeekScheduleEditor() {
+        if (!this.selectedWeekSchedule) return;
+
+        const schedule = this.selectedWeekSchedule;
+        const editor = document.getElementById('week-schedule-editor');
+        const title = document.getElementById('week-schedule-title');
+
+        if (title) title.textContent = schedule.name;
+        if (editor) editor.style.display = 'block';
 
         // Populate table
         const tbody = document.getElementById('week-schedule-tbody');
@@ -277,6 +391,41 @@ const schedules = {
         });
 
         tbody.innerHTML = html;
+    },
+
+    async createWeekSchedule() {
+        const nameInput = document.getElementById('new-week-schedule-name');
+        const name = nameInput?.value?.trim();
+
+        if (!name) {
+            api.utils.showError('Please enter a schedule name');
+            return;
+        }
+
+        // Create with first day schedule as default for all days
+        const firstDaySchedule = this.daySchedules[0]?.day_schedule_id || null;
+
+        try {
+            const result = await api.weekSchedules.save({
+                name: name,
+                monday_schedule_id: firstDaySchedule,
+                tuesday_schedule_id: firstDaySchedule,
+                wednesday_schedule_id: firstDaySchedule,
+                thursday_schedule_id: firstDaySchedule,
+                friday_schedule_id: firstDaySchedule,
+                saturday_schedule_id: firstDaySchedule,
+                sunday_schedule_id: firstDaySchedule
+            });
+
+            if (result.success) {
+                api.utils.showSuccess('Created: ' + name);
+                nameInput.value = '';
+                await this.loadWeekSchedules();
+                this.selectWeekSchedule(result.week_schedule_id);
+            }
+        } catch (err) {
+            api.utils.showError('Failed: ' + err.message);
+        }
     },
 
     async saveWeekSchedule() {
@@ -423,14 +572,11 @@ const schedules = {
 
             if (result.success) {
                 api.utils.showSuccess('Day schedule saved');
+                const scheduleId = this.selectedDaySchedule.day_schedule_id;
                 // Reload to get fresh data
                 await this.loadDaySchedules();
                 // Re-select the schedule
-                const selector = document.getElementById('day-schedule-selector');
-                if (selector) {
-                    selector.value = this.selectedDaySchedule.day_schedule_id;
-                    this.loadDaySchedule();
-                }
+                this.selectDaySchedule(scheduleId);
             }
         } catch (err) {
             api.utils.showError('Failed to save: ' + err.message);
@@ -499,58 +645,17 @@ const schedules = {
         }
     },
 
+    // Legacy method aliases for backwards compatibility with HTML buttons
     addWeekSchedule() {
-        const name = prompt('Enter name for new Week Schedule:', 'Normal Week');
-        if (!name) return;
-
-        // For now create with all days using the first day schedule
-        const firstDaySchedule = this.daySchedules[0]?.day_schedule_id || null;
-
-        api.weekSchedules.save({
-            name: name,
-            monday_schedule_id: firstDaySchedule,
-            tuesday_schedule_id: firstDaySchedule,
-            wednesday_schedule_id: firstDaySchedule,
-            thursday_schedule_id: firstDaySchedule,
-            friday_schedule_id: firstDaySchedule,
-            saturday_schedule_id: firstDaySchedule,
-            sunday_schedule_id: firstDaySchedule
-        }).then(result => {
-            if (result.success) {
-                api.utils.showSuccess('Week schedule created: ' + name);
-                this.loadWeekSchedules();
-            }
-        }).catch(err => {
-            api.utils.showError('Failed to create week schedule: ' + err.message);
-        });
+        // Focus the create input instead
+        const input = document.getElementById('new-week-schedule-name');
+        if (input) input.focus();
     },
 
     addDaySchedule() {
-        const name = prompt('Enter name for new Day Schedule:', 'Reference 10-20');
-        if (!name) return;
-
-        // Create with default 10:00-20:00 period (user can edit later)
-        const periods = [{
-            start_time: '10:00',
-            end_time: '20:00',
-            target_temp: 28.0,
-            min_temp: 26.0,
-            max_temp: 30.0,
-            period_order: 1
-        }];
-
-        api.daySchedules.save({
-            name: name,
-            is_closed: 0,
-            periods: periods
-        }).then(result => {
-            if (result.success) {
-                api.utils.showSuccess('Day schedule created: ' + name + ' (default 10:00-20:00)');
-                this.loadDaySchedules();
-            }
-        }).catch(err => {
-            api.utils.showError('Failed to create day schedule: ' + err.message);
-        });
+        // Focus the create input instead
+        const input = document.getElementById('new-day-schedule-name');
+        if (input) input.focus();
     }
 };
 

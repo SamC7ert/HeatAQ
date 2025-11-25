@@ -109,15 +109,22 @@ class HeatAQAPI {
     // ====================================
     // MAIN HANDLER
     // ====================================
-    
+
     public function handle() {
+        // Get action from query string first, then from POST body
         $action = $_GET['action'] ?? '';
-        
+
+        // If no action in query string, check POST body
+        if (empty($action) && $_SERVER['REQUEST_METHOD'] === 'POST') {
+            $input = json_decode(file_get_contents('php://input'), true);
+            $action = $input['action'] ?? '';
+        }
+
         // Log API access if authenticated
         if (Config::requiresAuth() && class_exists('HeatAQAuth')) {
             HeatAQAuth::audit('api_access', 'endpoint', null, null, ['action' => $action]);
         }
-        
+
         try {
             switch ($action) {
                 // READ operations

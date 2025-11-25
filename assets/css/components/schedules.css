@@ -253,3 +253,68 @@
 .empty-state-text {
     font-size: 0.9rem;
 }
+
+/* Schedule List Items */
+.schedule-list {
+    background: white;
+}
+
+.schedule-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--neutral-200);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background-color 0.15s;
+}
+
+.schedule-item:last-child {
+    border-bottom: none;
+}
+
+.schedule-item:hover {
+    background: var(--neutral-100);
+}
+
+.schedule-item.selected {
+    background: var(--primary);
+    color: white;
+}
+
+.schedule-item.selected .badge {
+    background: rgba(255,255,255,0.3);
+}
+
+.schedule-name {
+    font-size: 0.9rem;
+}
+
+/* New Schedule Form */
+.new-schedule-form {
+    background: var(--neutral-100);
+}
+
+.new-schedule-form .form-label {
+    margin-bottom: 5px;
+    display: block;
+}
+
+/* Badge styles */
+.badge {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: var(--neutral-500);
+    color: white;
+}
+
+.badge-secondary {
+    background: var(--neutral-400);
+}
+
+/* Small button */
+.btn-xs {
+    padding: 2px 6px;
+    font-size: 0.75rem;
+}
