@@ -927,15 +927,23 @@ class HeatAQAPI {
     // ====================================
 
     private function getHolidayDefinitions() {
-        // Query without country column in case it doesn't exist in production
-        $stmt = $this->db->query("
-            SELECT id, name, is_moving, fixed_month, fixed_day, easter_offset_days
-            FROM holiday_definitions
-            ORDER BY COALESCE(fixed_month, 3), COALESCE(fixed_day, easter_offset_days + 100)
-        ");
-        $definitions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        $this->sendResponse(['definitions' => $definitions]);
+        try {
+            // Query without country column in case it doesn't exist in production
+            $stmt = $this->db->query("
+                SELECT id, name, is_moving, fixed_month, fixed_day, easter_offset_days
+                FROM holiday_definitions
+                ORDER BY COALESCE(fixed_month, 3), COALESCE(fixed_day, easter_offset_days + 100)
+            ");
+            $definitions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $this->sendResponse(['definitions' => $definitions]);
+        } catch (PDOException $e) {
+            // Table might not exist - return empty list with error info
+            $this->sendResponse([
+                'definitions' => [],
+                'error' => 'Holiday definitions table not found or has different structure',
+                'debug' => $e->getMessage()
+            ]);
+        }
     }
 
     private function saveHolidayDefinition() {
@@ -1223,29 +1231,60 @@ class HeatAQAPI {
     // ====================================
 
     private function getProjectConfigs() {
-        $query = "SELECT template_id, template_name as name, description, config_json, is_active, created_at, updated_at
-                  FROM config_templates";
-        $query = $this->addSiteFilter($query);
-        $query .= " ORDER BY template_name";
+        try {
+            // Try with config_json column first
+            $query = "SELECT template_id, template_name as name, config_json, is_active, created_at, updated_at
+                      FROM config_templates";
+            $query = $this->addSiteFilter($query);
+            $query .= " ORDER BY template_name";
 
-        $params = [];
-        $this->bindSiteParam($params);
+            $params = [];
+            $this->bindSiteParam($params);
 
-        if ($params) {
-            $stmt = $this->db->prepare($query);
-            $stmt->execute($params);
-            $configs = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } else {
-            $configs = $this->db->query($query)->fetchAll(PDO::FETCH_ASSOC);
+            if ($params) {
+                $stmt = $this->db->prepare($query);
+                $stmt->execute($params);
+                $configs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            } else {
+                $configs = $this->db->query($query)->fetchAll(PDO::FETCH_ASSOC);
+            }
+
+            // Decode JSON
+            foreach ($configs as &$config) {
+                $config['config'] = json_decode($config['config_json'] ?? '{}', true);
+                unset($config['config_json']);
+            }
+
+            $this->sendResponse(['configs' => $configs]);
+        } catch (PDOException $e) {
+            // Fallback: config_json column might not exist
+            try {
+                $query = "SELECT template_id, template_name as name, is_active, created_at, updated_at
+                          FROM config_templates";
+                $query = $this->addSiteFilter($query);
+                $query .= " ORDER BY template_name";
+
+                $params = [];
+                $this->bindSiteParam($params);
+
+                if ($params) {
+                    $stmt = $this->db->prepare($query);
+                    $stmt->execute($params);
+                    $configs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                } else {
+                    $configs = $this->db->query($query)->fetchAll(PDO::FETCH_ASSOC);
+                }
+
+                // No config_json column - return empty config
+                foreach ($configs as &$config) {
+                    $config['config'] = [];
+                }
+
+                $this->sendResponse(['configs' => $configs, 'note' => 'config_json column not found - run migration']);
+            } catch (PDOException $e2) {
+                $this->sendError('Failed to load configs: ' . $e2->getMessage());
+            }
         }
-
-        // Decode JSON
-        foreach ($configs as &$config) {
-            $config['config'] = json_decode($config['config_json'], true);
-            unset($config['config_json']);
-        }
-
-        $this->sendResponse(['configs' => $configs]);
     }
 
     private function getProjectConfig($configId) {
@@ -1253,22 +1292,40 @@ class HeatAQAPI {
             $this->sendError('Invalid config ID');
         }
 
-        $stmt = $this->db->prepare("
-            SELECT template_id, template_name as name, description, config_json, is_active
-            FROM config_templates
-            WHERE template_id = ?
-        ");
-        $stmt->execute([$configId]);
-        $config = $stmt->fetch(PDO::FETCH_ASSOC);
+        try {
+            $stmt = $this->db->prepare("
+                SELECT template_id, template_name as name, config_json, is_active
+                FROM config_templates
+                WHERE template_id = ?
+            ");
+            $stmt->execute([$configId]);
+            $config = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$config) {
-            $this->sendError('Configuration not found', 404);
+            if (!$config) {
+                $this->sendError('Configuration not found', 404);
+            }
+
+            $config['config'] = json_decode($config['config_json'] ?? '{}', true);
+            unset($config['config_json']);
+
+            $this->sendResponse(['config' => $config]);
+        } catch (PDOException $e) {
+            // Fallback without config_json
+            $stmt = $this->db->prepare("
+                SELECT template_id, template_name as name, is_active
+                FROM config_templates
+                WHERE template_id = ?
+            ");
+            $stmt->execute([$configId]);
+            $config = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$config) {
+                $this->sendError('Configuration not found', 404);
+            }
+
+            $config['config'] = [];
+            $this->sendResponse(['config' => $config, 'note' => 'config_json column not found']);
         }
-
-        $config['config'] = json_decode($config['config_json'], true);
-        unset($config['config_json']);
-
-        $this->sendResponse(['config' => $config]);
     }
 
     private function saveProjectConfig() {
@@ -1283,25 +1340,49 @@ class HeatAQAPI {
 
         $configJson = json_encode($configData);
 
+        // Check if config_json column exists
+        $hasConfigJson = $this->columnExists('config_templates', 'config_json');
+
         if ($configId) {
             // Update existing
-            $stmt = $this->db->prepare("
-                UPDATE config_templates
-                SET template_name = ?, config_json = ?, updated_at = NOW()
-                WHERE template_id = ?
-            ");
-            $stmt->execute([$name, $configJson, $configId]);
+            if ($hasConfigJson) {
+                $stmt = $this->db->prepare("
+                    UPDATE config_templates
+                    SET template_name = ?, config_json = ?, updated_at = NOW()
+                    WHERE template_id = ?
+                ");
+                $stmt->execute([$name, $configJson, $configId]);
+            } else {
+                $stmt = $this->db->prepare("
+                    UPDATE config_templates
+                    SET template_name = ?, updated_at = NOW()
+                    WHERE template_id = ?
+                ");
+                $stmt->execute([$name, $configId]);
+            }
         } else {
             // Insert new
-            $stmt = $this->db->prepare("
-                INSERT INTO config_templates (site_id, template_name, config_json, is_active)
-                VALUES (?, ?, ?, 1)
-            ");
-            $stmt->execute([$this->siteId, $name, $configJson]);
+            if ($hasConfigJson) {
+                $stmt = $this->db->prepare("
+                    INSERT INTO config_templates (site_id, template_name, config_json, is_active)
+                    VALUES (?, ?, ?, 1)
+                ");
+                $stmt->execute([$this->siteId, $name, $configJson]);
+            } else {
+                $stmt = $this->db->prepare("
+                    INSERT INTO config_templates (site_id, template_name, is_active)
+                    VALUES (?, ?, 1)
+                ");
+                $stmt->execute([$this->siteId, $name]);
+            }
             $configId = $this->db->lastInsertId();
         }
 
-        $this->sendResponse(['success' => true, 'config_id' => $configId]);
+        $response = ['success' => true, 'config_id' => $configId];
+        if (!$hasConfigJson) {
+            $response['warning'] = 'config_json column missing - run: ALTER TABLE config_templates ADD COLUMN config_json JSON;';
+        }
+        $this->sendResponse($response);
     }
 
     private function deleteProjectConfig($configId) {
@@ -1337,6 +1418,21 @@ class HeatAQAPI {
         http_response_code($code);
         echo json_encode(['error' => $message]);
         exit;
+    }
+
+    private function columnExists($table, $column) {
+        try {
+            $stmt = $this->db->prepare("
+                SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME = ?
+                AND COLUMN_NAME = ?
+            ");
+            $stmt->execute([$table, $column]);
+            return $stmt->fetchColumn() > 0;
+        } catch (PDOException $e) {
+            return false;
+        }
     }
 }
 
