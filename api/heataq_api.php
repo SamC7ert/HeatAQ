@@ -693,23 +693,39 @@ class HeatAQAPI {
 
         $exceptionId = isset($input['exception_id']) ? (int)$input['exception_id'] : 0;
 
-        // Convert empty string or 0 to null for foreign key
+        // Convert any non-positive value to null for foreign key
+        // This handles: null, '', '0', 0, 'null', undefined, etc.
         $dayScheduleId = null;
-        if (isset($input['day_schedule_id']) && $input['day_schedule_id'] !== '' && $input['day_schedule_id'] !== null) {
-            $val = (int)$input['day_schedule_id'];
-            // Only use positive IDs - 0 or negative means no schedule
-            $dayScheduleId = ($val > 0) ? $val : null;
+        if (array_key_exists('day_schedule_id', $input)) {
+            $raw = $input['day_schedule_id'];
+            // Only accept positive integers
+            if ($raw !== null && $raw !== '' && $raw !== 'null' && $raw !== 0 && $raw !== '0') {
+                $val = (int)$raw;
+                if ($val > 0) {
+                    $dayScheduleId = $val;
+                }
+            }
         }
 
         // For updates, just update the day_schedule_id (simple schedule change)
         if ($exceptionId > 0) {
             try {
-                $stmt = $this->db->prepare("
-                    UPDATE calendar_exception_days
-                    SET day_schedule_id = ?
-                    WHERE id = ?
-                ");
-                $stmt->execute([$dayScheduleId, $exceptionId]);
+                // Use explicit NULL in SQL to avoid PDO parameter binding issues
+                if ($dayScheduleId === null) {
+                    $stmt = $this->db->prepare("
+                        UPDATE calendar_exception_days
+                        SET day_schedule_id = NULL
+                        WHERE id = ?
+                    ");
+                    $stmt->execute([$exceptionId]);
+                } else {
+                    $stmt = $this->db->prepare("
+                        UPDATE calendar_exception_days
+                        SET day_schedule_id = ?
+                        WHERE id = ?
+                    ");
+                    $stmt->execute([$dayScheduleId, $exceptionId]);
+                }
                 $this->sendResponse(['success' => true, 'exception_id' => $exceptionId]);
             } catch (Exception $e) {
                 $this->sendError('Database error: ' . $e->getMessage());
