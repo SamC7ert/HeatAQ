@@ -928,78 +928,82 @@ class HeatAQAPI {
 
     private function getHolidayDefinitions() {
         try {
-            // Try with 'name' column first
+            // Production schema: holiday_code, holiday_name_no, holiday_name_en,
+            // calculation_type (enum), fixed_date (varchar), easter_offset (int)
             $stmt = $this->db->query("
-                SELECT id, name, is_moving, fixed_month, fixed_day, easter_offset_days
+                SELECT
+                    holiday_code as id,
+                    holiday_name_no as name,
+                    holiday_name_en as name_en,
+                    CASE WHEN calculation_type = 'easter_relative' THEN 1 ELSE 0 END as is_moving,
+                    SUBSTRING(fixed_date, 1, 2) as fixed_month,
+                    SUBSTRING(fixed_date, 4, 2) as fixed_day,
+                    easter_offset as easter_offset_days
                 FROM holiday_definitions
-                ORDER BY COALESCE(fixed_month, 3), COALESCE(fixed_day, easter_offset_days + 100)
+                ORDER BY
+                    CASE WHEN calculation_type = 'fixed' THEN fixed_date ELSE CONCAT('03-', LPAD(easter_offset + 100, 3, '0')) END
             ");
             $definitions = $stmt->fetchAll(PDO::FETCH_ASSOC);
             $this->sendResponse(['definitions' => $definitions]);
         } catch (PDOException $e) {
-            // Try with 'holiday_name' column (production might use different name)
-            try {
-                $stmt = $this->db->query("
-                    SELECT id, holiday_name as name, is_moving, fixed_month, fixed_day, easter_offset_days
-                    FROM holiday_definitions
-                    ORDER BY COALESCE(fixed_month, 3), COALESCE(fixed_day, easter_offset_days + 100)
-                ");
-                $definitions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                $this->sendResponse(['definitions' => $definitions]);
-            } catch (PDOException $e2) {
-                $this->sendResponse([
-                    'definitions' => [],
-                    'error' => 'Holiday definitions table not found or has different structure',
-                    'debug' => $e2->getMessage()
-                ]);
-            }
+            $this->sendResponse([
+                'definitions' => [],
+                'error' => 'Holiday definitions table error',
+                'debug' => $e->getMessage()
+            ]);
         }
     }
 
     private function saveHolidayDefinition() {
         $input = $this->getPostInput();
-        $id = $input['id'] ?? null;
-        $name = $input['name'] ?? '';
+        $code = $input['id'] ?? null;  // holiday_code is the primary key
+        $nameNo = $input['name'] ?? '';
+        $nameEn = $input['name_en'] ?? null;
         $isMoving = $input['is_moving'] ?? 0;
         $fixedMonth = $input['fixed_month'] ?? null;
         $fixedDay = $input['fixed_day'] ?? null;
         $easterOffset = $input['easter_offset_days'] ?? null;
 
-        if (empty($name)) {
+        if (empty($nameNo)) {
             $this->sendError('Name is required');
         }
 
-        // Check which column name the table uses
-        $hasNameColumn = $this->columnExists('holiday_definitions', 'name');
-        $nameColumn = $hasNameColumn ? 'name' : 'holiday_name';
+        // Convert to production schema format
+        $calculationType = $isMoving ? 'easter_relative' : 'fixed';
+        $fixedDate = null;
+        if (!$isMoving && $fixedMonth && $fixedDay) {
+            $fixedDate = sprintf('%02d-%02d', $fixedMonth, $fixedDay);
+        }
 
-        if ($id) {
+        if ($code) {
             // Update existing
             $stmt = $this->db->prepare("
                 UPDATE holiday_definitions
-                SET {$nameColumn} = ?, is_moving = ?, fixed_month = ?, fixed_day = ?, easter_offset_days = ?
-                WHERE id = ?
+                SET holiday_name_no = ?, holiday_name_en = ?, calculation_type = ?,
+                    fixed_date = ?, easter_offset = ?
+                WHERE holiday_code = ?
             ");
-            $stmt->execute([$name, $isMoving, $fixedMonth, $fixedDay, $easterOffset, $id]);
+            $stmt->execute([$nameNo, $nameEn, $calculationType, $fixedDate, $easterOffset, $code]);
         } else {
-            // Insert new
+            // Generate code from name for new entries
+            $code = strtolower(preg_replace('/[^a-zA-Z0-9]/', '_', $nameNo));
             $stmt = $this->db->prepare("
-                INSERT INTO holiday_definitions ({$nameColumn}, is_moving, fixed_month, fixed_day, easter_offset_days)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO holiday_definitions (holiday_code, holiday_name_no, holiday_name_en,
+                    calculation_type, fixed_date, easter_offset)
+                VALUES (?, ?, ?, ?, ?, ?)
             ");
-            $stmt->execute([$name, $isMoving, $fixedMonth, $fixedDay, $easterOffset]);
-            $id = $this->db->lastInsertId();
+            $stmt->execute([$code, $nameNo, $nameEn, $calculationType, $fixedDate, $easterOffset]);
         }
 
-        $this->sendResponse(['success' => true, 'id' => $id]);
+        $this->sendResponse(['success' => true, 'id' => $code]);
     }
 
     private function deleteHolidayDefinition($id) {
-        if (!$this->validateId($id)) {
+        if (empty($id)) {
             $this->sendError('Invalid ID');
         }
 
-        $stmt = $this->db->prepare("DELETE FROM holiday_definitions WHERE id = ?");
+        $stmt = $this->db->prepare("DELETE FROM holiday_definitions WHERE holiday_code = ?");
         $stmt->execute([$id]);
 
         $this->sendResponse(['success' => true]);
