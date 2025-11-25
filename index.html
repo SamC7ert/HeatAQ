@@ -83,27 +83,40 @@
                 <h2>🏊 HeatAQ</h2>
                 <p>Pool Energy Management</p>
             </div>
-            
+
             <nav class="nav-menu">
+                <!-- PROJECT Section -->
+                <div class="nav-section-header">PROJECT</div>
+                <a href="#" class="nav-item" onclick="app.navigation.switchSection('dashboard')">
+                    <span class="nav-icon">📊</span>
+                    <span>Dashboard</span>
+                </a>
                 <a href="#" class="nav-item active" onclick="app.navigation.switchSection('schedules')">
                     <span class="nav-icon">📅</span>
                     <span>Schedules</span>
                 </a>
-                <a href="#" class="nav-item" onclick="app.navigation.switchSection('scenarios')">
-                    <span class="nav-icon">⚡</span>
-                    <span>Scenarios</span>
-                </a>
-                <a href="#" class="nav-item" onclick="app.navigation.switchSection('configurations')">
+                <a href="#" class="nav-item" onclick="app.navigation.switchSection('configuration')">
                     <span class="nav-icon">⚙️</span>
-                    <span>Configurations</span>
+                    <span>Configuration</span>
+                </a>
+
+                <!-- SIMULATION Section -->
+                <div class="nav-section-header">SIMULATION</div>
+                <a href="#" class="nav-item" onclick="app.navigation.switchSection('sim-new')">
+                    <span class="nav-icon">▶️</span>
+                    <span>New Run</span>
+                </a>
+                <a href="#" class="nav-item" onclick="app.navigation.switchSection('sim-history')">
+                    <span class="nav-icon">📋</span>
+                    <span>History</span>
+                </a>
+                <a href="#" class="nav-item" onclick="app.navigation.switchSection('sim-compare')">
+                    <span class="nav-icon">⚖️</span>
+                    <span>Compare</span>
                 </a>
                 <a href="#" class="nav-item" onclick="app.navigation.switchSection('reports')">
-                    <span class="nav-icon">📊</span>
+                    <span class="nav-icon">📈</span>
                     <span>Reports</span>
-                </a>
-                <a href="#" class="nav-item" onclick="app.navigation.switchSection('simulations')">
-                    <span class="nav-icon">🔬</span>
-                    <span>Simulations</span>
                 </a>
             </nav>
         </aside>
@@ -113,79 +126,277 @@
             <div class="content-wrapper">
                 <!-- Schedules Section (Default) -->
                 <section id="schedules-section" class="content-section active">
-                    <h2>Schedule Configuration</h2>
-                    
-                    <!-- Save Changes Button -->
-                    <div class="action-bar">
-                        <button class="btn btn-primary" onclick="app.saveChanges()">
-                            Save Changes
-                        </button>
-                    </div>
-                    
-                    <!-- Template Selector -->
-                    <div class="template-selector">
-                        <label for="schedule-template-selector">Select Template:</label>
-                        <select id="schedule-template-selector" onchange="app.schedules.loadTemplate()">
-                            <option value="1">Hisøy Default (v3.4.2)</option>
-                        </select>
-                        <button class="btn btn-secondary btn-sm" onclick="app.schedules.editTemplate()">
-                            Edit Template
-                        </button>
-                        <div id="template-description">
-                            Complex schedule with Norwegian holidays and seasonal variations
+                    <h2>Schedule Management</h2>
+
+                    <!-- Open Hours Calendar Selector -->
+                    <div class="ohc-selector card">
+                        <div class="ohc-header">
+                            <label for="ohc-selector">Open Hours Calendar:</label>
+                            <select id="ohc-selector" onchange="app.schedules.loadOHC()">
+                                <option value="1">Hisøy Swim Club - Standard Hours</option>
+                            </select>
+                            <button class="btn btn-secondary btn-sm" onclick="app.schedules.newOHC()">+ New</button>
+                            <button class="btn btn-primary" onclick="app.schedules.saveOHC()">Save</button>
+                        </div>
+                        <div id="ohc-description" class="ohc-description">
+                            Norwegian holidays, seasonal variations, standard pool opening hours
                         </div>
                     </div>
-                    
-                    <!-- Schedule Tabs -->
-                    <div class="schedule-tabs">
-                        <div class="tabs-header">
-                            <button class="tab-btn active" onclick="app.tabs.switch('day')">
-                                Day Schedules
-                            </button>
-                            <button class="tab-btn" onclick="app.tabs.switch('week')">
-                                Week Schedules
-                            </button>
-                            <button class="tab-btn" onclick="app.tabs.switch('calendar')">
-                                Calendar
-                            </button>
-                        </div>
-                        
-                        <!-- Day Schedules Tab -->
-                        <div id="day-tab" class="tab-content active">
-                            <div id="day-schedules-container">
-                                <!-- Day schedules will be loaded here -->
+
+                    <!-- Three-Column Layout: Calendar | Week | Day -->
+                    <div class="schedule-grid-3">
+                        <!-- Left: Calendar Rules -->
+                        <div class="card schedule-calendar">
+                            <h3>Calendar</h3>
+
+                            <!-- Date Ranges -->
+                            <div class="calendar-section">
+                                <h4>Date Ranges</h4>
+                                <div id="date-ranges-container">
+                                    <!-- Date ranges will be loaded here -->
+                                </div>
+                                <button class="btn btn-sm btn-secondary" onclick="app.calendar.addDateRange()">+ Add Range</button>
+                            </div>
+
+                            <!-- Exception Days -->
+                            <div class="calendar-section">
+                                <h4>Exception Days</h4>
+                                <div id="exception-days-container">
+                                    <!-- Exception days will be loaded here -->
+                                </div>
+                                <button class="btn btn-sm btn-secondary" onclick="app.calendar.addExceptionDay()">+ Add Exception</button>
                             </div>
                         </div>
-                        
-                        <!-- Week Schedules Tab -->
-                        <div id="week-tab" class="tab-content">
+
+                        <!-- Middle: Week Schedules -->
+                        <div class="card schedule-week">
+                            <h3>Week Schedules</h3>
+                            <p class="text-muted">Map days of week to day schedules</p>
                             <div id="week-schedules-container">
                                 <!-- Week schedules will be loaded here -->
                             </div>
+                            <button class="btn btn-sm btn-secondary" onclick="app.schedules.addWeekSchedule()">+ Add Week</button>
                         </div>
-                        
-                        <!-- Calendar Tab -->
-                        <div id="calendar-tab" class="tab-content">
-                            <!-- Calendar content will be loaded here -->
+
+                        <!-- Right: Day Schedules -->
+                        <div class="card schedule-days">
+                            <h3>Day Schedules</h3>
+                            <p class="text-muted">Opening hours per day type</p>
+                            <div id="day-schedules-container">
+                                <!-- Day schedules will be loaded here -->
+                            </div>
+                            <button class="btn btn-sm btn-secondary" onclick="app.schedules.addDaySchedule()">+ Add Day</button>
                         </div>
                     </div>
                 </section>
                 
-                <!-- Scenarios Section -->
-                <section id="scenarios-section" class="content-section">
-                    <h2>Energy Scenarios</h2>
-                    <div class="placeholder-message">
-                        <h3>Scenario Management</h3>
-                        <p>Compare different heating strategies and configurations</p>
+                <!-- Dashboard Section -->
+                <section id="dashboard-section" class="content-section">
+                    <h2>Project Dashboard</h2>
+                    <div class="dashboard-grid">
+                        <div class="card">
+                            <h3>Project Summary</h3>
+                            <table class="data-table compact">
+                                <tr><td>Site</td><td id="dash-site-name">Loading...</td></tr>
+                                <tr><td>Pool Area</td><td id="dash-pool-area">-</td></tr>
+                                <tr><td>Heat Pump</td><td id="dash-hp-capacity">-</td></tr>
+                                <tr><td>Boiler</td><td id="dash-boiler-capacity">-</td></tr>
+                            </table>
+                        </div>
+                        <div class="card">
+                            <h3>Weather Data</h3>
+                            <table class="data-table compact">
+                                <tr><td>Available Range</td><td id="dash-weather-range">-</td></tr>
+                                <tr><td>Data Points</td><td id="dash-weather-count">-</td></tr>
+                            </table>
+                        </div>
+                        <div class="card">
+                            <h3>Recent Simulations</h3>
+                            <div id="dash-recent-runs">No runs yet</div>
+                        </div>
                     </div>
                 </section>
-                
-                <!-- Configurations Section -->
-                <section id="configurations-section" class="content-section">
-                    <h2>System Configuration</h2>
-                    <div class="placeholder-message">
-                        <h3>System Settings</h3>
-                        <p>Configure pool parameters and equipment specifications</p>
+
+                <!-- Configuration Section -->
+                <section id="configuration-section" class="content-section">
+                    <h2>Project Configuration</h2>
+                    <div class="config-actions">
+                        <button class="btn btn-primary" onclick="app.configuration.save()">Save Configuration</button>
+                    </div>
+
+                    <div class="config-grid">
+                        <!-- Pool Physical -->
+                        <div class="card">
+                            <h3>Pool Physical</h3>
+                            <table class="data-table form-table">
+                                <tr>
+                                    <td><label for="cfg-pool-volume">Volume (m³)</label></td>
+                                    <td><input type="number" id="cfg-pool-volume" step="1" value="625"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-pool-area">Surface Area (m²)</label></td>
+                                    <td><input type="number" id="cfg-pool-area" step="0.1" value="312.5"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-pool-depth">Avg Depth (m)</label></td>
+                                    <td><input type="number" id="cfg-pool-depth" step="0.1" value="2.0"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-wind-factor">Wind Exposure</label></td>
+                                    <td><input type="number" id="cfg-wind-factor" step="0.01" value="0.535" min="0" max="1"></td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <!-- Cover & Environment -->
+                        <div class="card">
+                            <h3>Cover & Environment</h3>
+                            <table class="data-table form-table">
+                                <tr>
+                                    <td><label for="cfg-has-cover">Pool Cover</label></td>
+                                    <td>
+                                        <select id="cfg-has-cover" onchange="app.configuration.toggleCover()">
+                                            <option value="1" selected>Yes - Cover when closed</option>
+                                            <option value="0">No cover</option>
+                                        </select>
+                                    </td>
+                                </tr>
+                                <tr id="cover-u-row">
+                                    <td><label for="cfg-cover-u">Cover U-value (W/m²K)</label></td>
+                                    <td><input type="number" id="cfg-cover-u" step="0.1" value="5.0" min="0"></td>
+                                </tr>
+                                <tr id="cover-solar-row">
+                                    <td><label for="cfg-cover-solar">Cover Solar Trans. (%)</label></td>
+                                    <td><input type="number" id="cfg-cover-solar" step="1" value="10" min="0" max="100"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-solar-absorb">Solar Absorption (%)</label></td>
+                                    <td><input type="number" id="cfg-solar-absorb" step="1" value="60" min="0" max="100"></td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <!-- Equipment -->
+                        <div class="card">
+                            <h3>Equipment</h3>
+                            <table class="data-table form-table">
+                                <tr>
+                                    <td><label for="cfg-hp-capacity">Heat Pump (kW)</label></td>
+                                    <td><input type="number" id="cfg-hp-capacity" step="1" value="125"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-hp-cop">HP COP (nominal)</label></td>
+                                    <td><input type="number" id="cfg-hp-cop" step="0.1" value="4.6"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-boiler-capacity">Boiler (kW)</label></td>
+                                    <td><input type="number" id="cfg-boiler-capacity" step="1" value="200"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-boiler-eff">Boiler Efficiency</label></td>
+                                    <td><input type="number" id="cfg-boiler-eff" step="0.01" value="0.92"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-showers-hp">Showers use HP</label></td>
+                                    <td>
+                                        <select id="cfg-showers-hp">
+                                            <option value="1" selected>Yes</option>
+                                            <option value="0">No (separate heater)</option>
+                                        </select>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <!-- Control Settings -->
+                        <div class="card">
+                            <h3>Control Settings</h3>
+                            <table class="data-table form-table">
+                                <tr>
+                                    <td><label for="cfg-target-temp">Target Temp (°C)</label></td>
+                                    <td><input type="number" id="cfg-target-temp" step="0.5" value="28"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-temp-tolerance">Temp Tolerance (±°C)</label></td>
+                                    <td><input type="number" id="cfg-temp-tolerance" step="0.5" value="2" min="0.5" max="5"></td>
+                                </tr>
+                                <tr class="calculated">
+                                    <td>Allowed Range</td>
+                                    <td id="cfg-temp-range">26 - 30°C</td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-strategy">Strategy</label></td>
+                                    <td>
+                                        <select id="cfg-strategy">
+                                            <option value="reactive">Reactive</option>
+                                            <option value="predictive" selected>Predictive</option>
+                                            <option value="cost_optimizing" disabled>Cost Optimizing (soon)</option>
+                                        </select>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <!-- Bather Load -->
+                        <div class="card">
+                            <h3>Bather Load</h3>
+                            <table class="data-table form-table">
+                                <tr>
+                                    <td><label for="cfg-bathers">Bathers/day</label></td>
+                                    <td><input type="number" id="cfg-bathers" step="1" value="100"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-refill-liters">Refill (L/bather)</label></td>
+                                    <td><input type="number" id="cfg-refill-liters" step="1" value="30"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-shower-liters">Shower (L/bather)</label></td>
+                                    <td><input type="number" id="cfg-shower-liters" step="1" value="60"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-activity-factor">Activity Factor</label></td>
+                                    <td><input type="number" id="cfg-activity-factor" step="0.1" value="1.1" min="1.0" max="2.0"></td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <!-- Water Temperatures -->
+                        <div class="card">
+                            <h3>Water Temperatures</h3>
+                            <table class="data-table form-table">
+                                <tr>
+                                    <td><label for="cfg-cold-water-temp">Cold Water (°C)</label></td>
+                                    <td><input type="number" id="cfg-cold-water-temp" step="1" value="5" min="0" max="20"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-shower-target-temp">Shower Target (°C)</label></td>
+                                    <td><input type="number" id="cfg-shower-target-temp" step="1" value="40" min="30" max="50"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-hot-water-temp">Hot Water Tank (°C)</label></td>
+                                    <td><input type="number" id="cfg-hot-water-temp" step="1" value="60" min="50" max="80"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-hp-max-dhw-temp">HP Max DHW (°C)</label></td>
+                                    <td><input type="number" id="cfg-hp-max-dhw-temp" step="1" value="35" min="30" max="55"></td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <!-- Energy Costs -->
+                        <div class="card">
+                            <h3>Energy Costs</h3>
+                            <table class="data-table form-table">
+                                <tr>
+                                    <td><label for="cfg-elec-cost">Electricity (NOK/kWh)</label></td>
+                                    <td><input type="number" id="cfg-elec-cost" step="0.01" value="1.20"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-gas-cost">Gas/Oil (NOK/kWh)</label></td>
+                                    <td><input type="number" id="cfg-gas-cost" step="0.01" value="0.80"></td>
+                                </tr>
+                            </table>
+                        </div>
                     </div>
                 </section>
                 
@@ -198,52 +409,103 @@
                     </div>
                 </section>
                 
-                <!-- Simulations Section -->
-                <section id="simulations-section" class="content-section">
-                    <h2>Energy Simulations</h2>
+                <!-- New Run Section -->
+                <section id="sim-new-section" class="content-section">
+                    <h2>New Simulation Run</h2>
 
-                    <!-- New Simulation Form -->
-                    <div class="simulation-form card">
-                        <h3>Run New Simulation</h3>
-                        <div class="form-grid">
-                            <div class="form-group">
-                                <label for="sim-scenario-name">Scenario Name</label>
-                                <input type="text" id="sim-scenario-name" placeholder="e.g., Winter 2023 Analysis">
-                            </div>
-                            <div class="form-group">
-                                <label for="sim-start-date">Start Date</label>
-                                <input type="date" id="sim-start-date">
-                            </div>
-                            <div class="form-group">
-                                <label for="sim-end-date">End Date</label>
-                                <input type="date" id="sim-end-date">
-                            </div>
-                            <div class="form-group full-width">
-                                <label for="sim-description">Description (optional)</label>
-                                <textarea id="sim-description" rows="2" placeholder="Notes about this simulation..."></textarea>
+                    <div class="sim-new-grid">
+                        <!-- Run Configuration -->
+                        <div class="card">
+                            <h3>Run Settings</h3>
+                            <table class="data-table form-table">
+                                <tr>
+                                    <td><label for="sim-scenario-name">Scenario Name</label></td>
+                                    <td><input type="text" id="sim-scenario-name" placeholder="e.g., 2024 Benchmark"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="sim-start-date">Start Date</label></td>
+                                    <td><input type="date" id="sim-start-date" value="2024-01-01"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="sim-end-date">End Date</label></td>
+                                    <td><input type="date" id="sim-end-date" value="2024-12-31"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="sim-description">Notes</label></td>
+                                    <td><textarea id="sim-description" rows="2" placeholder="Optional notes..."></textarea></td>
+                                </tr>
+                            </table>
+                            <div class="form-info">
+                                <span id="weather-range-info" class="text-muted">Loading weather data range...</span>
                             </div>
                         </div>
-                        <div class="form-info">
-                            <span id="weather-range-info" class="text-muted">Loading weather data range...</span>
+
+                        <!-- Config Override (use project defaults or override) -->
+                        <div class="card">
+                            <h3>Configuration</h3>
+                            <div class="config-toggle">
+                                <label>
+                                    <input type="checkbox" id="sim-use-override" onchange="SimulationsModule.toggleOverride()">
+                                    Override project configuration
+                                </label>
+                            </div>
+                            <div id="sim-override-fields" style="display: none;">
+                                <table class="data-table form-table compact">
+                                    <tr>
+                                        <td>Heat Pump (kW)</td>
+                                        <td><input type="number" id="sim-hp-override" step="1" value="125"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Boiler (kW)</td>
+                                        <td><input type="number" id="sim-boiler-override" step="1" value="200"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Wind Factor</td>
+                                        <td><input type="number" id="sim-wind-override" step="0.01" value="0.535"></td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div id="sim-project-config">
+                                <p class="text-muted">Using project configuration</p>
+                            </div>
                         </div>
-                        <div class="form-actions">
-                            <button id="run-simulation-btn" class="btn btn-primary" onclick="SimulationsModule.startSimulation()">
-                                Run Simulation
-                            </button>
-                        </div>
-                        <div id="simulation-progress" class="simulation-progress" style="display: none;"></div>
                     </div>
 
+                    <div class="form-actions">
+                        <button id="run-simulation-btn" class="btn btn-primary btn-lg" onclick="SimulationsModule.startSimulation()">
+                            ▶️ Run Simulation
+                        </button>
+                    </div>
+                    <div id="simulation-progress" class="simulation-progress" style="display: none;"></div>
+                </section>
+
+                <!-- History Section -->
+                <section id="sim-history-section" class="content-section">
+                    <h2>Simulation History</h2>
+                    <div id="simulation-runs-list" class="runs-list">
+                        <p class="loading">Loading simulation runs...</p>
+                    </div>
                     <!-- Simulation Detail View -->
                     <div id="simulation-detail" class="simulation-detail card" style="display: none;"></div>
+                </section>
 
-                    <!-- Previous Runs List -->
-                    <div class="simulation-runs card">
-                        <h3>Previous Simulation Runs</h3>
-                        <div id="simulation-runs-list" class="runs-list">
-                            <p class="loading">Loading simulation runs...</p>
+                <!-- Compare Section -->
+                <section id="sim-compare-section" class="content-section">
+                    <h2>Compare Runs</h2>
+                    <div class="card">
+                        <h3>Select Runs to Compare</h3>
+                        <div class="compare-selectors">
+                            <select id="compare-run-1" class="form-control">
+                                <option value="">Select Run 1...</option>
+                            </select>
+                            <span class="vs-label">vs</span>
+                            <select id="compare-run-2" class="form-control">
+                                <option value="">Select Run 2...</option>
+                            </select>
+                            <button class="btn btn-primary" onclick="SimulationsModule.compareRuns()">Compare</button>
                         </div>
                     </div>
+                    <div id="comparison-results" style="display: none;"></div>
                 </section>
             </div>
         </main>
@@ -292,6 +554,7 @@
     <script src="./assets/js/modules/schedules.js"></script>
     <script src="./assets/js/modules/calendar.js"></script>
     <script src="./assets/js/modules/simulations.js"></script>
+    <script src="./assets/js/modules/configuration.js"></script>
     <script src="./assets/js/app.js"></script>
 </body>
 </html>

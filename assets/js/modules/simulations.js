@@ -550,6 +550,192 @@ const SimulationsModule = {
             return (kwh / 1000).toFixed(1) + ' MWh';
         }
         return kwh.toFixed(0) + ' kWh';
+    },
+
+    // ============================================
+    // TWO-TIER STRUCTURE METHODS
+    // ============================================
+
+    /**
+     * Initialize New Run section
+     */
+    initNewRun: function() {
+        // Set default dates
+        const startInput = document.getElementById('sim-start-date');
+        const endInput = document.getElementById('sim-end-date');
+        if (startInput && !startInput.value) startInput.value = '2024-01-01';
+        if (endInput && !endInput.value) endInput.value = '2024-12-31';
+
+        // Load weather range
+        this.loadWeatherRange();
+    },
+
+    /**
+     * Initialize Compare section
+     */
+    initCompare: async function() {
+        const select1 = document.getElementById('compare-run-1');
+        const select2 = document.getElementById('compare-run-2');
+
+        if (!select1 || !select2) return;
+
+        // Load runs for dropdowns
+        try {
+            const response = await fetch('/api/simulation_api.php?action=get_runs&limit=50');
+            const data = await response.json();
+
+            if (data.runs) {
+                const optionsHtml = data.runs.map(run =>
+                    `<option value="${run.run_id}">${this.escapeHtml(run.scenario_name)} (${run.start_date} - ${run.end_date})</option>`
+                ).join('');
+
+                select1.innerHTML = '<option value="">Select Run 1...</option>' + optionsHtml;
+                select2.innerHTML = '<option value="">Select Run 2...</option>' + optionsHtml;
+            }
+        } catch (error) {
+            console.error('Failed to load runs for comparison:', error);
+        }
+    },
+
+    /**
+     * Toggle config override fields
+     */
+    toggleOverride: function() {
+        const checkbox = document.getElementById('sim-use-override');
+        const overrideFields = document.getElementById('sim-override-fields');
+        const projectConfig = document.getElementById('sim-project-config');
+
+        if (checkbox && overrideFields && projectConfig) {
+            if (checkbox.checked) {
+                overrideFields.style.display = 'block';
+                projectConfig.style.display = 'none';
+            } else {
+                overrideFields.style.display = 'none';
+                projectConfig.style.display = 'block';
+            }
+        }
+    },
+
+    /**
+     * Compare two runs
+     */
+    compareRuns: async function() {
+        const runId1 = document.getElementById('compare-run-1').value;
+        const runId2 = document.getElementById('compare-run-2').value;
+
+        if (!runId1 || !runId2) {
+            alert('Please select two runs to compare');
+            return;
+        }
+
+        if (runId1 === runId2) {
+            alert('Please select two different runs');
+            return;
+        }
+
+        const resultsDiv = document.getElementById('comparison-results');
+        resultsDiv.innerHTML = '<p class="loading">Loading comparison...</p>';
+        resultsDiv.style.display = 'block';
+
+        try {
+            // Fetch both runs
+            const [response1, response2] = await Promise.all([
+                fetch(`/api/simulation_api.php?action=get_summary&run_id=${runId1}`),
+                fetch(`/api/simulation_api.php?action=get_summary&run_id=${runId2}`)
+            ]);
+
+            const data1 = await response1.json();
+            const data2 = await response2.json();
+
+            if (data1.error || data2.error) {
+                throw new Error(data1.error || data2.error);
+            }
+
+            this.renderComparison(data1, data2);
+
+        } catch (error) {
+            resultsDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+        }
+    },
+
+    /**
+     * Render comparison table
+     */
+    renderComparison: function(data1, data2) {
+        const resultsDiv = document.getElementById('comparison-results');
+        const run1 = data1.run;
+        const run2 = data2.run;
+        const sum1 = run1.summary || {};
+        const sum2 = run2.summary || {};
+
+        const formatDiff = (val1, val2, unit = '') => {
+            if (val1 === null || val2 === null) return '-';
+            const diff = val2 - val1;
+            const pct = val1 !== 0 ? ((diff / val1) * 100).toFixed(1) : '-';
+            const sign = diff > 0 ? '+' : '';
+            const color = diff > 0 ? 'red' : (diff < 0 ? 'green' : 'gray');
+            return `<span style="color:${color}">${sign}${diff.toFixed(1)}${unit} (${sign}${pct}%)</span>`;
+        };
+
+        resultsDiv.innerHTML = `
+            <div class="card">
+                <h3>Comparison: ${this.escapeHtml(run1.scenario_name)} vs ${this.escapeHtml(run2.scenario_name)}</h3>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th>${this.escapeHtml(run1.scenario_name)}</th>
+                            <th>${this.escapeHtml(run2.scenario_name)}</th>
+                            <th>Difference</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Period</td>
+                            <td>${run1.start_date} - ${run1.end_date}</td>
+                            <td>${run2.start_date} - ${run2.end_date}</td>
+                            <td>-</td>
+                        </tr>
+                        <tr>
+                            <td>Total Cost</td>
+                            <td>${this.formatCurrency(sum1.total_cost)}</td>
+                            <td>${this.formatCurrency(sum2.total_cost)}</td>
+                            <td>${formatDiff(sum1.total_cost, sum2.total_cost, ' NOK')}</td>
+                        </tr>
+                        <tr>
+                            <td>Heat Pump Energy</td>
+                            <td>${this.formatEnergy(sum1.total_hp_energy_kwh)}</td>
+                            <td>${this.formatEnergy(sum2.total_hp_energy_kwh)}</td>
+                            <td>${formatDiff(sum1.total_hp_energy_kwh, sum2.total_hp_energy_kwh, ' kWh')}</td>
+                        </tr>
+                        <tr>
+                            <td>Boiler Energy</td>
+                            <td>${this.formatEnergy(sum1.total_boiler_energy_kwh)}</td>
+                            <td>${this.formatEnergy(sum2.total_boiler_energy_kwh)}</td>
+                            <td>${formatDiff(sum1.total_boiler_energy_kwh, sum2.total_boiler_energy_kwh, ' kWh')}</td>
+                        </tr>
+                        <tr>
+                            <td>Total Loss</td>
+                            <td>${this.formatEnergy(sum1.total_heat_loss_kwh)}</td>
+                            <td>${this.formatEnergy(sum2.total_heat_loss_kwh)}</td>
+                            <td>${formatDiff(sum1.total_heat_loss_kwh, sum2.total_heat_loss_kwh, ' kWh')}</td>
+                        </tr>
+                        <tr>
+                            <td>Solar Gain</td>
+                            <td>${this.formatEnergy(sum1.total_solar_gain_kwh)}</td>
+                            <td>${this.formatEnergy(sum2.total_solar_gain_kwh)}</td>
+                            <td>${formatDiff(sum1.total_solar_gain_kwh, sum2.total_solar_gain_kwh, ' kWh')}</td>
+                        </tr>
+                        <tr>
+                            <td>Avg COP</td>
+                            <td>${sum1.avg_cop?.toFixed(2) || '-'}</td>
+                            <td>${sum2.avg_cop?.toFixed(2) || '-'}</td>
+                            <td>${formatDiff(sum1.avg_cop, sum2.avg_cop)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
     }
 };
 

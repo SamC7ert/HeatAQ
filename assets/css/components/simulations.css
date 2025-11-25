@@ -342,3 +342,227 @@ p.loading {
     padding: 20px;
     text-align: center;
 }
+
+/* ============================================
+   TWO-TIER STRUCTURE STYLES
+   ============================================ */
+
+/* Dashboard Grid */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+/* Configuration Grid */
+.config-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.config-actions {
+    margin-bottom: 20px;
+}
+
+/* Sim New Grid */
+.sim-new-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+/* Generic Card */
+.card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.card h3 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    color: #333;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+/* Form Table Style (compact tables with inputs) */
+.data-table.form-table {
+    width: 100%;
+}
+
+.data-table.form-table td:first-child {
+    width: 50%;
+    font-weight: 500;
+    color: #555;
+}
+
+.data-table.form-table td:last-child {
+    width: 50%;
+}
+
+.data-table.form-table input,
+.data-table.form-table textarea,
+.data-table.form-table select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.data-table.form-table input:focus,
+.data-table.form-table textarea:focus,
+.data-table.form-table select:focus {
+    outline: none;
+    border-color: #007bff;
+}
+
+.data-table.form-table tr.calculated td {
+    color: #888;
+    font-style: italic;
+}
+
+.data-table.form-table tr.calculated td:last-child {
+    font-weight: 600;
+    color: #333;
+}
+
+/* Compact Table Variant */
+.data-table.compact td {
+    padding: 6px 10px;
+}
+
+/* Config Toggle */
+.config-toggle {
+    margin-bottom: 15px;
+}
+
+.config-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+/* Compare Section */
+.compare-selectors {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.compare-selectors select {
+    min-width: 200px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.vs-label {
+    font-weight: 600;
+    color: #666;
+}
+
+/* Large Button */
+.btn-lg {
+    padding: 12px 30px;
+    font-size: 16px;
+}
+
+/* Text Utilities */
+.text-muted {
+    color: #888;
+    font-size: 13px;
+}
+
+/* ============================================
+   SCHEDULE MANAGEMENT STYLES
+   ============================================ */
+
+/* OHC Selector */
+.ohc-selector {
+    margin-bottom: 20px;
+}
+
+.ohc-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.ohc-header label {
+    font-weight: 500;
+}
+
+.ohc-header select {
+    min-width: 250px;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.ohc-description {
+    margin-top: 10px;
+    color: #666;
+    font-size: 13px;
+    font-style: italic;
+}
+
+/* Schedule Grid (Calendar | Week | Days) */
+.schedule-grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 15px;
+}
+
+@media (max-width: 1200px) {
+    .schedule-grid-3 {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .schedule-grid-3 {
+        grid-template-columns: 1fr;
+    }
+}
+
+.schedule-calendar,
+.schedule-week,
+.schedule-days {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.calendar-section {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.calendar-section:last-child {
+    border-bottom: none;
+}
+
+.calendar-section h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 10px;
+}
+
+.form-control-sm {
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+}
