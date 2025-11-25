@@ -710,12 +710,22 @@ class HeatAQAPI {
         // For updates, just update the day_schedule_id (simple schedule change)
         if ($exceptionId > 0) {
             try {
-                $stmt = $this->db->prepare("
-                    UPDATE calendar_exception_days
-                    SET day_schedule_id = ?
-                    WHERE id = ?
-                ");
-                $stmt->execute([$dayScheduleId, $exceptionId]);
+                // Use explicit NULL in SQL to avoid PDO parameter binding issues
+                if ($dayScheduleId === null) {
+                    $stmt = $this->db->prepare("
+                        UPDATE calendar_exception_days
+                        SET day_schedule_id = NULL
+                        WHERE id = ?
+                    ");
+                    $stmt->execute([$exceptionId]);
+                } else {
+                    $stmt = $this->db->prepare("
+                        UPDATE calendar_exception_days
+                        SET day_schedule_id = ?
+                        WHERE id = ?
+                    ");
+                    $stmt->execute([$dayScheduleId, $exceptionId]);
+                }
                 $this->sendResponse(['success' => true, 'exception_id' => $exceptionId]);
             } catch (Exception $e) {
                 $this->sendError('Database error: ' . $e->getMessage());
