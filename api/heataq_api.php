@@ -1335,6 +1335,7 @@ class HeatAQAPI {
                 $stmt = $this->db->prepare($query);
                 $stmt->execute([':project_id' => $this->projectId]);
             } else {
+                // No auth - show all configs
                 $query = "SELECT template_id, template_name as name, json_config, created_at, updated_at
                           FROM config_templates
                           ORDER BY template_name";
@@ -1348,7 +1349,7 @@ class HeatAQAPI {
                 unset($config['json_config']);
             }
 
-            $this->sendResponse(['configs' => $configs]);
+            $this->sendResponse(['configs' => $configs, 'debug_project_id' => $this->projectId]);
         } catch (PDOException $e) {
             // Fallback: json_config column might not exist
             try {
@@ -1372,7 +1373,7 @@ class HeatAQAPI {
                     $config['config'] = [];
                 }
 
-                $this->sendResponse(['configs' => $configs, 'note' => 'json_config column not found - run migration']);
+                $this->sendResponse(['configs' => $configs, 'debug_project_id' => $this->projectId, 'note' => 'json_config column not found']);
             } catch (PDOException $e2) {
                 $this->sendError('Failed to load configs: ' . $e2->getMessage());
             }
