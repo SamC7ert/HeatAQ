@@ -532,18 +532,39 @@ class HeatAQAPI {
     }
     
     private function getReferenceDays() {
-        $currentYear = date('Y');
-        $startYear = $currentYear - 1;
-        $endYear = $currentYear + 1;
-        
-        $stmt = $this->db->prepare("
-            SELECT * FROM holiday_reference_days 
-            WHERE year BETWEEN ? AND ?
-            ORDER BY year
-        ");
-        $stmt->execute([$startYear, $endYear]);
-        
-        $this->sendResponse(['reference_days' => $stmt->fetchAll()]);
+        $currentYear = (int)date('Y');
+        $referenceDays = [];
+
+        // Calculate Easter for years around current year
+        for ($year = $currentYear - 1; $year <= $currentYear + 5; $year++) {
+            $easterDate = $this->calculateEaster($year);
+            $referenceDays[] = [
+                'year' => $year,
+                'easter_date' => $easterDate
+            ];
+        }
+
+        $this->sendResponse(['reference_days' => $referenceDays]);
+    }
+
+    private function calculateEaster($year) {
+        // Anonymous Gregorian algorithm
+        $a = $year % 19;
+        $b = intdiv($year, 100);
+        $c = $year % 100;
+        $d = intdiv($b, 4);
+        $e = $b % 4;
+        $f = intdiv($b + 8, 25);
+        $g = intdiv($b - $f + 1, 3);
+        $h = (19 * $a + $b - $d - $g + 15) % 30;
+        $i = intdiv($c, 4);
+        $k = $c % 4;
+        $l = (32 + 2 * $e + 2 * $i - $h - $k) % 7;
+        $m = intdiv($a + 11 * $h + 22 * $l, 451);
+        $month = intdiv($h + $l - 7 * $m + 114, 31);
+        $day = (($h + $l - 7 * $m + 114) % 31) + 1;
+
+        return sprintf('%04d-%02d-%02d', $year, $month, $day);
     }
     
     private function testResolution() {
