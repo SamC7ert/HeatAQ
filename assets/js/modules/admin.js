@@ -259,16 +259,32 @@ const AdminModule = {
 
     loadWeatherStations: async function() {
         try {
-            const response = await fetch('./api/heataq_api.php?action=get_weather_stations');
-            const data = await response.json();
+            // Load stations, yearly, and monthly data in parallel
+            const [stationsRes, yearlyRes, monthlyRes] = await Promise.all([
+                fetch('./api/heataq_api.php?action=get_weather_stations'),
+                fetch('./api/heataq_api.php?action=get_weather_yearly_averages'),
+                fetch('./api/heataq_api.php?action=get_weather_monthly_averages')
+            ]);
 
-            if (data.stations) {
-                this.weatherStations = data.stations;
+            const stationsData = await stationsRes.json();
+            const yearlyData = await yearlyRes.json();
+            const monthlyData = await monthlyRes.json();
+
+            if (stationsData.stations) {
+                this.weatherStations = stationsData.stations;
                 this.renderWeatherStations();
             }
 
-            if (data.summary) {
-                this.renderWeatherSummary(data.summary);
+            if (stationsData.summary) {
+                this.renderWeatherSummary(stationsData.summary);
+            }
+
+            if (yearlyData.yearly_averages) {
+                this.renderYearlyAverages(yearlyData.yearly_averages);
+            }
+
+            if (monthlyData.monthly_averages) {
+                this.renderMonthlyAverages(monthlyData.monthly_averages);
             }
         } catch (err) {
             console.error('Failed to load weather stations:', err);
@@ -323,18 +339,100 @@ const AdminModule = {
         alert('Weather station editing not yet implemented.');
     },
 
+    renderYearlyAverages: function(data) {
+        const container = document.getElementById('weather-yearly-averages');
+        if (!container) return;
+
+        if (!data || data.length === 0) {
+            container.innerHTML = '<p class="text-muted">No data available</p>';
+            return;
+        }
+
+        let html = `<table class="data-table compact">
+            <thead><tr>
+                <th>Year</th>
+                <th>Avg °C</th>
+                <th>Min °C</th>
+                <th>Max °C</th>
+                <th>Wind m/s</th>
+                <th>Humidity %</th>
+                <th>Solar kWh/m²</th>
+            </tr></thead><tbody>`;
+
+        data.forEach(row => {
+            html += `<tr>
+                <td>${row.year}</td>
+                <td>${row.avg_temp}</td>
+                <td>${row.min_temp}</td>
+                <td>${row.max_temp}</td>
+                <td>${row.avg_wind}</td>
+                <td>${row.avg_humidity}</td>
+                <td>${row.total_solar_kwh_m2?.toLocaleString() || '-'}</td>
+            </tr>`;
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    },
+
+    renderMonthlyAverages: function(data) {
+        const container = document.getElementById('weather-monthly-averages');
+        if (!container) return;
+
+        if (!data || data.length === 0) {
+            container.innerHTML = '<p class="text-muted">No data available</p>';
+            return;
+        }
+
+        let html = `<table class="data-table compact">
+            <thead><tr>
+                <th>Month</th>
+                <th>Avg °C</th>
+                <th>Min °C</th>
+                <th>Max °C</th>
+                <th>Wind m/s</th>
+                <th>Humidity %</th>
+                <th>Solar W/m²</th>
+            </tr></thead><tbody>`;
+
+        data.forEach(row => {
+            html += `<tr>
+                <td>${row.month_name}</td>
+                <td>${row.avg_temp}</td>
+                <td>${row.min_temp}</td>
+                <td>${row.max_temp}</td>
+                <td>${row.avg_wind}</td>
+                <td>${row.avg_humidity}</td>
+                <td>${row.avg_solar_w_m2}</td>
+            </tr>`;
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    },
+
     // ========================================
     // USER MANAGEMENT
     // ========================================
 
+    projects: [],
+
     loadUsers: async function() {
         try {
-            const response = await fetch('./api/heataq_api.php?action=get_users');
-            const data = await response.json();
+            // Load users and projects in parallel
+            const [usersRes, projectsRes] = await Promise.all([
+                fetch('./api/heataq_api.php?action=get_users'),
+                fetch('./api/heataq_api.php?action=get_projects')
+            ]);
+            const usersData = await usersRes.json();
+            const projectsData = await projectsRes.json();
 
-            if (data.users) {
-                this.users = data.users;
+            if (usersData.users) {
+                this.users = usersData.users;
                 this.renderUsers();
+            }
+            if (projectsData.projects) {
+                this.projects = projectsData.projects;
             }
         } catch (err) {
             console.error('Failed to load users:', err);
@@ -353,14 +451,17 @@ const AdminModule = {
         }
 
         let html = '<table class="data-table compact"><thead><tr>' +
-            '<th>Email</th><th>Name</th><th>Role</th><th>Active</th><th>Actions</th>' +
+            '<th>Email</th><th>Name</th><th>Role</th><th>Projects</th><th>Active</th><th>Actions</th>' +
             '</tr></thead><tbody>';
 
         this.users.forEach(user => {
+            const roleLabel = user.role === 'admin' ? 'Admin' : 'Operator';
+            const projectNames = user.project_names || '-';
             html += `<tr>
                 <td>${user.email}</td>
                 <td>${user.name || '-'}</td>
-                <td>${user.role || '-'}</td>
+                <td>${roleLabel}</td>
+                <td>${projectNames}</td>
                 <td>${user.is_active ? 'Yes' : 'No'}</td>
                 <td>
                     <button class="btn btn-xs btn-secondary" onclick="app.admin.editUser(${user.user_id})">Edit</button>
@@ -386,6 +487,16 @@ const AdminModule = {
     showUserForm: function(existingUser) {
         const isEdit = !!existingUser;
         const title = isEdit ? 'Edit User' : 'Add User';
+        const userProjectIds = existingUser?.project_ids || [];
+
+        // Build project checkboxes
+        const projectCheckboxes = this.projects.map(p => `
+            <label style="display: block; margin: 5px 0;">
+                <input type="checkbox" name="user-projects" value="${p.project_id}"
+                    ${userProjectIds.includes(p.project_id) ? 'checked' : ''}>
+                ${p.project_name}
+            </label>
+        `).join('');
 
         const html = `
             <div class="modal-overlay" onclick="app.admin.closeUserForm()">
@@ -408,11 +519,18 @@ const AdminModule = {
 
                         <div class="form-group">
                             <label>Role</label>
-                            <select id="user-role" class="form-control">
-                                <option value="viewer" ${existingUser?.role === 'viewer' ? 'selected' : ''}>Viewer</option>
-                                <option value="operator" ${existingUser?.role === 'operator' ? 'selected' : ''}>Operator</option>
+                            <select id="user-role" class="form-control" onchange="app.admin.toggleProjectsField()">
+                                <option value="operator" ${existingUser?.role !== 'admin' ? 'selected' : ''}>Operator</option>
                                 <option value="admin" ${existingUser?.role === 'admin' ? 'selected' : ''}>Admin</option>
                             </select>
+                        </div>
+
+                        <div class="form-group" id="projects-field" style="${existingUser?.role === 'admin' ? 'display:none' : ''}">
+                            <label>Assigned Projects</label>
+                            <div style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px;">
+                                ${projectCheckboxes || '<p class="text-muted">No projects available</p>'}
+                            </div>
+                            <small>Operators can only access assigned projects</small>
                         </div>
 
                         ${!isEdit ? `
@@ -449,6 +567,14 @@ const AdminModule = {
         });
     },
 
+    toggleProjectsField: function() {
+        const role = document.getElementById('user-role').value;
+        const projectsField = document.getElementById('projects-field');
+        if (projectsField) {
+            projectsField.style.display = role === 'admin' ? 'none' : '';
+        }
+    },
+
     closeUserForm: function() {
         const modal = document.getElementById('user-modal');
         if (modal) modal.remove();
@@ -456,12 +582,23 @@ const AdminModule = {
 
     saveUser: async function() {
         const id = document.getElementById('user-id').value;
+        const role = document.getElementById('user-role').value;
+
+        // Get selected projects for operators
+        const projectIds = [];
+        if (role === 'operator') {
+            document.querySelectorAll('input[name="user-projects"]:checked').forEach(cb => {
+                projectIds.push(parseInt(cb.value));
+            });
+        }
+
         const data = {
             action: 'save_user',
             user_id: id || null,
             email: document.getElementById('user-email').value,
             name: document.getElementById('user-name').value,
-            role: document.getElementById('user-role').value,
+            role: role,
+            project_ids: projectIds,
             is_active: document.getElementById('user-active').checked ? 1 : 0
         };
 

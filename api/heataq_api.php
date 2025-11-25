@@ -254,6 +254,14 @@ class HeatAQAPI {
                     $this->getWeatherStations();
                     break;
 
+                case 'get_weather_yearly_averages':
+                    $this->getWeatherYearlyAverages();
+                    break;
+
+                case 'get_weather_monthly_averages':
+                    $this->getWeatherMonthlyAverages();
+                    break;
+
                 // ADMIN: Users
                 case 'get_users':
                     if (!$this->canEdit()) {
@@ -267,6 +275,10 @@ class HeatAQAPI {
                         $this->sendError('Permission denied', 403);
                     }
                     $this->saveUser();
+                    break;
+
+                case 'get_projects':
+                    $this->getProjects();
                     break;
 
                 // PROJECT CONFIGURATION
@@ -976,17 +988,17 @@ class HeatAQAPI {
 
     private function getWeatherStations() {
         $stmt = $this->db->query("
-            SELECT station_id, name, latitude, longitude, elevation,
+            SELECT station_id, station_name as name, latitude, longitude, elevation,
                    measurement_height_temp, measurement_height_wind
             FROM weather_stations
-            ORDER BY name
+            ORDER BY station_name
         ");
         $stations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Get weather data summary
         $summaryStmt = $this->db->query("
             SELECT
-                ws.name as station_name,
+                ws.station_name as station_name,
                 MIN(DATE(wd.timestamp)) as min_date,
                 MAX(DATE(wd.timestamp)) as max_date,
                 COUNT(*) as record_count
@@ -1003,6 +1015,58 @@ class HeatAQAPI {
         ]);
     }
 
+    private function getWeatherYearlyAverages() {
+        $stmt = $this->db->query("
+            SELECT
+                YEAR(timestamp) as year,
+                ROUND(AVG(air_temperature), 1) as avg_temp,
+                ROUND(MIN(air_temperature), 1) as min_temp,
+                ROUND(MAX(air_temperature), 1) as max_temp,
+                ROUND(AVG(wind_speed), 1) as avg_wind,
+                ROUND(AVG(humidity), 0) as avg_humidity,
+                ROUND(SUM(solar_irradiance) / 1000, 0) as total_solar_kwh_m2,
+                COUNT(*) as hours_count
+            FROM weather_data
+            GROUP BY YEAR(timestamp)
+            ORDER BY year
+        ");
+        $yearly = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->sendResponse([
+            'yearly_averages' => $yearly
+        ]);
+    }
+
+    private function getWeatherMonthlyAverages() {
+        // Get averages across all years by month
+        $stmt = $this->db->query("
+            SELECT
+                MONTH(timestamp) as month,
+                ROUND(AVG(air_temperature), 1) as avg_temp,
+                ROUND(MIN(air_temperature), 1) as min_temp,
+                ROUND(MAX(air_temperature), 1) as max_temp,
+                ROUND(AVG(wind_speed), 1) as avg_wind,
+                ROUND(AVG(humidity), 0) as avg_humidity,
+                ROUND(AVG(solar_irradiance), 0) as avg_solar_w_m2,
+                COUNT(*) as hours_count
+            FROM weather_data
+            GROUP BY MONTH(timestamp)
+            ORDER BY month
+        ");
+        $monthly = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Add month names
+        $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        foreach ($monthly as &$row) {
+            $row['month_name'] = $monthNames[(int)$row['month']] ?? '';
+        }
+
+        $this->sendResponse([
+            'monthly_averages' => $monthly
+        ]);
+    }
+
     // ====================================
     // ADMIN: USERS
     // ====================================
@@ -1010,14 +1074,37 @@ class HeatAQAPI {
     private function getUsers() {
         $stmt = $this->db->query("
             SELECT u.user_id, u.email, u.name, u.is_active,
-                   up.role
+                   MAX(up.role) as role,
+                   GROUP_CONCAT(DISTINCT p.project_name SEPARATOR ', ') as project_names,
+                   GROUP_CONCAT(DISTINCT up.project_id) as project_ids_str
             FROM users u
             LEFT JOIN user_projects up ON u.user_id = up.user_id
+            LEFT JOIN projects p ON up.project_id = p.project_id
+            GROUP BY u.user_id, u.email, u.name, u.is_active
             ORDER BY u.email
         ");
         $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+        // Convert project_ids_str to array
+        foreach ($users as &$user) {
+            $user['project_ids'] = $user['project_ids_str']
+                ? array_map('intval', explode(',', $user['project_ids_str']))
+                : [];
+            unset($user['project_ids_str']);
+        }
+
         $this->sendResponse(['users' => $users]);
+    }
+
+    private function getProjects() {
+        $stmt = $this->db->query("
+            SELECT project_id, project_name
+            FROM projects
+            ORDER BY project_name
+        ");
+        $projects = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->sendResponse(['projects' => $projects]);
     }
 
     private function saveUser() {
@@ -1025,12 +1112,18 @@ class HeatAQAPI {
         $userId = $input['user_id'] ?? null;
         $email = $input['email'] ?? '';
         $name = $input['name'] ?? '';
-        $role = $input['role'] ?? 'viewer';
+        $role = $input['role'] ?? 'operator';
+        $projectIds = $input['project_ids'] ?? [];
         $isActive = $input['is_active'] ?? 1;
         $password = $input['password'] ?? null;
 
         if (empty($email)) {
             $this->sendError('Email is required');
+        }
+
+        // Validate role - only admin or operator allowed
+        if (!in_array($role, ['admin', 'operator'])) {
+            $role = 'operator';
         }
 
         if ($userId) {
@@ -1040,11 +1133,31 @@ class HeatAQAPI {
             ");
             $stmt->execute([$name, $isActive, $userId]);
 
-            // Update role in user_projects
-            $stmt = $this->db->prepare("
-                UPDATE user_projects SET role = ? WHERE user_id = ?
-            ");
-            $stmt->execute([$role, $userId]);
+            // Clear existing project assignments
+            $stmt = $this->db->prepare("DELETE FROM user_projects WHERE user_id = ?");
+            $stmt->execute([$userId]);
+
+            // Add new project assignments
+            if ($role === 'admin') {
+                // Admins get access to all projects
+                $allProjects = $this->db->query("SELECT project_id FROM projects")->fetchAll(PDO::FETCH_COLUMN);
+                foreach ($allProjects as $projectId) {
+                    $stmt = $this->db->prepare("
+                        INSERT INTO user_projects (user_id, project_id, role)
+                        VALUES (?, ?, ?)
+                    ");
+                    $stmt->execute([$userId, $projectId, $role]);
+                }
+            } else {
+                // Operators get access to selected projects
+                foreach ($projectIds as $projectId) {
+                    $stmt = $this->db->prepare("
+                        INSERT INTO user_projects (user_id, project_id, role)
+                        VALUES (?, ?, ?)
+                    ");
+                    $stmt->execute([$userId, $projectId, $role]);
+                }
+            }
         } else {
             // Create new user
             if (empty($password)) {
@@ -1060,17 +1173,26 @@ class HeatAQAPI {
             $stmt->execute([$email, $passwordHash, $name, $isActive]);
             $userId = $this->db->lastInsertId();
 
-            // Get default project ID
-            $projectStmt = $this->db->query("SELECT project_id FROM projects LIMIT 1");
-            $project = $projectStmt->fetch(PDO::FETCH_ASSOC);
-
-            if ($project) {
-                // Add to user_projects
-                $stmt = $this->db->prepare("
-                    INSERT INTO user_projects (user_id, project_id, role)
-                    VALUES (?, ?, ?)
-                ");
-                $stmt->execute([$userId, $project['project_id'], $role]);
+            // Add project assignments
+            if ($role === 'admin') {
+                // Admins get access to all projects
+                $allProjects = $this->db->query("SELECT project_id FROM projects")->fetchAll(PDO::FETCH_COLUMN);
+                foreach ($allProjects as $projectId) {
+                    $stmt = $this->db->prepare("
+                        INSERT INTO user_projects (user_id, project_id, role)
+                        VALUES (?, ?, ?)
+                    ");
+                    $stmt->execute([$userId, $projectId, $role]);
+                }
+            } else {
+                // Operators get access to selected projects
+                foreach ($projectIds as $projectId) {
+                    $stmt = $this->db->prepare("
+                        INSERT INTO user_projects (user_id, project_id, role)
+                        VALUES (?, ?, ?)
+                    ");
+                    $stmt->execute([$userId, $projectId, $role]);
+                }
             }
         }
 
@@ -1082,10 +1204,10 @@ class HeatAQAPI {
     // ====================================
 
     private function getProjectConfigs() {
-        $query = "SELECT template_id, name, description, config_json, is_active, created_at, updated_at
+        $query = "SELECT template_id, template_name as name, description, config_json, is_active, created_at, updated_at
                   FROM config_templates";
         $query = $this->addSiteFilter($query);
-        $query .= " ORDER BY name";
+        $query .= " ORDER BY template_name";
 
         $params = [];
         $this->bindSiteParam($params);
@@ -1113,7 +1235,7 @@ class HeatAQAPI {
         }
 
         $stmt = $this->db->prepare("
-            SELECT template_id, name, description, config_json, is_active
+            SELECT template_id, template_name as name, description, config_json, is_active
             FROM config_templates
             WHERE template_id = ?
         ");
@@ -1147,14 +1269,14 @@ class HeatAQAPI {
             // Update existing
             $stmt = $this->db->prepare("
                 UPDATE config_templates
-                SET name = ?, description = ?, config_json = ?, updated_at = NOW()
+                SET template_name = ?, description = ?, config_json = ?, updated_at = NOW()
                 WHERE template_id = ?
             ");
             $stmt->execute([$name, $description, $configJson, $configId]);
         } else {
             // Insert new
             $stmt = $this->db->prepare("
-                INSERT INTO config_templates (site_id, name, description, config_json, is_active)
+                INSERT INTO config_templates (site_id, template_name, description, config_json, is_active)
                 VALUES (?, ?, ?, ?, 1)
             ");
             $stmt->execute([$this->siteId, $name, $description, $configJson]);
