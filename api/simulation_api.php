@@ -11,6 +11,9 @@
  * - GET ?action=get_daily_results&run_id=123 - Get daily aggregated results
  * - GET ?action=get_summary&run_id=123 - Get run summary only
  * - DELETE ?action=delete_run&run_id=123 - Delete a simulation run
+ * - GET ?action=get_pool_config - Get pool configuration and equipment
+ * - GET ?action=get_weather_range - Get available weather data date range
+ * - GET ?action=get_version - Get simulator version
  */
 
 // Include configuration
@@ -137,6 +140,7 @@ try {
                 'start_date' => $startDate,
                 'end_date' => $endDate,
                 'config_snapshot' => json_encode([
+                    'simulator_version' => EnergySimulator::getVersion(),
                     'pool_config' => $simulator->getPoolConfig(),
                     'equipment' => $simulator->getEquipment(),
                     'template_id' => $scheduler->getTemplate()['template_id'] ?? null,
@@ -159,6 +163,7 @@ try {
                 sendResponse([
                     'status' => 'success',
                     'run_id' => $runId,
+                    'simulator_version' => EnergySimulator::getVersion(),
                     'summary' => $results['summary'],
                     'daily_count' => count($results['daily']),
                     'hourly_count' => count($results['hourly']),
@@ -413,13 +418,20 @@ try {
             $simulator = new EnergySimulator($pdo, $currentSiteId, $scheduler);
 
             sendResponse([
+                'simulator_version' => EnergySimulator::getVersion(),
                 'pool_config' => $simulator->getPoolConfig(),
                 'equipment' => $simulator->getEquipment()
             ]);
             break;
 
+        case 'get_version':
+            sendResponse([
+                'simulator_version' => EnergySimulator::getVersion()
+            ]);
+            break;
+
         default:
-            sendError('Invalid action. Valid actions: run_simulation, get_runs, get_run, get_summary, get_daily_results, get_results, delete_run, get_weather_range, get_pool_config');
+            sendError('Invalid action. Valid actions: run_simulation, get_runs, get_run, get_summary, get_daily_results, get_results, delete_run, get_weather_range, get_pool_config, get_version');
     }
 
 } catch (PDOException $e) {
