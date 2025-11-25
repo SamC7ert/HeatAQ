@@ -270,7 +270,7 @@ GROUP BY sr.run_id, YEAR(sdr.date);
 -- ============================================
 CREATE TABLE IF NOT EXISTS weather_stations (
     station_id VARCHAR(50) PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
+    station_name VARCHAR(255) NOT NULL,
     latitude DECIMAL(10, 6) NULL,
     longitude DECIMAL(10, 6) NULL,
     elevation DECIMAL(8, 2) NULL,

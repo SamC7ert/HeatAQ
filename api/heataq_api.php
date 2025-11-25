@@ -976,17 +976,17 @@ class HeatAQAPI {
 
     private function getWeatherStations() {
         $stmt = $this->db->query("
-            SELECT station_id, name, latitude, longitude, elevation,
+            SELECT station_id, station_name as name, latitude, longitude, elevation,
                    measurement_height_temp, measurement_height_wind
             FROM weather_stations
-            ORDER BY name
+            ORDER BY station_name
         ");
         $stations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Get weather data summary
         $summaryStmt = $this->db->query("
             SELECT
-                ws.name as station_name,
+                ws.station_name as station_name,
                 MIN(DATE(wd.timestamp)) as min_date,
                 MAX(DATE(wd.timestamp)) as max_date,
                 COUNT(*) as record_count
