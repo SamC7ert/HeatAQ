@@ -498,13 +498,24 @@ class HeatAQAPI {
             ");
             $stmt->execute([$name, $description, $baseWeekScheduleId, $templateId]);
         } else {
-            // Create new
+            // Create new - generate unique version
             $siteId = $this->siteId ?? 'arendal_aquatic';
+
+            // Find next available version for this name
             $stmt = $this->db->prepare("
-                INSERT INTO schedule_templates (site_id, name, description, base_week_schedule_id)
-                VALUES (?, ?, ?, ?)
+                SELECT MAX(CAST(SUBSTRING(version, 2) AS DECIMAL(10,1))) as max_ver
+                FROM schedule_templates
+                WHERE name = ?
             ");
-            $stmt->execute([$siteId, $name, $description, $baseWeekScheduleId]);
+            $stmt->execute([$name]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            $nextVer = ($row && $row['max_ver']) ? 'v' . number_format($row['max_ver'] + 0.1, 1) : 'v1.0';
+
+            $stmt = $this->db->prepare("
+                INSERT INTO schedule_templates (site_id, name, version, description, base_week_schedule_id)
+                VALUES (?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([$siteId, $name, $nextVer, $description, $baseWeekScheduleId]);
             $templateId = $this->db->lastInsertId();
         }
 
@@ -675,10 +686,12 @@ class HeatAQAPI {
 
         $exceptionId = isset($input['exception_id']) ? (int)$input['exception_id'] : 0;
 
-        // Convert empty string to null for foreign key
+        // Convert empty string or 0 to null for foreign key
         $dayScheduleId = null;
         if (isset($input['day_schedule_id']) && $input['day_schedule_id'] !== '' && $input['day_schedule_id'] !== null) {
-            $dayScheduleId = (int)$input['day_schedule_id'];
+            $val = (int)$input['day_schedule_id'];
+            // Only use positive IDs - 0 or negative means no schedule
+            $dayScheduleId = ($val > 0) ? $val : null;
         }
 
         // For updates, just update the day_schedule_id (simple schedule change)
