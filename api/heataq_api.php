@@ -675,10 +675,12 @@ class HeatAQAPI {
 
         $exceptionId = isset($input['exception_id']) ? (int)$input['exception_id'] : 0;
 
-        // Convert empty string to null for foreign key
+        // Convert empty string or 0 to null for foreign key
         $dayScheduleId = null;
         if (isset($input['day_schedule_id']) && $input['day_schedule_id'] !== '' && $input['day_schedule_id'] !== null) {
-            $dayScheduleId = (int)$input['day_schedule_id'];
+            $val = (int)$input['day_schedule_id'];
+            // Only use positive IDs - 0 or negative means no schedule
+            $dayScheduleId = ($val > 0) ? $val : null;
         }
 
         // For updates, just update the day_schedule_id (simple schedule change)
