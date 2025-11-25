@@ -200,7 +200,14 @@ class HeatAQAPI {
                     }
                     $this->deleteExceptionDay($_GET['exception_id'] ?? 0);
                     break;
-                    
+
+                case 'delete_day_schedule':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->deleteDaySchedule();
+                    break;
+
                 default:
                     $this->sendError('Invalid action');
             }
@@ -621,13 +628,32 @@ class HeatAQAPI {
         if (!$this->validateId($exceptionId)) {
             $this->sendError('Invalid exception ID');
         }
-        
+
         $stmt = $this->db->prepare("DELETE FROM calendar_exception_days WHERE id = ?");
         $stmt->execute([$exceptionId]);
-        
+
         $this->sendResponse(['success' => true]);
     }
-    
+
+    private function deleteDaySchedule() {
+        $input = json_decode(file_get_contents('php://input'), true);
+        $scheduleId = $input['schedule_id'] ?? null;
+
+        if (!$this->validateId($scheduleId)) {
+            $this->sendError('Invalid schedule ID');
+        }
+
+        // Delete periods first
+        $stmt = $this->db->prepare("DELETE FROM day_schedule_periods WHERE day_schedule_id = ?");
+        $stmt->execute([$scheduleId]);
+
+        // Delete the schedule
+        $stmt = $this->db->prepare("DELETE FROM day_schedules WHERE day_schedule_id = ?");
+        $stmt->execute([$scheduleId]);
+
+        $this->sendResponse(['success' => true]);
+    }
+
     // ====================================
     // UTILITY METHODS
     // ====================================

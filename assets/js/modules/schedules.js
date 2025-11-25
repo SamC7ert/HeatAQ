@@ -67,10 +67,11 @@ const schedules = {
 
             <div id="day-schedule-editor" style="display: none;">
                 <h4 id="day-schedule-title">Schedule Periods</h4>
-                <div id="periods-container"></div>
-                <div style="margin-top: 10px;">
+                <div id="periods-container" style="overflow-x: auto;"></div>
+                <div style="margin-top: 10px; display: flex; gap: 5px; flex-wrap: wrap;">
                     <button class="btn btn-primary btn-sm" onclick="app.schedules.addPeriod()">+ Add Period</button>
-                    <button class="btn btn-success btn-sm" onclick="app.schedules.saveDaySchedule()">Save Schedule</button>
+                    <button class="btn btn-success btn-sm" onclick="app.schedules.saveDaySchedule()">Save</button>
+                    <button class="btn btn-danger btn-sm" onclick="app.schedules.deleteDaySchedule()" style="margin-left: auto;">Delete Schedule</button>
                 </div>
             </div>
 
@@ -520,14 +521,11 @@ const schedules = {
             const result = await api.weekSchedules.save(data);
             if (result.success) {
                 api.utils.showSuccess('Week schedule saved');
+                const scheduleId = this.selectedWeekSchedule.week_schedule_id;
                 // Reload to get fresh data
                 await this.loadWeekSchedules();
                 // Re-select the schedule
-                const selector = document.getElementById('week-schedule-selector');
-                if (selector) {
-                    selector.value = this.selectedWeekSchedule.week_schedule_id;
-                    this.loadWeekSchedule();
-                }
+                this.selectWeekSchedule(scheduleId);
             }
         } catch (err) {
             api.utils.showError('Failed to save: ' + err.message);
@@ -650,7 +648,28 @@ const schedules = {
             api.utils.showError('Failed to save: ' + err.message);
         }
     },
-    
+
+    async deleteDaySchedule() {
+        if (!this.selectedDaySchedule) {
+            api.utils.showError('No schedule selected');
+            return;
+        }
+
+        const name = this.selectedDaySchedule.name;
+        if (!confirm(`Delete day schedule "${name}"?\n\nThis cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            await api.daySchedules.delete(this.selectedDaySchedule.day_schedule_id);
+            api.utils.showSuccess('Day schedule deleted');
+            this.selectedDaySchedule = null;
+            await this.loadDaySchedules();
+        } catch (err) {
+            api.utils.showError('Failed to delete: ' + err.message);
+        }
+    },
+
     createTemplate() {
         console.log('Create new template');
         api.utils.showError('Template creation not yet implemented');
