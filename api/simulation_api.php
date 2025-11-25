@@ -403,14 +403,12 @@ try {
             break;
 
         case 'get_weather_range':
-            // Return available weather data range (simplified query)
+            // Return available weather data range (fast query - removed slow COUNT)
             try {
                 $stmt = $pdo->query("
                     SELECT
                         MIN(DATE(timestamp)) as min_date,
-                        MAX(DATE(timestamp)) as max_date,
-                        COUNT(DISTINCT DATE(timestamp)) as days_count,
-                        COUNT(*) as hours_count
+                        MAX(DATE(timestamp)) as max_date
                     FROM weather_data
                 ");
                 $range = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -424,11 +422,10 @@ try {
                     'site_id' => $currentSiteId,
                     'weather_range' => [
                         'min_date' => '2014-01-01',
-                        'max_date' => '2023-12-31',
-                        'days_count' => 3653,
-                        'hours_count' => 87672
+                        'max_date' => '2023-12-31'
                     ],
-                    'note' => 'Using default range'
+                    'note' => 'Using default range',
+                    'error' => $e->getMessage()
                 ]);
             }
             break;
