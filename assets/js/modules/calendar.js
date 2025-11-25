@@ -242,6 +242,9 @@ const calendar = {
             // Convert empty string to null
             const scheduleId = dayScheduleId && dayScheduleId !== '' ? parseInt(dayScheduleId) : null;
 
+            // Debug logging
+            console.log('updateExceptionSchedule:', { index, dayScheduleId, exceptionId, scheduleId, exception });
+
             if (exceptionId) {
                 // Update existing exception - only send id and day_schedule_id
                 await api.calendar.saveExceptionDay({
