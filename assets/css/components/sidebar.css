@@ -31,13 +31,22 @@
     margin-top: 30px;
 }
 
-.sidebar-section-title {
+.sidebar-section-title,
+.nav-section-header {
     padding: 10px 20px;
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 1px;
     opacity: 0.6;
     font-weight: 600;
+    color: rgba(255,255,255,0.7);
+    margin-top: 20px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.nav-section-header:first-child {
+    margin-top: 10px;
+    border-top: none;
 }
 
 .nav-item {
