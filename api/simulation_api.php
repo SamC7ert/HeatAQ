@@ -152,14 +152,35 @@ try {
 
             // Load and apply configuration if specified
             if ($configId) {
-                $configStmt = $pdo->prepare("SELECT config_json FROM config_templates WHERE template_id = ?");
+                // Include legacy columns to merge with json_config
+                $configStmt = $pdo->prepare("
+                    SELECT json_config, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy
+                    FROM config_templates WHERE template_id = ?
+                ");
                 $configStmt->execute([$configId]);
                 $configRow = $configStmt->fetch();
-                if ($configRow && $configRow['config_json']) {
-                    $config = json_decode($configRow['config_json'], true);
-                    if ($config) {
-                        $simulator->setConfigFromUI($config);
+                if ($configRow) {
+                    $config = json_decode($configRow['json_config'] ?? '{}', true) ?: [];
+
+                    // Ensure nested arrays exist
+                    if (!isset($config['equipment'])) $config['equipment'] = [];
+                    if (!isset($config['control'])) $config['control'] = [];
+
+                    // Override with legacy column values if set (legacy columns take precedence)
+                    if ($configRow['hp_capacity_kw'] !== null) {
+                        $config['equipment']['hp_capacity_kw'] = (float)$configRow['hp_capacity_kw'];
                     }
+                    if ($configRow['boiler_capacity_kw'] !== null) {
+                        $config['equipment']['boiler_capacity_kw'] = (float)$configRow['boiler_capacity_kw'];
+                    }
+                    if ($configRow['target_temp'] !== null) {
+                        $config['control']['target_temp'] = (float)$configRow['target_temp'];
+                    }
+                    if ($configRow['control_strategy'] !== null) {
+                        $config['control']['strategy'] = $configRow['control_strategy'];
+                    }
+
+                    $simulator->setConfigFromUI($config);
                 }
             }
 
