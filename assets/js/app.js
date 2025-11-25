@@ -132,7 +132,9 @@ const app = {
     schedules: schedules,
     calendar: calendar,
     simulations: typeof SimulationsModule !== 'undefined' ? SimulationsModule : null,
+    simcontrol: typeof SimControlModule !== 'undefined' ? SimControlModule : null,
     configuration: typeof ConfigurationModule !== 'undefined' ? ConfigurationModule : null,
+    admin: typeof AdminModule !== 'undefined' ? AdminModule : null,
     api: api,
     config: config
 };

@@ -122,11 +122,30 @@ try {
             // Get optional equipment overrides
             $equipmentOverrides = getParam('equipment', null);
 
-            // Initialize scheduler and simulator
-            $scheduler = new PoolScheduler($pdo, $currentSiteId);
+            // Get optional config and template IDs
+            $configId = getParam('config_id', null);
+            $templateId = getParam('template_id', null);
+
+            // Initialize scheduler (with optional template selection)
+            $scheduler = new PoolScheduler($pdo, $currentSiteId, $templateId);
+
+            // Initialize simulator
             $simulator = new EnergySimulator($pdo, $currentSiteId, $scheduler);
 
-            // Apply equipment overrides if provided
+            // Load and apply configuration if specified
+            if ($configId) {
+                $configStmt = $pdo->prepare("SELECT config_json FROM config_templates WHERE template_id = ?");
+                $configStmt->execute([$configId]);
+                $configRow = $configStmt->fetch();
+                if ($configRow && $configRow['config_json']) {
+                    $config = json_decode($configRow['config_json'], true);
+                    if ($config) {
+                        $simulator->setConfigFromUI($config);
+                    }
+                }
+            }
+
+            // Apply equipment overrides if provided (takes precedence)
             if ($equipmentOverrides) {
                 $simulator->setEquipment($equipmentOverrides);
             }
@@ -165,6 +184,7 @@ try {
                     'run_id' => $runId,
                     'simulator_version' => EnergySimulator::getVersion(),
                     'summary' => $results['summary'],
+                    'meta' => $results['meta'],
                     'daily_count' => count($results['daily']),
                     'hourly_count' => count($results['hourly']),
                 ]);

@@ -61,11 +61,9 @@ const navigation = {
                 }
                 break;
 
-            case 'schedules':
-                // Load schedule data if not already loaded
-                if (!window.schedulesLoaded) {
-                    app.schedules.init();
-                    window.schedulesLoaded = true;
+            case 'simcontrol':
+                if (typeof app.simcontrol !== 'undefined') {
+                    app.simcontrol.init();
                 }
                 break;
 
@@ -75,22 +73,31 @@ const navigation = {
                 }
                 break;
 
-            // SIMULATION sections
-            case 'sim-new':
-                if (typeof SimulationsModule !== 'undefined') {
-                    SimulationsModule.initNewRun();
+            case 'schedules':
+                // Load schedule data if not already loaded
+                if (!window.schedulesLoaded) {
+                    app.schedules.init();
+                    window.schedulesLoaded = true;
                 }
                 break;
 
-            case 'sim-history':
-                if (typeof SimulationsModule !== 'undefined') {
-                    SimulationsModule.loadRuns();
+            // ADMIN sections
+            case 'admin-holidays':
+                if (typeof app.admin !== 'undefined') {
+                    app.admin.loadHolidayDefinitions();
+                    app.admin.loadReferenceDays();
                 }
                 break;
 
-            case 'sim-compare':
-                if (typeof SimulationsModule !== 'undefined') {
-                    SimulationsModule.initCompare();
+            case 'admin-weather':
+                if (typeof app.admin !== 'undefined') {
+                    app.admin.loadWeatherStations();
+                }
+                break;
+
+            case 'admin-users':
+                if (typeof app.admin !== 'undefined') {
+                    app.admin.loadUsers();
                 }
                 break;
 

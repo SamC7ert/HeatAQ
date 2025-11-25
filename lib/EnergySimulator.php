@@ -149,6 +149,76 @@ class EnergySimulator {
     }
 
     /**
+     * Set configuration from UI format (config_templates.config_json)
+     *
+     * @param array $uiConfig Configuration object from UI
+     */
+    public function setConfigFromUI($uiConfig) {
+        // Pool physical parameters
+        if (isset($uiConfig['pool'])) {
+            $this->poolConfig['area_m2'] = $uiConfig['pool']['area_m2'] ?? $this->poolConfig['area_m2'];
+            $this->poolConfig['volume_m3'] = $uiConfig['pool']['volume_m3'] ?? $this->poolConfig['volume_m3'];
+            $this->poolConfig['depth_m'] = $uiConfig['pool']['depth_m'] ?? $this->poolConfig['depth_m'];
+            $this->poolConfig['wind_exposure_factor'] = $uiConfig['pool']['wind_exposure'] ?? $this->poolConfig['wind_exposure_factor'];
+        }
+
+        // Cover settings
+        if (isset($uiConfig['cover'])) {
+            $this->poolConfig['has_cover'] = $uiConfig['cover']['has_cover'] ?? $this->poolConfig['has_cover'];
+            $this->poolConfig['cover_r_value'] = $uiConfig['cover']['u_value'] ?? $this->poolConfig['cover_r_value'];
+        }
+
+        // Equipment - Heat Pump
+        if (isset($uiConfig['equipment'])) {
+            $this->equipment['heat_pump']['capacity_kw'] = $uiConfig['equipment']['hp_capacity_kw'] ?? $this->equipment['heat_pump']['capacity_kw'];
+            $this->equipment['heat_pump']['cop_nominal'] = $uiConfig['equipment']['hp_cop'] ?? $this->equipment['heat_pump']['cop_nominal'];
+            $this->equipment['boiler']['capacity_kw'] = $uiConfig['equipment']['boiler_capacity_kw'] ?? $this->equipment['boiler']['capacity_kw'];
+            $this->equipment['boiler']['efficiency'] = $uiConfig['equipment']['boiler_efficiency'] ?? $this->equipment['boiler']['efficiency'];
+        }
+
+        // Control settings
+        if (isset($uiConfig['control'])) {
+            $this->equipment['control_strategy'] = $uiConfig['control']['strategy'] ?? $this->equipment['control_strategy'];
+            $this->equipment['target_temp'] = $uiConfig['control']['target_temp'] ?? 28;
+            $this->equipment['temp_tolerance'] = $uiConfig['control']['temp_tolerance'] ?? 2;
+        }
+
+        // Energy costs
+        if (isset($uiConfig['costs'])) {
+            $this->equipment['electricity_cost_per_kwh'] = $uiConfig['costs']['electricity_nok_kwh'] ?? $this->equipment['electricity_cost_per_kwh'];
+            $this->equipment['boiler']['fuel_cost_per_kwh'] = $uiConfig['costs']['gas_nok_kwh'] ?? $this->equipment['boiler']['fuel_cost_per_kwh'];
+        }
+    }
+
+    /**
+     * Set equipment configuration
+     */
+    public function setEquipment($equipment) {
+        $this->equipment = array_merge($this->equipment, $equipment);
+    }
+
+    /**
+     * Get simulator version
+     */
+    public static function getVersion() {
+        return self::VERSION;
+    }
+
+    /**
+     * Get pool configuration
+     */
+    public function getPoolConfig() {
+        return $this->poolConfig;
+    }
+
+    /**
+     * Get equipment configuration
+     */
+    public function getEquipment() {
+        return $this->equipment;
+    }
+
+    /**
      * Run simulation for a date range
      *
      * @param string $startDate Start date (YYYY-MM-DD)
@@ -182,14 +252,31 @@ class EnergySimulator {
             'summary' => [
                 'total_hours' => 0,
                 'open_hours' => 0,
+                // Detailed loss breakdown (kWh)
+                'evaporation_kwh' => 0,
+                'convection_kwh' => 0,
+                'radiation_kwh' => 0,
+                'floor_loss_kwh' => 0,
+                'wall_loss_kwh' => 0,
                 'total_heat_loss_kwh' => 0,
                 'total_solar_gain_kwh' => 0,
+                // Heating delivered (thermal kWh)
+                'hp_thermal_kwh' => 0,
+                'boiler_thermal_kwh' => 0,
+                'unmet_kwh' => 0,
+                // Energy consumed (kWh)
                 'total_hp_energy_kwh' => 0,
                 'total_boiler_energy_kwh' => 0,
                 'total_electricity_kwh' => 0,
                 'total_fuel_kwh' => 0,
+                'shower_heating_kwh' => 0,
                 'total_cost' => 0,
+                // Temperature stats
+                'min_water_temp' => 999,
+                'max_water_temp' => -999,
                 'avg_water_temp' => 0,
+                'days_below_27' => 0,
+                'days_below_26' => 0,
                 'avg_cop' => 0,
             ]
         ];
@@ -303,6 +390,7 @@ class EnergySimulator {
                     'open_hours' => 0,
                     'avg_air_temp' => 0,
                     'avg_water_temp' => 0,
+                    'min_water_temp' => 999,
                     'total_loss_kwh' => 0,
                     'total_solar_kwh' => 0,
                     'total_hp_kwh' => 0,
@@ -316,6 +404,7 @@ class EnergySimulator {
             $dailyStats['open_hours'] += $targetTemp !== null ? 1 : 0;
             $dailyStats['avg_air_temp'] += (float) $hour['air_temperature'];
             $dailyStats['avg_water_temp'] += $currentWaterTemp;
+            $dailyStats['min_water_temp'] = min($dailyStats['min_water_temp'], $currentWaterTemp);
             $dailyStats['total_loss_kwh'] += $losses['total'];
             $dailyStats['total_solar_kwh'] += $solarGain;
             $dailyStats['total_hp_kwh'] += $heating['hp_electricity'];
@@ -325,14 +414,34 @@ class EnergySimulator {
             // Accumulate summary totals
             $results['summary']['total_hours']++;
             $results['summary']['open_hours'] += $targetTemp !== null ? 1 : 0;
+
+            // Detailed loss breakdown
+            $results['summary']['evaporation_kwh'] += $losses['evaporation'];
+            $results['summary']['convection_kwh'] += $losses['convection'];
+            $results['summary']['radiation_kwh'] += $losses['radiation'];
+            // Split conduction into floor and wall (rough estimate: 80% floor, 20% wall)
+            $results['summary']['floor_loss_kwh'] += $losses['conduction'] * 0.8;
+            $results['summary']['wall_loss_kwh'] += $losses['conduction'] * 0.2;
             $results['summary']['total_heat_loss_kwh'] += $losses['total'];
             $results['summary']['total_solar_gain_kwh'] += $solarGain;
+
+            // Heating delivered (thermal)
+            $results['summary']['hp_thermal_kwh'] += $heating['hp_heat'];
+            $results['summary']['boiler_thermal_kwh'] += $heating['boiler_heat'];
+            $results['summary']['unmet_kwh'] += max(0, $netRequirement - $heating['total_heat']);
+
+            // Energy consumed
             $results['summary']['total_hp_energy_kwh'] += $heating['hp_electricity'];
             $results['summary']['total_boiler_energy_kwh'] += $heating['boiler_fuel'];
             $results['summary']['total_electricity_kwh'] += $heating['hp_electricity'];
             $results['summary']['total_fuel_kwh'] += $heating['boiler_fuel'];
             $results['summary']['total_cost'] += $heating['cost'];
+
+            // Temperature stats
+            $results['summary']['min_water_temp'] = min($results['summary']['min_water_temp'], $currentWaterTemp);
+            $results['summary']['max_water_temp'] = max($results['summary']['max_water_temp'], $currentWaterTemp);
             $results['summary']['avg_water_temp'] += $currentWaterTemp;
+
             if ($heating['hp_cop'] > 0) {
                 $results['summary']['avg_cop'] += $heating['hp_cop'];
             }
@@ -345,10 +454,29 @@ class EnergySimulator {
             $results['daily'][] = $dailyStats;
         }
 
+        // Count days below temperature thresholds
+        foreach ($results['daily'] as $day) {
+            if ($day['min_water_temp'] < 27) {
+                $results['summary']['days_below_27']++;
+            }
+            if ($day['min_water_temp'] < 26) {
+                $results['summary']['days_below_26']++;
+            }
+        }
+
         // Finalize averages
         if ($results['summary']['total_hours'] > 0) {
             $results['summary']['avg_water_temp'] /= $results['summary']['total_hours'];
         }
+
+        // Fix min/max if no data
+        if ($results['summary']['min_water_temp'] == 999) {
+            $results['summary']['min_water_temp'] = 0;
+        }
+        if ($results['summary']['max_water_temp'] == -999) {
+            $results['summary']['max_water_temp'] = 0;
+        }
+
         if ($results['summary']['total_hp_energy_kwh'] > 0) {
             $hpHours = count(array_filter($results['hourly'], fn($h) => $h['energy']['hp_electricity_kwh'] > 0));
             if ($hpHours > 0) {

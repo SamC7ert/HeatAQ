@@ -136,6 +136,8 @@ const SimulationsModule = {
         const startDate = document.getElementById('sim-start-date').value;
         const endDate = document.getElementById('sim-end-date').value;
         const description = document.getElementById('sim-description').value || '';
+        const configId = document.getElementById('sim-config-select')?.value || null;
+        const ohcId = document.getElementById('sim-ohc-select')?.value || null;
 
         // Validation
         if (!startDate || !endDate) {
@@ -167,7 +169,9 @@ const SimulationsModule = {
                     scenario_name: scenarioName,
                     start_date: startDate,
                     end_date: endDate,
-                    description: description
+                    description: description,
+                    config_id: configId,
+                    template_id: ohcId
                 })
             });
 
@@ -185,6 +189,14 @@ const SimulationsModule = {
                     <span class="summary-line">Hours Simulated: ${data.hourly_count?.toLocaleString() || 0}</span>
                 </div>
             `;
+
+            // Show benchmark report
+            if (typeof SimControlModule !== 'undefined' && data.summary) {
+                SimControlModule.showBenchmarkReport({
+                    summary: data.summary,
+                    meta: data.meta || {}
+                });
+            }
 
             // Reload runs list
             this.loadRuns();

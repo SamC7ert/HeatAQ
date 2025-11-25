@@ -2,6 +2,10 @@
 
 const ConfigurationModule = {
 
+    // Current selected config
+    currentConfigId: null,
+    configs: [],
+
     // Default configuration values (matching Python benchmark)
     defaults: {
         pool: {
@@ -50,63 +54,197 @@ const ConfigurationModule = {
 
     // Initialize configuration page
     init: function() {
-        this.loadDefaults();
         this.setupEventListeners();
+        this.updateCalculatedFields();
+    },
+
+    // Load configuration page
+    load: async function() {
+        this.init();
+        await this.loadConfigs();
+    },
+
+    // Load all configs from API
+    loadConfigs: async function() {
+        try {
+            const response = await fetch('./api/heataq_api.php?action=get_project_configs');
+            const data = await response.json();
+
+            if (data.configs) {
+                this.configs = data.configs;
+                this.renderConfigSelector();
+
+                // Auto-select first config if available
+                if (this.configs.length > 0 && !this.currentConfigId) {
+                    this.currentConfigId = this.configs[0].template_id;
+                    document.getElementById('config-selector').value = this.currentConfigId;
+                    this.loadSelected();
+                } else {
+                    this.loadDefaults();
+                }
+            }
+        } catch (err) {
+            console.error('Failed to load configs:', err);
+            this.loadDefaults();
+        }
+    },
+
+    // Render config selector dropdown
+    renderConfigSelector: function() {
+        const select = document.getElementById('config-selector');
+        if (!select) return;
+
+        select.innerHTML = '<option value="">-- Select Configuration --</option>';
+        this.configs.forEach(config => {
+            const option = document.createElement('option');
+            option.value = config.template_id;
+            option.textContent = config.name;
+            select.appendChild(option);
+        });
+    },
+
+    // Load selected configuration
+    loadSelected: function() {
+        const select = document.getElementById('config-selector');
+        const configId = select ? select.value : null;
+
+        if (!configId) {
+            this.currentConfigId = null;
+            this.loadDefaults();
+            return;
+        }
+
+        const config = this.configs.find(c => c.template_id == configId);
+        if (config && config.config) {
+            this.currentConfigId = configId;
+            this.populateForm(config.config);
+        } else {
+            this.loadDefaults();
+        }
+    },
+
+    // Populate form from config object
+    populateForm: function(config) {
+        // Pool Physical
+        if (config.pool) {
+            this.setVal('cfg-pool-volume', config.pool.volume_m3);
+            this.setVal('cfg-pool-area', config.pool.area_m2);
+            this.setVal('cfg-pool-depth', config.pool.depth_m);
+            this.setVal('cfg-wind-factor', config.pool.wind_exposure);
+        }
+
+        // Cover & Environment
+        if (config.cover) {
+            this.setVal('cfg-has-cover', config.cover.has_cover ? '1' : '0');
+            this.setVal('cfg-cover-u', config.cover.u_value);
+            this.setVal('cfg-cover-solar', config.cover.solar_transmittance);
+        }
+        if (config.solar) {
+            this.setVal('cfg-solar-absorb', config.solar.absorption);
+        }
+
+        // Equipment
+        if (config.equipment) {
+            this.setVal('cfg-hp-capacity', config.equipment.hp_capacity_kw);
+            this.setVal('cfg-hp-cop', config.equipment.hp_cop);
+            this.setVal('cfg-boiler-capacity', config.equipment.boiler_capacity_kw);
+            this.setVal('cfg-boiler-eff', config.equipment.boiler_efficiency);
+            this.setVal('cfg-showers-hp', config.equipment.showers_use_hp ? '1' : '0');
+        }
+
+        // Control Settings
+        if (config.control) {
+            this.setVal('cfg-target-temp', config.control.target_temp);
+            this.setVal('cfg-temp-tolerance', config.control.temp_tolerance);
+            this.setVal('cfg-strategy', config.control.strategy);
+        }
+
+        // Bather Load
+        if (config.bathers) {
+            this.setVal('cfg-bathers', config.bathers.per_day);
+            this.setVal('cfg-refill-liters', config.bathers.refill_liters);
+            this.setVal('cfg-shower-liters', config.bathers.shower_liters);
+            this.setVal('cfg-activity-factor', config.bathers.activity_factor);
+        }
+
+        // Water Temperatures
+        if (config.water_temps) {
+            this.setVal('cfg-cold-water-temp', config.water_temps.cold_water);
+            this.setVal('cfg-shower-target-temp', config.water_temps.shower_target);
+            this.setVal('cfg-hot-water-temp', config.water_temps.hot_water_tank);
+            this.setVal('cfg-hp-max-dhw-temp', config.water_temps.hp_max_dhw);
+        }
+
+        // Energy Costs
+        if (config.costs) {
+            this.setVal('cfg-elec-cost', config.costs.electricity_nok_kwh);
+            this.setVal('cfg-gas-cost', config.costs.gas_nok_kwh);
+        }
+
+        // Update visibility and calculated fields
+        this.toggleCover();
         this.updateCalculatedFields();
     },
 
     // Load default values into form fields
     loadDefaults: function() {
-        const d = this.defaults;
+        this.populateForm(this.defaults);
+    },
 
-        // Pool Physical
-        this.setVal('cfg-pool-volume', d.pool.volume_m3);
-        this.setVal('cfg-pool-area', d.pool.area_m2);
-        this.setVal('cfg-pool-depth', d.pool.depth_m);
-        this.setVal('cfg-wind-factor', d.pool.wind_exposure);
+    // Toggle new config form
+    toggleNewForm: function() {
+        const form = document.getElementById('new-config-form');
+        if (form) {
+            form.style.display = form.style.display === 'none' ? '' : 'none';
+        }
+    },
 
-        // Cover & Environment
-        this.setVal('cfg-has-cover', d.cover.has_cover ? '1' : '0');
-        this.setVal('cfg-cover-u', d.cover.u_value);
-        this.setVal('cfg-cover-solar', d.cover.solar_transmittance);
-        this.setVal('cfg-solar-absorb', d.solar.absorption);
+    // Create new configuration
+    createNew: async function() {
+        const name = document.getElementById('new-config-name')?.value?.trim();
+        const description = document.getElementById('new-config-description')?.value?.trim() || '';
 
-        // Equipment
-        this.setVal('cfg-hp-capacity', d.equipment.hp_capacity_kw);
-        this.setVal('cfg-hp-cop', d.equipment.hp_cop);
-        this.setVal('cfg-boiler-capacity', d.equipment.boiler_capacity_kw);
-        this.setVal('cfg-boiler-eff', d.equipment.boiler_efficiency);
-        this.setVal('cfg-showers-hp', d.equipment.showers_use_hp ? '1' : '0');
+        if (!name) {
+            alert('Please enter a name');
+            return;
+        }
 
-        // Control Settings
-        this.setVal('cfg-target-temp', d.control.target_temp);
-        this.setVal('cfg-temp-tolerance', d.control.temp_tolerance);
-        this.setVal('cfg-strategy', d.control.strategy);
+        const config = this.getConfig();
 
-        // Bather Load
-        this.setVal('cfg-bathers', d.bathers.per_day);
-        this.setVal('cfg-refill-liters', d.bathers.refill_liters);
-        this.setVal('cfg-shower-liters', d.bathers.shower_liters);
-        this.setVal('cfg-activity-factor', d.bathers.activity_factor);
+        try {
+            const response = await fetch('./api/heataq_api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'save_project_config',
+                    name: name,
+                    description: description,
+                    config: config
+                })
+            });
+            const result = await response.json();
 
-        // Water Temperatures
-        this.setVal('cfg-cold-water-temp', d.water_temps.cold_water);
-        this.setVal('cfg-shower-target-temp', d.water_temps.shower_target);
-        this.setVal('cfg-hot-water-temp', d.water_temps.hot_water_tank);
-        this.setVal('cfg-hp-max-dhw-temp', d.water_temps.hp_max_dhw);
-
-        // Energy Costs
-        this.setVal('cfg-elec-cost', d.costs.electricity_nok_kwh);
-        this.setVal('cfg-gas-cost', d.costs.gas_nok_kwh);
-
-        // Update visibility
-        this.toggleCover();
+            if (result.success) {
+                this.currentConfigId = result.config_id;
+                this.toggleNewForm();
+                document.getElementById('new-config-name').value = '';
+                document.getElementById('new-config-description').value = '';
+                await this.loadConfigs();
+                document.getElementById('config-selector').value = this.currentConfigId;
+                alert('Configuration created successfully');
+            } else {
+                alert('Failed to create: ' + (result.error || 'Unknown error'));
+            }
+        } catch (err) {
+            console.error('Failed to create config:', err);
+            alert('Failed to create configuration');
+        }
     },
 
     // Helper to set form field value
     setVal: function(id, value) {
         const el = document.getElementById(id);
-        if (el) el.value = value;
+        if (el && value !== undefined && value !== null) el.value = value;
     },
 
     // Helper to get form field value
@@ -160,18 +298,6 @@ const ConfigurationModule = {
         this.updateTempRange();
     },
 
-    // Load configuration from server (future)
-    load: function() {
-        // For now, just initialize with defaults
-        this.init();
-
-        // TODO: Load from API
-        // fetch('/api/config.php?action=get&site_id=...')
-        //     .then(response => response.json())
-        //     .then(data => this.populateForm(data))
-        //     .catch(err => console.error('Failed to load config:', err));
-    },
-
     // Get current configuration as object
     getConfig: function() {
         return {
@@ -222,28 +348,67 @@ const ConfigurationModule = {
 
     // Save configuration to server
     save: async function() {
+        if (!this.currentConfigId) {
+            alert('Please select a configuration or create a new one first');
+            return;
+        }
+
         const config = this.getConfig();
-        console.log('Saving configuration:', config);
+        const currentConfig = this.configs.find(c => c.template_id == this.currentConfigId);
 
-        // TODO: Save to API
-        // try {
-        //     const response = await fetch('/api/config.php', {
-        //         method: 'POST',
-        //         headers: { 'Content-Type': 'application/json' },
-        //         body: JSON.stringify({ action: 'save', config: config })
-        //     });
-        //     const result = await response.json();
-        //     if (result.success) {
-        //         alert('Configuration saved successfully');
-        //     } else {
-        //         alert('Failed to save: ' + result.error);
-        //     }
-        // } catch (err) {
-        //     console.error('Save failed:', err);
-        //     alert('Failed to save configuration');
-        // }
+        try {
+            const response = await fetch('./api/heataq_api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'save_project_config',
+                    config_id: this.currentConfigId,
+                    name: currentConfig?.name || 'Configuration',
+                    description: currentConfig?.description || '',
+                    config: config
+                })
+            });
+            const result = await response.json();
 
-        alert('Configuration saved (local only - API not yet implemented)');
+            if (result.success) {
+                await this.loadConfigs();
+                document.getElementById('config-selector').value = this.currentConfigId;
+                alert('Configuration saved successfully');
+            } else {
+                alert('Failed to save: ' + (result.error || 'Unknown error'));
+            }
+        } catch (err) {
+            console.error('Save failed:', err);
+            alert('Failed to save configuration');
+        }
+    },
+
+    // Delete configuration
+    deleteConfig: async function() {
+        if (!this.currentConfigId) {
+            alert('Please select a configuration to delete');
+            return;
+        }
+
+        if (!confirm('Are you sure you want to delete this configuration?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`./api/heataq_api.php?action=delete_project_config&config_id=${this.currentConfigId}`);
+            const result = await response.json();
+
+            if (result.success) {
+                this.currentConfigId = null;
+                await this.loadConfigs();
+                alert('Configuration deleted');
+            } else {
+                alert('Failed to delete: ' + (result.error || 'Unknown error'));
+            }
+        } catch (err) {
+            console.error('Delete failed:', err);
+            alert('Failed to delete configuration');
+        }
     }
 };
 
