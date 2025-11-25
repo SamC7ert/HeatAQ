@@ -1282,7 +1282,7 @@ class HeatAQAPI {
     private function getProjectConfigs() {
         try {
             // Try with config_json column first
-            $query = "SELECT template_id, template_name as name, config_json, is_active, created_at, updated_at
+            $query = "SELECT template_id, template_name as name, config_json, created_at, updated_at
                       FROM config_templates";
             $query = $this->addSiteFilter($query);
             $query .= " ORDER BY template_name";
@@ -1308,7 +1308,7 @@ class HeatAQAPI {
         } catch (PDOException $e) {
             // Fallback: config_json column might not exist
             try {
-                $query = "SELECT template_id, template_name as name, is_active, created_at, updated_at
+                $query = "SELECT template_id, template_name as name, created_at, updated_at
                           FROM config_templates";
                 $query = $this->addSiteFilter($query);
                 $query .= " ORDER BY template_name";
@@ -1343,7 +1343,7 @@ class HeatAQAPI {
 
         try {
             $stmt = $this->db->prepare("
-                SELECT template_id, template_name as name, config_json, is_active
+                SELECT template_id, template_name as name, config_json
                 FROM config_templates
                 WHERE template_id = ?
             ");
@@ -1361,7 +1361,7 @@ class HeatAQAPI {
         } catch (PDOException $e) {
             // Fallback without config_json
             $stmt = $this->db->prepare("
-                SELECT template_id, template_name as name, is_active
+                SELECT template_id, template_name as name
                 FROM config_templates
                 WHERE template_id = ?
             ");
@@ -1413,14 +1413,14 @@ class HeatAQAPI {
             // Insert new
             if ($hasConfigJson) {
                 $stmt = $this->db->prepare("
-                    INSERT INTO config_templates (site_id, template_name, config_json, is_active)
-                    VALUES (?, ?, ?, 1)
+                    INSERT INTO config_templates (site_id, template_name, config_json)
+                    VALUES (?, ?, ?)
                 ");
                 $stmt->execute([$this->siteId, $name, $configJson]);
             } else {
                 $stmt = $this->db->prepare("
-                    INSERT INTO config_templates (site_id, template_name, is_active)
-                    VALUES (?, ?, 1)
+                    INSERT INTO config_templates (site_id, template_name)
+                    VALUES (?, ?)
                 ");
                 $stmt->execute([$this->siteId, $name]);
             }
