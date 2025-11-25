@@ -9,7 +9,8 @@ const schedules = {
     selectedWeekSchedule: null,
     
     async init() {
-        // Load initial template
+        // Load templates list first, then load the selected template
+        await this.loadTemplatesSelector();
         await this.loadTemplate();
     },
     
