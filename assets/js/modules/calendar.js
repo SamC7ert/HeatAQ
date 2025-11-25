@@ -1,5 +1,5 @@
 // Calendar module - Manages calendar rules and holidays
-// Updated for 3-column layout
+// Updated for 3-column layout with full edit capabilities
 
 const calendar = {
     calendarRules: [],
@@ -7,9 +7,20 @@ const calendar = {
     referenceDays: [],
     dateRanges: [],
     weekSchedules: [],
+    daySchedules: [],
+    currentTemplateId: 1,
 
     async loadCalendarData(templateId) {
-        // Load all calendar data in parallel
+        this.currentTemplateId = templateId;
+
+        // Load week schedules and day schedules for dropdowns
+        const wsData = await api.weekSchedules.getAll();
+        this.weekSchedules = wsData.schedules || [];
+
+        const dsData = await api.daySchedules.getAll();
+        this.daySchedules = dsData.schedules || [];
+
+        // Load calendar data
         await Promise.all([
             this.loadCalendarRules(templateId),
             this.loadReferenceDays()
@@ -21,11 +32,9 @@ const calendar = {
             const data = await api.calendar.getRules(templateId);
             this.dateRanges = data.rules || [];
 
-            // Also load exception days
             const exceptionsData = await api.calendar.getExceptionDays(templateId);
             this.exceptionDays = exceptionsData.exceptions || [];
 
-            // Render to 3-column containers
             this.renderDateRanges();
             this.renderExceptionDays();
         } catch (error) {
@@ -37,39 +46,60 @@ const calendar = {
         const container = document.getElementById('date-ranges-container');
         if (!container) return;
 
-        if (this.dateRanges.length === 0) {
-            container.innerHTML = '<p class="text-muted text-small">No date ranges defined</p>';
-            return;
-        }
+        // Separate default (priority 0) from seasonal ranges
+        const defaultRange = this.dateRanges.find(r => r.priority === 0 || r.priority === '0');
+        const seasonalRanges = this.dateRanges.filter(r => r.priority > 0);
 
-        let html = `
-            <table class="data-table compact">
-                <thead>
-                    <tr>
-                        <th>Period</th>
-                        <th>Week Schedule</th>
-                    </tr>
-                </thead>
-                <tbody>
+        let html = '';
+
+        // Default/Year-round schedule
+        html += `
+            <div class="form-group" style="margin-bottom: 12px;">
+                <label class="form-label text-small"><strong>Default (Year-Round):</strong></label>
+                <select id="default-week-schedule" class="form-control form-control-sm" onchange="app.calendar.saveDefaultSchedule()">
+                    <option value="">-- Select week schedule --</option>
+                    ${this.weekSchedules.map(ws =>
+                        `<option value="${ws.week_schedule_id}" ${defaultRange && defaultRange.week_schedule_id == ws.week_schedule_id ? 'selected' : ''}>${ws.name}</option>`
+                    ).join('')}
+                </select>
+            </div>
         `;
 
-        this.dateRanges.forEach(range => {
-            if (range.priority > 0) {
+        // Seasonal date ranges
+        if (seasonalRanges.length > 0) {
+            html += `
+                <table class="data-table compact">
+                    <thead>
+                        <tr>
+                            <th>Period</th>
+                            <th>Week Schedule</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            seasonalRanges.forEach(range => {
                 const startDate = this.formatDateShort(range.start_date);
                 const endDate = this.formatDateShort(range.end_date);
                 html += `
                     <tr data-range-id="${range.range_id || range.id}">
                         <td>${startDate} - ${endDate}</td>
-                        <td>${range.week_schedule_name || range.name || 'Normal'}</td>
+                        <td>${range.week_schedule_name || 'Normal'}</td>
+                        <td>
+                            <button class="btn btn-danger btn-xs" onclick="app.calendar.deleteRange(${range.range_id || range.id})" title="Delete">×</button>
+                        </td>
                     </tr>
                 `;
-            }
-        });
+            });
 
-        html += `
-                </tbody>
-            </table>
-        `;
+            html += `
+                    </tbody>
+                </table>
+            `;
+        } else {
+            html += '<p class="text-muted text-small">No seasonal overrides</p>';
+        }
 
         container.innerHTML = html;
     },
@@ -83,7 +113,7 @@ const calendar = {
             return;
         }
 
-        // Sort exception days - moving first, then fixed
+        // Sort exception days
         const sortedExceptions = [...this.exceptionDays].sort((a, b) => {
             if (a.is_moving != b.is_moving) {
                 return b.is_moving - a.is_moving;
@@ -102,6 +132,7 @@ const calendar = {
                         <th>Name</th>
                         <th>Date</th>
                         <th>Schedule</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -122,6 +153,9 @@ const calendar = {
                     <td>${exception.name}</td>
                     <td>${dateRef}</td>
                     <td>${exception.day_schedule_name || 'Closed'}</td>
+                    <td>
+                        <button class="btn btn-danger btn-xs" onclick="app.calendar.deleteException(${exception.exception_id || exception.id})" title="Delete">×</button>
+                    </td>
                 </tr>
             `;
         });
@@ -145,29 +179,161 @@ const calendar = {
 
     formatDateShort(dateStr) {
         if (!dateStr) return '--';
-        const date = new Date(dateStr);
-        return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        // Use string parsing to avoid timezone issues
+        const parts = dateStr.split('-');
+        if (parts.length !== 3) return dateStr;
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const day = parseInt(parts[2], 10);
+        const month = months[parseInt(parts[1], 10) - 1];
+        return `${day} ${month}`;
     },
 
-    // Action methods
+    // Save default (year-round) schedule
+    async saveDefaultSchedule() {
+        const select = document.getElementById('default-week-schedule');
+        const weekScheduleId = select.value;
+
+        if (!weekScheduleId) {
+            return;
+        }
+
+        // Find existing default range (priority 0)
+        const defaultRange = this.dateRanges.find(r => r.priority === 0 || r.priority === '0');
+
+        try {
+            await api.calendar.saveDateRange({
+                range_id: defaultRange?.range_id || null,
+                template_id: this.currentTemplateId,
+                week_schedule_id: parseInt(weekScheduleId),
+                start_date: null,
+                end_date: null,
+                priority: 0
+            });
+
+            api.utils.showSuccess('Default schedule saved');
+            await this.loadCalendarRules(this.currentTemplateId);
+        } catch (err) {
+            api.utils.showError('Failed to save: ' + err.message);
+        }
+    },
+
+    // Add a seasonal date range
     addDateRange() {
-        console.log('Add date range');
-        api.utils.showError('Add date range functionality not yet implemented');
+        const startDate = prompt('Start date (YYYY-MM-DD):', '2024-06-01');
+        if (!startDate) return;
+
+        const endDate = prompt('End date (YYYY-MM-DD):', '2024-08-31');
+        if (!endDate) return;
+
+        // Show week schedule options
+        const options = this.weekSchedules.map((ws, i) => `${i + 1}. ${ws.name}`).join('\n');
+        const choice = prompt(`Select week schedule:\n${options}`, '1');
+        if (!choice) return;
+
+        const wsIndex = parseInt(choice) - 1;
+        if (wsIndex < 0 || wsIndex >= this.weekSchedules.length) {
+            api.utils.showError('Invalid selection');
+            return;
+        }
+
+        const weekScheduleId = this.weekSchedules[wsIndex].week_schedule_id;
+
+        api.calendar.saveDateRange({
+            template_id: this.currentTemplateId,
+            week_schedule_id: weekScheduleId,
+            start_date: startDate,
+            end_date: endDate,
+            priority: 1
+        }).then(result => {
+            if (result.success) {
+                api.utils.showSuccess('Date range added');
+                this.loadCalendarRules(this.currentTemplateId);
+            }
+        }).catch(err => {
+            api.utils.showError('Failed to add: ' + err.message);
+        });
     },
 
-    deleteRange(rangeId) {
-        console.log('Delete range:', rangeId);
-        api.utils.showError('Delete functionality not yet implemented');
+    async deleteRange(rangeId) {
+        if (!confirm('Delete this date range?')) return;
+
+        try {
+            await api.calendar.deleteDateRange(rangeId);
+            api.utils.showSuccess('Date range deleted');
+            await this.loadCalendarRules(this.currentTemplateId);
+        } catch (err) {
+            api.utils.showError('Failed to delete: ' + err.message);
+        }
     },
 
+    // Add exception day
     addExceptionDay() {
-        console.log('Add exception day');
-        api.utils.showError('Add exception day functionality not yet implemented');
+        const name = prompt('Exception day name:', 'Christmas Day');
+        if (!name) return;
+
+        const isMoving = confirm('Is this a moving holiday (relative to Easter)?');
+
+        let easterOffset = null;
+        let fixedMonth = null;
+        let fixedDay = null;
+
+        if (isMoving) {
+            easterOffset = parseInt(prompt('Days offset from Easter Sunday (0=Easter, -2=Good Friday, 1=Easter Monday):', '0'));
+            if (isNaN(easterOffset)) {
+                api.utils.showError('Invalid offset');
+                return;
+            }
+        } else {
+            fixedMonth = parseInt(prompt('Month (1-12):', '12'));
+            fixedDay = parseInt(prompt('Day (1-31):', '25'));
+            if (!fixedMonth || !fixedDay || fixedMonth < 1 || fixedMonth > 12 || fixedDay < 1 || fixedDay > 31) {
+                api.utils.showError('Invalid date');
+                return;
+            }
+        }
+
+        // Select day schedule (typically Closed)
+        const closedSchedule = this.daySchedules.find(ds => ds.name.toLowerCase().includes('closed'));
+        const options = this.daySchedules.map((ds, i) => `${i + 1}. ${ds.name}`).join('\n');
+        const defaultChoice = closedSchedule ? this.daySchedules.indexOf(closedSchedule) + 1 : 1;
+        const choice = prompt(`Select day schedule:\n${options}`, defaultChoice.toString());
+
+        let dayScheduleId = null;
+        if (choice) {
+            const dsIndex = parseInt(choice) - 1;
+            if (dsIndex >= 0 && dsIndex < this.daySchedules.length) {
+                dayScheduleId = this.daySchedules[dsIndex].day_schedule_id;
+            }
+        }
+
+        api.calendar.saveExceptionDay({
+            template_id: this.currentTemplateId,
+            name: name,
+            day_schedule_id: dayScheduleId,
+            is_moving: isMoving ? 1 : 0,
+            easter_offset_days: easterOffset,
+            fixed_month: fixedMonth,
+            fixed_day: fixedDay
+        }).then(result => {
+            if (result.success) {
+                api.utils.showSuccess('Exception day added');
+                this.loadCalendarRules(this.currentTemplateId);
+            }
+        }).catch(err => {
+            api.utils.showError('Failed to add: ' + err.message);
+        });
     },
 
-    deleteException(exceptionId) {
-        console.log('Delete exception:', exceptionId);
-        api.utils.showError('Delete functionality not yet implemented');
+    async deleteException(exceptionId) {
+        if (!confirm('Delete this exception day?')) return;
+
+        try {
+            await api.calendar.deleteExceptionDay(exceptionId);
+            api.utils.showSuccess('Exception day deleted');
+            await this.loadCalendarRules(this.currentTemplateId);
+        } catch (err) {
+            api.utils.showError('Failed to delete: ' + err.message);
+        }
     }
 };
 

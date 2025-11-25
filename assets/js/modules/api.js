@@ -123,44 +123,40 @@ const api = {
         }
     },
     
-    // Calendar
+    // Calendar - Date Ranges and Exception Days
     calendar: {
         async getRules(templateId) {
             return api.call('get_calendar_rules', { template_id: templateId });
         },
-        
+
         async getExceptionDays(templateId) {
             return api.call('get_exception_days', { template_id: templateId });
         },
-        
+
         async getReferenceDays() {
             return api.call('get_reference_days');
         },
-        
-        async createRule(data) {
-            return api.post('create_calendar_rule', data);
+
+        // Date Ranges
+        async saveDateRange(data) {
+            // data: { range_id?, template_id, week_schedule_id, start_date, end_date, priority }
+            return api.post('save_date_range', data);
         },
-        
-        async updateRule(ruleId, data) {
-            return api.post('update_calendar_rule', { rule_id: ruleId, ...data });
+
+        async deleteDateRange(rangeId) {
+            return api.call('delete_date_range', { range_id: rangeId });
         },
-        
-        async deleteRule(ruleId) {
-            return api.post('delete_calendar_rule', { rule_id: ruleId });
+
+        // Exception Days
+        async saveExceptionDay(data) {
+            // data: { exception_id?, template_id, name, day_schedule_id, is_moving, easter_offset_days?, fixed_month?, fixed_day? }
+            return api.post('save_exception_day', data);
         },
-        
-        async createExceptionDay(data) {
-            return api.post('create_exception_day', data);
+
+        async deleteExceptionDay(exceptionId) {
+            return api.call('delete_exception_day', { exception_id: exceptionId });
         },
-        
-        async updateExceptionDay(dayId, data) {
-            return api.post('update_exception_day', { day_id: dayId, ...data });
-        },
-        
-        async deleteExceptionDay(dayId) {
-            return api.post('delete_exception_day', { day_id: dayId });
-        },
-        
+
         async testResolution(date, templateId) {
             return api.call('resolve_schedule', { date: date, template_id: templateId });
         }

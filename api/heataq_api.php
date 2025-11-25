@@ -164,8 +164,29 @@ class HeatAQAPI {
                     }
                     $this->saveWeekSchedule();
                     break;
-                    
-                // DELETE operations  
+
+                case 'save_date_range':
+                    if (!$this->canEdit()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->saveDateRange();
+                    break;
+
+                case 'save_exception_day':
+                    if (!$this->canEdit()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->saveExceptionDay();
+                    break;
+
+                // DELETE operations
+                case 'delete_date_range':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->deleteDateRange($_GET['range_id'] ?? 0);
+                    break;
+
                 case 'delete_exception_day':
                     if (!$this->canDelete()) {
                         $this->sendError('Permission denied', 403);
@@ -494,7 +515,101 @@ class HeatAQAPI {
 
         $this->sendResponse(['success' => true, 'week_schedule_id' => $scheduleId]);
     }
-    
+
+    private function saveDateRange() {
+        $input = json_decode(file_get_contents('php://input'), true);
+
+        $rangeId = $input['range_id'] ?? null;
+        $templateId = $input['template_id'] ?? 1;
+        $weekScheduleId = $input['week_schedule_id'] ?? null;
+        $startDate = $input['start_date'] ?? null;
+        $endDate = $input['end_date'] ?? null;
+        $priority = $input['priority'] ?? 1;
+
+        if (!$weekScheduleId) {
+            $this->sendError('Week schedule is required');
+        }
+
+        // For year-round (default), use priority 0
+        $isDefault = ($input['is_default'] ?? false) || $priority === 0;
+
+        if ($rangeId) {
+            // Update existing
+            $stmt = $this->db->prepare("
+                UPDATE calendar_date_ranges
+                SET week_schedule_id = ?, start_date = ?, end_date = ?, priority = ?
+                WHERE range_id = ?
+            ");
+            $stmt->execute([$weekScheduleId, $startDate, $endDate, $priority, $rangeId]);
+        } else {
+            // Create new
+            $stmt = $this->db->prepare("
+                INSERT INTO calendar_date_ranges (template_id, week_schedule_id, start_date, end_date, priority)
+                VALUES (?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([$templateId, $weekScheduleId, $startDate, $endDate, $priority]);
+            $rangeId = $this->db->lastInsertId();
+        }
+
+        $this->sendResponse(['success' => true, 'range_id' => $rangeId]);
+    }
+
+    private function saveExceptionDay() {
+        $input = json_decode(file_get_contents('php://input'), true);
+
+        $exceptionId = $input['exception_id'] ?? null;
+        $templateId = $input['template_id'] ?? 1;
+        $name = trim($input['name'] ?? '');
+        $dayScheduleId = $input['day_schedule_id'] ?? null;
+        $isMoving = $input['is_moving'] ?? 0;
+        $easterOffsetDays = $input['easter_offset_days'] ?? null;
+        $fixedMonth = $input['fixed_month'] ?? null;
+        $fixedDay = $input['fixed_day'] ?? null;
+
+        if (empty($name)) {
+            $this->sendError('Exception name is required');
+        }
+
+        if ($isMoving && $easterOffsetDays === null) {
+            $this->sendError('Easter offset is required for moving holidays');
+        }
+
+        if (!$isMoving && (!$fixedMonth || !$fixedDay)) {
+            $this->sendError('Fixed month and day are required for fixed holidays');
+        }
+
+        if ($exceptionId) {
+            // Update existing
+            $stmt = $this->db->prepare("
+                UPDATE calendar_exception_days
+                SET name = ?, day_schedule_id = ?, is_moving = ?, easter_offset_days = ?, fixed_month = ?, fixed_day = ?
+                WHERE exception_id = ?
+            ");
+            $stmt->execute([$name, $dayScheduleId, $isMoving, $easterOffsetDays, $fixedMonth, $fixedDay, $exceptionId]);
+        } else {
+            // Create new
+            $stmt = $this->db->prepare("
+                INSERT INTO calendar_exception_days (template_id, name, day_schedule_id, is_moving, easter_offset_days, fixed_month, fixed_day)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([$templateId, $name, $dayScheduleId, $isMoving, $easterOffsetDays, $fixedMonth, $fixedDay]);
+            $exceptionId = $this->db->lastInsertId();
+        }
+
+        $this->sendResponse(['success' => true, 'exception_id' => $exceptionId]);
+    }
+
+    private function deleteDateRange($rangeId) {
+        if (!$this->validateId($rangeId)) {
+            $this->sendError('Invalid range ID');
+        }
+
+        $stmt = $this->db->prepare("DELETE FROM calendar_date_ranges WHERE range_id = ?");
+        $stmt->execute([$rangeId]);
+
+        $this->sendResponse(['success' => true]);
+    }
+
     private function deleteExceptionDay($exceptionId) {
         if (!$this->validateId($exceptionId)) {
             $this->sendError('Invalid exception ID');
