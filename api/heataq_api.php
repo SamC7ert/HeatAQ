@@ -927,8 +927,9 @@ class HeatAQAPI {
     // ====================================
 
     private function getHolidayDefinitions() {
+        // Query without country column in case it doesn't exist in production
         $stmt = $this->db->query("
-            SELECT id, name, is_moving, fixed_month, fixed_day, easter_offset_days, country
+            SELECT id, name, is_moving, fixed_month, fixed_day, easter_offset_days
             FROM holiday_definitions
             ORDER BY COALESCE(fixed_month, 3), COALESCE(fixed_day, easter_offset_days + 100)
         ");
@@ -959,10 +960,10 @@ class HeatAQAPI {
             ");
             $stmt->execute([$name, $isMoving, $fixedMonth, $fixedDay, $easterOffset, $id]);
         } else {
-            // Insert new
+            // Insert new (without country column in case it doesn't exist)
             $stmt = $this->db->prepare("
-                INSERT INTO holiday_definitions (name, is_moving, fixed_month, fixed_day, easter_offset_days, country)
-                VALUES (?, ?, ?, ?, ?, 'NO')
+                INSERT INTO holiday_definitions (name, is_moving, fixed_month, fixed_day, easter_offset_days)
+                VALUES (?, ?, ?, ?, ?)
             ");
             $stmt->execute([$name, $isMoving, $fixedMonth, $fixedDay, $easterOffset]);
             $id = $this->db->lastInsertId();
