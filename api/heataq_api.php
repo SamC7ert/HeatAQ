@@ -1037,35 +1037,58 @@ class HeatAQAPI {
     private function getWeatherStations() {
         $stationId = $_GET['station_id'] ?? null;
 
-        // Query only basic columns that are guaranteed to exist
-        $stmt = $this->db->query("
-            SELECT station_id, station_name as name, latitude, longitude
-            FROM weather_stations
-            ORDER BY station_name
-        ");
-        $stations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        try {
+            // Query only basic columns that are guaranteed to exist
+            $stmt = $this->db->query("
+                SELECT station_id, station_name as name, latitude, longitude
+                FROM weather_stations
+                ORDER BY station_name
+            ");
+            $stations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            // Try alternative column name
+            try {
+                $stmt = $this->db->query("
+                    SELECT station_id, name, latitude, longitude
+                    FROM weather_stations
+                    ORDER BY name
+                ");
+                $stations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            } catch (PDOException $e2) {
+                $this->sendResponse([
+                    'stations' => [],
+                    'summary' => [],
+                    'error' => $e2->getMessage()
+                ]);
+                return;
+            }
+        }
 
         // Get weather data summary (filtered by station if specified)
-        if ($stationId) {
-            $summaryStmt = $this->db->prepare("
-                SELECT
-                    MIN(DATE(timestamp)) as min_date,
-                    MAX(DATE(timestamp)) as max_date,
-                    COUNT(*) as record_count
-                FROM weather_data
-                WHERE station_id = ?
-            ");
-            $summaryStmt->execute([$stationId]);
-        } else {
-            $summaryStmt = $this->db->query("
-                SELECT
-                    MIN(DATE(timestamp)) as min_date,
-                    MAX(DATE(timestamp)) as max_date,
-                    COUNT(*) as record_count
-                FROM weather_data
-            ");
+        try {
+            if ($stationId) {
+                $summaryStmt = $this->db->prepare("
+                    SELECT
+                        MIN(DATE(timestamp)) as min_date,
+                        MAX(DATE(timestamp)) as max_date,
+                        COUNT(*) as record_count
+                    FROM weather_data
+                    WHERE station_id = ?
+                ");
+                $summaryStmt->execute([$stationId]);
+            } else {
+                $summaryStmt = $this->db->query("
+                    SELECT
+                        MIN(DATE(timestamp)) as min_date,
+                        MAX(DATE(timestamp)) as max_date,
+                        COUNT(*) as record_count
+                    FROM weather_data
+                ");
+            }
+            $summary = $summaryStmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $summary = [];
         }
-        $summary = $summaryStmt->fetch(PDO::FETCH_ASSOC);
 
         $this->sendResponse([
             'stations' => $stations,
