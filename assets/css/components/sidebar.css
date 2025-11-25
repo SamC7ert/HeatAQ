@@ -68,6 +68,15 @@
 
 .nav-item span:last-child {
     font-size: 0.95rem;
+    color: #ffffff;
+}
+
+.nav-item {
+    color: #ffffff;
+}
+
+.sidebar-section-title {
+    color: rgba(255,255,255,0.8);
 }
 
 /* Mobile responsiveness */
