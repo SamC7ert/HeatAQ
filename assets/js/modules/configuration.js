@@ -36,6 +36,12 @@ const ConfigurationModule = {
             shower_liters: 60,
             activity_factor: 1.1
         },
+        water_temps: {
+            cold_water: 5,          // °C - mains water
+            shower_target: 40,      // °C - mixed shower output
+            hot_water_tank: 60,     // °C - if separate heater
+            hp_max_dhw: 35          // °C - HP can only heat DHW to this
+        },
         costs: {
             electricity_nok_kwh: 1.20,
             gas_nok_kwh: 0.80
@@ -82,6 +88,12 @@ const ConfigurationModule = {
         this.setVal('cfg-refill-liters', d.bathers.refill_liters);
         this.setVal('cfg-shower-liters', d.bathers.shower_liters);
         this.setVal('cfg-activity-factor', d.bathers.activity_factor);
+
+        // Water Temperatures
+        this.setVal('cfg-cold-water-temp', d.water_temps.cold_water);
+        this.setVal('cfg-shower-target-temp', d.water_temps.shower_target);
+        this.setVal('cfg-hot-water-temp', d.water_temps.hot_water_tank);
+        this.setVal('cfg-hp-max-dhw-temp', d.water_temps.hp_max_dhw);
 
         // Energy Costs
         this.setVal('cfg-elec-cost', d.costs.electricity_nok_kwh);
@@ -194,6 +206,12 @@ const ConfigurationModule = {
                 refill_liters: parseInt(this.getVal('cfg-refill-liters')),
                 shower_liters: parseInt(this.getVal('cfg-shower-liters')),
                 activity_factor: parseFloat(this.getVal('cfg-activity-factor'))
+            },
+            water_temps: {
+                cold_water: parseInt(this.getVal('cfg-cold-water-temp')),
+                shower_target: parseInt(this.getVal('cfg-shower-target-temp')),
+                hot_water_tank: parseInt(this.getVal('cfg-hot-water-temp')),
+                hp_max_dhw: parseInt(this.getVal('cfg-hp-max-dhw-temp'))
             },
             costs: {
                 electricity_nok_kwh: parseFloat(this.getVal('cfg-elec-cost')),
