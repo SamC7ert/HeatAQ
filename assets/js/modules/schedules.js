@@ -381,29 +381,23 @@ const schedules = {
         const name = prompt('Enter name for new Day Schedule:', 'Reference 10-20');
         if (!name) return;
 
-        // Only ask about closed if name suggests it (contains "closed")
-        const isClosed = name.toLowerCase().includes('closed');
-
-        let periods = [];
-        if (!isClosed) {
-            // Default period 10:00-20:00 with temp targets
-            periods = [{
-                start_time: '10:00',
-                end_time: '20:00',
-                target_temp: 28.0,
-                min_temp: 26.0,
-                max_temp: 30.0,
-                period_order: 1
-            }];
-        }
+        // Create with default 10:00-20:00 period (user can edit later)
+        const periods = [{
+            start_time: '10:00',
+            end_time: '20:00',
+            target_temp: 28.0,
+            min_temp: 26.0,
+            max_temp: 30.0,
+            period_order: 1
+        }];
 
         api.daySchedules.save({
             name: name,
-            is_closed: isClosed ? 1 : 0,
+            is_closed: 0,
             periods: periods
         }).then(result => {
             if (result.success) {
-                api.utils.showSuccess('Day schedule created: ' + name);
+                api.utils.showSuccess('Day schedule created: ' + name + ' (default 10:00-20:00)');
                 this.loadDaySchedules();
             }
         }).catch(err => {
