@@ -1441,14 +1441,14 @@ class HeatAQAPI {
             if ($hasConfigJson) {
                 $stmt = $this->db->prepare("
                     UPDATE config_templates
-                    SET template_name = ?, json_config = ?, updated_at = NOW()
+                    SET template_name = ?, json_config = ?
                     WHERE template_id = ?
                 ");
                 $stmt->execute([$name, $configJson, $configId]);
             } else {
                 $stmt = $this->db->prepare("
                     UPDATE config_templates
-                    SET template_name = ?, updated_at = NOW()
+                    SET template_name = ?
                     WHERE template_id = ?
                 ");
                 $stmt->execute([$name, $configId]);
