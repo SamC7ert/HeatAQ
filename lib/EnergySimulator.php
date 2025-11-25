@@ -961,20 +961,6 @@ class EnergySimulator {
     }
 
     /**
-     * Get pool configuration
-     */
-    public function getPoolConfig() {
-        return $this->poolConfig;
-    }
-
-    /**
-     * Get equipment configuration
-     */
-    public function getEquipment() {
-        return $this->equipment;
-    }
-
-    /**
      * Set custom equipment configuration
      */
     public function setEquipment($equipment) {
