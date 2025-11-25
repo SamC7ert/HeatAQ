@@ -225,29 +225,53 @@
                     </div>
 
                     <div class="config-grid">
-                        <!-- Pool Dimensions -->
+                        <!-- Pool Physical -->
                         <div class="card">
-                            <h3>Pool Dimensions</h3>
+                            <h3>Pool Physical</h3>
                             <table class="data-table form-table">
                                 <tr>
-                                    <td><label for="cfg-pool-length">Length (m)</label></td>
-                                    <td><input type="number" id="cfg-pool-length" step="0.1" value="25"></td>
+                                    <td><label for="cfg-pool-volume">Volume (m³)</label></td>
+                                    <td><input type="number" id="cfg-pool-volume" step="1" value="625"></td>
                                 </tr>
                                 <tr>
-                                    <td><label for="cfg-pool-width">Width (m)</label></td>
-                                    <td><input type="number" id="cfg-pool-width" step="0.1" value="12.5"></td>
+                                    <td><label for="cfg-pool-area">Surface Area (m²)</label></td>
+                                    <td><input type="number" id="cfg-pool-area" step="0.1" value="312.5"></td>
                                 </tr>
                                 <tr>
                                     <td><label for="cfg-pool-depth">Avg Depth (m)</label></td>
                                     <td><input type="number" id="cfg-pool-depth" step="0.1" value="2.0"></td>
                                 </tr>
-                                <tr class="calculated">
-                                    <td>Area (m²)</td>
-                                    <td id="cfg-pool-area">312.5</td>
+                                <tr>
+                                    <td><label for="cfg-wind-factor">Wind Exposure</label></td>
+                                    <td><input type="number" id="cfg-wind-factor" step="0.01" value="0.535" min="0" max="1"></td>
                                 </tr>
-                                <tr class="calculated">
-                                    <td>Volume (m³)</td>
-                                    <td id="cfg-pool-volume">625</td>
+                            </table>
+                        </div>
+
+                        <!-- Cover & Environment -->
+                        <div class="card">
+                            <h3>Cover & Environment</h3>
+                            <table class="data-table form-table">
+                                <tr>
+                                    <td><label for="cfg-has-cover">Pool Cover</label></td>
+                                    <td>
+                                        <select id="cfg-has-cover" onchange="app.configuration.toggleCover()">
+                                            <option value="1" selected>Yes - Cover when closed</option>
+                                            <option value="0">No cover</option>
+                                        </select>
+                                    </td>
+                                </tr>
+                                <tr id="cover-u-row">
+                                    <td><label for="cfg-cover-u">Cover U-value (W/m²K)</label></td>
+                                    <td><input type="number" id="cfg-cover-u" step="0.1" value="5.0" min="0"></td>
+                                </tr>
+                                <tr id="cover-solar-row">
+                                    <td><label for="cfg-cover-solar">Cover Solar Trans. (%)</label></td>
+                                    <td><input type="number" id="cfg-cover-solar" step="1" value="10" min="0" max="100"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-solar-absorb">Solar Absorption (%)</label></td>
+                                    <td><input type="number" id="cfg-solar-absorb" step="1" value="60" min="0" max="100"></td>
                                 </tr>
                             </table>
                         </div>
@@ -272,32 +296,66 @@
                                     <td><label for="cfg-boiler-eff">Boiler Efficiency</label></td>
                                     <td><input type="number" id="cfg-boiler-eff" step="0.01" value="0.92"></td>
                                 </tr>
+                                <tr>
+                                    <td><label for="cfg-showers-hp">Showers use HP</label></td>
+                                    <td>
+                                        <select id="cfg-showers-hp">
+                                            <option value="1" selected>Yes</option>
+                                            <option value="0">No (separate heater)</option>
+                                        </select>
+                                    </td>
+                                </tr>
                             </table>
                         </div>
 
-                        <!-- Operating Parameters -->
+                        <!-- Control Settings -->
                         <div class="card">
-                            <h3>Operating Parameters</h3>
+                            <h3>Control Settings</h3>
                             <table class="data-table form-table">
                                 <tr>
                                     <td><label for="cfg-target-temp">Target Temp (°C)</label></td>
                                     <td><input type="number" id="cfg-target-temp" step="0.5" value="28"></td>
                                 </tr>
                                 <tr>
-                                    <td><label for="cfg-min-temp">Min Temp (°C)</label></td>
-                                    <td><input type="number" id="cfg-min-temp" step="0.5" value="26"></td>
+                                    <td><label for="cfg-temp-tolerance">Temp Tolerance (±°C)</label></td>
+                                    <td><input type="number" id="cfg-temp-tolerance" step="0.5" value="2" min="0.5" max="5"></td>
+                                </tr>
+                                <tr class="calculated">
+                                    <td>Allowed Range</td>
+                                    <td id="cfg-temp-range">26 - 30°C</td>
                                 </tr>
                                 <tr>
-                                    <td><label for="cfg-max-temp">Max Temp (°C)</label></td>
-                                    <td><input type="number" id="cfg-max-temp" step="0.5" value="30"></td>
+                                    <td><label for="cfg-strategy">Strategy</label></td>
+                                    <td>
+                                        <select id="cfg-strategy">
+                                            <option value="reactive">Reactive</option>
+                                            <option value="predictive" selected>Predictive</option>
+                                            <option value="cost_optimizing" disabled>Cost Optimizing (soon)</option>
+                                        </select>
+                                    </td>
                                 </tr>
-                                <tr>
-                                    <td><label for="cfg-wind-factor">Wind Factor</label></td>
-                                    <td><input type="number" id="cfg-wind-factor" step="0.01" value="0.535"></td>
-                                </tr>
+                            </table>
+                        </div>
+
+                        <!-- Bather Load -->
+                        <div class="card">
+                            <h3>Bather Load</h3>
+                            <table class="data-table form-table">
                                 <tr>
                                     <td><label for="cfg-bathers">Bathers/day</label></td>
                                     <td><input type="number" id="cfg-bathers" step="1" value="100"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-refill-liters">Refill (L/bather)</label></td>
+                                    <td><input type="number" id="cfg-refill-liters" step="1" value="30"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-shower-liters">Shower (L/bather)</label></td>
+                                    <td><input type="number" id="cfg-shower-liters" step="1" value="60"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-activity-factor">Activity Factor</label></td>
+                                    <td><input type="number" id="cfg-activity-factor" step="0.1" value="1.1" min="1.0" max="2.0"></td>
                                 </tr>
                             </table>
                         </div>
@@ -473,6 +531,7 @@
     <script src="./assets/js/modules/schedules.js"></script>
     <script src="./assets/js/modules/calendar.js"></script>
     <script src="./assets/js/modules/simulations.js"></script>
+    <script src="./assets/js/modules/configuration.js"></script>
     <script src="./assets/js/app.js"></script>
 </body>
 </html>

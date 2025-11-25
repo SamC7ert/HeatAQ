@@ -132,6 +132,7 @@ const app = {
     schedules: schedules,
     calendar: calendar,
     simulations: typeof SimulationsModule !== 'undefined' ? SimulationsModule : null,
+    configuration: typeof ConfigurationModule !== 'undefined' ? ConfigurationModule : null,
     api: api,
     config: config
 };
