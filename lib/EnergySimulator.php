@@ -355,11 +355,11 @@ class EnergySimulator {
     private function getWeatherData($startDate, $endDate) {
         $stmt = $this->db->prepare("
             SELECT
-                CONCAT(date, ' ', LPAD(hour, 2, '0'), ':00:00') as timestamp,
-                air_temperature,
-                wind_speed,
-                relative_humidity as humidity,
-                tunnel_temperature
+                CONCAT(wd.date, ' ', LPAD(wd.hour, 2, '0'), ':00:00') as timestamp,
+                wd.air_temperature,
+                wd.wind_speed,
+                wd.relative_humidity as humidity,
+                wd.tunnel_temperature
             FROM weather_data wd
             JOIN weather_stations ws ON wd.station_id = ws.station_id
             JOIN pool_sites ps ON ws.station_id = ps.default_weather_station
@@ -377,10 +377,10 @@ class EnergySimulator {
     private function getSolarData($startDate, $endDate) {
         $stmt = $this->db->prepare("
             SELECT
-                date,
-                daily_total_kwh_m2,
-                clear_sky_kwh_m2,
-                cloud_factor
+                sd.date,
+                sd.daily_total_kwh_m2,
+                sd.clear_sky_kwh_m2,
+                sd.cloud_factor
             FROM solar_daily_data sd
             JOIN pool_sites ps ON sd.site_id = ps.site_id
             WHERE ps.site_id = ?
