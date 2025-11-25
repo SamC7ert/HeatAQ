@@ -552,17 +552,17 @@ class HeatAQAPI {
         $isDefault = ($input['is_default'] ?? false) || $priority === 0;
 
         if ($rangeId) {
-            // Update existing
+            // Update existing (column is 'id', not 'range_id')
             $stmt = $this->db->prepare("
                 UPDATE calendar_date_ranges
                 SET week_schedule_id = ?, start_date = ?, end_date = ?, priority = ?
-                WHERE range_id = ?
+                WHERE id = ?
             ");
             $stmt->execute([$weekScheduleId, $startDate, $endDate, $priority, $rangeId]);
         } else {
-            // Create new
+            // Create new (column is 'schedule_template_id', not 'template_id')
             $stmt = $this->db->prepare("
-                INSERT INTO calendar_date_ranges (template_id, week_schedule_id, start_date, end_date, priority)
+                INSERT INTO calendar_date_ranges (schedule_template_id, week_schedule_id, start_date, end_date, priority)
                 VALUES (?, ?, ?, ?, ?)
             ");
             $stmt->execute([$templateId, $weekScheduleId, $startDate, $endDate, $priority]);
@@ -605,9 +605,9 @@ class HeatAQAPI {
             ");
             $stmt->execute([$name, $dayScheduleId, $isMoving, $easterOffsetDays, $fixedMonth, $fixedDay, $exceptionId]);
         } else {
-            // Create new
+            // Create new (column is 'schedule_template_id', not 'template_id')
             $stmt = $this->db->prepare("
-                INSERT INTO calendar_exception_days (template_id, name, day_schedule_id, is_moving, easter_offset_days, fixed_month, fixed_day)
+                INSERT INTO calendar_exception_days (schedule_template_id, name, day_schedule_id, is_moving, easter_offset_days, fixed_month, fixed_day)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             ");
             $stmt->execute([$templateId, $name, $dayScheduleId, $isMoving, $easterOffsetDays, $fixedMonth, $fixedDay]);
@@ -622,7 +622,7 @@ class HeatAQAPI {
             $this->sendError('Invalid range ID');
         }
 
-        $stmt = $this->db->prepare("DELETE FROM calendar_date_ranges WHERE range_id = ?");
+        $stmt = $this->db->prepare("DELETE FROM calendar_date_ranges WHERE id = ?");
         $stmt->execute([$rangeId]);
 
         $this->sendResponse(['success' => true]);

@@ -135,11 +135,19 @@
                             <select id="ohc-selector" onchange="app.schedules.loadOHC()">
                                 <option value="1">Hisøy Swim Club - Standard Hours</option>
                             </select>
-                            <button class="btn btn-secondary btn-sm" onclick="app.schedules.newOHC()">+ New</button>
-                            <button class="btn btn-primary" onclick="app.schedules.saveOHC()">Save</button>
+                            <button class="btn btn-secondary btn-sm" onclick="app.schedules.toggleNewOHCForm()">+ New</button>
                         </div>
                         <div id="ohc-description" class="ohc-description">
                             Norwegian holidays, seasonal variations, standard pool opening hours
+                        </div>
+                        <!-- Inline form for new OHC -->
+                        <div id="new-ohc-form" style="display: none; margin-top: 10px; padding: 10px; background: var(--neutral-100); border-radius: 4px;">
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                                <input type="text" id="new-ohc-name" class="form-control form-control-sm" placeholder="Name" style="width: 150px;" />
+                                <input type="text" id="new-ohc-description" class="form-control form-control-sm" placeholder="Description (optional)" style="flex: 1; min-width: 150px;" />
+                                <button class="btn btn-primary btn-sm" onclick="app.schedules.createOHC()">Create</button>
+                                <button class="btn btn-secondary btn-sm" onclick="app.schedules.toggleNewOHCForm()">Cancel</button>
+                            </div>
                         </div>
                     </div>
 

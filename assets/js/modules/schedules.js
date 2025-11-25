@@ -703,24 +703,51 @@ const schedules = {
         api.utils.showSuccess('Schedule saved');
     },
 
-    newOHC() {
-        const name = prompt('Enter name for new Open Hours Calendar:', 'Reference');
-        if (!name) return;
+    toggleNewOHCForm() {
+        const form = document.getElementById('new-ohc-form');
+        if (form) {
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+            if (form.style.display === 'block') {
+                document.getElementById('new-ohc-name')?.focus();
+            }
+        }
+    },
 
-        const description = prompt('Enter description (optional):', '');
+    async createOHC() {
+        const nameInput = document.getElementById('new-ohc-name');
+        const descInput = document.getElementById('new-ohc-description');
 
-        api.templates.save({
-            name: name,
-            description: description
-        }).then(result => {
+        const name = nameInput?.value?.trim();
+        const description = descInput?.value?.trim() || '';
+
+        if (!name) {
+            api.utils.showError('Please enter a name');
+            return;
+        }
+
+        try {
+            const result = await api.templates.save({
+                name: name,
+                description: description
+            });
+
             if (result.success) {
                 api.utils.showSuccess('Template created: ' + name);
+                // Clear and hide form
+                nameInput.value = '';
+                descInput.value = '';
+                this.toggleNewOHCForm();
                 // Reload templates selector
-                this.loadTemplatesSelector();
+                await this.loadTemplatesSelector();
             }
-        }).catch(err => {
+        } catch (err) {
             api.utils.showError('Failed to create template: ' + err.message);
-        });
+        }
+    },
+
+    // Legacy method for backwards compatibility
+    newOHC() {
+        this.toggleNewOHCForm();
     },
 
     async loadTemplatesSelector() {
