@@ -126,60 +126,71 @@
             <div class="content-wrapper">
                 <!-- Schedules Section (Default) -->
                 <section id="schedules-section" class="content-section active">
-                    <h2>Schedule Configuration</h2>
-                    
-                    <!-- Save Changes Button -->
-                    <div class="action-bar">
-                        <button class="btn btn-primary" onclick="app.saveChanges()">
-                            Save Changes
-                        </button>
-                    </div>
-                    
-                    <!-- Template Selector -->
-                    <div class="template-selector">
-                        <label for="schedule-template-selector">Select Template:</label>
-                        <select id="schedule-template-selector" onchange="app.schedules.loadTemplate()">
-                            <option value="1">Hisøy Default (v3.4.2)</option>
-                        </select>
-                        <button class="btn btn-secondary btn-sm" onclick="app.schedules.editTemplate()">
-                            Edit Template
-                        </button>
-                        <div id="template-description">
-                            Complex schedule with Norwegian holidays and seasonal variations
+                    <h2>Schedule Management</h2>
+
+                    <!-- Open Hours Calendar Selector -->
+                    <div class="ohc-selector card">
+                        <div class="ohc-header">
+                            <label for="ohc-selector">Open Hours Calendar:</label>
+                            <select id="ohc-selector" onchange="app.schedules.loadOHC()">
+                                <option value="1">Hisøy Swim Club - Standard Hours</option>
+                            </select>
+                            <button class="btn btn-secondary btn-sm" onclick="app.schedules.newOHC()">+ New</button>
+                            <button class="btn btn-primary" onclick="app.schedules.saveOHC()">Save</button>
+                        </div>
+                        <div id="ohc-description" class="ohc-description">
+                            Norwegian holidays, seasonal variations, standard pool opening hours
                         </div>
                     </div>
-                    
-                    <!-- Schedule Tabs -->
-                    <div class="schedule-tabs">
-                        <div class="tabs-header">
-                            <button class="tab-btn active" onclick="app.tabs.switch('day')">
-                                Day Schedules
-                            </button>
-                            <button class="tab-btn" onclick="app.tabs.switch('week')">
-                                Week Schedules
-                            </button>
-                            <button class="tab-btn" onclick="app.tabs.switch('calendar')">
-                                Calendar
-                            </button>
+
+                    <!-- Two-Column Layout: Calendar | Day Schedules -->
+                    <div class="schedule-grid">
+                        <!-- Left: Calendar Rules -->
+                        <div class="card schedule-calendar">
+                            <h3>Calendar Rules</h3>
+
+                            <!-- Date Ranges -->
+                            <div class="calendar-section">
+                                <h4>Date Ranges</h4>
+                                <div id="date-ranges-container">
+                                    <!-- Date ranges will be loaded here -->
+                                </div>
+                                <button class="btn btn-sm btn-secondary" onclick="app.calendar.addDateRange()">+ Add Date Range</button>
+                            </div>
+
+                            <!-- Exception Days -->
+                            <div class="calendar-section">
+                                <h4>Exception Days (Holidays)</h4>
+                                <div id="exception-days-container">
+                                    <!-- Exception days will be loaded here -->
+                                </div>
+                                <button class="btn btn-sm btn-secondary" onclick="app.calendar.addExceptionDay()">+ Add Exception</button>
+                            </div>
+
+                            <!-- Week Schedule Mapping -->
+                            <div class="calendar-section">
+                                <h4>Week Schedule</h4>
+                                <table class="data-table compact">
+                                    <tr>
+                                        <td>Base Week</td>
+                                        <td>
+                                            <select id="base-week-schedule" class="form-control-sm">
+                                                <option value="1">Normal Week</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
                         </div>
-                        
-                        <!-- Day Schedules Tab -->
-                        <div id="day-tab" class="tab-content active">
+
+                        <!-- Right: Day Schedules -->
+                        <div class="card schedule-days">
+                            <h3>Day Schedules</h3>
+                            <p class="text-muted">Define opening hours for different day types</p>
                             <div id="day-schedules-container">
                                 <!-- Day schedules will be loaded here -->
                             </div>
-                        </div>
-                        
-                        <!-- Week Schedules Tab -->
-                        <div id="week-tab" class="tab-content">
-                            <div id="week-schedules-container">
-                                <!-- Week schedules will be loaded here -->
-                            </div>
-                        </div>
-                        
-                        <!-- Calendar Tab -->
-                        <div id="calendar-tab" class="tab-content">
-                            <!-- Calendar content will be loaded here -->
+                            <button class="btn btn-sm btn-secondary" onclick="app.schedules.addDaySchedule()">+ Add Day Schedule</button>
                         </div>
                     </div>
                 </section>

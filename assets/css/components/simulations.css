@@ -481,3 +481,81 @@ p.loading {
     color: #888;
     font-size: 13px;
 }
+
+/* ============================================
+   SCHEDULE MANAGEMENT STYLES
+   ============================================ */
+
+/* OHC Selector */
+.ohc-selector {
+    margin-bottom: 20px;
+}
+
+.ohc-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.ohc-header label {
+    font-weight: 500;
+}
+
+.ohc-header select {
+    min-width: 250px;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.ohc-description {
+    margin-top: 10px;
+    color: #666;
+    font-size: 13px;
+    font-style: italic;
+}
+
+/* Schedule Grid (Calendar | Days) */
+.schedule-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+@media (max-width: 1024px) {
+    .schedule-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.schedule-calendar,
+.schedule-days {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.calendar-section {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+}
+
+.calendar-section:last-child {
+    border-bottom: none;
+}
+
+.calendar-section h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 10px;
+}
+
+.form-control-sm {
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+}
