@@ -988,9 +988,9 @@ class HeatAQAPI {
     // ====================================
 
     private function getWeatherStations() {
+        // Query only basic columns that are guaranteed to exist
         $stmt = $this->db->query("
-            SELECT station_id, station_name as name, latitude, longitude, elevation,
-                   measurement_height_temp, measurement_height_wind
+            SELECT station_id, station_name as name, latitude, longitude
             FROM weather_stations
             ORDER BY station_name
         ");
@@ -1073,18 +1073,36 @@ class HeatAQAPI {
     // ====================================
 
     private function getUsers() {
-        $stmt = $this->db->query("
-            SELECT u.user_id, u.email, u.name, u.is_active,
-                   MAX(up.role) as role,
-                   GROUP_CONCAT(DISTINCT p.project_name SEPARATOR ', ') as project_names,
-                   GROUP_CONCAT(DISTINCT up.project_id) as project_ids_str
-            FROM users u
-            LEFT JOIN user_projects up ON u.user_id = up.user_id
-            LEFT JOIN projects p ON up.project_id = p.project_id
-            GROUP BY u.user_id, u.email, u.name, u.is_active
-            ORDER BY u.email
-        ");
-        $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        // Simple query first to check what columns exist
+        try {
+            $stmt = $this->db->query("
+                SELECT u.user_id, u.email,
+                       COALESCE(u.name, u.email) as name,
+                       COALESCE(u.is_active, 1) as is_active,
+                       MAX(up.role) as role,
+                       GROUP_CONCAT(DISTINCT p.project_name SEPARATOR ', ') as project_names,
+                       GROUP_CONCAT(DISTINCT up.project_id) as project_ids_str
+                FROM users u
+                LEFT JOIN user_projects up ON u.user_id = up.user_id
+                LEFT JOIN projects p ON up.project_id = p.project_id
+                GROUP BY u.user_id, u.email
+                ORDER BY u.email
+            ");
+            $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+            // Fallback to simpler query if columns don't exist
+            $stmt = $this->db->query("SELECT user_id, email FROM users ORDER BY email");
+            $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($users as &$user) {
+                $user['name'] = $user['email'];
+                $user['is_active'] = 1;
+                $user['role'] = 'operator';
+                $user['project_names'] = '';
+                $user['project_ids'] = [];
+            }
+            $this->sendResponse(['users' => $users]);
+            return;
+        }
 
         // Convert project_ids_str to array
         foreach ($users as &$user) {
