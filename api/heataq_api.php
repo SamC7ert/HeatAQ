@@ -390,7 +390,7 @@ class HeatAQAPI {
         $templateId = $input['template_id'] ?? null;
         $name = trim($input['name'] ?? '');
         $description = trim($input['description'] ?? '');
-        $defaultWeekScheduleId = $input['default_week_schedule_id'] ?? null;
+        $baseWeekScheduleId = $input['base_week_schedule_id'] ?? $input['default_week_schedule_id'] ?? null;
 
         if (empty($name)) {
             $this->sendError('Template name is required');
@@ -400,18 +400,18 @@ class HeatAQAPI {
             // Update existing
             $stmt = $this->db->prepare("
                 UPDATE schedule_templates
-                SET name = ?, description = ?, default_week_schedule_id = ?
+                SET name = ?, description = ?, base_week_schedule_id = ?
                 WHERE template_id = ?
             ");
-            $stmt->execute([$name, $description, $defaultWeekScheduleId, $templateId]);
+            $stmt->execute([$name, $description, $baseWeekScheduleId, $templateId]);
         } else {
             // Create new
             $siteId = $this->siteId ?? 'arendal_aquatic';
             $stmt = $this->db->prepare("
-                INSERT INTO schedule_templates (site_id, name, description, default_week_schedule_id)
+                INSERT INTO schedule_templates (site_id, name, description, base_week_schedule_id)
                 VALUES (?, ?, ?, ?)
             ");
-            $stmt->execute([$siteId, $name, $description, $defaultWeekScheduleId]);
+            $stmt->execute([$siteId, $name, $description, $baseWeekScheduleId]);
             $templateId = $this->db->lastInsertId();
         }
 
@@ -579,8 +579,10 @@ class HeatAQAPI {
         $templateId = $input['template_id'] ?? 1;
         $name = trim($input['name'] ?? '');
         $dayScheduleId = $input['day_schedule_id'] ?? null;
-        $isMoving = $input['is_moving'] ?? 0;
-        $easterOffsetDays = $input['easter_offset_days'] ?? null;
+        // Handle is_moving as int (could come as string "1" or "0")
+        $isMoving = (int)($input['is_moving'] ?? 0);
+        // Easter offset can be 0 (Easter Sunday itself), so check for key existence
+        $easterOffsetDays = array_key_exists('easter_offset_days', $input) ? $input['easter_offset_days'] : null;
         $fixedMonth = $input['fixed_month'] ?? null;
         $fixedDay = $input['fixed_day'] ?? null;
 
@@ -588,12 +590,15 @@ class HeatAQAPI {
             $this->sendError('Exception name is required');
         }
 
-        if ($isMoving && $easterOffsetDays === null) {
-            $this->sendError('Easter offset is required for moving holidays');
-        }
+        // Only validate date fields for new exceptions (not updates)
+        if (!$exceptionId) {
+            if ($isMoving && $easterOffsetDays === null) {
+                $this->sendError('Easter offset is required for moving holidays');
+            }
 
-        if (!$isMoving && (!$fixedMonth || !$fixedDay)) {
-            $this->sendError('Fixed month and day are required for fixed holidays');
+            if (!$isMoving && (!$fixedMonth || !$fixedDay)) {
+                $this->sendError('Fixed month and day are required for fixed holidays');
+            }
         }
 
         if ($exceptionId) {
