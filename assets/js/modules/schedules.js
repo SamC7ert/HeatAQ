@@ -290,11 +290,9 @@ const schedules = {
                     <thead>
                         <tr>
                             <th style="width: 25px;">#</th>
-                            <th style="width: 75px;">Start</th>
-                            <th style="width: 75px;">End</th>
-                            <th style="width: 60px;">Target</th>
-                            <th style="width: 55px;">Min</th>
-                            <th style="width: 55px;">Max</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Target °C</th>
                             <th style="width: 30px;"></th>
                         </tr>
                     </thead>
@@ -303,16 +301,15 @@ const schedules = {
 
             periods.forEach((period, index) => {
                 const target = period.target_temp_c || period.target_temp || 28;
-                const min = period.min_temp || (target - 2);
-                const max = period.max_temp || (target + 2);
+                // Format time as HH:MM (remove seconds if present)
+                const startTime = (period.start_time || '10:00').substring(0, 5);
+                const endTime = (period.end_time || '20:00').substring(0, 5);
                 html += `
                     <tr data-index="${index}">
                         <td>${index + 1}</td>
-                        <td><input type="time" class="form-control form-control-sm period-start" value="${period.start_time || '10:00'}" style="width: 70px; padding: 2px 4px;" /></td>
-                        <td><input type="time" class="form-control form-control-sm period-end" value="${period.end_time || '20:00'}" style="width: 70px; padding: 2px 4px;" /></td>
-                        <td><input type="number" class="form-control form-control-sm period-target" value="${target}" step="0.5" min="20" max="35" style="width: 55px; padding: 2px 4px;" /></td>
-                        <td><input type="number" class="form-control form-control-sm period-min" value="${min}" step="0.5" min="20" max="35" style="width: 50px; padding: 2px 4px;" /></td>
-                        <td><input type="number" class="form-control form-control-sm period-max" value="${max}" step="0.5" min="20" max="35" style="width: 50px; padding: 2px 4px;" /></td>
+                        <td><input type="time" class="form-control form-control-sm period-start" value="${startTime}" step="60" /></td>
+                        <td><input type="time" class="form-control form-control-sm period-end" value="${endTime}" step="60" /></td>
+                        <td><input type="number" class="form-control form-control-sm period-target" value="${target}" step="0.5" min="20" max="35" style="width: 70px;" /></td>
                         <td>
                             <button class="btn btn-danger btn-xs" onclick="app.schedules.removePeriod(${index})" title="Remove period" style="padding: 1px 6px;">×</button>
                         </td>
@@ -591,16 +588,15 @@ const schedules = {
             const startInput = row.querySelector('.period-start');
             const endInput = row.querySelector('.period-end');
             const targetInput = row.querySelector('.period-target');
-            const minInput = row.querySelector('.period-min');
-            const maxInput = row.querySelector('.period-max');
 
             if (startInput && endInput && targetInput) {
+                const target = parseFloat(targetInput.value) || 28.0;
                 periods.push({
                     start_time: startInput.value,
                     end_time: endInput.value,
-                    target_temp: parseFloat(targetInput.value) || 28.0,
-                    min_temp: parseFloat(minInput?.value) || 26.0,
-                    max_temp: parseFloat(maxInput?.value) || 30.0,
+                    target_temp: target,
+                    min_temp: target - 2.0,  // Auto-calculate from target
+                    max_temp: target + 2.0,
                     period_order: index + 1
                 });
             }
