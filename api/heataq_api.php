@@ -648,14 +648,19 @@ class HeatAQAPI {
         $weekScheduleId = $input['week_schedule_id'] ?? null;
         $startDate = $input['start_date'] ?? null;
         $endDate = $input['end_date'] ?? null;
-        $priority = $input['priority'] ?? 1;
+        $priority = (int)($input['priority'] ?? 1);
 
         if (!$weekScheduleId) {
             $this->sendError('Week schedule is required');
         }
 
-        // For year-round (default), use priority 0
+        // For year-round (default), use priority 0 and placeholder dates
         $isDefault = ($input['is_default'] ?? false) || $priority === 0;
+        if ($isDefault || $priority === 0) {
+            $startDate = $startDate ?: '1970-01-01';
+            $endDate = $endDate ?: '2099-12-31';
+            $priority = 0;
+        }
 
         if ($rangeId) {
             // Update existing (column is 'id', not 'range_id')
