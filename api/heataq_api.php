@@ -1433,12 +1433,23 @@ class HeatAQAPI {
 
         $configJson = json_encode($configData);
 
-        // Check if json_config column exists
+        // Check if columns exist
         $hasConfigJson = $this->columnExists('config_templates', 'json_config');
+        $hasUpdatedAt = $this->columnExists('config_templates', 'updated_at');
+
+        // Get current user for audit
+        $updatedBy = $this->userId ?? 'system';
 
         if ($configId) {
             // Update existing
-            if ($hasConfigJson) {
+            if ($hasConfigJson && $hasUpdatedAt) {
+                $stmt = $this->db->prepare("
+                    UPDATE config_templates
+                    SET template_name = ?, json_config = ?, updated_at = NOW(), updated_by = ?
+                    WHERE template_id = ?
+                ");
+                $stmt->execute([$name, $configJson, $updatedBy, $configId]);
+            } elseif ($hasConfigJson) {
                 $stmt = $this->db->prepare("
                     UPDATE config_templates
                     SET template_name = ?, json_config = ?

@@ -115,14 +115,12 @@ const ConfigurationModule = {
         }
 
         const config = this.configs.find(c => c.template_id == configId);
-        if (config) {
+        if (config && config.config) {
             this.currentConfigId = configId;
-            // First load defaults, then overlay with config values
-            this.loadDefaults();
-            if (config.config) {
-                this.populateForm(config.config);
-            }
+            this.populateForm(config.config);
         } else {
+            // Config exists but has no json_config - load defaults for this config
+            this.currentConfigId = configId;
             this.loadDefaults();
         }
     },
