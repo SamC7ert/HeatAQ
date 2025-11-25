@@ -961,13 +961,6 @@ class EnergySimulator {
     }
 
     /**
-     * Set custom equipment configuration
-     */
-    public function setEquipment($equipment) {
-        $this->equipment = array_merge($this->equipment, $equipment);
-    }
-
-    /**
      * Get simulator version
      * @return string Version string (e.g., "3.7.0")
      */
