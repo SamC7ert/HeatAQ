@@ -11,11 +11,11 @@
  */
 
 // Include configuration loader
-require_once 'config.php';
+require_once __DIR__ . '/../config.php';
 
 // Include authentication if required
-if (Config::requiresAuth() && file_exists('auth.php')) {
-    require_once 'auth.php';
+if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
+    require_once __DIR__ . '/../auth.php';
     $auth = HeatAQAuth::check(Config::requiresAuth());
     if ($auth) {
         $currentSiteId = $auth['project']['site_id'];
