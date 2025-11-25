@@ -79,36 +79,52 @@ class EnergySimulator {
 
         if (!$config) {
             // Default configuration if no pool_configurations row exists
-            // These are conservative defaults - admin should configure actual values
+            // Physical properties are conservative defaults - admin should configure actual values
+            // Simulation parameters will be overridden by config template via setConfigFromUI()
             return [
+                // Physical pool properties (defaults)
                 'area_m2' => 312.5,      // 25m x 12.5m
                 'volume_m3' => 625,       // area × 2m depth
                 'depth_m' => 2.0,
                 'perimeter_m' => 75,      // 2×(25+12.5)
-                'has_cover' => false,     // Default: no cover (must be configured)
                 'has_tunnel' => true,
                 'cover_r_value' => 5.0,   // U-value when cover exists
-                'cover_solar_transmittance' => 0.10, // 10% solar passes through cover
-                'solar_absorption' => 0.60,          // 60% solar absorption
-                'wind_exposure_factor' => 1.0,       // Default: full wind exposure
-                'years_operating' => 3               // Default for simulation (set in config template)
+                // Simulation parameters - defaults here, overridden by config template
+                'has_cover' => true,                    // Config template decides
+                'cover_solar_transmittance' => 0.10,   // 10% (config template)
+                'solar_absorption' => 0.60,            // 60% (config template)
+                'wind_exposure_factor' => 1.0,         // Full exposure (config template)
+                'years_operating' => 3                  // Year 3 (config template)
             ];
         }
 
-        // years_operating is NOT from pool_configurations - it's a simulation parameter
-        // set via config template JSON (pool.years_operating)
+        // These values from pool_configurations are PHYSICAL pool properties:
+        // - area, volume, depth, perimeter: geometry
+        // - has_tunnel: construction feature
+        // - cover_r_value: physical cover insulation
+        //
+        // These values are SIMULATION parameters (from config template JSON):
+        // - has_cover: whether to use cover in this simulation
+        // - cover_solar_transmittance: cover optical property for simulation
+        // - solar_absorption: water absorption for simulation
+        // - wind_exposure_factor: site exposure for simulation
+        // - years_operating: affects ground thermal state
+        //
+        // setConfigFromUI() will override simulation parameters from config template
         return [
+            // Physical pool properties from database
             'area_m2' => (float) ($config['area_m2'] ?? 312.5),
             'volume_m3' => (float) ($config['volume_m3'] ?? 625),
             'depth_m' => (float) ($config['depth_m'] ?? 2.0),
             'perimeter_m' => (float) ($config['perimeter_m'] ?? 75),
-            'has_cover' => (bool) ($config['has_cover'] ?? false),
             'has_tunnel' => (bool) ($config['has_tunnel'] ?? true),
             'cover_r_value' => (float) ($config['cover_r_value'] ?? 5.0),
-            'cover_solar_transmittance' => (float) ($config['cover_solar_transmittance'] ?? 0.10),
-            'solar_absorption' => (float) ($config['solar_absorption'] ?? 0.60),
-            'wind_exposure_factor' => (float) ($config['wind_exposure_factor'] ?? 1.0),
-            'years_operating' => 3  // Default - overridden by config template
+            // Simulation parameters - defaults here, overridden by config template
+            'has_cover' => true,                    // Default: use cover (config template decides)
+            'cover_solar_transmittance' => 0.10,   // 10% solar transmittance (config template)
+            'solar_absorption' => 0.60,            // 60% water absorption (config template)
+            'wind_exposure_factor' => 1.0,         // Full exposure (config template)
+            'years_operating' => 3                  // Year 3 steady state (config template)
         ];
     }
 
