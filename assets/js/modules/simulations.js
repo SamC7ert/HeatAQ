@@ -13,6 +13,12 @@ const SimulationsModule = {
      * Initialize simulations module
      */
     init: function() {
+        // Set default dates immediately
+        const startInput = document.getElementById('sim-start-date');
+        const endInput = document.getElementById('sim-end-date');
+        if (startInput) startInput.value = '2024-01-01';
+        if (endInput) endInput.value = '2024-12-31';
+
         this.loadWeatherRange();
         this.loadRuns();
     },
