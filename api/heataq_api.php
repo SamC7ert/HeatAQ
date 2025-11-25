@@ -694,11 +694,9 @@ class HeatAQAPI {
         $exceptionId = isset($input['exception_id']) ? (int)$input['exception_id'] : 0;
 
         // Convert any non-positive value to null for foreign key
-        // This handles: null, '', '0', 0, 'null', undefined, etc.
         $dayScheduleId = null;
         if (array_key_exists('day_schedule_id', $input)) {
             $raw = $input['day_schedule_id'];
-            // Only accept positive integers
             if ($raw !== null && $raw !== '' && $raw !== 'null' && $raw !== 0 && $raw !== '0') {
                 $val = (int)$raw;
                 if ($val > 0) {
@@ -707,38 +705,33 @@ class HeatAQAPI {
             }
         }
 
-        // For updates, just update the day_schedule_id (simple schedule change)
+        // DEBUG v4: Log what we're about to do
+        error_log("saveExceptionDay: exceptionId=$exceptionId, dayScheduleId=" . var_export($dayScheduleId, true));
+
+        // For updates, just update the day_schedule_id
         if ($exceptionId > 0) {
-            try {
-                // DEBUG: v3 - Use explicit NULL in SQL
-                if ($dayScheduleId === null) {
-                    $stmt = $this->db->prepare("
-                        UPDATE calendar_exception_days
-                        SET day_schedule_id = NULL
-                        WHERE id = ?
-                    ");
-                    $stmt->execute([$exceptionId]);
-                } else {
-                    $stmt = $this->db->prepare("
-                        UPDATE calendar_exception_days
-                        SET day_schedule_id = ?
-                        WHERE id = ?
-                    ");
-                    $stmt->execute([$dayScheduleId, $exceptionId]);
+            if ($dayScheduleId === null) {
+                // V5: Direct exec with literal NULL
+                $result = $this->db->exec("UPDATE calendar_exception_days SET day_schedule_id = NULL WHERE id = " . (int)$exceptionId);
+                if ($result === false) {
+                    $err = $this->db->errorInfo();
+                    $this->sendError('V5-NULL-FAIL: ' . $err[2]);
                 }
-                $this->sendResponse([
-                    'success' => true,
-                    'exception_id' => $exceptionId,
-                    'debug_version' => 'v3-null-fix',
-                    'was_null' => ($dayScheduleId === null)
-                ]);
-            } catch (Exception $e) {
-                $this->sendError('Database error: ' . $e->getMessage());
+                $this->sendResponse(['success' => true, 'v' => 'V5-NULL', 'id' => $exceptionId, 'rows' => $result]);
+            } else {
+                $stmt = $this->db->prepare("UPDATE calendar_exception_days SET day_schedule_id = ? WHERE id = ?");
+                $ok = $stmt->execute([$dayScheduleId, $exceptionId]);
+                if (!$ok) {
+                    $err = $stmt->errorInfo();
+                    $this->sendError('V5-VAL-FAIL: ' . $err[2]);
+                }
+                $this->sendResponse(['success' => true, 'v' => 'V5-VAL', 'id' => $exceptionId, 'ds' => $dayScheduleId]);
             }
             return;
         }
 
-        // For new exceptions, validate all fields
+        // For new exceptions - this shouldn't be reached for "No Exception" selection
+        error_log("saveExceptionDay: Creating NEW exception (no exceptionId)");
         $templateId = $input['template_id'] ?? 1;
         $name = trim($input['name'] ?? '');
         $isMoving = (int)($input['is_moving'] ?? 0);
