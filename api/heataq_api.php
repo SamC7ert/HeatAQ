@@ -711,21 +711,15 @@ class HeatAQAPI {
         // For updates, just update the day_schedule_id
         if ($exceptionId > 0) {
             if ($dayScheduleId === null) {
-                // V5: Direct exec with literal NULL
-                $result = $this->db->exec("UPDATE calendar_exception_days SET day_schedule_id = NULL WHERE id = " . (int)$exceptionId);
-                if ($result === false) {
-                    $err = $this->db->errorInfo();
-                    $this->sendError('V5-NULL-FAIL: ' . $err[2]);
-                }
-                $this->sendResponse(['success' => true, 'v' => 'V5-NULL', 'id' => $exceptionId, 'rows' => $result]);
+                // V6: DELETE the record instead of setting NULL
+                // The standard holiday list will show "No Exception" for missing records
+                $stmt = $this->db->prepare("DELETE FROM calendar_exception_days WHERE id = ?");
+                $stmt->execute([$exceptionId]);
+                $this->sendResponse(['success' => true, 'v' => 'V6-DEL', 'deleted_id' => $exceptionId]);
             } else {
                 $stmt = $this->db->prepare("UPDATE calendar_exception_days SET day_schedule_id = ? WHERE id = ?");
-                $ok = $stmt->execute([$dayScheduleId, $exceptionId]);
-                if (!$ok) {
-                    $err = $stmt->errorInfo();
-                    $this->sendError('V5-VAL-FAIL: ' . $err[2]);
-                }
-                $this->sendResponse(['success' => true, 'v' => 'V5-VAL', 'id' => $exceptionId, 'ds' => $dayScheduleId]);
+                $stmt->execute([$dayScheduleId, $exceptionId]);
+                $this->sendResponse(['success' => true, 'v' => 'V6-UPD', 'id' => $exceptionId, 'ds' => $dayScheduleId]);
             }
             return;
         }
