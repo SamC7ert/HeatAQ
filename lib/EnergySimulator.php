@@ -116,7 +116,7 @@ class EnergySimulator {
                     return $config;
                 }
             }
-        } catch (Exception $e) {
+        } catch (\PDOException $e) {
             // Table or column doesn't exist yet, use defaults
         }
 
