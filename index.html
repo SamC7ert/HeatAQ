@@ -74,7 +74,7 @@
         <div class="user-info">
             <span class="project-name" id="current-project"></span>
             <span class="user-name" id="current-user"></span>
-            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">v6</span>
+            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">v7</span>
             <button onclick="logout()" class="btn-logout">Logout</button>
         </div>
         
@@ -92,32 +92,32 @@
                     <span class="nav-icon">📊</span>
                     <span>Dashboard</span>
                 </a>
-                <a href="#" class="nav-item active" onclick="app.navigation.switchSection('schedules')">
-                    <span class="nav-icon">📅</span>
-                    <span>Schedules</span>
+                <a href="#" class="nav-item" onclick="app.navigation.switchSection('simcontrol')">
+                    <span class="nav-icon">▶️</span>
+                    <span>SimControl</span>
                 </a>
                 <a href="#" class="nav-item" onclick="app.navigation.switchSection('configuration')">
                     <span class="nav-icon">⚙️</span>
                     <span>Configuration</span>
                 </a>
+                <a href="#" class="nav-item active" onclick="app.navigation.switchSection('schedules')">
+                    <span class="nav-icon">📅</span>
+                    <span>Schedules</span>
+                </a>
 
-                <!-- SIMULATION Section -->
-                <div class="nav-section-header">SIMULATION</div>
-                <a href="#" class="nav-item" onclick="app.navigation.switchSection('sim-new')">
-                    <span class="nav-icon">▶️</span>
-                    <span>New Run</span>
+                <!-- ADMIN Section -->
+                <div class="nav-section-header">ADMIN</div>
+                <a href="#" class="nav-item" onclick="app.navigation.switchSection('admin-holidays')">
+                    <span class="nav-icon">🎄</span>
+                    <span>Exception Days</span>
                 </a>
-                <a href="#" class="nav-item" onclick="app.navigation.switchSection('sim-history')">
-                    <span class="nav-icon">📋</span>
-                    <span>History</span>
+                <a href="#" class="nav-item" onclick="app.navigation.switchSection('admin-weather')">
+                    <span class="nav-icon">🌤️</span>
+                    <span>Weather Stations</span>
                 </a>
-                <a href="#" class="nav-item" onclick="app.navigation.switchSection('sim-compare')">
-                    <span class="nav-icon">⚖️</span>
-                    <span>Compare</span>
-                </a>
-                <a href="#" class="nav-item" onclick="app.navigation.switchSection('reports')">
-                    <span class="nav-icon">📈</span>
-                    <span>Reports</span>
+                <a href="#" class="nav-item" onclick="app.navigation.switchSection('admin-users')">
+                    <span class="nav-icon">👥</span>
+                    <span>User Management</span>
                 </a>
             </nav>
         </aside>
@@ -227,8 +227,27 @@
                 <!-- Configuration Section -->
                 <section id="configuration-section" class="content-section">
                     <h2>Project Configuration</h2>
-                    <div class="config-actions">
-                        <button class="btn btn-primary" onclick="app.configuration.save()">Save Configuration</button>
+
+                    <!-- Configuration Selector -->
+                    <div class="config-selector card">
+                        <div class="config-header">
+                            <label for="config-selector">Configuration:</label>
+                            <select id="config-selector" onchange="app.configuration.loadSelected()">
+                                <option value="">-- Select Configuration --</option>
+                            </select>
+                            <button class="btn btn-secondary btn-sm" onclick="app.configuration.toggleNewForm()">+ New</button>
+                            <button class="btn btn-primary btn-sm" onclick="app.configuration.save()">Save</button>
+                            <button class="btn btn-danger btn-sm" onclick="app.configuration.deleteConfig()">Delete</button>
+                        </div>
+                        <!-- Inline form for new config -->
+                        <div id="new-config-form" style="display: none; margin-top: 10px; padding: 10px; background: var(--neutral-100); border-radius: 4px;">
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                                <input type="text" id="new-config-name" class="form-control form-control-sm" placeholder="Name" style="width: 150px;" />
+                                <input type="text" id="new-config-description" class="form-control form-control-sm" placeholder="Description (optional)" style="flex: 1; min-width: 150px;" />
+                                <button class="btn btn-primary btn-sm" onclick="app.configuration.createNew()">Create</button>
+                                <button class="btn btn-secondary btn-sm" onclick="app.configuration.toggleNewForm()">Cancel</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="config-grid">
@@ -416,10 +435,19 @@
                     </div>
                 </section>
                 
-                <!-- New Run Section -->
-                <section id="sim-new-section" class="content-section">
-                    <h2>New Simulation Run</h2>
+                <!-- SimControl Section -->
+                <section id="simcontrol-section" class="content-section">
+                    <h2>SimControl</h2>
 
+                    <!-- SimControl Tabs -->
+                    <div class="sim-tabs">
+                        <button class="sim-tab active" onclick="app.simcontrol.switchTab('new')">New Run</button>
+                        <button class="sim-tab" onclick="app.simcontrol.switchTab('history')">History</button>
+                        <button class="sim-tab" onclick="app.simcontrol.switchTab('compare')">Compare</button>
+                    </div>
+
+                    <!-- New Run Tab Content -->
+                    <div id="sim-tab-new" class="sim-tab-content">
                     <div class="sim-new-grid">
                         <!-- Run Configuration -->
                         <div class="card">
@@ -492,35 +520,155 @@
                         </button>
                     </div>
                     <div id="simulation-progress" class="simulation-progress" style="display: none;"></div>
-                </section>
+                    </div><!-- end sim-tab-new -->
 
-                <!-- History Section -->
-                <section id="sim-history-section" class="content-section">
-                    <h2>Simulation History</h2>
-                    <div id="simulation-runs-list" class="runs-list">
-                        <p class="loading">Loading simulation runs...</p>
+                    <!-- History Tab Content -->
+                    <div id="sim-tab-history" class="sim-tab-content" style="display: none;">
+                        <div id="simulation-runs-list" class="runs-list">
+                            <p class="loading">Loading simulation runs...</p>
+                        </div>
+                        <div id="simulation-detail" class="simulation-detail card" style="display: none;"></div>
                     </div>
-                    <!-- Simulation Detail View -->
-                    <div id="simulation-detail" class="simulation-detail card" style="display: none;"></div>
-                </section>
 
-                <!-- Compare Section -->
-                <section id="sim-compare-section" class="content-section">
-                    <h2>Compare Runs</h2>
-                    <div class="card">
-                        <h3>Select Runs to Compare</h3>
-                        <div class="compare-selectors">
-                            <select id="compare-run-1" class="form-control">
-                                <option value="">Select Run 1...</option>
-                            </select>
-                            <span class="vs-label">vs</span>
-                            <select id="compare-run-2" class="form-control">
-                                <option value="">Select Run 2...</option>
-                            </select>
-                            <button class="btn btn-primary" onclick="SimulationsModule.compareRuns()">Compare</button>
+                    <!-- Compare Tab Content -->
+                    <div id="sim-tab-compare" class="sim-tab-content" style="display: none;">
+                        <div class="card">
+                            <h3>Select Runs to Compare</h3>
+                            <div class="compare-selectors">
+                                <select id="compare-run-1" class="form-control">
+                                    <option value="">Select Run 1...</option>
+                                </select>
+                                <span class="vs-label">vs</span>
+                                <select id="compare-run-2" class="form-control">
+                                    <option value="">Select Run 2...</option>
+                                </select>
+                                <button class="btn btn-primary" onclick="SimulationsModule.compareRuns()">Compare</button>
+                            </div>
+                        </div>
+                        <div id="comparison-results" style="display: none;"></div>
+                    </div>
+
+                    <!-- Benchmark Report Section -->
+                    <div id="benchmark-report" class="benchmark-report card" style="display: none;">
+                        <h3>Simulation Results - Benchmark Report</h3>
+                        <div class="benchmark-config">
+                            <strong>Configuration:</strong>
+                            <span id="bench-config-summary">-</span>
+                        </div>
+                        <div class="benchmark-grid">
+                            <div class="benchmark-section">
+                                <h4>Thermal Losses (MWh/year)</h4>
+                                <table class="data-table compact">
+                                    <tr><td>Evaporation</td><td id="bench-evap">-</td></tr>
+                                    <tr><td>Convection</td><td id="bench-conv">-</td></tr>
+                                    <tr><td>Radiation</td><td id="bench-rad">-</td></tr>
+                                    <tr><td>Floor losses</td><td id="bench-floor">-</td></tr>
+                                    <tr><td>Wall losses</td><td id="bench-wall">-</td></tr>
+                                    <tr><td>Solar gain</td><td id="bench-solar">-</td></tr>
+                                    <tr class="total"><td>Total system loss</td><td id="bench-total-loss">-</td></tr>
+                                </table>
+                            </div>
+                            <div class="benchmark-section">
+                                <h4>Heating Delivered (MWh/year)</h4>
+                                <table class="data-table compact">
+                                    <tr><td>Heat pump thermal</td><td id="bench-hp-thermal">-</td></tr>
+                                    <tr><td>Boiler thermal</td><td id="bench-boiler-thermal">-</td></tr>
+                                    <tr class="total"><td>Total delivered</td><td id="bench-total-delivered">-</td></tr>
+                                    <tr><td>Unmet need</td><td id="bench-unmet">-</td></tr>
+                                </table>
+                            </div>
+                            <div class="benchmark-section">
+                                <h4>Electricity (MWh/year)</h4>
+                                <table class="data-table compact">
+                                    <tr><td>HP electricity</td><td id="bench-hp-elec">-</td></tr>
+                                    <tr><td>Boiler fuel</td><td id="bench-boiler-fuel">-</td></tr>
+                                    <tr><td>Shower heating</td><td id="bench-shower">-</td></tr>
+                                    <tr class="total"><td>Total electricity</td><td id="bench-total-elec">-</td></tr>
+                                </table>
+                            </div>
+                            <div class="benchmark-section">
+                                <h4>Temperature (°C)</h4>
+                                <table class="data-table compact">
+                                    <tr><td>Minimum</td><td id="bench-temp-min">-</td></tr>
+                                    <tr><td>Average</td><td id="bench-temp-avg">-</td></tr>
+                                    <tr><td>Maximum</td><td id="bench-temp-max">-</td></tr>
+                                    <tr><td>Days &lt; 27°C</td><td id="bench-days-27">-</td></tr>
+                                    <tr><td>Days &lt; 26°C</td><td id="bench-days-26">-</td></tr>
+                                </table>
+                            </div>
                         </div>
                     </div>
-                    <div id="comparison-results" style="display: none;"></div>
+                </section>
+
+                <!-- Admin: Exception Day Definitions -->
+                <section id="admin-holidays-section" class="content-section">
+                    <h2>Exception Day Definitions</h2>
+                    <p class="text-muted">Define holidays and special days (fixed dates or relative to Easter)</p>
+
+                    <div class="admin-grid">
+                        <div class="card">
+                            <h3>Holiday Definitions</h3>
+                            <div id="holiday-definitions-list">
+                                <p class="loading">Loading...</p>
+                            </div>
+                            <button class="btn btn-secondary btn-sm" onclick="app.admin.addHolidayDefinition()">+ Add Holiday</button>
+                        </div>
+
+                        <div class="card">
+                            <h3>Reference Days</h3>
+                            <p class="text-muted">Easter dates used for relative holidays</p>
+                            <div id="reference-days-list">
+                                <p class="loading">Loading...</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Admin: Weather Stations -->
+                <section id="admin-weather-section" class="content-section">
+                    <h2>Weather Stations</h2>
+                    <p class="text-muted">Manage weather data sources</p>
+
+                    <div class="card">
+                        <h3>Configured Stations</h3>
+                        <div id="weather-stations-list">
+                            <p class="loading">Loading...</p>
+                        </div>
+                        <button class="btn btn-secondary btn-sm" onclick="app.admin.addWeatherStation()">+ Add Station</button>
+                    </div>
+
+                    <div class="card">
+                        <h3>Weather Data Summary</h3>
+                        <table class="data-table compact">
+                            <tr><td>Station</td><td id="weather-station-name">-</td></tr>
+                            <tr><td>Date Range</td><td id="weather-date-range">-</td></tr>
+                            <tr><td>Total Records</td><td id="weather-record-count">-</td></tr>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Admin: User Management -->
+                <section id="admin-users-section" class="content-section">
+                    <h2>User Management</h2>
+                    <p class="text-muted">Manage users and access permissions</p>
+
+                    <div class="card">
+                        <h3>Users</h3>
+                        <div id="users-list">
+                            <p class="loading">Loading...</p>
+                        </div>
+                        <button class="btn btn-secondary btn-sm" onclick="app.admin.addUser()">+ Add User</button>
+                    </div>
+
+                    <div class="card">
+                        <h3>Roles</h3>
+                        <table class="data-table compact">
+                            <tr><td><strong>viewer</strong></td><td>Read-only access</td></tr>
+                            <tr><td><strong>operator</strong></td><td>Can edit schedules and run simulations</td></tr>
+                            <tr><td><strong>admin</strong></td><td>Full access including user management</td></tr>
+                            <tr><td><strong>owner</strong></td><td>Project owner with all permissions</td></tr>
+                        </table>
+                    </div>
                 </section>
             </div>
         </main>
@@ -569,7 +717,9 @@
     <script src="./assets/js/modules/schedules.js"></script>
     <script src="./assets/js/modules/calendar.js"></script>
     <script src="./assets/js/modules/simulations.js"></script>
+    <script src="./assets/js/modules/simcontrol.js"></script>
     <script src="./assets/js/modules/configuration.js"></script>
+    <script src="./assets/js/modules/admin.js"></script>
     <script src="./assets/js/app.js"></script>
 </body>
 </html>

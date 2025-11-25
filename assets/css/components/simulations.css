@@ -566,3 +566,244 @@ p.loading {
     border-radius: 4px;
     font-size: 13px;
 }
+
+/* ============================================
+   SIMCONTROL TABS
+   ============================================ */
+
+.sim-tabs {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #e0e0e0;
+    padding-bottom: 0;
+}
+
+.sim-tab {
+    padding: 10px 20px;
+    background: #f0f0f0;
+    border: none;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: #666;
+    transition: all 0.2s;
+    margin-bottom: -2px;
+}
+
+.sim-tab:hover {
+    background: #e0e0e0;
+}
+
+.sim-tab.active {
+    background: white;
+    color: #007bff;
+    border: 2px solid #e0e0e0;
+    border-bottom-color: white;
+}
+
+.sim-tab-content {
+    /* Content container for tabs */
+}
+
+/* ============================================
+   BENCHMARK REPORT
+   ============================================ */
+
+.benchmark-report {
+    margin-top: 30px;
+    border: 2px solid #28a745;
+}
+
+.benchmark-report h3 {
+    color: #28a745;
+    border-bottom-color: #28a745;
+}
+
+.benchmark-config {
+    background: #f8f9fa;
+    padding: 10px 15px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    font-size: 13px;
+}
+
+.benchmark-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+}
+
+.benchmark-section h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.benchmark-section table {
+    width: 100%;
+}
+
+.benchmark-section table td:first-child {
+    color: #555;
+}
+
+.benchmark-section table td:last-child {
+    text-align: right;
+    font-weight: 500;
+    font-family: monospace;
+}
+
+.benchmark-section table tr.total {
+    font-weight: 600;
+    border-top: 1px solid #ddd;
+}
+
+.benchmark-section table tr.total td {
+    padding-top: 8px;
+}
+
+/* ============================================
+   ADMIN PAGES
+   ============================================ */
+
+.admin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 20px;
+}
+
+@media (max-width: 900px) {
+    .admin-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ============================================
+   MODAL OVERLAY
+   ============================================ */
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 8px;
+    padding: 25px;
+    min-width: 400px;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.modal-content h3 {
+    margin: 0 0 20px 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.modal-content .form-group {
+    margin-bottom: 15px;
+}
+
+.modal-content .form-group label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 5px;
+    color: #555;
+}
+
+.modal-content .form-group input,
+.modal-content .form-group select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.modal-content .form-group small {
+    display: block;
+    margin-top: 5px;
+    color: #888;
+}
+
+.modal-content .form-row {
+    display: flex;
+    gap: 15px;
+}
+
+.modal-content .form-row .form-group {
+    flex: 1;
+}
+
+.modal-content .form-actions {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid #eee;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* Button variants */
+.btn-xs {
+    padding: 3px 8px;
+    font-size: 11px;
+}
+
+.btn-danger {
+    background: #dc3545;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #c82333;
+}
+
+/* Error state */
+.error {
+    color: #dc3545;
+}
+
+/* ============================================
+   CONFIG SELECTOR
+   ============================================ */
+
+.config-selector {
+    margin-bottom: 20px;
+}
+
+.config-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.config-header label {
+    font-weight: 500;
+}
+
+.config-header select {
+    min-width: 250px;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}

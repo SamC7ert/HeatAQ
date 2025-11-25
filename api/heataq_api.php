@@ -226,6 +226,72 @@ class HeatAQAPI {
                     $this->deleteTemplate();
                     break;
 
+                // ADMIN: Holiday Definitions
+                case 'get_holiday_definitions':
+                    $this->getHolidayDefinitions();
+                    break;
+
+                case 'save_holiday_definition':
+                    if (!$this->canEdit()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->saveHolidayDefinition();
+                    break;
+
+                case 'delete_holiday_definition':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->deleteHolidayDefinition($_GET['id'] ?? 0);
+                    break;
+
+                case 'get_reference_days':
+                    $this->getReferenceDays();
+                    break;
+
+                // ADMIN: Weather Stations
+                case 'get_weather_stations':
+                    $this->getWeatherStations();
+                    break;
+
+                // ADMIN: Users
+                case 'get_users':
+                    if (!$this->canEdit()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->getUsers();
+                    break;
+
+                case 'save_user':
+                    if (!$this->canEdit()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->saveUser();
+                    break;
+
+                // PROJECT CONFIGURATION
+                case 'get_project_configs':
+                    $this->getProjectConfigs();
+                    break;
+
+                case 'get_project_config':
+                    $this->getProjectConfig($_GET['config_id'] ?? 0);
+                    break;
+
+                case 'save_project_config':
+                    if (!$this->canEdit()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->saveProjectConfig();
+                    break;
+
+                case 'delete_project_config':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->deleteProjectConfig($_GET['config_id'] ?? 0);
+                    break;
+
                 default:
                     $this->sendError('Invalid action');
             }
@@ -840,6 +906,283 @@ class HeatAQAPI {
         // Delete the template
         $stmt = $this->db->prepare("DELETE FROM schedule_templates WHERE template_id = ?");
         $stmt->execute([$templateId]);
+
+        $this->sendResponse(['success' => true]);
+    }
+
+    // ====================================
+    // ADMIN: HOLIDAY DEFINITIONS
+    // ====================================
+
+    private function getHolidayDefinitions() {
+        $stmt = $this->db->query("
+            SELECT id, name, is_moving, fixed_month, fixed_day, easter_offset_days, country
+            FROM holiday_definitions
+            ORDER BY COALESCE(fixed_month, 3), COALESCE(fixed_day, easter_offset_days + 100)
+        ");
+        $definitions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->sendResponse(['definitions' => $definitions]);
+    }
+
+    private function saveHolidayDefinition() {
+        $input = $this->getPostInput();
+        $id = $input['id'] ?? null;
+        $name = $input['name'] ?? '';
+        $isMoving = $input['is_moving'] ?? 0;
+        $fixedMonth = $input['fixed_month'] ?? null;
+        $fixedDay = $input['fixed_day'] ?? null;
+        $easterOffset = $input['easter_offset_days'] ?? null;
+
+        if (empty($name)) {
+            $this->sendError('Name is required');
+        }
+
+        if ($id) {
+            // Update existing
+            $stmt = $this->db->prepare("
+                UPDATE holiday_definitions
+                SET name = ?, is_moving = ?, fixed_month = ?, fixed_day = ?, easter_offset_days = ?
+                WHERE id = ?
+            ");
+            $stmt->execute([$name, $isMoving, $fixedMonth, $fixedDay, $easterOffset, $id]);
+        } else {
+            // Insert new
+            $stmt = $this->db->prepare("
+                INSERT INTO holiday_definitions (name, is_moving, fixed_month, fixed_day, easter_offset_days, country)
+                VALUES (?, ?, ?, ?, ?, 'NO')
+            ");
+            $stmt->execute([$name, $isMoving, $fixedMonth, $fixedDay, $easterOffset]);
+            $id = $this->db->lastInsertId();
+        }
+
+        $this->sendResponse(['success' => true, 'id' => $id]);
+    }
+
+    private function deleteHolidayDefinition($id) {
+        if (!$this->validateId($id)) {
+            $this->sendError('Invalid ID');
+        }
+
+        $stmt = $this->db->prepare("DELETE FROM holiday_definitions WHERE id = ?");
+        $stmt->execute([$id]);
+
+        $this->sendResponse(['success' => true]);
+    }
+
+    private function getReferenceDays() {
+        $stmt = $this->db->query("
+            SELECT year, easter_date
+            FROM holiday_reference_days
+            WHERE country = 'NO'
+            ORDER BY year
+        ");
+        $referenceDays = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->sendResponse(['reference_days' => $referenceDays]);
+    }
+
+    // ====================================
+    // ADMIN: WEATHER STATIONS
+    // ====================================
+
+    private function getWeatherStations() {
+        $stmt = $this->db->query("
+            SELECT station_id, name, latitude, longitude, elevation,
+                   measurement_height_temp, measurement_height_wind
+            FROM weather_stations
+            ORDER BY name
+        ");
+        $stations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Get weather data summary
+        $summaryStmt = $this->db->query("
+            SELECT
+                ws.name as station_name,
+                MIN(DATE(wd.timestamp)) as min_date,
+                MAX(DATE(wd.timestamp)) as max_date,
+                COUNT(*) as record_count
+            FROM weather_data wd
+            JOIN weather_stations ws ON wd.station_id = ws.station_id
+            GROUP BY ws.station_id
+            LIMIT 1
+        ");
+        $summary = $summaryStmt->fetch(PDO::FETCH_ASSOC);
+
+        $this->sendResponse([
+            'stations' => $stations,
+            'summary' => $summary ?: []
+        ]);
+    }
+
+    // ====================================
+    // ADMIN: USERS
+    // ====================================
+
+    private function getUsers() {
+        $stmt = $this->db->query("
+            SELECT u.user_id, u.email, u.name, u.is_active,
+                   up.role
+            FROM users u
+            LEFT JOIN user_projects up ON u.user_id = up.user_id
+            ORDER BY u.email
+        ");
+        $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->sendResponse(['users' => $users]);
+    }
+
+    private function saveUser() {
+        $input = $this->getPostInput();
+        $userId = $input['user_id'] ?? null;
+        $email = $input['email'] ?? '';
+        $name = $input['name'] ?? '';
+        $role = $input['role'] ?? 'viewer';
+        $isActive = $input['is_active'] ?? 1;
+        $password = $input['password'] ?? null;
+
+        if (empty($email)) {
+            $this->sendError('Email is required');
+        }
+
+        if ($userId) {
+            // Update existing user
+            $stmt = $this->db->prepare("
+                UPDATE users SET name = ?, is_active = ? WHERE user_id = ?
+            ");
+            $stmt->execute([$name, $isActive, $userId]);
+
+            // Update role in user_projects
+            $stmt = $this->db->prepare("
+                UPDATE user_projects SET role = ? WHERE user_id = ?
+            ");
+            $stmt->execute([$role, $userId]);
+        } else {
+            // Create new user
+            if (empty($password)) {
+                $this->sendError('Password is required for new users');
+            }
+
+            $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+
+            $stmt = $this->db->prepare("
+                INSERT INTO users (email, password_hash, name, is_active)
+                VALUES (?, ?, ?, ?)
+            ");
+            $stmt->execute([$email, $passwordHash, $name, $isActive]);
+            $userId = $this->db->lastInsertId();
+
+            // Get default project ID
+            $projectStmt = $this->db->query("SELECT project_id FROM projects LIMIT 1");
+            $project = $projectStmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($project) {
+                // Add to user_projects
+                $stmt = $this->db->prepare("
+                    INSERT INTO user_projects (user_id, project_id, role)
+                    VALUES (?, ?, ?)
+                ");
+                $stmt->execute([$userId, $project['project_id'], $role]);
+            }
+        }
+
+        $this->sendResponse(['success' => true, 'user_id' => $userId]);
+    }
+
+    // ====================================
+    // PROJECT CONFIGURATION
+    // ====================================
+
+    private function getProjectConfigs() {
+        $query = "SELECT template_id, name, description, config_json, is_active, created_at, updated_at
+                  FROM config_templates";
+        $query = $this->addSiteFilter($query);
+        $query .= " ORDER BY name";
+
+        $params = [];
+        $this->bindSiteParam($params);
+
+        if ($params) {
+            $stmt = $this->db->prepare($query);
+            $stmt->execute($params);
+            $configs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } else {
+            $configs = $this->db->query($query)->fetchAll(PDO::FETCH_ASSOC);
+        }
+
+        // Decode JSON
+        foreach ($configs as &$config) {
+            $config['config'] = json_decode($config['config_json'], true);
+            unset($config['config_json']);
+        }
+
+        $this->sendResponse(['configs' => $configs]);
+    }
+
+    private function getProjectConfig($configId) {
+        if (!$this->validateId($configId)) {
+            $this->sendError('Invalid config ID');
+        }
+
+        $stmt = $this->db->prepare("
+            SELECT template_id, name, description, config_json, is_active
+            FROM config_templates
+            WHERE template_id = ?
+        ");
+        $stmt->execute([$configId]);
+        $config = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$config) {
+            $this->sendError('Configuration not found', 404);
+        }
+
+        $config['config'] = json_decode($config['config_json'], true);
+        unset($config['config_json']);
+
+        $this->sendResponse(['config' => $config]);
+    }
+
+    private function saveProjectConfig() {
+        $input = $this->getPostInput();
+        $configId = $input['config_id'] ?? null;
+        $name = $input['name'] ?? '';
+        $description = $input['description'] ?? '';
+        $configData = $input['config'] ?? [];
+
+        if (empty($name)) {
+            $this->sendError('Name is required');
+        }
+
+        $configJson = json_encode($configData);
+
+        if ($configId) {
+            // Update existing
+            $stmt = $this->db->prepare("
+                UPDATE config_templates
+                SET name = ?, description = ?, config_json = ?, updated_at = NOW()
+                WHERE template_id = ?
+            ");
+            $stmt->execute([$name, $description, $configJson, $configId]);
+        } else {
+            // Insert new
+            $stmt = $this->db->prepare("
+                INSERT INTO config_templates (site_id, name, description, config_json, is_active)
+                VALUES (?, ?, ?, ?, 1)
+            ");
+            $stmt->execute([$this->siteId, $name, $description, $configJson]);
+            $configId = $this->db->lastInsertId();
+        }
+
+        $this->sendResponse(['success' => true, 'config_id' => $configId]);
+    }
+
+    private function deleteProjectConfig($configId) {
+        if (!$this->validateId($configId)) {
+            $this->sendError('Invalid config ID');
+        }
+
+        $stmt = $this->db->prepare("DELETE FROM config_templates WHERE template_id = ?");
+        $stmt->execute([$configId]);
 
         $this->sendResponse(['success' => true]);
     }
