@@ -375,14 +375,16 @@ class EnergySimulator {
      * Get solar data for date range
      */
     private function getSolarData($startDate, $endDate) {
+        // TODO: Link solar_daily_data to site_id instead of station_id
         $stmt = $this->db->prepare("
             SELECT
                 sd.date,
                 sd.daily_total_kwh_m2,
-                sd.clear_sky_kwh_m2,
-                sd.cloud_factor
+                sd.daily_clear_sky_kwh_m2 as clear_sky_kwh_m2,
+                sd.cloud_reduction_factor as cloud_factor
             FROM solar_daily_data sd
-            JOIN pool_sites ps ON sd.site_id = ps.site_id
+            JOIN weather_stations ws ON sd.station_id = ws.station_id
+            JOIN pool_sites ps ON ws.station_id = ps.default_weather_station
             WHERE ps.site_id = ?
               AND sd.date BETWEEN ? AND ?
             ORDER BY sd.date
