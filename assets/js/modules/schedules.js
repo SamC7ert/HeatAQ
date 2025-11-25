@@ -14,25 +14,26 @@ const schedules = {
     },
     
     async loadTemplate() {
-        const selector = document.getElementById('schedule-template-selector');
-        this.currentTemplate = selector.value;
-        
-        // Update description
-        const description = document.getElementById('template-description');
-        description.textContent = config.templateDescriptions[this.currentTemplate];
-        
-        // Load data for active tab
-        const activeTab = document.querySelector('.tab-content.active');
-        if (activeTab) {
-            const tabId = activeTab.id;
-            if (tabId === 'day-tab') {
-                await this.loadDaySchedules();
-            } else if (tabId === 'week-tab') {
-                await this.loadWeekSchedules();
-            } else if (tabId === 'calendar-tab') {
-                await app.calendar.loadCalendarData(this.currentTemplate);
-            }
+        const selector = document.getElementById('ohc-selector');
+        if (!selector) {
+            // OHC selector not on current page, use default
+            this.currentTemplate = 1;
+            return;
         }
+        this.currentTemplate = selector.value;
+
+        // Update description
+        const description = document.getElementById('ohc-description');
+        if (description && config.templateDescriptions) {
+            description.textContent = config.templateDescriptions[this.currentTemplate];
+        }
+
+        // Load all data for 3-column layout (Calendar | Week | Days)
+        await Promise.all([
+            this.loadDaySchedules(),
+            this.loadWeekSchedules(),
+            app.calendar ? app.calendar.loadCalendarData(this.currentTemplate) : Promise.resolve()
+        ]);
     },
     
     async loadDaySchedules() {
@@ -296,6 +297,32 @@ const schedules = {
     editTemplate() {
         console.log('Edit template:', this.currentTemplate);
         api.utils.showError('Template editing not yet implemented');
+    },
+
+    // OHC (Open Hours Calendar) methods
+    async loadOHC() {
+        // Reload template when OHC selection changes
+        await this.loadTemplate();
+    },
+
+    saveOHC() {
+        console.log('Save OHC:', this.currentTemplate);
+        api.utils.showError('OHC save functionality not yet implemented');
+    },
+
+    newOHC() {
+        console.log('Create new OHC');
+        api.utils.showError('OHC creation not yet implemented');
+    },
+
+    addWeekSchedule() {
+        console.log('Add week schedule');
+        api.utils.showError('Add week schedule not yet implemented');
+    },
+
+    addDaySchedule() {
+        console.log('Add day schedule');
+        api.utils.showError('Add day schedule not yet implemented');
     }
 };
 
