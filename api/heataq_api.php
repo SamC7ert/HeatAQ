@@ -532,18 +532,39 @@ class HeatAQAPI {
     }
     
     private function getReferenceDays() {
-        $currentYear = date('Y');
-        $startYear = $currentYear - 1;
-        $endYear = $currentYear + 1;
-        
-        $stmt = $this->db->prepare("
-            SELECT * FROM holiday_reference_days 
-            WHERE year BETWEEN ? AND ?
-            ORDER BY year
-        ");
-        $stmt->execute([$startYear, $endYear]);
-        
-        $this->sendResponse(['reference_days' => $stmt->fetchAll()]);
+        $currentYear = (int)date('Y');
+        $referenceDays = [];
+
+        // Calculate Easter for years around current year
+        for ($year = $currentYear - 1; $year <= $currentYear + 5; $year++) {
+            $easterDate = $this->calculateEaster($year);
+            $referenceDays[] = [
+                'year' => $year,
+                'easter_date' => $easterDate
+            ];
+        }
+
+        $this->sendResponse(['reference_days' => $referenceDays]);
+    }
+
+    private function calculateEaster($year) {
+        // Anonymous Gregorian algorithm
+        $a = $year % 19;
+        $b = intdiv($year, 100);
+        $c = $year % 100;
+        $d = intdiv($b, 4);
+        $e = $b % 4;
+        $f = intdiv($b + 8, 25);
+        $g = intdiv($b - $f + 1, 3);
+        $h = (19 * $a + $b - $d - $g + 15) % 30;
+        $i = intdiv($c, 4);
+        $k = $c % 4;
+        $l = (32 + 2 * $e + 2 * $i - $h - $k) % 7;
+        $m = intdiv($a + 11 * $h + 22 * $l, 451);
+        $month = intdiv($h + $l - 7 * $m + 114, 31);
+        $day = (($h + $l - 7 * $m + 114) % 31) + 1;
+
+        return sprintf('%04d-%02d-%02d', $year, $month, $day);
     }
     
     private function testResolution() {
@@ -1016,35 +1037,58 @@ class HeatAQAPI {
     private function getWeatherStations() {
         $stationId = $_GET['station_id'] ?? null;
 
-        // Query only basic columns that are guaranteed to exist
-        $stmt = $this->db->query("
-            SELECT station_id, station_name as name, latitude, longitude
-            FROM weather_stations
-            ORDER BY station_name
-        ");
-        $stations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        try {
+            // Query only basic columns that are guaranteed to exist
+            $stmt = $this->db->query("
+                SELECT station_id, station_name as name, latitude, longitude
+                FROM weather_stations
+                ORDER BY station_name
+            ");
+            $stations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            // Try alternative column name
+            try {
+                $stmt = $this->db->query("
+                    SELECT station_id, name, latitude, longitude
+                    FROM weather_stations
+                    ORDER BY name
+                ");
+                $stations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            } catch (PDOException $e2) {
+                $this->sendResponse([
+                    'stations' => [],
+                    'summary' => [],
+                    'error' => $e2->getMessage()
+                ]);
+                return;
+            }
+        }
 
         // Get weather data summary (filtered by station if specified)
-        if ($stationId) {
-            $summaryStmt = $this->db->prepare("
-                SELECT
-                    MIN(DATE(timestamp)) as min_date,
-                    MAX(DATE(timestamp)) as max_date,
-                    COUNT(*) as record_count
-                FROM weather_data
-                WHERE station_id = ?
-            ");
-            $summaryStmt->execute([$stationId]);
-        } else {
-            $summaryStmt = $this->db->query("
-                SELECT
-                    MIN(DATE(timestamp)) as min_date,
-                    MAX(DATE(timestamp)) as max_date,
-                    COUNT(*) as record_count
-                FROM weather_data
-            ");
+        try {
+            if ($stationId) {
+                $summaryStmt = $this->db->prepare("
+                    SELECT
+                        MIN(DATE(timestamp)) as min_date,
+                        MAX(DATE(timestamp)) as max_date,
+                        COUNT(*) as record_count
+                    FROM weather_data
+                    WHERE station_id = ?
+                ");
+                $summaryStmt->execute([$stationId]);
+            } else {
+                $summaryStmt = $this->db->query("
+                    SELECT
+                        MIN(DATE(timestamp)) as min_date,
+                        MAX(DATE(timestamp)) as max_date,
+                        COUNT(*) as record_count
+                    FROM weather_data
+                ");
+            }
+            $summary = $summaryStmt->fetch(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $summary = [];
         }
-        $summary = $summaryStmt->fetch(PDO::FETCH_ASSOC);
 
         $this->sendResponse([
             'stations' => $stations,
@@ -1282,7 +1326,7 @@ class HeatAQAPI {
     private function getProjectConfigs() {
         try {
             // Try with config_json column first
-            $query = "SELECT template_id, template_name as name, config_json, is_active, created_at, updated_at
+            $query = "SELECT template_id, template_name as name, config_json, created_at, updated_at
                       FROM config_templates";
             $query = $this->addSiteFilter($query);
             $query .= " ORDER BY template_name";
@@ -1308,7 +1352,7 @@ class HeatAQAPI {
         } catch (PDOException $e) {
             // Fallback: config_json column might not exist
             try {
-                $query = "SELECT template_id, template_name as name, is_active, created_at, updated_at
+                $query = "SELECT template_id, template_name as name, created_at, updated_at
                           FROM config_templates";
                 $query = $this->addSiteFilter($query);
                 $query .= " ORDER BY template_name";
@@ -1343,7 +1387,7 @@ class HeatAQAPI {
 
         try {
             $stmt = $this->db->prepare("
-                SELECT template_id, template_name as name, config_json, is_active
+                SELECT template_id, template_name as name, config_json
                 FROM config_templates
                 WHERE template_id = ?
             ");
@@ -1361,7 +1405,7 @@ class HeatAQAPI {
         } catch (PDOException $e) {
             // Fallback without config_json
             $stmt = $this->db->prepare("
-                SELECT template_id, template_name as name, is_active
+                SELECT template_id, template_name as name
                 FROM config_templates
                 WHERE template_id = ?
             ");
@@ -1413,14 +1457,14 @@ class HeatAQAPI {
             // Insert new
             if ($hasConfigJson) {
                 $stmt = $this->db->prepare("
-                    INSERT INTO config_templates (site_id, template_name, config_json, is_active)
-                    VALUES (?, ?, ?, 1)
+                    INSERT INTO config_templates (site_id, template_name, config_json)
+                    VALUES (?, ?, ?)
                 ");
                 $stmt->execute([$this->siteId, $name, $configJson]);
             } else {
                 $stmt = $this->db->prepare("
-                    INSERT INTO config_templates (site_id, template_name, is_active)
-                    VALUES (?, ?, 1)
+                    INSERT INTO config_templates (site_id, template_name)
+                    VALUES (?, ?)
                 ");
                 $stmt->execute([$this->siteId, $name]);
             }

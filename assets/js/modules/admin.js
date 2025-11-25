@@ -46,17 +46,16 @@ const AdminModule = {
             '</tr></thead><tbody>';
 
         this.holidayDefinitions.forEach(def => {
-            const dateInfo = def.is_moving
+            const dateInfo = def.is_moving == 1
                 ? `Easter ${def.easter_offset_days >= 0 ? '+' : ''}${def.easter_offset_days} days`
-                : `${def.fixed_day}/${def.fixed_month}`;
+                : `${String(def.fixed_day).padStart(2,'0')}/${String(def.fixed_month).padStart(2,'0')}`;
 
             html += `<tr>
                 <td>${def.name}</td>
-                <td>${def.is_moving ? 'Moving' : 'Fixed'}</td>
+                <td>${def.is_moving == 1 ? 'Moving' : 'Fixed'}</td>
                 <td>${dateInfo}</td>
                 <td>
-                    <button class="btn btn-xs btn-secondary" onclick="app.admin.editHolidayDefinition(${def.id})">Edit</button>
-                    <button class="btn btn-xs btn-danger" onclick="app.admin.deleteHolidayDefinition(${def.id})">Delete</button>
+                    <button class="btn btn-xs btn-danger" onclick="app.admin.deleteHolidayDefinition('${def.id}')">Delete</button>
                 </td>
             </tr>`;
         });
