@@ -51,9 +51,16 @@ const navigation = {
         // Load section-specific data if needed
         this.loadSectionData(sectionName);
     },
-    
+
     loadSectionData(sectionName) {
         switch (sectionName) {
+            // PROJECT sections
+            case 'dashboard':
+                if (typeof app.dashboard !== 'undefined') {
+                    app.dashboard.load();
+                }
+                break;
+
             case 'schedules':
                 // Load schedule data if not already loaded
                 if (!window.schedulesLoaded) {
@@ -61,27 +68,34 @@ const navigation = {
                     window.schedulesLoaded = true;
                 }
                 break;
-                
-            case 'scenarios':
-                // TODO: Load scenarios
-                console.log('Loading scenarios...');
-                break;
-                
-            case 'configurations':
-                // TODO: Load configurations
-                console.log('Loading configurations...');
-                break;
-                
-            case 'reports':
-                // TODO: Load reports
-                console.log('Loading reports...');
-                break;
-                
-            case 'simulations':
-                // Initialize simulations module
-                if (typeof SimulationsModule !== 'undefined') {
-                    SimulationsModule.init();
+
+            case 'configuration':
+                if (typeof app.configuration !== 'undefined') {
+                    app.configuration.load();
                 }
+                break;
+
+            // SIMULATION sections
+            case 'sim-new':
+                if (typeof SimulationsModule !== 'undefined') {
+                    SimulationsModule.initNewRun();
+                }
+                break;
+
+            case 'sim-history':
+                if (typeof SimulationsModule !== 'undefined') {
+                    SimulationsModule.loadRuns();
+                }
+                break;
+
+            case 'sim-compare':
+                if (typeof SimulationsModule !== 'undefined') {
+                    SimulationsModule.initCompare();
+                }
+                break;
+
+            case 'reports':
+                console.log('Loading reports...');
                 break;
         }
     },
