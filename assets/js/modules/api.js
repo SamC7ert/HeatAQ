@@ -65,66 +65,59 @@ const api = {
         }
     },
     
-    // Schedule Templates
+    // Schedule Templates (OHC)
     templates: {
         async getAll() {
             return api.call('get_templates');
         },
-        
+
         async getById(templateId) {
             return api.call('get_template', { template_id: templateId });
         },
-        
-        async create(data) {
-            return api.post('create_template', data);
-        },
-        
-        async update(templateId, data) {
-            return api.post('update_template', { template_id: templateId, ...data });
+
+        async save(data) {
+            // Creates new or updates existing (based on template_id presence)
+            return api.post('save_template', data);
         }
     },
-    
+
     // Day Schedules
     daySchedules: {
         async getAll() {
             return api.call('get_day_schedules');
         },
-        
+
         async getById(scheduleId) {
             return api.call('get_day_schedule', { schedule_id: scheduleId });
         },
-        
-        async create(data) {
-            return api.post('create_day_schedule', data);
+
+        async save(data) {
+            // Creates new or updates existing (based on day_schedule_id presence)
+            // data: { day_schedule_id?, name, is_closed, periods: [{start_time, end_time, target_temp, min_temp, max_temp}] }
+            return api.post('save_day_schedule', data);
         },
-        
-        async update(scheduleId, data) {
-            return api.post('update_day_schedule', { schedule_id: scheduleId, ...data });
-        },
-        
+
         async delete(scheduleId) {
             return api.post('delete_day_schedule', { schedule_id: scheduleId });
         }
     },
-    
+
     // Week Schedules
     weekSchedules: {
         async getAll() {
             return api.call('get_week_schedules');
         },
-        
+
         async getById(scheduleId) {
             return api.call('get_week_schedule', { schedule_id: scheduleId });
         },
-        
-        async create(data) {
-            return api.post('create_week_schedule', data);
+
+        async save(data) {
+            // Creates new or updates existing (based on week_schedule_id presence)
+            // data: { week_schedule_id?, name, monday_schedule_id, tuesday_schedule_id, ... }
+            return api.post('save_week_schedule', data);
         },
-        
-        async update(scheduleId, data) {
-            return api.post('update_week_schedule', { schedule_id: scheduleId, ...data });
-        },
-        
+
         async delete(scheduleId) {
             return api.post('delete_week_schedule', { schedule_id: scheduleId });
         }
