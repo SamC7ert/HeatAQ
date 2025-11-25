@@ -1328,7 +1328,7 @@ class HeatAQAPI {
         try {
             // Only show configs for the current project
             if ($this->projectId) {
-                $query = "SELECT template_id, template_name as name, json_config, created_at, updated_at
+                $query = "SELECT template_id, template_name as name, json_config, created_at
                           FROM config_templates
                           WHERE project_id = :project_id
                           ORDER BY template_name";
@@ -1336,7 +1336,7 @@ class HeatAQAPI {
                 $stmt->execute([':project_id' => $this->projectId]);
             } else {
                 // No auth - show all configs
-                $query = "SELECT template_id, template_name as name, json_config, created_at, updated_at
+                $query = "SELECT template_id, template_name as name, json_config, created_at
                           FROM config_templates
                           ORDER BY template_name";
                 $stmt = $this->db->query($query);
@@ -1354,14 +1354,14 @@ class HeatAQAPI {
             // Fallback: json_config column might not exist
             try {
                 if ($this->projectId) {
-                    $query = "SELECT template_id, template_name as name, created_at, updated_at
+                    $query = "SELECT template_id, template_name as name, created_at
                               FROM config_templates
                               WHERE project_id = :project_id
                               ORDER BY template_name";
                     $stmt = $this->db->prepare($query);
                     $stmt->execute([':project_id' => $this->projectId]);
                 } else {
-                    $query = "SELECT template_id, template_name as name, created_at, updated_at
+                    $query = "SELECT template_id, template_name as name, created_at
                               FROM config_templates
                               ORDER BY template_name";
                     $stmt = $this->db->query($query);
