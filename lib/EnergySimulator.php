@@ -91,10 +91,12 @@ class EnergySimulator {
                 'cover_solar_transmittance' => 0.10, // 10% solar passes through cover
                 'solar_absorption' => 0.60,          // 60% solar absorption
                 'wind_exposure_factor' => 1.0,       // Default: full wind exposure
-                'years_operating' => 3               // Years since startup (affects ground thermal)
+                'years_operating' => 3               // Default for simulation (set in config template)
             ];
         }
 
+        // years_operating is NOT from pool_configurations - it's a simulation parameter
+        // set via config template JSON (pool.years_operating)
         return [
             'area_m2' => (float) ($config['area_m2'] ?? 312.5),
             'volume_m3' => (float) ($config['volume_m3'] ?? 625),
@@ -106,7 +108,7 @@ class EnergySimulator {
             'cover_solar_transmittance' => (float) ($config['cover_solar_transmittance'] ?? 0.10),
             'solar_absorption' => (float) ($config['solar_absorption'] ?? 0.60),
             'wind_exposure_factor' => (float) ($config['wind_exposure_factor'] ?? 1.0),
-            'years_operating' => (int) ($config['years_operating'] ?? 3)
+            'years_operating' => 3  // Default - overridden by config template
         ];
     }
 
