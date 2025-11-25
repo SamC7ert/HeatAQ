@@ -382,9 +382,9 @@ try {
             try {
                 $stmt = $pdo->query("
                     SELECT
-                        MIN(date) as min_date,
-                        MAX(date) as max_date,
-                        COUNT(DISTINCT date) as days_count,
+                        MIN(DATE(timestamp)) as min_date,
+                        MAX(DATE(timestamp)) as max_date,
+                        COUNT(DISTINCT DATE(timestamp)) as days_count,
                         COUNT(*) as hours_count
                     FROM weather_data
                 ");

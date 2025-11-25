@@ -355,17 +355,17 @@ class EnergySimulator {
     private function getWeatherData($startDate, $endDate) {
         $stmt = $this->db->prepare("
             SELECT
-                CONCAT(wd.date, ' ', LPAD(wd.hour, 2, '0'), ':00:00') as timestamp,
-                wd.air_temperature,
+                wd.timestamp,
+                wd.temperature as air_temperature,
                 wd.wind_speed,
-                wd.relative_humidity as humidity,
-                wd.tunnel_temperature
+                wd.humidity,
+                wd.tunnel_temp as tunnel_temperature
             FROM weather_data wd
             JOIN weather_stations ws ON wd.station_id = ws.station_id
             JOIN pool_sites ps ON ws.station_id = ps.default_weather_station
             WHERE ps.site_id = ?
-              AND wd.date BETWEEN ? AND ?
-            ORDER BY wd.date, wd.hour
+              AND DATE(wd.timestamp) BETWEEN ? AND ?
+            ORDER BY wd.timestamp
         ");
         $stmt->execute([$this->siteId, $startDate, $endDate]);
         return $stmt->fetchAll();
