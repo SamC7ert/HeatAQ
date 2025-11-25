@@ -373,21 +373,23 @@ class HeatAQAPI {
         // Standard Norwegian holidays - will be merged with saved exceptions
         $standardHolidays = [
             // Fixed date holidays
-            ['name' => 'New Year\'s Day', 'is_moving' => 0, 'fixed_month' => 1, 'fixed_day' => 1],
-            ['name' => 'May Day', 'is_moving' => 0, 'fixed_month' => 5, 'fixed_day' => 1],
-            ['name' => 'Constitution Day', 'is_moving' => 0, 'fixed_month' => 5, 'fixed_day' => 17],
-            ['name' => 'Christmas Eve', 'is_moving' => 0, 'fixed_month' => 12, 'fixed_day' => 24],
-            ['name' => 'Christmas Day', 'is_moving' => 0, 'fixed_month' => 12, 'fixed_day' => 25],
-            ['name' => 'Boxing Day', 'is_moving' => 0, 'fixed_month' => 12, 'fixed_day' => 26],
-            ['name' => 'New Year\'s Eve', 'is_moving' => 0, 'fixed_month' => 12, 'fixed_day' => 31],
+            ['name' => 'Nyttårsdag', 'is_moving' => 0, 'fixed_month' => 1, 'fixed_day' => 1],
+            ['name' => 'Arbeidernes dag', 'is_moving' => 0, 'fixed_month' => 5, 'fixed_day' => 1],
+            ['name' => 'Grunnlovsdag', 'is_moving' => 0, 'fixed_month' => 5, 'fixed_day' => 17],
+            ['name' => 'Julaften', 'is_moving' => 0, 'fixed_month' => 12, 'fixed_day' => 24],
+            ['name' => 'Første juledag', 'is_moving' => 0, 'fixed_month' => 12, 'fixed_day' => 25],
+            ['name' => 'Andre juledag', 'is_moving' => 0, 'fixed_month' => 12, 'fixed_day' => 26],
+            ['name' => 'Nyttårsaften', 'is_moving' => 0, 'fixed_month' => 12, 'fixed_day' => 31],
             // Easter-relative holidays
-            ['name' => 'Maundy Thursday', 'is_moving' => 1, 'easter_offset_days' => -3],
-            ['name' => 'Good Friday', 'is_moving' => 1, 'easter_offset_days' => -2],
-            ['name' => 'Easter Sunday', 'is_moving' => 1, 'easter_offset_days' => 0],
-            ['name' => 'Easter Monday', 'is_moving' => 1, 'easter_offset_days' => 1],
-            ['name' => 'Ascension Day', 'is_moving' => 1, 'easter_offset_days' => 39],
-            ['name' => 'Whit Sunday', 'is_moving' => 1, 'easter_offset_days' => 49],
-            ['name' => 'Whit Monday', 'is_moving' => 1, 'easter_offset_days' => 50],
+            ['name' => 'Palmesøndag', 'is_moving' => 1, 'easter_offset_days' => -7],
+            ['name' => 'Skjærtorsdag', 'is_moving' => 1, 'easter_offset_days' => -3],
+            ['name' => 'Langfredag', 'is_moving' => 1, 'easter_offset_days' => -2],
+            ['name' => 'Påskeaften', 'is_moving' => 1, 'easter_offset_days' => -1],
+            ['name' => 'Første påskedag', 'is_moving' => 1, 'easter_offset_days' => 0],
+            ['name' => 'Andre påskedag', 'is_moving' => 1, 'easter_offset_days' => 1],
+            ['name' => 'Kristi himmelfartsdag', 'is_moving' => 1, 'easter_offset_days' => 39],
+            ['name' => 'Første pinsedag', 'is_moving' => 1, 'easter_offset_days' => 49],
+            ['name' => 'Andre pinsedag', 'is_moving' => 1, 'easter_offset_days' => 50],
         ];
 
         // Build lookup of saved exceptions by key (name + date info)
