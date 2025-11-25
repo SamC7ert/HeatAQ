@@ -239,27 +239,32 @@ const calendar = {
             }
 
             const exceptionId = exception.exception_id || exception.id;
+            // Convert empty string to null
+            const scheduleId = dayScheduleId && dayScheduleId !== '' ? parseInt(dayScheduleId) : null;
 
             if (exceptionId) {
                 // Update existing exception - only send id and day_schedule_id
                 await api.calendar.saveExceptionDay({
-                    exception_id: exceptionId,
-                    day_schedule_id: dayScheduleId || null
+                    exception_id: parseInt(exceptionId),
+                    day_schedule_id: scheduleId
                 });
-            } else {
-                // Create new exception with full details
+                api.utils.showSuccess('Exception updated');
+            } else if (scheduleId) {
+                // Only create new exception if a schedule is actually being assigned
+                // No need to save "No Exception" for standard holidays
                 await api.calendar.saveExceptionDay({
                     template_id: this.currentTemplateId,
                     name: exception.name,
-                    day_schedule_id: dayScheduleId || null,
+                    day_schedule_id: scheduleId,
                     is_moving: exception.is_moving ? 1 : 0,
                     easter_offset_days: exception.easter_offset_days,
                     fixed_month: exception.fixed_month,
                     fixed_day: exception.fixed_day
                 });
+                api.utils.showSuccess('Exception created');
             }
+            // If no exceptionId and no scheduleId, nothing to do (standard holiday with No Exception)
 
-            api.utils.showSuccess('Exception updated');
             // Reload to show updated data
             await this.loadCalendarRules(this.currentTemplateId);
         } catch (err) {

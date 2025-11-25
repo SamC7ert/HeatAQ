@@ -23,10 +23,11 @@ const schedules = {
         }
         this.currentTemplate = selector.value;
 
-        // Update description
-        const description = document.getElementById('ohc-description');
-        if (description && config.templateDescriptions) {
-            description.textContent = config.templateDescriptions[this.currentTemplate];
+        // Update description from stored templates
+        const descriptionEl = document.getElementById('ohc-description');
+        if (descriptionEl && this.templates) {
+            const template = this.templates.find(t => t.template_id == this.currentTemplate);
+            descriptionEl.textContent = template?.description || '';
         }
 
         // Load all data for 3-column layout (Calendar | Week | Days)
@@ -805,6 +806,9 @@ const schedules = {
     async loadTemplatesSelector() {
         try {
             const data = await api.templates.getAll();
+            // Store templates for description lookup
+            this.templates = data.templates || [];
+
             const selector = document.getElementById('ohc-selector');
             if (selector && data.templates) {
                 selector.innerHTML = data.templates.map(t =>
