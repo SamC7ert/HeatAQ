@@ -970,18 +970,6 @@ class HeatAQAPI {
         $this->sendResponse(['success' => true]);
     }
 
-    private function getReferenceDays() {
-        $stmt = $this->db->query("
-            SELECT year, easter_date
-            FROM holiday_reference_days
-            WHERE country = 'NO'
-            ORDER BY year
-        ");
-        $referenceDays = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        $this->sendResponse(['reference_days' => $referenceDays]);
-    }
-
     // ====================================
     // ADMIN: WEATHER STATIONS
     // ====================================
