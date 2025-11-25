@@ -1,6 +1,6 @@
 <?php
 /**
- * HeatAQ Energy Simulator v1.0.0
+ * HeatAQ Energy Simulator
  *
  * Calculates pool energy requirements based on:
  * - Weather data (temperature, wind, humidity, solar)
@@ -19,9 +19,16 @@
  * - Solar radiation
  * - Heat pump
  * - Boiler
+ *
+ * Version History:
+ * - 3.7.0: Initial PHP port from Python v3.6.0.3
+ *          Config UI with all parameters, DB-backed schedules
  */
 
 class EnergySimulator {
+    // Simulator version - update when calculation logic changes
+    const VERSION = '3.7.0';
+
     private $db;
     private $siteId;
     private $scheduler;
@@ -162,6 +169,7 @@ class EnergySimulator {
         // Initialize results
         $results = [
             'meta' => [
+                'simulator_version' => self::VERSION,
                 'start_date' => $startDate,
                 'end_date' => $endDate,
                 'site_id' => $this->siteId,
@@ -804,5 +812,13 @@ class EnergySimulator {
      */
     public function setEquipment($equipment) {
         $this->equipment = array_merge($this->equipment, $equipment);
+    }
+
+    /**
+     * Get simulator version
+     * @return string Version string (e.g., "3.7.0")
+     */
+    public static function getVersion() {
+        return self::VERSION;
     }
 }
