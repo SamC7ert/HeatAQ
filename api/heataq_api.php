@@ -928,7 +928,7 @@ class HeatAQAPI {
 
     private function getHolidayDefinitions() {
         try {
-            // Query without country column in case it doesn't exist in production
+            // Try with 'name' column first
             $stmt = $this->db->query("
                 SELECT id, name, is_moving, fixed_month, fixed_day, easter_offset_days
                 FROM holiday_definitions
@@ -937,12 +937,22 @@ class HeatAQAPI {
             $definitions = $stmt->fetchAll(PDO::FETCH_ASSOC);
             $this->sendResponse(['definitions' => $definitions]);
         } catch (PDOException $e) {
-            // Table might not exist - return empty list with error info
-            $this->sendResponse([
-                'definitions' => [],
-                'error' => 'Holiday definitions table not found or has different structure',
-                'debug' => $e->getMessage()
-            ]);
+            // Try with 'holiday_name' column (production might use different name)
+            try {
+                $stmt = $this->db->query("
+                    SELECT id, holiday_name as name, is_moving, fixed_month, fixed_day, easter_offset_days
+                    FROM holiday_definitions
+                    ORDER BY COALESCE(fixed_month, 3), COALESCE(fixed_day, easter_offset_days + 100)
+                ");
+                $definitions = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                $this->sendResponse(['definitions' => $definitions]);
+            } catch (PDOException $e2) {
+                $this->sendResponse([
+                    'definitions' => [],
+                    'error' => 'Holiday definitions table not found or has different structure',
+                    'debug' => $e2->getMessage()
+                ]);
+            }
         }
     }
 
@@ -959,18 +969,22 @@ class HeatAQAPI {
             $this->sendError('Name is required');
         }
 
+        // Check which column name the table uses
+        $hasNameColumn = $this->columnExists('holiday_definitions', 'name');
+        $nameColumn = $hasNameColumn ? 'name' : 'holiday_name';
+
         if ($id) {
             // Update existing
             $stmt = $this->db->prepare("
                 UPDATE holiday_definitions
-                SET name = ?, is_moving = ?, fixed_month = ?, fixed_day = ?, easter_offset_days = ?
+                SET {$nameColumn} = ?, is_moving = ?, fixed_month = ?, fixed_day = ?, easter_offset_days = ?
                 WHERE id = ?
             ");
             $stmt->execute([$name, $isMoving, $fixedMonth, $fixedDay, $easterOffset, $id]);
         } else {
-            // Insert new (without country column in case it doesn't exist)
+            // Insert new
             $stmt = $this->db->prepare("
-                INSERT INTO holiday_definitions (name, is_moving, fixed_month, fixed_day, easter_offset_days)
+                INSERT INTO holiday_definitions ({$nameColumn}, is_moving, fixed_month, fixed_day, easter_offset_days)
                 VALUES (?, ?, ?, ?, ?)
             ");
             $stmt->execute([$name, $isMoving, $fixedMonth, $fixedDay, $easterOffset]);
@@ -996,6 +1010,8 @@ class HeatAQAPI {
     // ====================================
 
     private function getWeatherStations() {
+        $stationId = $_GET['station_id'] ?? null;
+
         // Query only basic columns that are guaranteed to exist
         $stmt = $this->db->query("
             SELECT station_id, station_name as name, latitude, longitude
@@ -1004,18 +1020,26 @@ class HeatAQAPI {
         ");
         $stations = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Get weather data summary
-        $summaryStmt = $this->db->query("
-            SELECT
-                ws.station_name as station_name,
-                MIN(DATE(wd.timestamp)) as min_date,
-                MAX(DATE(wd.timestamp)) as max_date,
-                COUNT(*) as record_count
-            FROM weather_data wd
-            JOIN weather_stations ws ON wd.station_id = ws.station_id
-            GROUP BY ws.station_id
-            LIMIT 1
-        ");
+        // Get weather data summary (filtered by station if specified)
+        if ($stationId) {
+            $summaryStmt = $this->db->prepare("
+                SELECT
+                    MIN(DATE(timestamp)) as min_date,
+                    MAX(DATE(timestamp)) as max_date,
+                    COUNT(*) as record_count
+                FROM weather_data
+                WHERE station_id = ?
+            ");
+            $summaryStmt->execute([$stationId]);
+        } else {
+            $summaryStmt = $this->db->query("
+                SELECT
+                    MIN(DATE(timestamp)) as min_date,
+                    MAX(DATE(timestamp)) as max_date,
+                    COUNT(*) as record_count
+                FROM weather_data
+            ");
+        }
         $summary = $summaryStmt->fetch(PDO::FETCH_ASSOC);
 
         $this->sendResponse([
@@ -1025,7 +1049,9 @@ class HeatAQAPI {
     }
 
     private function getWeatherYearlyAverages() {
-        $stmt = $this->db->query("
+        $stationId = $_GET['station_id'] ?? null;
+
+        $sql = "
             SELECT
                 YEAR(timestamp) as year,
                 ROUND(AVG(air_temperature), 1) as avg_temp,
@@ -1036,9 +1062,18 @@ class HeatAQAPI {
                 ROUND(SUM(solar_irradiance) / 1000, 0) as total_solar_kwh_m2,
                 COUNT(*) as hours_count
             FROM weather_data
-            GROUP BY YEAR(timestamp)
-            ORDER BY year
-        ");
+        ";
+
+        $params = [];
+        if ($stationId) {
+            $sql .= " WHERE station_id = ?";
+            $params[] = $stationId;
+        }
+
+        $sql .= " GROUP BY YEAR(timestamp) ORDER BY year";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
         $yearly = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $this->sendResponse([
@@ -1047,8 +1082,9 @@ class HeatAQAPI {
     }
 
     private function getWeatherMonthlyAverages() {
-        // Get averages across all years by month
-        $stmt = $this->db->query("
+        $stationId = $_GET['station_id'] ?? null;
+
+        $sql = "
             SELECT
                 MONTH(timestamp) as month,
                 ROUND(AVG(air_temperature), 1) as avg_temp,
@@ -1059,9 +1095,18 @@ class HeatAQAPI {
                 ROUND(AVG(solar_irradiance), 0) as avg_solar_w_m2,
                 COUNT(*) as hours_count
             FROM weather_data
-            GROUP BY MONTH(timestamp)
-            ORDER BY month
-        ");
+        ";
+
+        $params = [];
+        if ($stationId) {
+            $sql .= " WHERE station_id = ?";
+            $params[] = $stationId;
+        }
+
+        $sql .= " GROUP BY MONTH(timestamp) ORDER BY month";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
         $monthly = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         // Add month names

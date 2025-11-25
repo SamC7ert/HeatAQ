@@ -257,26 +257,61 @@ const AdminModule = {
     // WEATHER STATIONS
     // ========================================
 
+    selectedStationId: '',
+
     loadWeatherStations: async function() {
         try {
-            // Load stations, yearly, and monthly data in parallel
-            const [stationsRes, yearlyRes, monthlyRes] = await Promise.all([
-                fetch('./api/heataq_api.php?action=get_weather_stations'),
-                fetch('./api/heataq_api.php?action=get_weather_yearly_averages'),
-                fetch('./api/heataq_api.php?action=get_weather_monthly_averages')
-            ]);
-
+            // Load stations first
+            const stationsRes = await fetch('./api/heataq_api.php?action=get_weather_stations');
             const stationsData = await stationsRes.json();
-            const yearlyData = await yearlyRes.json();
-            const monthlyData = await monthlyRes.json();
 
             if (stationsData.stations) {
                 this.weatherStations = stationsData.stations;
                 this.renderWeatherStations();
+                this.populateStationDropdown();
             }
 
-            if (stationsData.summary) {
-                this.renderWeatherSummary(stationsData.summary);
+            // Load data for selected station (or all)
+            await this.loadWeatherData();
+        } catch (err) {
+            console.error('Failed to load weather stations:', err);
+            document.getElementById('weather-stations-list').innerHTML =
+                '<p class="error">Failed to load weather stations</p>';
+        }
+    },
+
+    populateStationDropdown: function() {
+        const select = document.getElementById('weather-station-select');
+        if (!select) return;
+
+        select.innerHTML = '<option value="">-- All Stations --</option>' +
+            this.weatherStations.map(s =>
+                `<option value="${s.station_id}">${s.name}</option>`
+            ).join('');
+    },
+
+    onStationChange: async function() {
+        const select = document.getElementById('weather-station-select');
+        this.selectedStationId = select ? select.value : '';
+        await this.loadWeatherData();
+    },
+
+    loadWeatherData: async function() {
+        const stationParam = this.selectedStationId ? `&station_id=${this.selectedStationId}` : '';
+
+        try {
+            const [summaryRes, yearlyRes, monthlyRes] = await Promise.all([
+                fetch(`./api/heataq_api.php?action=get_weather_stations${stationParam}`),
+                fetch(`./api/heataq_api.php?action=get_weather_yearly_averages${stationParam}`),
+                fetch(`./api/heataq_api.php?action=get_weather_monthly_averages${stationParam}`)
+            ]);
+
+            const summaryData = await summaryRes.json();
+            const yearlyData = await yearlyRes.json();
+            const monthlyData = await monthlyRes.json();
+
+            if (summaryData.summary) {
+                this.renderWeatherSummary(summaryData.summary);
             }
 
             if (yearlyData.yearly_averages) {
@@ -287,9 +322,7 @@ const AdminModule = {
                 this.renderMonthlyAverages(monthlyData.monthly_averages);
             }
         } catch (err) {
-            console.error('Failed to load weather stations:', err);
-            document.getElementById('weather-stations-list').innerHTML =
-                '<p class="error">Failed to load weather stations</p>';
+            console.error('Failed to load weather data:', err);
         }
     },
 
@@ -322,13 +355,19 @@ const AdminModule = {
     },
 
     renderWeatherSummary: function(summary) {
-        document.getElementById('weather-station-name').textContent = summary.station_name || '-';
-        document.getElementById('weather-date-range').textContent =
-            summary.min_date && summary.max_date
+        const dateRange = document.getElementById('weather-date-range');
+        const recordCount = document.getElementById('weather-record-count');
+
+        if (dateRange) {
+            dateRange.textContent = summary.min_date && summary.max_date
                 ? `${summary.min_date} to ${summary.max_date}`
                 : '-';
-        document.getElementById('weather-record-count').textContent =
-            summary.record_count ? summary.record_count.toLocaleString() : '-';
+        }
+        if (recordCount) {
+            recordCount.textContent = summary.record_count
+                ? summary.record_count.toLocaleString()
+                : '-';
+        }
     },
 
     addWeatherStation: function() {
