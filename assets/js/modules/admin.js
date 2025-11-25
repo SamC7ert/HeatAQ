@@ -404,7 +404,6 @@ const AdminModule = {
                 <th>Max °C</th>
                 <th>Wind m/s</th>
                 <th>Humidity %</th>
-                <th>Solar kWh/m²</th>
             </tr></thead><tbody>`;
 
         data.forEach(row => {
@@ -415,7 +414,6 @@ const AdminModule = {
                 <td>${row.max_temp}</td>
                 <td>${row.avg_wind}</td>
                 <td>${row.avg_humidity}</td>
-                <td>${row.total_solar_kwh_m2?.toLocaleString() || '-'}</td>
             </tr>`;
         });
 
@@ -440,7 +438,6 @@ const AdminModule = {
                 <th>Max °C</th>
                 <th>Wind m/s</th>
                 <th>Humidity %</th>
-                <th>Solar W/m²</th>
             </tr></thead><tbody>`;
 
         data.forEach(row => {
@@ -451,7 +448,6 @@ const AdminModule = {
                 <td>${row.max_temp}</td>
                 <td>${row.avg_wind}</td>
                 <td>${row.avg_humidity}</td>
-                <td>${row.avg_solar_w_m2}</td>
             </tr>`;
         });
 

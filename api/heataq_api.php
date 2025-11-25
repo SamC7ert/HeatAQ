@@ -1102,12 +1102,11 @@ class HeatAQAPI {
         $sql = "
             SELECT
                 YEAR(timestamp) as year,
-                ROUND(AVG(air_temperature), 1) as avg_temp,
-                ROUND(MIN(air_temperature), 1) as min_temp,
-                ROUND(MAX(air_temperature), 1) as max_temp,
+                ROUND(AVG(temperature), 1) as avg_temp,
+                ROUND(MIN(temperature), 1) as min_temp,
+                ROUND(MAX(temperature), 1) as max_temp,
                 ROUND(AVG(wind_speed), 1) as avg_wind,
                 ROUND(AVG(humidity), 0) as avg_humidity,
-                ROUND(SUM(solar_irradiance) / 1000, 0) as total_solar_kwh_m2,
                 COUNT(*) as hours_count
             FROM weather_data
         ";
@@ -1135,12 +1134,11 @@ class HeatAQAPI {
         $sql = "
             SELECT
                 MONTH(timestamp) as month,
-                ROUND(AVG(air_temperature), 1) as avg_temp,
-                ROUND(MIN(air_temperature), 1) as min_temp,
-                ROUND(MAX(air_temperature), 1) as max_temp,
+                ROUND(AVG(temperature), 1) as avg_temp,
+                ROUND(MIN(temperature), 1) as min_temp,
+                ROUND(MAX(temperature), 1) as max_temp,
                 ROUND(AVG(wind_speed), 1) as avg_wind,
                 ROUND(AVG(humidity), 0) as avg_humidity,
-                ROUND(AVG(solar_irradiance), 0) as avg_solar_w_m2,
                 COUNT(*) as hours_count
             FROM weather_data
         ";
