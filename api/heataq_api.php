@@ -1082,10 +1082,10 @@ class HeatAQAPI {
     // ====================================
 
     private function getProjectConfigs() {
-        $query = "SELECT template_id, name, description, config_json, is_active, created_at, updated_at
+        $query = "SELECT template_id, template_name as name, description, config_json, is_active, created_at, updated_at
                   FROM config_templates";
         $query = $this->addSiteFilter($query);
-        $query .= " ORDER BY name";
+        $query .= " ORDER BY template_name";
 
         $params = [];
         $this->bindSiteParam($params);
@@ -1113,7 +1113,7 @@ class HeatAQAPI {
         }
 
         $stmt = $this->db->prepare("
-            SELECT template_id, name, description, config_json, is_active
+            SELECT template_id, template_name as name, description, config_json, is_active
             FROM config_templates
             WHERE template_id = ?
         ");
@@ -1147,14 +1147,14 @@ class HeatAQAPI {
             // Update existing
             $stmt = $this->db->prepare("
                 UPDATE config_templates
-                SET name = ?, description = ?, config_json = ?, updated_at = NOW()
+                SET template_name = ?, description = ?, config_json = ?, updated_at = NOW()
                 WHERE template_id = ?
             ");
             $stmt->execute([$name, $description, $configJson, $configId]);
         } else {
             // Insert new
             $stmt = $this->db->prepare("
-                INSERT INTO config_templates (site_id, name, description, config_json, is_active)
+                INSERT INTO config_templates (site_id, template_name, description, config_json, is_active)
                 VALUES (?, ?, ?, ?, 1)
             ");
             $stmt->execute([$this->siteId, $name, $description, $configJson]);

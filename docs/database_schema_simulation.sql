@@ -170,7 +170,7 @@ CREATE TABLE IF NOT EXISTS pool_configurations (
 CREATE TABLE IF NOT EXISTS config_templates (
     template_id INT AUTO_INCREMENT PRIMARY KEY,
     site_id VARCHAR(50) NOT NULL,
-    name VARCHAR(255) NOT NULL,
+    template_name VARCHAR(255) NOT NULL,
     description TEXT,
 
     -- Equipment configuration (JSON)
@@ -197,7 +197,7 @@ CREATE TABLE IF NOT EXISTS config_templates (
 -- ============================================
 -- EXAMPLE: Insert default equipment configuration
 -- ============================================
--- INSERT INTO config_templates (site_id, name, config_json) VALUES (
+-- INSERT INTO config_templates (site_id, template_name, config_json) VALUES (
 --     'arendal_aquatic',
 --     'Default Equipment',
 --     '{
