@@ -693,37 +693,35 @@ class EnergySimulator {
 
     /**
      * Calculate conduction heat loss to ground
+     * Always use calculation - lookup table was unreliable
      */
     private function calculateConductionLoss($waterTemp) {
-        // Try to use lookup table
-        try {
-            $stmt = $this->db->prepare("
-                SELECT Q_total_kW FROM ground_thermal_lookup
-                ORDER BY year DESC LIMIT 1
-            ");
-            $stmt->execute();
-            $row = $stmt->fetch();
-            if ($row) {
-                return (float) $row['Q_total_kW'];
-            }
-        } catch (Exception $e) {
-            // Use calculation fallback
-        }
-
-        // Simplified calculation
         // Ground temperature assumed ~10°C year-round in Norway
         $groundTemp = 10;
         $tempDiff = $waterTemp - $groundTemp;
 
         // U-value for pool walls/floor (W/m²·K)
+        // Typical insulated pool: 0.3-0.5, uninsulated: 1.0-2.0
         $uValue = 0.5;
 
-        // Use pool surface area for bottom + perimeter × depth for sides
+        // Calculate areas
         $bottomArea = $this->poolConfig['area_m2'];
-        $sideArea = $this->poolConfig['perimeter_m'] * $this->poolConfig['depth_m'];
+        $perimeter = $this->poolConfig['perimeter_m'] ?? $this->calculatePerimeter();
+        $sideArea = $perimeter * $this->poolConfig['depth_m'];
         $totalArea = $bottomArea + $sideArea;
 
         return $uValue * $totalArea * $tempDiff / 1000; // kW
+    }
+
+    /**
+     * Calculate perimeter from area (assuming rectangular pool ~2:1 ratio)
+     */
+    private function calculatePerimeter() {
+        $area = $this->poolConfig['area_m2'];
+        // Assume length = 2 * width, so area = 2*w^2, w = sqrt(area/2)
+        $width = sqrt($area / 2);
+        $length = 2 * $width;
+        return 2 * ($length + $width);
     }
 
     /**
