@@ -261,12 +261,42 @@ body {
     to { transform: rotate(360deg); }
 }
 
+/* Inline Edit */
+.inline-edit {
+    padding: 4px 8px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    font-size: 13px;
+    width: 100%;
+}
+
+.inline-edit:hover {
+    border-color: var(--neutral-300);
+    background: var(--neutral-100);
+}
+
+.inline-edit:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: white;
+}
+
+select.inline-edit {
+    width: auto;
+    min-width: 80px;
+}
+
+input[type="date"].inline-edit {
+    width: auto;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .content-wrapper {
         padding: 20px;
     }
-    
+
     .form-row {
         flex-direction: column;
     }

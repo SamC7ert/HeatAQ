@@ -37,31 +37,87 @@ const AdminModule = {
         if (!container) return;
 
         if (this.holidayDefinitions.length === 0) {
-            container.innerHTML = '<p class="text-muted">No holiday definitions</p>';
+            container.innerHTML = '<p class="text-muted">No exception days defined</p>';
             return;
         }
 
         let html = '<table class="data-table compact"><thead><tr>' +
-            '<th>Name</th><th>Type</th><th>Date/Offset</th><th>Actions</th>' +
+            '<th>Name</th><th>Type</th><th>Date/Offset</th><th></th>' +
             '</tr></thead><tbody>';
 
         this.holidayDefinitions.forEach(def => {
-            const dateInfo = def.is_moving == 1
-                ? `Easter ${def.easter_offset_days >= 0 ? '+' : ''}${def.easter_offset_days} days`
-                : `${String(def.fixed_day).padStart(2,'0')}/${String(def.fixed_month).padStart(2,'0')}`;
+            const isMoving = def.is_moving == 1;
+            const dateValue = isMoving
+                ? (def.easter_offset_days || 0)
+                : `${String(def.fixed_month || 1).padStart(2,'0')}-${String(def.fixed_day || 1).padStart(2,'0')}`;
 
-            html += `<tr>
-                <td>${def.name}</td>
-                <td>${def.is_moving == 1 ? 'Moving' : 'Fixed'}</td>
-                <td>${dateInfo}</td>
-                <td>
-                    <button class="btn btn-xs btn-danger" onclick="app.admin.deleteHolidayDefinition('${def.id}')">Delete</button>
-                </td>
+            html += `<tr data-id="${def.id}">
+                <td><input type="text" class="inline-edit" value="${def.name || ''}"
+                    onchange="app.admin.updateHolidayField('${def.id}', 'name', this.value)"></td>
+                <td><select class="inline-edit" onchange="app.admin.updateHolidayType('${def.id}', this.value)">
+                    <option value="fixed" ${!isMoving ? 'selected' : ''}>Fixed</option>
+                    <option value="moving" ${isMoving ? 'selected' : ''}>Moving</option>
+                </select></td>
+                <td>${isMoving
+                    ? `<input type="number" class="inline-edit" style="width:60px" value="${def.easter_offset_days || 0}"
+                        onchange="app.admin.updateHolidayField('${def.id}', 'easter_offset_days', this.value)"> days from Easter`
+                    : `<input type="date" class="inline-edit" value="2000-${dateValue}"
+                        onchange="app.admin.updateHolidayDate('${def.id}', this.value)">`
+                }</td>
+                <td><button class="btn btn-xs btn-danger" onclick="app.admin.deleteHolidayDefinition('${def.id}')" title="Delete">×</button></td>
             </tr>`;
         });
 
         html += '</tbody></table>';
         container.innerHTML = html;
+    },
+
+    updateHolidayField: async function(id, field, value) {
+        const def = this.holidayDefinitions.find(d => d.id === id);
+        if (!def) return;
+        def[field] = value;
+        await this.saveHolidayInline(def);
+    },
+
+    updateHolidayType: async function(id, type) {
+        const def = this.holidayDefinitions.find(d => d.id === id);
+        if (!def) return;
+        def.is_moving = type === 'moving' ? 1 : 0;
+        await this.saveHolidayInline(def);
+        this.renderHolidayDefinitions(); // Re-render to show correct date field
+    },
+
+    updateHolidayDate: async function(id, dateValue) {
+        const def = this.holidayDefinitions.find(d => d.id === id);
+        if (!def) return;
+        // dateValue is like "2000-05-17", extract month and day
+        const parts = dateValue.split('-');
+        def.fixed_month = parseInt(parts[1]);
+        def.fixed_day = parseInt(parts[2]);
+        await this.saveHolidayInline(def);
+    },
+
+    saveHolidayInline: async function(def) {
+        try {
+            const response = await fetch('./api/heataq_api.php?action=save_holiday_definition', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: def.id,
+                    name: def.name,
+                    is_moving: def.is_moving,
+                    fixed_month: def.fixed_month,
+                    fixed_day: def.fixed_day,
+                    easter_offset_days: def.easter_offset_days
+                })
+            });
+            const result = await response.json();
+            if (!result.success) {
+                console.error('Failed to save:', result.error);
+            }
+        } catch (err) {
+            console.error('Failed to save:', err);
+        }
     },
 
     addHolidayDefinition: function() {
@@ -203,7 +259,11 @@ const AdminModule = {
             if (result.success) {
                 this.loadHolidayDefinitions();
             } else {
-                alert('Failed to delete: ' + (result.error || 'Unknown error'));
+                let msg = result.error || 'Unknown error';
+                if (msg.includes('foreign key') || msg.includes('constraint')) {
+                    msg = 'Cannot delete: This exception day is used in calendar rules.\nRemove it from calendar rules first.';
+                }
+                alert(msg);
             }
         } catch (err) {
             console.error('Failed to delete exception day:', err);

@@ -1024,10 +1024,13 @@ class HeatAQAPI {
             $this->sendError('Invalid ID');
         }
 
-        $stmt = $this->db->prepare("DELETE FROM holiday_definitions WHERE holiday_code = ?");
-        $stmt->execute([$id]);
-
-        $this->sendResponse(['success' => true]);
+        try {
+            $stmt = $this->db->prepare("DELETE FROM holiday_definitions WHERE holiday_code = ?");
+            $stmt->execute([$id]);
+            $this->sendResponse(['success' => true]);
+        } catch (PDOException $e) {
+            $this->sendError($e->getMessage());
+        }
     }
 
     // ====================================
