@@ -1326,14 +1326,14 @@ class HeatAQAPI {
 
     private function getProjectConfigs() {
         try {
-            // Only show configs for the current project (site_id = project_code)
-            if ($this->siteId) {
+            // Only show configs for the current project
+            if ($this->projectId) {
                 $query = "SELECT template_id, template_name as name, json_config, created_at, updated_at
                           FROM config_templates
-                          WHERE site_id = :site_id
+                          WHERE project_id = :project_id
                           ORDER BY template_name";
                 $stmt = $this->db->prepare($query);
-                $stmt->execute([':site_id' => $this->siteId]);
+                $stmt->execute([':project_id' => $this->projectId]);
             } else {
                 $query = "SELECT template_id, template_name as name, json_config, created_at, updated_at
                           FROM config_templates
@@ -1352,13 +1352,13 @@ class HeatAQAPI {
         } catch (PDOException $e) {
             // Fallback: json_config column might not exist
             try {
-                if ($this->siteId) {
+                if ($this->projectId) {
                     $query = "SELECT template_id, template_name as name, created_at, updated_at
                               FROM config_templates
-                              WHERE site_id = :site_id
+                              WHERE project_id = :project_id
                               ORDER BY template_name";
                     $stmt = $this->db->prepare($query);
-                    $stmt->execute([':site_id' => $this->siteId]);
+                    $stmt->execute([':project_id' => $this->projectId]);
                 } else {
                     $query = "SELECT template_id, template_name as name, created_at, updated_at
                               FROM config_templates
@@ -1456,16 +1456,16 @@ class HeatAQAPI {
             // Insert new
             if ($hasConfigJson) {
                 $stmt = $this->db->prepare("
-                    INSERT INTO config_templates (site_id, template_name, json_config)
+                    INSERT INTO config_templates (project_id, template_name, json_config)
                     VALUES (?, ?, ?)
                 ");
-                $stmt->execute([$this->siteId, $name, $configJson]);
+                $stmt->execute([$this->projectId, $name, $configJson]);
             } else {
                 $stmt = $this->db->prepare("
-                    INSERT INTO config_templates (site_id, template_name)
+                    INSERT INTO config_templates (project_id, template_name)
                     VALUES (?, ?)
                 ");
-                $stmt->execute([$this->siteId, $name]);
+                $stmt->execute([$this->projectId, $name]);
             }
             $configId = $this->db->lastInsertId();
         }
