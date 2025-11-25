@@ -78,8 +78,10 @@ const navigation = {
                 break;
                 
             case 'simulations':
-                // TODO: Load simulations
-                console.log('Loading simulations...');
+                // Initialize simulations module
+                if (typeof SimulationsModule !== 'undefined') {
+                    SimulationsModule.init();
+                }
                 break;
         }
     },

@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="./assets/css/components/sidebar.css">
     <link rel="stylesheet" href="./assets/css/components/schedules.css">
     <link rel="stylesheet" href="./assets/css/components/calendar.css">
+    <link rel="stylesheet" href="./assets/css/components/simulations.css">
     <style>
         /* Logout button styles */
         .user-info {
@@ -198,10 +199,49 @@
                 
                 <!-- Simulations Section -->
                 <section id="simulations-section" class="content-section">
-                    <h2>Run Simulations</h2>
-                    <div class="placeholder-message">
-                        <h3>Run Simulations</h3>
-                        <p>Execute pool energy simulations</p>
+                    <h2>Energy Simulations</h2>
+
+                    <!-- New Simulation Form -->
+                    <div class="simulation-form card">
+                        <h3>Run New Simulation</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="sim-scenario-name">Scenario Name</label>
+                                <input type="text" id="sim-scenario-name" placeholder="e.g., Winter 2023 Analysis">
+                            </div>
+                            <div class="form-group">
+                                <label for="sim-start-date">Start Date</label>
+                                <input type="date" id="sim-start-date">
+                            </div>
+                            <div class="form-group">
+                                <label for="sim-end-date">End Date</label>
+                                <input type="date" id="sim-end-date">
+                            </div>
+                            <div class="form-group full-width">
+                                <label for="sim-description">Description (optional)</label>
+                                <textarea id="sim-description" rows="2" placeholder="Notes about this simulation..."></textarea>
+                            </div>
+                        </div>
+                        <div class="form-info">
+                            <span id="weather-range-info" class="text-muted">Loading weather data range...</span>
+                        </div>
+                        <div class="form-actions">
+                            <button id="run-simulation-btn" class="btn btn-primary" onclick="SimulationsModule.startSimulation()">
+                                Run Simulation
+                            </button>
+                        </div>
+                        <div id="simulation-progress" class="simulation-progress" style="display: none;"></div>
+                    </div>
+
+                    <!-- Simulation Detail View -->
+                    <div id="simulation-detail" class="simulation-detail card" style="display: none;"></div>
+
+                    <!-- Previous Runs List -->
+                    <div class="simulation-runs card">
+                        <h3>Previous Simulation Runs</h3>
+                        <div id="simulation-runs-list" class="runs-list">
+                            <p class="loading">Loading simulation runs...</p>
+                        </div>
                     </div>
                 </section>
             </div>
@@ -250,6 +290,7 @@
     <script src="./assets/js/modules/navigation.js"></script>
     <script src="./assets/js/modules/schedules.js"></script>
     <script src="./assets/js/modules/calendar.js"></script>
+    <script src="./assets/js/modules/simulations.js"></script>
     <script src="./assets/js/app.js"></script>
 </body>
 </html>
