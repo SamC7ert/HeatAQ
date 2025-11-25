@@ -143,11 +143,11 @@
                         </div>
                     </div>
 
-                    <!-- Two-Column Layout: Calendar | Day Schedules -->
-                    <div class="schedule-grid">
+                    <!-- Three-Column Layout: Calendar | Week | Day -->
+                    <div class="schedule-grid-3">
                         <!-- Left: Calendar Rules -->
                         <div class="card schedule-calendar">
-                            <h3>Calendar Rules</h3>
+                            <h3>Calendar</h3>
 
                             <!-- Date Ranges -->
                             <div class="calendar-section">
@@ -155,42 +155,37 @@
                                 <div id="date-ranges-container">
                                     <!-- Date ranges will be loaded here -->
                                 </div>
-                                <button class="btn btn-sm btn-secondary" onclick="app.calendar.addDateRange()">+ Add Date Range</button>
+                                <button class="btn btn-sm btn-secondary" onclick="app.calendar.addDateRange()">+ Add Range</button>
                             </div>
 
                             <!-- Exception Days -->
                             <div class="calendar-section">
-                                <h4>Exception Days (Holidays)</h4>
+                                <h4>Exception Days</h4>
                                 <div id="exception-days-container">
                                     <!-- Exception days will be loaded here -->
                                 </div>
                                 <button class="btn btn-sm btn-secondary" onclick="app.calendar.addExceptionDay()">+ Add Exception</button>
                             </div>
+                        </div>
 
-                            <!-- Week Schedule Mapping -->
-                            <div class="calendar-section">
-                                <h4>Week Schedule</h4>
-                                <table class="data-table compact">
-                                    <tr>
-                                        <td>Base Week</td>
-                                        <td>
-                                            <select id="base-week-schedule" class="form-control-sm">
-                                                <option value="1">Normal Week</option>
-                                            </select>
-                                        </td>
-                                    </tr>
-                                </table>
+                        <!-- Middle: Week Schedules -->
+                        <div class="card schedule-week">
+                            <h3>Week Schedules</h3>
+                            <p class="text-muted">Map days of week to day schedules</p>
+                            <div id="week-schedules-container">
+                                <!-- Week schedules will be loaded here -->
                             </div>
+                            <button class="btn btn-sm btn-secondary" onclick="app.schedules.addWeekSchedule()">+ Add Week</button>
                         </div>
 
                         <!-- Right: Day Schedules -->
                         <div class="card schedule-days">
                             <h3>Day Schedules</h3>
-                            <p class="text-muted">Define opening hours for different day types</p>
+                            <p class="text-muted">Opening hours per day type</p>
                             <div id="day-schedules-container">
                                 <!-- Day schedules will be loaded here -->
                             </div>
-                            <button class="btn btn-sm btn-secondary" onclick="app.schedules.addDaySchedule()">+ Add Day Schedule</button>
+                            <button class="btn btn-sm btn-secondary" onclick="app.schedules.addDaySchedule()">+ Add Day</button>
                         </div>
                     </div>
                 </section>
