@@ -100,20 +100,24 @@ class EnergySimulator {
      * Load equipment configuration from database
      */
     private function loadEquipmentConfig() {
-        // Try to load from config_templates
-        $stmt = $this->db->prepare("
-            SELECT config_json FROM config_templates
-            WHERE site_id = ?
-            LIMIT 1
-        ");
-        $stmt->execute([$this->siteId]);
-        $row = $stmt->fetch();
+        // Try to load from config_templates (may not exist yet)
+        try {
+            $stmt = $this->db->prepare("
+                SELECT config_json FROM config_templates
+                WHERE site_id = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$this->siteId]);
+            $row = $stmt->fetch();
 
-        if ($row && $row['config_json']) {
-            $config = json_decode($row['config_json'], true);
-            if ($config) {
-                return $config;
+            if ($row && $row['config_json']) {
+                $config = json_decode($row['config_json'], true);
+                if ($config) {
+                    return $config;
+                }
             }
+        } catch (Exception $e) {
+            // Table or column doesn't exist yet, use defaults
         }
 
         // Default equipment configuration

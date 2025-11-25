@@ -88,7 +88,6 @@ const app = {
                     
                 case 'calendar':
                     await app.calendar.loadCalendarRules(app.schedules.currentTemplate);
-                    await app.calendar.loadExceptionDays(app.schedules.currentTemplate);
                     break;
             }
         },
