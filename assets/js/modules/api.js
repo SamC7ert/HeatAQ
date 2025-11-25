@@ -46,18 +46,16 @@ const api = {
                     ...data
                 })
             });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
+
+            // Always try to read the response body for error details
             const result = await response.json();
-            
-            if (result.error) {
-                console.error('API Error:', result.error);
-                throw new Error(result.error);
+
+            if (!response.ok || result.error) {
+                const errorMsg = result.error || `HTTP error ${response.status}`;
+                console.error('API Error:', errorMsg);
+                throw new Error(errorMsg);
             }
-            
+
             return result;
         } catch (error) {
             console.error(`API POST failed for ${action}:`, error);
@@ -78,6 +76,10 @@ const api = {
         async save(data) {
             // Creates new or updates existing (based on template_id presence)
             return api.post('save_template', data);
+        },
+
+        async delete(templateId) {
+            return api.post('delete_template', { template_id: templateId });
         }
     },
 

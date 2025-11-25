@@ -9,7 +9,8 @@ const schedules = {
     selectedWeekSchedule: null,
     
     async init() {
-        // Load initial template
+        // Load templates list first, then load the selected template
+        await this.loadTemplatesSelector();
         await this.loadTemplate();
     },
     
@@ -368,7 +369,10 @@ const schedules = {
                     <tbody id="week-schedule-tbody">
                     </tbody>
                 </table>
-                <button class="btn btn-success btn-sm" onclick="app.schedules.saveWeekSchedule()">Save Week</button>
+                <div style="margin-top: 10px; display: flex; gap: 5px;">
+                    <button class="btn btn-success btn-sm" onclick="app.schedules.saveWeekSchedule()">Save</button>
+                    <button class="btn btn-danger btn-sm" onclick="app.schedules.deleteWeekSchedule()" style="margin-left: auto;">Delete</button>
+                </div>
             </div>
 
             <hr style="margin: 15px 0;" />
@@ -678,6 +682,32 @@ const schedules = {
         }
     },
 
+    async deleteWeekSchedule() {
+        if (!this.selectedWeekSchedule) {
+            api.utils.showError('No week schedule selected');
+            return;
+        }
+
+        const name = this.selectedWeekSchedule.name;
+        if (!confirm(`Delete week schedule "${name}"?\n\nThis cannot be undone.`)) {
+            return;
+        }
+
+        try {
+            await api.weekSchedules.delete(this.selectedWeekSchedule.week_schedule_id);
+            api.utils.showSuccess('Week schedule deleted');
+            this.selectedWeekSchedule = null;
+            await this.loadWeekSchedules();
+            // Also refresh calendar
+            if (app.calendar) {
+                app.calendar.weekSchedules = this.weekSchedules;
+                app.calendar.renderDateRanges();
+            }
+        } catch (err) {
+            api.utils.showError('Failed to delete: ' + err.message);
+        }
+    },
+
     createTemplate() {
         console.log('Create new template');
         api.utils.showError('Template creation not yet implemented');
@@ -695,8 +725,34 @@ const schedules = {
     },
 
     async saveOHC() {
-        console.log('Save OHC:', this.currentTemplate);
-        api.utils.showSuccess('Schedule saved');
+        // OHC saves are done automatically through individual operations
+        // This just confirms the current state
+        api.utils.showSuccess('All changes saved');
+    },
+
+    async deleteOHC() {
+        if (this.currentTemplate == 1) {
+            api.utils.showError('Cannot delete the default template');
+            return;
+        }
+
+        if (!confirm('Delete this template and all its calendar rules? This cannot be undone.')) {
+            return;
+        }
+
+        try {
+            await api.templates.delete(this.currentTemplate);
+            api.utils.showSuccess('Template deleted');
+            // Reload templates and select first one
+            await this.loadTemplatesSelector();
+            const selector = document.getElementById('ohc-selector');
+            if (selector) {
+                selector.value = 1;
+            }
+            await this.loadTemplate();
+        } catch (err) {
+            api.utils.showError('Failed to delete: ' + err.message);
+        }
     },
 
     toggleNewOHCForm() {
