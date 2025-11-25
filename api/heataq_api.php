@@ -269,6 +269,10 @@ class HeatAQAPI {
                     $this->saveUser();
                     break;
 
+                case 'get_projects':
+                    $this->getProjects();
+                    break;
+
                 // PROJECT CONFIGURATION
                 case 'get_project_configs':
                     $this->getProjectConfigs();
@@ -1010,14 +1014,37 @@ class HeatAQAPI {
     private function getUsers() {
         $stmt = $this->db->query("
             SELECT u.user_id, u.email, u.name, u.is_active,
-                   up.role
+                   MAX(up.role) as role,
+                   GROUP_CONCAT(DISTINCT p.project_name SEPARATOR ', ') as project_names,
+                   GROUP_CONCAT(DISTINCT up.project_id) as project_ids_str
             FROM users u
             LEFT JOIN user_projects up ON u.user_id = up.user_id
+            LEFT JOIN projects p ON up.project_id = p.project_id
+            GROUP BY u.user_id, u.email, u.name, u.is_active
             ORDER BY u.email
         ");
         $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+        // Convert project_ids_str to array
+        foreach ($users as &$user) {
+            $user['project_ids'] = $user['project_ids_str']
+                ? array_map('intval', explode(',', $user['project_ids_str']))
+                : [];
+            unset($user['project_ids_str']);
+        }
+
         $this->sendResponse(['users' => $users]);
+    }
+
+    private function getProjects() {
+        $stmt = $this->db->query("
+            SELECT project_id, project_name
+            FROM projects
+            ORDER BY project_name
+        ");
+        $projects = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->sendResponse(['projects' => $projects]);
     }
 
     private function saveUser() {
@@ -1025,12 +1052,18 @@ class HeatAQAPI {
         $userId = $input['user_id'] ?? null;
         $email = $input['email'] ?? '';
         $name = $input['name'] ?? '';
-        $role = $input['role'] ?? 'viewer';
+        $role = $input['role'] ?? 'operator';
+        $projectIds = $input['project_ids'] ?? [];
         $isActive = $input['is_active'] ?? 1;
         $password = $input['password'] ?? null;
 
         if (empty($email)) {
             $this->sendError('Email is required');
+        }
+
+        // Validate role - only admin or operator allowed
+        if (!in_array($role, ['admin', 'operator'])) {
+            $role = 'operator';
         }
 
         if ($userId) {
@@ -1040,11 +1073,31 @@ class HeatAQAPI {
             ");
             $stmt->execute([$name, $isActive, $userId]);
 
-            // Update role in user_projects
-            $stmt = $this->db->prepare("
-                UPDATE user_projects SET role = ? WHERE user_id = ?
-            ");
-            $stmt->execute([$role, $userId]);
+            // Clear existing project assignments
+            $stmt = $this->db->prepare("DELETE FROM user_projects WHERE user_id = ?");
+            $stmt->execute([$userId]);
+
+            // Add new project assignments
+            if ($role === 'admin') {
+                // Admins get access to all projects
+                $allProjects = $this->db->query("SELECT project_id FROM projects")->fetchAll(PDO::FETCH_COLUMN);
+                foreach ($allProjects as $projectId) {
+                    $stmt = $this->db->prepare("
+                        INSERT INTO user_projects (user_id, project_id, role)
+                        VALUES (?, ?, ?)
+                    ");
+                    $stmt->execute([$userId, $projectId, $role]);
+                }
+            } else {
+                // Operators get access to selected projects
+                foreach ($projectIds as $projectId) {
+                    $stmt = $this->db->prepare("
+                        INSERT INTO user_projects (user_id, project_id, role)
+                        VALUES (?, ?, ?)
+                    ");
+                    $stmt->execute([$userId, $projectId, $role]);
+                }
+            }
         } else {
             // Create new user
             if (empty($password)) {
@@ -1060,17 +1113,26 @@ class HeatAQAPI {
             $stmt->execute([$email, $passwordHash, $name, $isActive]);
             $userId = $this->db->lastInsertId();
 
-            // Get default project ID
-            $projectStmt = $this->db->query("SELECT project_id FROM projects LIMIT 1");
-            $project = $projectStmt->fetch(PDO::FETCH_ASSOC);
-
-            if ($project) {
-                // Add to user_projects
-                $stmt = $this->db->prepare("
-                    INSERT INTO user_projects (user_id, project_id, role)
-                    VALUES (?, ?, ?)
-                ");
-                $stmt->execute([$userId, $project['project_id'], $role]);
+            // Add project assignments
+            if ($role === 'admin') {
+                // Admins get access to all projects
+                $allProjects = $this->db->query("SELECT project_id FROM projects")->fetchAll(PDO::FETCH_COLUMN);
+                foreach ($allProjects as $projectId) {
+                    $stmt = $this->db->prepare("
+                        INSERT INTO user_projects (user_id, project_id, role)
+                        VALUES (?, ?, ?)
+                    ");
+                    $stmt->execute([$userId, $projectId, $role]);
+                }
+            } else {
+                // Operators get access to selected projects
+                foreach ($projectIds as $projectId) {
+                    $stmt = $this->db->prepare("
+                        INSERT INTO user_projects (user_id, project_id, role)
+                        VALUES (?, ?, ?)
+                    ");
+                    $stmt->execute([$userId, $projectId, $role]);
+                }
             }
         }
 
