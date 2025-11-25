@@ -259,16 +259,32 @@ const AdminModule = {
 
     loadWeatherStations: async function() {
         try {
-            const response = await fetch('./api/heataq_api.php?action=get_weather_stations');
-            const data = await response.json();
+            // Load stations, yearly, and monthly data in parallel
+            const [stationsRes, yearlyRes, monthlyRes] = await Promise.all([
+                fetch('./api/heataq_api.php?action=get_weather_stations'),
+                fetch('./api/heataq_api.php?action=get_weather_yearly_averages'),
+                fetch('./api/heataq_api.php?action=get_weather_monthly_averages')
+            ]);
 
-            if (data.stations) {
-                this.weatherStations = data.stations;
+            const stationsData = await stationsRes.json();
+            const yearlyData = await yearlyRes.json();
+            const monthlyData = await monthlyRes.json();
+
+            if (stationsData.stations) {
+                this.weatherStations = stationsData.stations;
                 this.renderWeatherStations();
             }
 
-            if (data.summary) {
-                this.renderWeatherSummary(data.summary);
+            if (stationsData.summary) {
+                this.renderWeatherSummary(stationsData.summary);
+            }
+
+            if (yearlyData.yearly_averages) {
+                this.renderYearlyAverages(yearlyData.yearly_averages);
+            }
+
+            if (monthlyData.monthly_averages) {
+                this.renderMonthlyAverages(monthlyData.monthly_averages);
             }
         } catch (err) {
             console.error('Failed to load weather stations:', err);
@@ -321,6 +337,78 @@ const AdminModule = {
 
     editWeatherStation: function(stationId) {
         alert('Weather station editing not yet implemented.');
+    },
+
+    renderYearlyAverages: function(data) {
+        const container = document.getElementById('weather-yearly-averages');
+        if (!container) return;
+
+        if (!data || data.length === 0) {
+            container.innerHTML = '<p class="text-muted">No data available</p>';
+            return;
+        }
+
+        let html = `<table class="data-table compact">
+            <thead><tr>
+                <th>Year</th>
+                <th>Avg °C</th>
+                <th>Min °C</th>
+                <th>Max °C</th>
+                <th>Wind m/s</th>
+                <th>Humidity %</th>
+                <th>Solar kWh/m²</th>
+            </tr></thead><tbody>`;
+
+        data.forEach(row => {
+            html += `<tr>
+                <td>${row.year}</td>
+                <td>${row.avg_temp}</td>
+                <td>${row.min_temp}</td>
+                <td>${row.max_temp}</td>
+                <td>${row.avg_wind}</td>
+                <td>${row.avg_humidity}</td>
+                <td>${row.total_solar_kwh_m2?.toLocaleString() || '-'}</td>
+            </tr>`;
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    },
+
+    renderMonthlyAverages: function(data) {
+        const container = document.getElementById('weather-monthly-averages');
+        if (!container) return;
+
+        if (!data || data.length === 0) {
+            container.innerHTML = '<p class="text-muted">No data available</p>';
+            return;
+        }
+
+        let html = `<table class="data-table compact">
+            <thead><tr>
+                <th>Month</th>
+                <th>Avg °C</th>
+                <th>Min °C</th>
+                <th>Max °C</th>
+                <th>Wind m/s</th>
+                <th>Humidity %</th>
+                <th>Solar W/m²</th>
+            </tr></thead><tbody>`;
+
+        data.forEach(row => {
+            html += `<tr>
+                <td>${row.month_name}</td>
+                <td>${row.avg_temp}</td>
+                <td>${row.min_temp}</td>
+                <td>${row.max_temp}</td>
+                <td>${row.avg_wind}</td>
+                <td>${row.avg_humidity}</td>
+                <td>${row.avg_solar_w_m2}</td>
+            </tr>`;
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
     },
 
     // ========================================

@@ -254,6 +254,14 @@ class HeatAQAPI {
                     $this->getWeatherStations();
                     break;
 
+                case 'get_weather_yearly_averages':
+                    $this->getWeatherYearlyAverages();
+                    break;
+
+                case 'get_weather_monthly_averages':
+                    $this->getWeatherMonthlyAverages();
+                    break;
+
                 // ADMIN: Users
                 case 'get_users':
                     if (!$this->canEdit()) {
@@ -1004,6 +1012,58 @@ class HeatAQAPI {
         $this->sendResponse([
             'stations' => $stations,
             'summary' => $summary ?: []
+        ]);
+    }
+
+    private function getWeatherYearlyAverages() {
+        $stmt = $this->db->query("
+            SELECT
+                YEAR(timestamp) as year,
+                ROUND(AVG(air_temperature), 1) as avg_temp,
+                ROUND(MIN(air_temperature), 1) as min_temp,
+                ROUND(MAX(air_temperature), 1) as max_temp,
+                ROUND(AVG(wind_speed), 1) as avg_wind,
+                ROUND(AVG(humidity), 0) as avg_humidity,
+                ROUND(SUM(solar_irradiance) / 1000, 0) as total_solar_kwh_m2,
+                COUNT(*) as hours_count
+            FROM weather_data
+            GROUP BY YEAR(timestamp)
+            ORDER BY year
+        ");
+        $yearly = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->sendResponse([
+            'yearly_averages' => $yearly
+        ]);
+    }
+
+    private function getWeatherMonthlyAverages() {
+        // Get averages across all years by month
+        $stmt = $this->db->query("
+            SELECT
+                MONTH(timestamp) as month,
+                ROUND(AVG(air_temperature), 1) as avg_temp,
+                ROUND(MIN(air_temperature), 1) as min_temp,
+                ROUND(MAX(air_temperature), 1) as max_temp,
+                ROUND(AVG(wind_speed), 1) as avg_wind,
+                ROUND(AVG(humidity), 0) as avg_humidity,
+                ROUND(AVG(solar_irradiance), 0) as avg_solar_w_m2,
+                COUNT(*) as hours_count
+            FROM weather_data
+            GROUP BY MONTH(timestamp)
+            ORDER BY month
+        ");
+        $monthly = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Add month names
+        $monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        foreach ($monthly as &$row) {
+            $row['month_name'] = $monthNames[(int)$row['month']] ?? '';
+        }
+
+        $this->sendResponse([
+            'monthly_averages' => $monthly
         ]);
     }
 
