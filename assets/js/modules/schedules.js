@@ -213,6 +213,12 @@ const schedules = {
                 api.utils.showSuccess('Created: ' + name);
                 nameInput.value = '';
                 await this.loadDaySchedules();
+                // Also refresh week schedules (dropdown options) and calendar
+                this.renderWeekScheduleSelector();
+                if (app.calendar) {
+                    app.calendar.daySchedules = this.daySchedules;
+                    app.calendar.renderExceptionDays();
+                }
                 // Select the new schedule
                 this.selectDaySchedule(result.day_schedule_id);
             }
@@ -220,7 +226,7 @@ const schedules = {
             api.utils.showError('Failed: ' + err.message);
         }
     },
-    
+
     loadDaySchedule() {
         const selector = document.getElementById('day-schedule-selector');
         const scheduleId = parseInt(selector.value);
@@ -280,16 +286,16 @@ const schedules = {
             html = '<div class="alert alert-info">This is a closed day - pool is not operating</div>';
         } else if (periods.length > 0) {
             html = `
-                <table class="table" id="periods-table">
+                <table class="table table-sm" id="periods-table" style="font-size: 0.85rem;">
                     <thead>
                         <tr>
-                            <th>#</th>
-                            <th>Start</th>
-                            <th>End</th>
-                            <th>Target °C</th>
-                            <th>Min °C</th>
-                            <th>Max °C</th>
-                            <th></th>
+                            <th style="width: 25px;">#</th>
+                            <th style="width: 75px;">Start</th>
+                            <th style="width: 75px;">End</th>
+                            <th style="width: 60px;">Target</th>
+                            <th style="width: 55px;">Min</th>
+                            <th style="width: 55px;">Max</th>
+                            <th style="width: 30px;"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -302,13 +308,13 @@ const schedules = {
                 html += `
                     <tr data-index="${index}">
                         <td>${index + 1}</td>
-                        <td><input type="time" class="form-control form-control-sm period-start" value="${period.start_time || '10:00'}" /></td>
-                        <td><input type="time" class="form-control form-control-sm period-end" value="${period.end_time || '20:00'}" /></td>
-                        <td><input type="number" class="form-control form-control-sm period-target" value="${target}" step="0.5" min="20" max="35" /></td>
-                        <td><input type="number" class="form-control form-control-sm period-min" value="${min}" step="0.5" min="20" max="35" /></td>
-                        <td><input type="number" class="form-control form-control-sm period-max" value="${max}" step="0.5" min="20" max="35" /></td>
+                        <td><input type="time" class="form-control form-control-sm period-start" value="${period.start_time || '10:00'}" style="width: 70px; padding: 2px 4px;" /></td>
+                        <td><input type="time" class="form-control form-control-sm period-end" value="${period.end_time || '20:00'}" style="width: 70px; padding: 2px 4px;" /></td>
+                        <td><input type="number" class="form-control form-control-sm period-target" value="${target}" step="0.5" min="20" max="35" style="width: 55px; padding: 2px 4px;" /></td>
+                        <td><input type="number" class="form-control form-control-sm period-min" value="${min}" step="0.5" min="20" max="35" style="width: 50px; padding: 2px 4px;" /></td>
+                        <td><input type="number" class="form-control form-control-sm period-max" value="${max}" step="0.5" min="20" max="35" style="width: 50px; padding: 2px 4px;" /></td>
                         <td>
-                            <button class="btn btn-danger btn-sm" onclick="app.schedules.removePeriod(${index})" title="Remove">×</button>
+                            <button class="btn btn-danger btn-xs" onclick="app.schedules.removePeriod(${index})" title="Remove period" style="padding: 1px 6px;">×</button>
                         </td>
                     </tr>
                 `;
@@ -665,6 +671,12 @@ const schedules = {
             api.utils.showSuccess('Day schedule deleted');
             this.selectedDaySchedule = null;
             await this.loadDaySchedules();
+            // Also refresh week schedules and calendar
+            this.renderWeekScheduleSelector();
+            if (app.calendar) {
+                app.calendar.daySchedules = this.daySchedules;
+                app.calendar.renderExceptionDays();
+            }
         } catch (err) {
             api.utils.showError('Failed to delete: ' + err.message);
         }
@@ -691,24 +703,51 @@ const schedules = {
         api.utils.showSuccess('Schedule saved');
     },
 
-    newOHC() {
-        const name = prompt('Enter name for new Open Hours Calendar:', 'Reference');
-        if (!name) return;
+    toggleNewOHCForm() {
+        const form = document.getElementById('new-ohc-form');
+        if (form) {
+            form.style.display = form.style.display === 'none' ? 'block' : 'none';
+            if (form.style.display === 'block') {
+                document.getElementById('new-ohc-name')?.focus();
+            }
+        }
+    },
 
-        const description = prompt('Enter description (optional):', '');
+    async createOHC() {
+        const nameInput = document.getElementById('new-ohc-name');
+        const descInput = document.getElementById('new-ohc-description');
 
-        api.templates.save({
-            name: name,
-            description: description
-        }).then(result => {
+        const name = nameInput?.value?.trim();
+        const description = descInput?.value?.trim() || '';
+
+        if (!name) {
+            api.utils.showError('Please enter a name');
+            return;
+        }
+
+        try {
+            const result = await api.templates.save({
+                name: name,
+                description: description
+            });
+
             if (result.success) {
                 api.utils.showSuccess('Template created: ' + name);
+                // Clear and hide form
+                nameInput.value = '';
+                descInput.value = '';
+                this.toggleNewOHCForm();
                 // Reload templates selector
-                this.loadTemplatesSelector();
+                await this.loadTemplatesSelector();
             }
-        }).catch(err => {
+        } catch (err) {
             api.utils.showError('Failed to create template: ' + err.message);
-        });
+        }
+    },
+
+    // Legacy method for backwards compatibility
+    newOHC() {
+        this.toggleNewOHCForm();
     },
 
     async loadTemplatesSelector() {
