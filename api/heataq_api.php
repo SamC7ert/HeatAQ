@@ -710,34 +710,22 @@ class HeatAQAPI {
 
         // For updates, just update the day_schedule_id
         if ($exceptionId > 0) {
-            try {
-                if ($dayScheduleId === null) {
-                    // DEBUG v4: Explicitly set NULL
-                    error_log("Executing UPDATE with NULL for exception $exceptionId");
-                    $stmt = $this->db->prepare("
-                        UPDATE calendar_exception_days
-                        SET day_schedule_id = NULL
-                        WHERE id = ?
-                    ");
-                    $stmt->execute([$exceptionId]);
-                    error_log("UPDATE succeeded, rows affected: " . $stmt->rowCount());
-                } else {
-                    $stmt = $this->db->prepare("
-                        UPDATE calendar_exception_days
-                        SET day_schedule_id = ?
-                        WHERE id = ?
-                    ");
-                    $stmt->execute([$dayScheduleId, $exceptionId]);
+            if ($dayScheduleId === null) {
+                // V5: Direct exec with literal NULL
+                $result = $this->db->exec("UPDATE calendar_exception_days SET day_schedule_id = NULL WHERE id = " . (int)$exceptionId);
+                if ($result === false) {
+                    $err = $this->db->errorInfo();
+                    $this->sendError('V5-NULL-FAIL: ' . $err[2]);
                 }
-                $this->sendResponse([
-                    'success' => true,
-                    'exception_id' => $exceptionId,
-                    'debug_version' => 'v4-verbose',
-                    'was_null' => ($dayScheduleId === null)
-                ]);
-            } catch (Exception $e) {
-                error_log("UPDATE failed: " . $e->getMessage());
-                $this->sendError('Update failed: ' . $e->getMessage());
+                $this->sendResponse(['success' => true, 'v' => 'V5-NULL', 'id' => $exceptionId, 'rows' => $result]);
+            } else {
+                $stmt = $this->db->prepare("UPDATE calendar_exception_days SET day_schedule_id = ? WHERE id = ?");
+                $ok = $stmt->execute([$dayScheduleId, $exceptionId]);
+                if (!$ok) {
+                    $err = $stmt->errorInfo();
+                    $this->sendError('V5-VAL-FAIL: ' . $err[2]);
+                }
+                $this->sendResponse(['success' => true, 'v' => 'V5-VAL', 'id' => $exceptionId, 'ds' => $dayScheduleId]);
             }
             return;
         }
