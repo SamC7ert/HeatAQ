@@ -261,18 +261,31 @@ const AdminModule = {
             const stationsRes = await fetch('./api/heataq_api.php?action=get_weather_stations');
             const stationsData = await stationsRes.json();
 
+            if (stationsData.error) {
+                console.error('Weather stations API error:', stationsData.error);
+                document.getElementById('weather-stations-list').innerHTML =
+                    `<p class="error">Error: ${stationsData.error}</p>`;
+                return;
+            }
+
             if (stationsData.stations) {
                 this.weatherStations = stationsData.stations;
                 this.renderWeatherStations();
                 this.populateStationDropdown();
+
+                if (stationsData.summary) {
+                    this.renderWeatherSummary(stationsData.summary);
+                }
             }
 
-            // Load data for selected station (or all)
+            // Load yearly and monthly data
             await this.loadWeatherData();
         } catch (err) {
             console.error('Failed to load weather stations:', err);
-            document.getElementById('weather-stations-list').innerHTML =
-                '<p class="error">Failed to load weather stations</p>';
+            const container = document.getElementById('weather-stations-list');
+            if (container) {
+                container.innerHTML = '<p class="error">Failed to load weather stations</p>';
+            }
         }
     },
 
