@@ -101,6 +101,12 @@ const navigation = {
                 }
                 break;
 
+            case 'admin-system':
+                if (typeof app.admin !== 'undefined') {
+                    app.admin.loadSystemInfo();
+                }
+                break;
+
             case 'reports':
                 console.log('Loading reports...');
                 break;
