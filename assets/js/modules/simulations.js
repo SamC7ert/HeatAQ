@@ -1102,11 +1102,18 @@ const SimulationsModule = {
                         type: 'line',
                         label: 'Water Temp',
                         data: data.map(d => d.water_temp),
+                        segment: {
+                            borderColor: ctx => {
+                                // Red when pool is closed, blue when open
+                                const idx = ctx.p0DataIndex;
+                                return data[idx]?.is_open ? 'rgb(33, 150, 243)' : 'rgb(220, 53, 69)';
+                            }
+                        },
                         borderColor: 'rgb(33, 150, 243)',
                         backgroundColor: 'transparent',
                         borderWidth: 2,
                         pointRadius: 0,
-                        tension: 0.2,
+                        tension: 0,
                         yAxisID: 'yTemp',
                         order: 0
                     },
