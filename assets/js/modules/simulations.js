@@ -969,7 +969,7 @@ const SimulationsModule = {
     },
 
     /**
-     * Render production chart (HP + Boiler stacked vs heat loss line)
+     * Render production chart (HP + Boiler stacked vs heat loss line, with water temp)
      */
     renderWeeklyProductionChart: function(weekData) {
         const canvas = document.getElementById('weekly-production-chart');
@@ -999,34 +999,50 @@ const SimulationsModule = {
                 labels: labels,
                 datasets: [
                     {
-                        label: 'Heat Loss',
+                        label: 'Water Temp',
+                        data: data.map(d => d.water_temp),
+                        borderColor: 'rgb(33, 150, 243)',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.2,
+                        yAxisID: 'yTemp',
+                        order: 0
+                    },
+                    {
+                        label: 'Heat Demand',
                         data: data.map(d => d.net_demand > 0 ? d.net_demand : 0),
                         borderColor: '#333',
                         backgroundColor: 'transparent',
                         borderWidth: 2,
                         pointRadius: 0,
                         tension: 0.1,
+                        yAxisID: 'y',
                         order: 1
-                    },
-                    {
-                        label: 'Heat Pump',
-                        data: data.map(d => d.hp_output),
-                        backgroundColor: 'rgba(40, 167, 69, 0.7)',
-                        borderColor: 'rgba(40, 167, 69, 1)',
-                        borderWidth: 1,
-                        fill: true,
-                        pointRadius: 0,
-                        order: 2
                     },
                     {
                         label: 'Boiler',
                         data: data.map(d => d.boiler_output),
-                        backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                        backgroundColor: 'rgba(220, 53, 69, 0.8)',
                         borderColor: 'rgba(220, 53, 69, 1)',
-                        borderWidth: 1,
+                        borderWidth: 0,
                         fill: true,
                         pointRadius: 0,
+                        yAxisID: 'y',
+                        stack: 'heating',
                         order: 3
+                    },
+                    {
+                        label: 'Heat Pump',
+                        data: data.map(d => d.hp_output),
+                        backgroundColor: 'rgba(40, 167, 69, 0.8)',
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        borderWidth: 0,
+                        fill: true,
+                        pointRadius: 0,
+                        yAxisID: 'y',
+                        stack: 'heating',
+                        order: 2
                     }
                 ]
             },
@@ -1059,15 +1075,46 @@ const SimulationsModule = {
                 scales: {
                     x: {
                         display: true,
-                        grid: { display: false },
+                        grid: {
+                            display: true,
+                            color: function(context) {
+                                // Major gridline every 24 hours (day boundary)
+                                if (context.index % 24 === 0) {
+                                    return 'rgba(0, 0, 0, 0.3)';
+                                }
+                                // Minor gridline every 6 hours
+                                if (context.index % 6 === 0) {
+                                    return 'rgba(0, 0, 0, 0.1)';
+                                }
+                                return 'transparent';
+                            },
+                            lineWidth: function(context) {
+                                return context.index % 24 === 0 ? 1.5 : 1;
+                            }
+                        },
                         ticks: { maxRotation: 0, font: { size: 9 } }
                     },
                     y: {
+                        type: 'linear',
                         display: true,
-                        stacked: false,
+                        position: 'left',
+                        stacked: true,
                         title: { display: true, text: 'kW', font: { size: 10 } },
                         beginAtZero: true,
-                        ticks: { font: { size: 9 } }
+                        ticks: { font: { size: 9 } },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.1)'
+                        }
+                    },
+                    yTemp: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: { display: true, text: '°C', font: { size: 10 } },
+                        min: 20,
+                        max: 32,
+                        ticks: { font: { size: 9 } },
+                        grid: { drawOnChartArea: false }
                     }
                 }
             }
@@ -1150,7 +1197,17 @@ const SimulationsModule = {
                 scales: {
                     x: {
                         display: true,
-                        grid: { display: false },
+                        grid: {
+                            display: true,
+                            color: function(context) {
+                                if (context.index % 24 === 0) return 'rgba(0, 0, 0, 0.3)';
+                                if (context.index % 6 === 0) return 'rgba(0, 0, 0, 0.1)';
+                                return 'transparent';
+                            },
+                            lineWidth: function(context) {
+                                return context.index % 24 === 0 ? 1.5 : 1;
+                            }
+                        },
                         ticks: { maxRotation: 0, font: { size: 9 } }
                     },
                     y: {
