@@ -304,6 +304,29 @@ class HeatAQAPI {
                     $this->deleteProjectConfig($_GET['config_id'] ?? 0);
                     break;
 
+                // Solar data endpoints
+                case 'get_solar_status':
+                    $this->getSolarStatus();
+                    break;
+
+                case 'get_site_location':
+                    $this->getSiteLocation();
+                    break;
+
+                case 'save_site_location':
+                    if (!$this->canEdit()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->saveSiteLocation();
+                    break;
+
+                case 'fetch_nasa_solar':
+                    if (!$this->canEdit()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->fetchNasaSolar();
+                    break;
+
                 default:
                     $this->sendError('Invalid action');
             }
@@ -1504,6 +1527,157 @@ class HeatAQAPI {
         $stmt->execute([$configId]);
 
         $this->sendResponse(['success' => true]);
+    }
+
+    // ====================================
+    // SOLAR DATA METHODS
+    // ====================================
+
+    private function getSolarStatus() {
+        // Check if solar_hourly_data table exists
+        $tableExists = $this->columnExists('solar_hourly_data', 'site_id');
+
+        if (!$tableExists) {
+            $this->sendResponse([
+                'status' => 'not_configured',
+                'message' => 'Solar hourly data table not yet created. Run migration first.',
+                'has_data' => false
+            ]);
+            return;
+        }
+
+        // Get solar data range for this site
+        $stmt = $this->db->prepare("
+            SELECT
+                MIN(timestamp) as data_start,
+                MAX(timestamp) as data_end,
+                COUNT(*) as hour_count,
+                COUNT(DISTINCT DATE(timestamp)) as day_count
+            FROM solar_hourly_data
+            WHERE site_id = ?
+        ");
+        $stmt->execute([$this->siteId]);
+        $stats = $stmt->fetch();
+
+        // Get site location
+        $locStmt = $this->db->prepare("
+            SELECT solar_latitude, solar_longitude, solar_data_start, solar_data_end
+            FROM pool_sites
+            WHERE site_id = ?
+        ");
+        $locStmt->execute([$this->siteId]);
+        $location = $locStmt->fetch();
+
+        $this->sendResponse([
+            'status' => $stats['hour_count'] > 0 ? 'configured' : 'no_data',
+            'has_data' => $stats['hour_count'] > 0,
+            'data_start' => $stats['data_start'],
+            'data_end' => $stats['data_end'],
+            'hour_count' => (int) $stats['hour_count'],
+            'day_count' => (int) $stats['day_count'],
+            'location' => [
+                'latitude' => $location['solar_latitude'] ?? null,
+                'longitude' => $location['solar_longitude'] ?? null
+            ]
+        ]);
+    }
+
+    private function getSiteLocation() {
+        $stmt = $this->db->prepare("
+            SELECT site_id, site_name, latitude, longitude,
+                   solar_latitude, solar_longitude, solar_data_start, solar_data_end
+            FROM pool_sites
+            WHERE site_id = ?
+        ");
+        $stmt->execute([$this->siteId]);
+        $site = $stmt->fetch();
+
+        if (!$site) {
+            $this->sendError('Site not found', 404);
+        }
+
+        $this->sendResponse([
+            'site_id' => $site['site_id'],
+            'site_name' => $site['site_name'],
+            'latitude' => $site['latitude'] ?? $site['solar_latitude'],
+            'longitude' => $site['longitude'] ?? $site['solar_longitude'],
+            'solar_latitude' => $site['solar_latitude'],
+            'solar_longitude' => $site['solar_longitude'],
+            'solar_data_start' => $site['solar_data_start'],
+            'solar_data_end' => $site['solar_data_end']
+        ]);
+    }
+
+    private function saveSiteLocation() {
+        $input = $this->getPostInput();
+        $latitude = $input['latitude'] ?? null;
+        $longitude = $input['longitude'] ?? null;
+
+        if ($latitude === null || $longitude === null) {
+            $this->sendError('latitude and longitude are required');
+        }
+
+        $lat = (float) $latitude;
+        $lon = (float) $longitude;
+
+        if ($lat < -90 || $lat > 90) {
+            $this->sendError('latitude must be between -90 and 90');
+        }
+        if ($lon < -180 || $lon > 180) {
+            $this->sendError('longitude must be between -180 and 180');
+        }
+
+        $stmt = $this->db->prepare("
+            UPDATE pool_sites
+            SET solar_latitude = ?, solar_longitude = ?
+            WHERE site_id = ?
+        ");
+        $stmt->execute([$lat, $lon, $this->siteId]);
+
+        $this->sendResponse(['success' => true, 'latitude' => $lat, 'longitude' => $lon]);
+    }
+
+    private function fetchNasaSolar() {
+        $input = $this->getPostInput();
+        $startYear = $input['start_year'] ?? date('Y') - 10;
+        $endYear = $input['end_year'] ?? date('Y') - 1;
+        $latitude = $input['latitude'] ?? null;
+        $longitude = $input['longitude'] ?? null;
+
+        // If location not provided, get from site
+        if ($latitude === null || $longitude === null) {
+            $stmt = $this->db->prepare("
+                SELECT solar_latitude, solar_longitude, latitude, longitude
+                FROM pool_sites WHERE site_id = ?
+            ");
+            $stmt->execute([$this->siteId]);
+            $site = $stmt->fetch();
+
+            $latitude = $site['solar_latitude'] ?? $site['latitude'] ?? null;
+            $longitude = $site['solar_longitude'] ?? $site['longitude'] ?? null;
+
+            if ($latitude === null || $longitude === null) {
+                $this->sendError('Site location not configured. Set latitude/longitude first.');
+            }
+        }
+
+        // Include the NASA fetcher
+        require_once __DIR__ . '/../lib/NasaSolarFetcher.php';
+
+        try {
+            $fetcher = new NasaSolarFetcher($this->db, $this->siteId);
+            $result = $fetcher->fetchAndStore(
+                (float) $latitude,
+                (float) $longitude,
+                (string) $startYear,
+                (string) $endYear
+            );
+
+            $this->sendResponse($result);
+
+        } catch (Exception $e) {
+            $this->sendError('Failed to fetch NASA solar data: ' . $e->getMessage());
+        }
     }
 
     // ====================================
