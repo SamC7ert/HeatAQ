@@ -969,13 +969,18 @@ const SimulationsModule = {
                 throw new Error('No data returned for this week');
             }
 
-            // Hide placeholder, show charts
+            // Hide placeholder, show charts and nav buttons
             if (placeholder) placeholder.style.display = 'none';
             if (chartsDiv) chartsDiv.style.display = 'block';
+            const navButtons = document.getElementById('week-nav-buttons');
+            if (navButtons) navButtons.style.display = 'block';
 
             // Render charts
             this.renderWeeklyProductionChart(result);
             this.renderWeeklyWeatherChart(result);
+
+            // Calculate and display top 3 peak demand periods
+            this.displayTopHeatLossPeriods(result.data);
 
         } catch (error) {
             console.error('Failed to load weekly data:', error);
@@ -983,6 +988,78 @@ const SimulationsModule = {
                 placeholder.innerHTML = `<span style="color: #dc3545;">Error: ${error.message}</span>`;
             }
         }
+    },
+
+    /**
+     * Navigate week forward or backward
+     */
+    navigateWeek: function(direction) {
+        const dateInput = document.getElementById('debug-date');
+        if (!dateInput || !dateInput.value) return;
+
+        const currentDate = new Date(dateInput.value);
+        currentDate.setDate(currentDate.getDate() + (direction * 7));
+
+        // Format as YYYY-MM-DD
+        const newDate = currentDate.toISOString().split('T')[0];
+        dateInput.value = newDate;
+
+        // Save to localStorage and reload
+        localStorage.setItem('heataq_debug_date', newDate);
+        this.loadWeeklyChart();
+    },
+
+    /**
+     * Display top 3 heat loss periods with clickable links
+     */
+    displayTopHeatLossPeriods: function(data) {
+        const container = document.getElementById('peak-periods-list');
+        if (!container || !data || data.length === 0) return;
+
+        // Sort by net_demand descending and take top 3
+        const sorted = [...data]
+            .filter(d => d.net_demand > 0)
+            .sort((a, b) => b.net_demand - a.net_demand)
+            .slice(0, 3);
+
+        if (sorted.length === 0) {
+            container.innerHTML = '<em>No heating demand in this period</em>';
+            return;
+        }
+
+        const links = sorted.map((d, i) => {
+            const dateTime = d.timestamp.split(' ');
+            const displayDate = dateTime[0].substring(5); // MM-DD
+            const displayTime = dateTime[1]?.substring(0, 5) || '00:00'; // HH:MM
+            return `<a href="#" onclick="app.simulations.jumpToTime('${d.timestamp}'); return false;"
+                       style="color: #1976d2; text-decoration: none; margin-left: ${i > 0 ? '10px' : '5px'};"
+                       title="${d.net_demand.toFixed(1)} kW demand">${displayDate} ${displayTime} (${d.net_demand.toFixed(0)} kW)</a>`;
+        });
+
+        container.innerHTML = links.join(' | ');
+    },
+
+    /**
+     * Jump to a specific timestamp and recalculate
+     */
+    jumpToTime: function(timestamp) {
+        const parts = timestamp.split(' ');
+        const date = parts[0];
+        const hour = parseInt(parts[1]?.split(':')[0] || '0');
+
+        const dateInput = document.getElementById('debug-date');
+        const hourSelect = document.getElementById('debug-hour');
+
+        if (dateInput) {
+            dateInput.value = date;
+            localStorage.setItem('heataq_debug_date', date);
+        }
+        if (hourSelect) {
+            hourSelect.value = hour;
+        }
+
+        // Trigger recalculation
+        this.debugHour();
     },
 
     /**

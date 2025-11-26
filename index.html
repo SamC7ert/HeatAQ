@@ -649,7 +649,13 @@
 
                         <!-- Weekly Graph -->
                         <div class="card" style="padding: 12px; margin-bottom: 15px;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px;">Weekly Heat Profile (Thu-Wed)</h4>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <h4 style="margin: 0; font-size: 14px;">Weekly Heat Profile (Thu-Wed)</h4>
+                                <div id="week-nav-buttons" style="display: none;">
+                                    <button onclick="app.simulations.navigateWeek(-1)" class="btn btn-sm btn-secondary" style="padding: 2px 10px; font-size: 14px;" title="Previous week">◀</button>
+                                    <button onclick="app.simulations.navigateWeek(1)" class="btn btn-sm btn-secondary" style="padding: 2px 10px; font-size: 14px; margin-left: 4px;" title="Next week">▶</button>
+                                </div>
+                            </div>
                             <div id="debug-weekly-chart-placeholder" style="height: 60px; background: #f9f9f9; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999;">
                                 Press Calculate to load weekly data
                             </div>
@@ -659,8 +665,13 @@
                                     <canvas id="weekly-production-chart"></canvas>
                                 </div>
                                 <!-- Weather Chart (Temperature + Wind) -->
-                                <div style="height: 120px;">
+                                <div style="height: 120px; margin-bottom: 10px;">
                                     <canvas id="weekly-weather-chart"></canvas>
+                                </div>
+                                <!-- Top 3 Heat Loss Periods -->
+                                <div id="top-heat-loss-periods" style="font-size: 12px; padding: 8px; background: #f5f5f5; border-radius: 4px;">
+                                    <strong style="color: #666;">Peak demand periods:</strong>
+                                    <span id="peak-periods-list" style="color: #999;">Loading...</span>
                                 </div>
                             </div>
                         </div>
