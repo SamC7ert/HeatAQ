@@ -1087,7 +1087,9 @@ const SimulationsModule = {
             // Show day label at start of each day (hour 0)
             if (i % 24 === 0) {
                 const date = new Date(d.timestamp);
-                return date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+                const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+                const dayNum = date.getDate();
+                return `${dayName} ${dayNum}`;
             }
             return '';
         });
@@ -1116,7 +1118,7 @@ const SimulationsModule = {
                         backgroundColor: 'transparent',
                         borderWidth: 1.5,
                         pointRadius: 0,
-                        tension: 0.1,
+                        stepped: 'middle',
                         yAxisID: 'y',
                         order: 1
                     },
@@ -1177,10 +1179,11 @@ const SimulationsModule = {
                 scales: {
                     x: {
                         display: true,
-                        offset: false,
+                        offset: true,
                         grid: {
                             display: true,
                             drawTicks: true,
+                            offset: false,
                             color: function(context) {
                                 // Major gridline every 24 hours (day boundary)
                                 if (context.index % 24 === 0) {
@@ -1200,6 +1203,7 @@ const SimulationsModule = {
                             maxRotation: 0,
                             font: { size: 9 },
                             padding: 2,
+                            autoSkip: false,
                             callback: function(value, index) {
                                 // Show day label at hour 0
                                 if (index % 24 === 0) {
@@ -1253,10 +1257,12 @@ const SimulationsModule = {
 
         const data = weekData.data;
         const labels = data.map((d, i) => {
-            // Show day abbreviation at hour 0 (day boundary)
+            // Show day label at start of each day (hour 0)
             if (i % 24 === 0) {
                 const date = new Date(d.timestamp);
-                return date.toLocaleDateString('en-US', { weekday: 'short' });
+                const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+                const dayNum = date.getDate();
+                return `${dayName} ${dayNum}`;
             }
             return '';
         });
@@ -1319,7 +1325,7 @@ const SimulationsModule = {
                             color: function(context) {
                                 // Match production chart gridlines
                                 if (context.index % 24 === 0) return 'rgba(0, 0, 0, 0.25)';
-                                if (context.index % 6 === 0) return 'rgba(0, 0, 0, 0.12)';
+                                if (context.index % 6 === 0) return 'rgba(0, 0, 0, 0.15)';
                                 return 'transparent';
                             },
                             lineWidth: function(context) {
@@ -1330,6 +1336,7 @@ const SimulationsModule = {
                             maxRotation: 0,
                             font: { size: 9 },
                             padding: 2,
+                            autoSkip: false,
                             callback: function(value, index) {
                                 if (index % 24 === 0) {
                                     return this.getLabelForValue(value);

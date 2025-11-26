@@ -156,15 +156,16 @@ class EnergySimulator {
         return [
             'heat_pump' => [
                 'enabled' => true,
-                'capacity_kw' => 50,       // Nominal heating capacity
-                'cop_nominal' => 4.5,       // Coefficient of performance at 15°C air
-                'min_operating_temp' => -5, // °C
-                'max_operating_temp' => 35, // °C
+                'type' => 'ground_source',   // 'air_source' or 'ground_source' (borehole)
+                'capacity_kw' => 125,        // Nominal heating capacity
+                'cop_nominal' => 4.6,        // COP (constant for ground source)
+                'min_operating_temp' => -20, // °C (only applies to air_source)
+                'max_operating_temp' => 35,  // °C (only applies to air_source)
             ],
             'boiler' => [
                 'enabled' => true,
-                'capacity_kw' => 100,
-                'efficiency' => 0.92,       // 92% efficiency
+                'capacity_kw' => 200,        // Backup boiler capacity
+                'efficiency' => 0.92,        // 92% efficiency
                 'fuel_type' => 'natural_gas',
                 'fuel_cost_per_kwh' => 0.08, // NOK per kWh
             ],
@@ -1020,13 +1021,17 @@ class EnergySimulator {
             return ['heat' => 0, 'electricity' => 0, 'cop' => 0, 'cost' => 0];
         }
 
-        // Check operating temperature range
-        if ($airTemp < $hp['min_operating_temp'] || $airTemp > $hp['max_operating_temp']) {
-            return ['heat' => 0, 'electricity' => 0, 'cop' => 0, 'cost' => 0];
-        }
+        $hpType = $hp['type'] ?? 'ground_source';
 
-        // Calculate COP based on air temperature
-        // COP decreases as air temp drops
+        // For air source, check operating temperature range
+        if ($hpType === 'air_source') {
+            if ($airTemp < $hp['min_operating_temp'] || $airTemp > $hp['max_operating_temp']) {
+                return ['heat' => 0, 'electricity' => 0, 'cop' => 0, 'cost' => 0];
+            }
+        }
+        // Ground source (borehole) has no air temperature limits
+
+        // Calculate COP based on HP type
         $cop = $this->calculateHeatPumpCOP($airTemp);
 
         // Available heat output (limited by capacity)
@@ -1051,8 +1056,15 @@ class EnergySimulator {
      */
     private function calculateHeatPumpCOP($airTemp) {
         $hp = $this->equipment['heat_pump'];
-        $nominalCOP = $hp['cop_nominal'];
+        $nominalCOP = $hp['cop_nominal'] ?? 4.6;
+        $hpType = $hp['type'] ?? 'ground_source';
 
+        // Ground source (borehole): constant COP regardless of air temp
+        if ($hpType === 'ground_source') {
+            return $nominalCOP;
+        }
+
+        // Air source: COP varies with air temperature
         // COP decreases roughly 2.5% per degree below 15°C
         $referenceTemp = 15;
         $tempDiff = $airTemp - $referenceTemp;
@@ -1359,11 +1371,15 @@ class EnergySimulator {
         // Calculate heat pump output (if heat needed and not boiler_priority)
         if ($remainingHeat > 0 && $strategy !== 'boiler_priority') {
             $hpCop = $this->calculateHeatPumpCOP($airTemp);
-            $hpCapacity = $this->equipment['heat_pump']['capacity_kw'] ?? 50;
+            $hpCapacity = $this->equipment['heat_pump']['capacity_kw'] ?? 125;
             $hpEnabled = $this->equipment['heat_pump']['enabled'] ?? true;
-            $minOpTemp = $this->equipment['heat_pump']['min_operating_temp'] ?? -5;
+            $hpType = $this->equipment['heat_pump']['type'] ?? 'ground_source';
+            $minOpTemp = $this->equipment['heat_pump']['min_operating_temp'] ?? -20;
 
-            if ($hpEnabled && $airTemp >= $minOpTemp) {
+            // Ground source (borehole) has no temperature limits
+            $canOperate = $hpEnabled && ($hpType === 'ground_source' || $airTemp >= $minOpTemp);
+
+            if ($canOperate) {
                 $hpOutput = min($remainingHeat, $hpCapacity);
                 $hpElectricity = $hpOutput / $hpCop;
                 $remainingHeat -= $hpOutput;
@@ -1474,15 +1490,16 @@ class EnergySimulator {
             ],
             'heat_pump' => [
                 'strategy' => $strategy,
-                'capacity_kw' => $this->equipment['heat_pump']['capacity_kw'] ?? 50,
+                'type' => $this->equipment['heat_pump']['type'] ?? 'ground_source',
+                'capacity_kw' => $this->equipment['heat_pump']['capacity_kw'] ?? 125,
                 'enabled' => $this->equipment['heat_pump']['enabled'] ?? true,
-                'min_temp_c' => $this->equipment['heat_pump']['min_operating_temp'] ?? -5,
+                'min_temp_c' => $this->equipment['heat_pump']['min_operating_temp'] ?? -20,
                 'cop' => round($hpCop, 2),
                 'output_kw' => round($hpOutput, 3),
                 'electricity_kw' => round($hpElectricity, 3),
             ],
             'boiler' => [
-                'capacity_kw' => $this->equipment['boiler']['capacity_kw'] ?? 100,
+                'capacity_kw' => $this->equipment['boiler']['capacity_kw'] ?? 200,
                 'enabled' => $this->equipment['boiler']['enabled'] ?? true,
                 'efficiency' => $this->equipment['boiler']['efficiency'] ?? 0.92,
                 'output_kw' => round($boilerOutput, 3),
