@@ -103,20 +103,55 @@ try {
     $mdPath = __DIR__ . '/schema.md';
     file_put_contents($mdPath, $md);
 
+    // Check if git push requested
+    $pushToGit = isset($_GET['push']) || (isset($argv[1]) && $argv[1] === '--push');
+    $gitResult = null;
+
+    if ($pushToGit) {
+        $projectRoot = dirname(__DIR__);
+        $branch = 'schema-update-' . date('Ymd-His');
+
+        // Run git commands
+        $commands = [
+            "cd " . escapeshellarg($projectRoot),
+            "git checkout -b " . escapeshellarg($branch),
+            "git add db/schema.json db/schema.md",
+            "git commit -m 'Update database schema " . date('Y-m-d H:i') . "'",
+            "git push -u origin " . escapeshellarg($branch)
+        ];
+
+        $fullCommand = implode(' && ', $commands) . ' 2>&1';
+        $output = shell_exec($fullCommand);
+
+        $gitResult = [
+            'pushed' => strpos($output, 'fatal') === false && strpos($output, 'error') === false,
+            'branch' => $branch,
+            'output' => $output
+        ];
+    }
+
     // Output result
     if (php_sapi_name() === 'cli') {
         echo "Schema dumped to:\n";
         echo "  - $jsonPath\n";
         echo "  - $mdPath\n";
         echo "\nTables found: " . count($schema['tables']) . "\n";
+        if ($gitResult) {
+            echo "\nGit: " . ($gitResult['pushed'] ? "Pushed to {$gitResult['branch']}" : "Failed") . "\n";
+            echo $gitResult['output'] . "\n";
+        }
     } else {
         header('Content-Type: application/json');
-        echo json_encode([
+        $response = [
             'status' => 'success',
             'tables' => count($schema['tables']),
             'json_path' => 'db/schema.json',
             'md_path' => 'db/schema.md'
-        ]);
+        ];
+        if ($gitResult) {
+            $response['git'] = $gitResult;
+        }
+        echo json_encode($response);
     }
 
 } catch (Exception $e) {
