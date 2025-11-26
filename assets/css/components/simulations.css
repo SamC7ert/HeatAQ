@@ -596,6 +596,77 @@ p.loading {
     font-style: italic;
 }
 
+/* History Table */
+.history-table {
+    width: 100%;
+    font-size: 13px;
+}
+
+.history-table th {
+    background: #f8f9fa;
+    padding: 10px 8px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #dee2e6;
+    white-space: nowrap;
+}
+
+.history-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #eee;
+    vertical-align: middle;
+}
+
+.history-table .run-row:hover {
+    background: #f8f9fa;
+}
+
+.history-table .run-name {
+    font-weight: 500;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.history-table .run-dates {
+    color: #666;
+    font-size: 12px;
+}
+
+.history-table td.bad {
+    color: #dc3545;
+    font-weight: 600;
+}
+
+.history-table td.warning {
+    color: #ffc107;
+    font-weight: 600;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.status-badge.status-completed {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-badge.status-running {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.status-badge.status-failed {
+    background: #f8d7da;
+    color: #721c24;
+}
+
 /* Large Button */
 .btn-lg {
     padding: 12px 30px;
