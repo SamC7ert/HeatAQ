@@ -152,14 +152,35 @@ try {
 
             // Load and apply configuration if specified
             if ($configId) {
-                $configStmt = $pdo->prepare("SELECT config_json FROM config_templates WHERE template_id = ?");
+                // Include legacy columns to merge with json_config
+                $configStmt = $pdo->prepare("
+                    SELECT json_config, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy
+                    FROM config_templates WHERE template_id = ?
+                ");
                 $configStmt->execute([$configId]);
                 $configRow = $configStmt->fetch();
-                if ($configRow && $configRow['config_json']) {
-                    $config = json_decode($configRow['config_json'], true);
-                    if ($config) {
-                        $simulator->setConfigFromUI($config);
+                if ($configRow) {
+                    $config = json_decode($configRow['json_config'] ?? '{}', true) ?: [];
+
+                    // Ensure nested arrays exist (values come from pool_configurations + JSON overrides)
+                    if (!isset($config['equipment'])) $config['equipment'] = [];
+                    if (!isset($config['control'])) $config['control'] = [];
+
+                    // Override with legacy column values if set (legacy columns take precedence)
+                    if ($configRow['hp_capacity_kw'] !== null) {
+                        $config['equipment']['hp_capacity_kw'] = (float)$configRow['hp_capacity_kw'];
                     }
+                    if ($configRow['boiler_capacity_kw'] !== null) {
+                        $config['equipment']['boiler_capacity_kw'] = (float)$configRow['boiler_capacity_kw'];
+                    }
+                    if ($configRow['target_temp'] !== null) {
+                        $config['control']['target_temp'] = (float)$configRow['target_temp'];
+                    }
+                    if ($configRow['control_strategy'] !== null) {
+                        $config['control']['strategy'] = $configRow['control_strategy'];
+                    }
+
+                    $simulator->setConfigFromUI($config);
                 }
             }
 
@@ -465,8 +486,68 @@ try {
             ]);
             break;
 
+        case 'debug_hour':
+            // Debug a single hour calculation with detailed breakdown
+            // For comparing PHP calculations with Excel benchmark
+            $date = getParam('date');
+            $hour = (int) getParam('hour', 0);
+            $waterTemp = getParam('water_temp'); // Optional override
+            $configId = getParam('config_id');
+
+            if (!$date) {
+                sendError('date parameter required (YYYY-MM-DD)');
+            }
+
+            if (!validateDate($date)) {
+                sendError('Invalid date format. Use YYYY-MM-DD');
+            }
+
+            if ($hour < 0 || $hour > 23) {
+                sendError('hour must be between 0 and 23');
+            }
+
+            // Initialize scheduler
+            $scheduler = new PoolScheduler($pdo, $currentSiteId);
+
+            // Initialize simulator
+            $simulator = new EnergySimulator($pdo, $currentSiteId, $scheduler);
+
+            // Load config if specified
+            if ($configId) {
+                $configStmt = $pdo->prepare("
+                    SELECT json_config, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy
+                    FROM config_templates WHERE template_id = ?
+                ");
+                $configStmt->execute([$configId]);
+                $configRow = $configStmt->fetch();
+                if ($configRow) {
+                    $config = json_decode($configRow['json_config'] ?? '{}', true) ?: [];
+                    if (!isset($config['equipment'])) $config['equipment'] = [];
+                    if (!isset($config['control'])) $config['control'] = [];
+                    if ($configRow['hp_capacity_kw'] !== null) {
+                        $config['equipment']['hp_capacity_kw'] = (float)$configRow['hp_capacity_kw'];
+                    }
+                    if ($configRow['boiler_capacity_kw'] !== null) {
+                        $config['equipment']['boiler_capacity_kw'] = (float)$configRow['boiler_capacity_kw'];
+                    }
+                    if ($configRow['target_temp'] !== null) {
+                        $config['control']['target_temp'] = (float)$configRow['target_temp'];
+                    }
+                    if ($configRow['control_strategy'] !== null) {
+                        $config['control']['strategy'] = $configRow['control_strategy'];
+                    }
+                    $simulator->setConfigFromUI($config);
+                }
+            }
+
+            // Run debug calculation
+            $debug = $simulator->debugSingleHour($date, $hour, $waterTemp ? (float)$waterTemp : null);
+
+            sendResponse($debug);
+            break;
+
         default:
-            sendError('Invalid action. Valid actions: run_simulation, get_runs, get_run, get_summary, get_daily_results, get_results, delete_run, get_weather_range, get_pool_config, get_version');
+            sendError('Invalid action. Valid actions: run_simulation, get_runs, get_run, get_summary, get_daily_results, get_results, delete_run, get_weather_range, get_pool_config, get_version, debug_hour');
     }
 
 } catch (PDOException $e) {

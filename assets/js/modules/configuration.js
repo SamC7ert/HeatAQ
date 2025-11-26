@@ -12,7 +12,8 @@ const ConfigurationModule = {
             volume_m3: 625,
             area_m2: 312.5,
             depth_m: 2.0,
-            wind_exposure: 0.535
+            wind_exposure: 0.535,
+            years_operating: 3      // Years since startup (affects ground thermal)
         },
         cover: {
             has_cover: true,
@@ -154,6 +155,7 @@ const ConfigurationModule = {
             this.setVal('cfg-pool-area', config.pool.area_m2);
             this.setVal('cfg-pool-depth', config.pool.depth_m);
             this.setVal('cfg-wind-factor', config.pool.wind_exposure);
+            this.setVal('cfg-years-operating', config.pool.years_operating || 3);
         }
 
         // Cover & Environment
@@ -333,7 +335,8 @@ const ConfigurationModule = {
                 volume_m3: parseFloat(this.getVal('cfg-pool-volume')),
                 area_m2: parseFloat(this.getVal('cfg-pool-area')),
                 depth_m: parseFloat(this.getVal('cfg-pool-depth')),
-                wind_exposure: parseFloat(this.getVal('cfg-wind-factor'))
+                wind_exposure: parseFloat(this.getVal('cfg-wind-factor')),
+                years_operating: parseInt(this.getVal('cfg-years-operating')) || 3
             },
             cover: {
                 has_cover: this.getVal('cfg-has-cover') === '1',

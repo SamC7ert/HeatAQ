@@ -57,6 +57,11 @@ const SimControlModule = {
                     SimulationsModule.initCompare();
                 }
                 break;
+            case 'debug':
+                if (typeof SimulationsModule !== 'undefined') {
+                    SimulationsModule.initDebug();
+                }
+                break;
         }
     },
 

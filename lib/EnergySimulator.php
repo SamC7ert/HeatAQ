@@ -78,32 +78,53 @@ class EnergySimulator {
         $config = $stmt->fetch();
 
         if (!$config) {
-            // Default configuration if not found
+            // Default configuration if no pool_configurations row exists
+            // Physical properties are conservative defaults - admin should configure actual values
+            // Simulation parameters will be overridden by config template via setConfigFromUI()
             return [
+                // Physical pool properties (defaults)
                 'area_m2' => 312.5,      // 25m x 12.5m
                 'volume_m3' => 625,       // area × 2m depth
                 'depth_m' => 2.0,
                 'perimeter_m' => 75,      // 2×(25+12.5)
-                'has_cover' => false,
                 'has_tunnel' => true,
-                'cover_r_value' => 0,
-                'cover_solar_transmittance' => 0.10, // 10% solar passes through cover
-                'solar_absorption' => 0.60,          // 60% solar absorption (v3.6.0.3 benchmark)
-                'wind_exposure_factor' => 1.0
+                'cover_r_value' => 5.0,   // U-value when cover exists
+                // Simulation parameters - defaults here, overridden by config template
+                'has_cover' => true,                    // Config template decides
+                'cover_solar_transmittance' => 0.10,   // 10% (config template)
+                'solar_absorption' => 0.60,            // 60% (config template)
+                'wind_exposure_factor' => 1.0,         // Full exposure (config template)
+                'years_operating' => 3                  // Year 3 (config template)
             ];
         }
 
+        // These values from pool_configurations are PHYSICAL pool properties:
+        // - area, volume, depth, perimeter: geometry
+        // - has_tunnel: construction feature
+        // - cover_r_value: physical cover insulation
+        //
+        // These values are SIMULATION parameters (from config template JSON):
+        // - has_cover: whether to use cover in this simulation
+        // - cover_solar_transmittance: cover optical property for simulation
+        // - solar_absorption: water absorption for simulation
+        // - wind_exposure_factor: site exposure for simulation
+        // - years_operating: affects ground thermal state
+        //
+        // setConfigFromUI() will override simulation parameters from config template
         return [
+            // Physical pool properties from database
             'area_m2' => (float) ($config['area_m2'] ?? 312.5),
             'volume_m3' => (float) ($config['volume_m3'] ?? 625),
             'depth_m' => (float) ($config['depth_m'] ?? 2.0),
             'perimeter_m' => (float) ($config['perimeter_m'] ?? 75),
-            'has_cover' => (bool) ($config['has_cover'] ?? false),
             'has_tunnel' => (bool) ($config['has_tunnel'] ?? true),
-            'cover_r_value' => (float) ($config['cover_r_value'] ?? 0),
-            'cover_solar_transmittance' => (float) ($config['cover_solar_transmittance'] ?? 0.10),
-            'solar_absorption' => (float) ($config['solar_absorption'] ?? 0.60),
-            'wind_exposure_factor' => (float) ($config['wind_exposure_factor'] ?? 1.0)
+            'cover_r_value' => (float) ($config['cover_r_value'] ?? 5.0),
+            // Simulation parameters - defaults here, overridden by config template
+            'has_cover' => true,                    // Default: use cover (config template decides)
+            'cover_solar_transmittance' => 0.10,   // 10% solar transmittance (config template)
+            'solar_absorption' => 0.60,            // 60% water absorption (config template)
+            'wind_exposure_factor' => 1.0,         // Full exposure (config template)
+            'years_operating' => 3                  // Year 3 steady state (config template)
         ];
     }
 
@@ -164,6 +185,7 @@ class EnergySimulator {
             $this->poolConfig['volume_m3'] = $uiConfig['pool']['volume_m3'] ?? $this->poolConfig['volume_m3'];
             $this->poolConfig['depth_m'] = $uiConfig['pool']['depth_m'] ?? $this->poolConfig['depth_m'];
             $this->poolConfig['wind_exposure_factor'] = $uiConfig['pool']['wind_exposure'] ?? $this->poolConfig['wind_exposure_factor'];
+            $this->poolConfig['years_operating'] = $uiConfig['pool']['years_operating'] ?? $this->poolConfig['years_operating'];
         }
 
         // Cover settings
@@ -711,7 +733,12 @@ class EnergySimulator {
 
     /**
      * Calculate conduction heat loss to ground
-     * Always use calculation - lookup table was unreliable
+     * Uses years_operating to adjust for ground thermal stabilization
+     *
+     * Ground around pool warms up over time:
+     * - Year 1: Cold ground, higher losses (factor ~1.5)
+     * - Year 2: Warming ground (factor ~1.2)
+     * - Year 3+: Steady state (factor 1.0)
      */
     private function calculateConductionLoss($waterTemp) {
         // Ground temperature assumed ~10°C year-round in Norway
@@ -722,13 +749,51 @@ class EnergySimulator {
         // Typical insulated pool: 0.3-0.5, uninsulated: 1.0-2.0
         $uValue = 0.5;
 
+        // Years operating affects ground thermal - ground warms up over time
+        $yearsOperating = $this->poolConfig['years_operating'] ?? 3;
+        $groundFactor = $this->getGroundThermalFactor($yearsOperating);
+
         // Calculate areas
         $bottomArea = $this->poolConfig['area_m2'];
         $perimeter = $this->poolConfig['perimeter_m'] ?? $this->calculatePerimeter();
         $sideArea = $perimeter * $this->poolConfig['depth_m'];
         $totalArea = $bottomArea + $sideArea;
 
-        return $uValue * $totalArea * $tempDiff / 1000; // kW
+        return $uValue * $totalArea * $tempDiff * $groundFactor / 1000; // kW
+    }
+
+    /**
+     * Get ground thermal factor based on years of operation
+     * Ground around pool warms up over time, reducing heat loss
+     */
+    private function getGroundThermalFactor($yearsOperating) {
+        // Try to get from lookup table first
+        try {
+            $stmt = $this->db->prepare("
+                SELECT q_total_kw FROM ground_thermal_lookup
+                WHERE year = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$yearsOperating]);
+            $row = $stmt->fetch();
+            if ($row && $row['q_total_kw'] > 0) {
+                // Normalize to year 3 baseline (factor of 1.0)
+                $stmt->execute([3]);
+                $baseline = $stmt->fetch();
+                if ($baseline && $baseline['q_total_kw'] > 0) {
+                    return $row['q_total_kw'] / $baseline['q_total_kw'];
+                }
+            }
+        } catch (\PDOException $e) {
+            // Table doesn't exist, use calculated factors
+        }
+
+        // Fallback: calculated factors if lookup fails
+        switch ($yearsOperating) {
+            case 1: return 1.5;  // Cold ground, 50% more loss
+            case 2: return 1.2;  // Warming ground, 20% more loss
+            default: return 1.0; // Year 3+: steady state
+        }
     }
 
     /**
@@ -982,5 +1047,303 @@ class EnergySimulator {
 
         // Temperature change
         return $energy / ($mass * self::WATER_SPECIFIC_HEAT / 1000);
+    }
+
+    /**
+     * Debug a single hour calculation with detailed intermediate values
+     *
+     * Outputs all intermediate calculations for comparison with Excel benchmark
+     *
+     * @param string $date Date (YYYY-MM-DD)
+     * @param int $hour Hour of day (0-23)
+     * @param float|null $waterTemp Override water temperature (optional)
+     * @return array Detailed breakdown of all calculations
+     */
+    public function debugSingleHour($date, $hour, $waterTemp = null) {
+        // Get weather for this specific hour
+        $timestamp = sprintf('%s %02d:00:00', $date, $hour);
+
+        $stmt = $this->db->prepare("
+            SELECT
+                wd.timestamp,
+                wd.temperature as air_temperature,
+                wd.wind_speed,
+                wd.humidity,
+                wd.tunnel_temp
+            FROM weather_data wd
+            JOIN weather_stations ws ON wd.station_id = ws.station_id
+            JOIN pool_sites ps ON ws.station_id = ps.default_weather_station
+            WHERE ps.site_id = ?
+              AND wd.timestamp = ?
+            LIMIT 1
+        ");
+        $stmt->execute([$this->siteId, $timestamp]);
+        $weather = $stmt->fetch();
+
+        if (!$weather) {
+            return ['error' => "No weather data found for $timestamp"];
+        }
+
+        // Get solar data for this day
+        $stmt = $this->db->prepare("
+            SELECT daily_total_kwh_m2, daily_clear_sky_kwh_m2
+            FROM solar_daily_data sd
+            JOIN weather_stations ws ON sd.station_id = ws.station_id
+            JOIN pool_sites ps ON ws.station_id = ps.default_weather_station
+            WHERE ps.site_id = ? AND sd.date = ?
+            LIMIT 1
+        ");
+        $stmt->execute([$this->siteId, $date]);
+        $solar = $stmt->fetch();
+
+        // Get schedule info
+        $isOpen = false;
+        $targetTemp = null;
+        if ($this->scheduler) {
+            $period = $this->scheduler->getCurrentPeriod(new DateTime($timestamp));
+            if ($period) {
+                $isOpen = true;
+                $targetTemp = $period['target_temp'] ?? 28;
+            }
+        }
+
+        // Use provided water temp or default
+        $poolTemp = $waterTemp ?? 28.59;
+
+        // Extract weather values
+        $airTemp = (float) $weather['air_temperature'];
+        $windSpeed = (float) ($weather['wind_speed'] ?? 2.0);
+        $humidity = (float) ($weather['humidity'] ?? 70);
+        $tunnelTemp = $weather['tunnel_temp'] ? (float) $weather['tunnel_temp'] : null;
+
+        // Solar for this hour
+        $dailySolar = $solar ? (float) $solar['daily_total_kwh_m2'] : 0;
+        $hourlySolar = $this->distributeSolarToHour(['daily_total_kwh_m2' => $dailySolar], $hour);
+        // Convert kWh/m² to W/m² for this hour (kWh/m²/hour = kW/m² = 1000 W/m²)
+        $solarIrradiance = $hourlySolar * 1000; // W/m²
+
+        // Pool config
+        $area = $this->poolConfig['area_m2'];
+        $volume = $this->poolConfig['volume_m3'];
+        $depth = $this->poolConfig['depth_m'];
+        $perimeter = $this->poolConfig['perimeter_m'] ?? $this->calculatePerimeter();
+        $windFactor = $this->poolConfig['wind_exposure_factor'];
+        $yearsOperating = $this->poolConfig['years_operating'] ?? 3;
+        $hasCover = $this->poolConfig['has_cover'];
+        $coverUValue = $this->poolConfig['cover_r_value'];
+        $solarAbsorption = $this->poolConfig['solar_absorption'] ?? 0.60;
+        $coverTransmittance = $this->poolConfig['cover_solar_transmittance'] ?? 0.10;
+
+        // Wall area
+        $wallArea = $perimeter * $depth;
+        $floorArea = $area;
+
+        // ========== EVAPORATION CALCULATION ==========
+        // Saturation vapor pressure at water temp (Pa)
+        $pWaterKPa = 0.6108 * exp(17.27 * $poolTemp / ($poolTemp + 237.3));
+        $pWaterPa = $pWaterKPa * 1000;
+
+        // Saturation vapor pressure at air temp (Pa)
+        $pSatKPa = 0.6108 * exp(17.27 * $airTemp / ($airTemp + 237.3));
+        $pSatPa = $pSatKPa * 1000;
+
+        // Actual vapor pressure in air (Pa)
+        $pAirPa = $pSatPa * ($humidity / 100);
+
+        // Vapor pressure difference (Pa)
+        $vpDiff = $pWaterPa - $pAirPa;
+
+        // Effective wind speed (m/s)
+        $effectWindSpeed = $windSpeed * $windFactor;
+
+        // Activity factor
+        $activityFactor = $isOpen ? 1.1 : 1.0; // Match Excel's 1.1
+
+        // Evaporation using ASHRAE formula variant
+        // E = (25 + 19*v) * A * (pw - pa) / L_v  [W]
+        // where v=wind speed, A=area, pw/pa in kPa, L_v=latent heat
+        $windCoeff = 25 + 19 * $effectWindSpeed; // W/(m²·kPa)
+        $evapRateKgPerS = $windCoeff * $area * ($vpDiff / 1000) / self::LATENT_HEAT_VAPORIZATION;
+        $evapPerUnitArea = $evapRateKgPerS / $area;
+
+        // Heat loss from evaporation (kW)
+        $evapLossKW = $evapRateKgPerS * self::LATENT_HEAT_VAPORIZATION / 1000 * $activityFactor;
+
+        // ========== CONVECTION CALCULATION ==========
+        // Using Bowen ratio approach: Q_conv = β * Q_evap
+        // β = (c_p / L_v) * (T_water - T_air) / (p_water - p_air) * P_atm
+        $tempDiff = $poolTemp - $airTemp; // K (same as °C difference)
+        $cP = 1005; // J/(kg·K) specific heat of air
+        $pAtm = 101325; // Pa
+
+        // Bowen ratio
+        $bowenNumerator = $cP * $tempDiff * $pAtm;
+        $bowenDenominator = self::LATENT_HEAT_VAPORIZATION * $vpDiff;
+        $bowenRatio = $bowenDenominator > 0 ? $bowenNumerator / $bowenDenominator : 0;
+
+        // Convection loss (kW) = Bowen ratio * Evaporation
+        $convLossKW = abs($bowenRatio) * $evapLossKW;
+
+        // ========== RADIATION CALCULATION ==========
+        $tWaterK = $poolTemp + 273.15;
+        $tSkyK = $this->estimateSkyTemperature($airTemp) + 273.15;
+        $tWater4 = pow($tWaterK, 4);
+        $tSky4 = pow($tSkyK, 4);
+        $radDiff = $tWater4 - $tSky4;
+
+        // Radiation loss (kW)
+        $radLossKW = self::STEFAN_BOLTZMANN * self::WATER_EMISSIVITY * $area * $radDiff / 1000;
+
+        // ========== SOLAR GAIN CALCULATION ==========
+        // Solar irradiance in kW/m² for this calculation
+        $solarKWm2 = $hourlySolar; // Already in kWh/m² for this hour = kW/m² average
+
+        $solarGainKW = 0;
+        if ($hasCover && !$isOpen) {
+            $solarGainKW = $solarKWm2 * $area * $solarAbsorption * $coverTransmittance;
+        } else {
+            $solarGainKW = $solarKWm2 * $area * $solarAbsorption;
+        }
+
+        // ========== CONDUCTION CALCULATION ==========
+        $groundTemp = 10; // °C assumed
+        $groundTempDiff = $poolTemp - $groundTemp;
+        $uValueWall = 0.58; // W/(m²·K) from Excel
+        $groundFactor = $this->getGroundThermalFactor($yearsOperating);
+
+        // Wall loss (kW)
+        $wallLossKW = $uValueWall * $wallArea * $groundTempDiff * $groundFactor / 1000;
+
+        // Floor loss (kW)
+        $floorLossKW = $uValueWall * $floorArea * $groundTempDiff * $groundFactor / 1000;
+
+        // Total conduction
+        $condLossKW = $wallLossKW + $floorLossKW;
+
+        // ========== WATER HEATING (bather makeup) ==========
+        // From Excel: 100 persons * 1.37 kWh/visit / 10 open hours = 13.7 kWh/hour
+        $bathersPerDay = 100;
+        $kwhPerVisit = 1.37;
+        $openHours = 10;
+        $waterHeatingKW = ($bathersPerDay * $kwhPerVisit) / $openHours;
+
+        // ========== APPLY COVER REDUCTION ==========
+        if ($hasCover && !$isOpen) {
+            $coverFactor = 0.1; // 90% reduction
+            $evapLossKW *= $coverFactor;
+            $convLossKW *= $coverFactor;
+            $radLossKW *= $coverFactor;
+        }
+
+        // ========== TOTALS ==========
+        $totalLossKW = $evapLossKW + $convLossKW + $radLossKW + $condLossKW + $waterHeatingKW;
+        $netRequirementKW = $totalLossKW - $solarGainKW;
+
+        // Return detailed breakdown matching Excel format
+        return [
+            'timestamp' => $timestamp,
+            'input' => [
+                'date' => $date,
+                'hour' => $hour,
+                'weather' => [
+                    'air_temp_c' => round($airTemp, 2),
+                    'wind_speed_ms' => round($windSpeed, 2),
+                    'humidity_pct' => round($humidity, 1),
+                    'solar_ghi_wm2' => round($solarIrradiance, 2),
+                    'tunnel_temp_c' => $tunnelTemp,
+                ],
+                'pool' => [
+                    'water_temp_c' => round($poolTemp, 2),
+                    'area_m2' => $area,
+                    'volume_m3' => $volume,
+                    'depth_m' => $depth,
+                    'perimeter_m' => round($perimeter, 1),
+                    'wall_area_m2' => round($wallArea, 1),
+                    'floor_area_m2' => $floorArea,
+                ],
+                'config' => [
+                    'wind_factor' => $windFactor,
+                    'years_operating' => $yearsOperating,
+                    'ground_thermal_factor' => $groundFactor,
+                    'has_cover' => $hasCover,
+                    'cover_u_value' => $coverUValue,
+                    'solar_absorption' => $solarAbsorption,
+                    'cover_transmittance' => $coverTransmittance,
+                    'is_open' => $isOpen,
+                    'target_temp' => $targetTemp,
+                ],
+            ],
+            'evaporation' => [
+                'p_water_sat_pa' => round($pWaterPa, 1),
+                'p_air_sat_pa' => round($pSatPa, 1),
+                'p_air_actual_pa' => round($pAirPa, 1),
+                'vapor_diff_pa' => round($vpDiff, 1),
+                'effect_wind_speed_ms' => round($effectWindSpeed, 3),
+                'wind_coeff' => round($windCoeff, 2),
+                'evap_per_unit_area_kgm2s' => sprintf('%.6f', $evapPerUnitArea),
+                'evap_rate_kgs' => sprintf('%.4f', $evapRateKgPerS),
+                'activity_factor' => $activityFactor,
+                'evap_loss_kw' => round($evapLossKW, 3),
+            ],
+            'convection' => [
+                'temp_diff_k' => round($tempDiff, 2),
+                'bowen_numerator' => round($bowenNumerator, 0),
+                'bowen_denominator' => round($bowenDenominator, 0),
+                'bowen_ratio' => round($bowenRatio, 3),
+                'conv_loss_kw' => round($convLossKW, 3),
+            ],
+            'radiation' => [
+                't_water_k' => round($tWaterK, 2),
+                't_water_4' => sprintf('%.0f', $tWater4),
+                't_sky_k' => round($tSkyK, 2),
+                't_sky_4' => sprintf('%.0f', $tSky4),
+                'diff_t4' => sprintf('%.0f', $radDiff),
+                'rad_loss_kw' => round($radLossKW, 3),
+            ],
+            'solar_gain' => [
+                'daily_total_kwh_m2' => round($dailySolar, 3),
+                'hourly_kwh_m2' => round($hourlySolar, 4),
+                'solar_absorption' => $solarAbsorption,
+                'cover_transmittance' => $hasCover && !$isOpen ? $coverTransmittance : 1.0,
+                'solar_gain_kw' => round($solarGainKW, 3),
+            ],
+            'conduction' => [
+                'ground_temp_c' => $groundTemp,
+                'temp_diff_k' => round($groundTempDiff, 2),
+                'u_value' => $uValueWall,
+                'wall_area_m2' => round($wallArea, 1),
+                'floor_area_m2' => $floorArea,
+                'ground_factor' => $groundFactor,
+                'wall_loss_kw' => round($wallLossKW, 3),
+                'floor_loss_kw' => round($floorLossKW, 3),
+                'total_cond_kw' => round($condLossKW, 3),
+            ],
+            'water_heating' => [
+                'bathers_per_day' => $bathersPerDay,
+                'kwh_per_visit' => $kwhPerVisit,
+                'open_hours' => $openHours,
+                'water_heating_kw' => round($waterHeatingKW, 3),
+            ],
+            'summary' => [
+                'evaporation_kw' => round($evapLossKW, 3),
+                'convection_kw' => round($convLossKW, 3),
+                'radiation_kw' => round($radLossKW, 3),
+                'wall_loss_kw' => round($wallLossKW, 3),
+                'floor_loss_kw' => round($floorLossKW, 3),
+                'water_heating_kw' => round($waterHeatingKW, 3),
+                'total_loss_kw' => round($totalLossKW, 3),
+                'solar_gain_kw' => round($solarGainKW, 3),
+                'net_requirement_kw' => round($netRequirementKW, 3),
+            ],
+            'excel_comparison' => [
+                // Excel reference values for 2024-07-27 hour 1
+                'excel_evaporation' => 73.0,
+                'excel_convection' => 24.318,
+                'excel_radiation' => 37.908,
+                'excel_solar_gain' => -68.1,
+                'excel_wall_loss' => 0.909,
+                'excel_floor_loss' => 0.484,
+            ],
+        ];
     }
 }
