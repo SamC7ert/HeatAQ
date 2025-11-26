@@ -809,19 +809,15 @@ const SimulationsModule = {
     },
 
     /**
-     * Render debug calculation results - builds entire HTML structure
+     * Render debug calculation results - populates new UI structure
      */
     renderDebugResults: function(data) {
-        console.log('V52 renderDebugResults called');
-        const resultsDiv = document.getElementById('debug-results');
-        if (!resultsDiv) {
-            alert('renderDebugResults: debug-results element not found!');
-            return;
-        }
+        console.log('V59 renderDebugResults called', data);
 
         // Helper to render a table from object
         const renderTable = (obj) => {
-            let html = '<table class="data-table compact">';
+            if (!obj) return '<p class="text-muted">No data</p>';
+            let html = '<table class="data-table compact" style="font-size: 11px;">';
             for (const [key, value] of Object.entries(obj)) {
                 if (typeof value === 'object' && value !== null) continue;
                 const displayKey = key.replace(/_/g, ' ');
@@ -832,108 +828,349 @@ const SimulationsModule = {
             return html;
         };
 
-        // Build comparison rows
-        const sum = data.summary || {};
-        const excel = data.excel_comparison || {};
+        // ===== Populate Heat Balance Summary (top right) =====
+        const hs = data.heating_summary || {};
+        const hp = data.heat_pump || {};
+        const boiler = data.boiler || {};
 
-        const compareRow = (label, phpVal, excelVal, unit = 'kW') => {
-            const diff = phpVal - excelVal;
-            const pctDiff = excelVal !== 0 ? ((diff / excelVal) * 100).toFixed(1) : '-';
-            const status = Math.abs(diff) < 1 ? '✓' : (Math.abs(diff) < 5 ? '~' : '✗');
-            const color = status === '✓' ? 'green' : (status === '~' ? 'orange' : 'red');
-            return `
-                <tr>
-                    <td>${label}</td>
-                    <td><strong>${phpVal?.toFixed(3) || '-'}</strong> ${unit}</td>
-                    <td>${excelVal?.toFixed(3) || '-'} ${unit}</td>
-                    <td style="color:${color}">${diff?.toFixed(3) || '-'} (${pctDiff}%)</td>
-                    <td style="color:${color}">${status}</td>
-                </tr>
-            `;
+        const setEl = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val;
+        };
+        const setHtml = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = val;
         };
 
-        // Build entire HTML structure
-        resultsDiv.innerHTML = `
-            <div class="debug-grid">
-                <div class="card">
-                    <h4>Input Values</h4>
-                    <div id="debug-input">
-                        <strong>Weather:</strong> ${data.input?.weather?.air_temp_c}°C,
-                        Wind: ${data.input?.weather?.wind_speed_ms} m/s,
-                        Humidity: ${data.input?.weather?.humidity_pct}%,
-                        GHI: ${data.input?.weather?.solar_ghi_wm2} W/m²<br>
-                        <strong>Pool:</strong> ${data.input?.pool?.water_temp_c}°C,
-                        Area: ${data.input?.pool?.area_m2} m²,
-                        Volume: ${data.input?.pool?.volume_m3} m³<br>
-                        <strong>Config:</strong> Wind factor: ${data.input?.config?.wind_factor},
-                        Years operating: ${data.input?.config?.years_operating},
-                        Has cover: ${data.input?.config?.has_cover ? 'Yes' : 'No'},
-                        Is open: ${data.input?.config?.is_open ? 'Yes' : 'No'}
-                    </div>
-                </div>
-                <div class="card">
-                    <h4>Evaporation</h4>
-                    ${renderTable(data.evaporation || {})}
-                </div>
-                <div class="card">
-                    <h4>Convection</h4>
-                    ${renderTable(data.convection || {})}
-                </div>
-                <div class="card">
-                    <h4>Radiation</h4>
-                    ${renderTable(data.radiation || {})}
-                </div>
-                <div class="card">
-                    <h4>Solar Gain</h4>
-                    ${renderTable(data.solar_gain || {})}
-                </div>
-                <div class="card">
-                    <h4>Conduction (Floor + Wall)</h4>
-                    ${renderTable(data.conduction || {})}
-                </div>
+        // Net demand
+        setEl('debug-net-demand', `${hs.net_demand_kw?.toFixed(1) || '0'} kW`);
+
+        // Heat pump output
+        setEl('debug-hp-output', `${hs.hp_output_kw?.toFixed(1) || '0'} kW`);
+        setEl('debug-hp-detail', `COP ${hp.cop || '-'} | ${hp.electricity_kw?.toFixed(1) || '0'} kW elec`);
+
+        // Boiler output
+        setEl('debug-boiler-output', `${hs.boiler_output_kw?.toFixed(1) || '0'} kW`);
+        setEl('debug-boiler-detail', `${((boiler.efficiency || 0.92) * 100).toFixed(0)}% eff | ${boiler.fuel_kw?.toFixed(1) || '0'} kW fuel`);
+
+        // Input summary bar
+        const inp = data.input || {};
+        setEl('debug-air-temp', `${inp.weather?.air_temp_c || '-'}°C`);
+        setEl('debug-wind', `${inp.weather?.wind_speed_ms || '-'} m/s`);
+        setEl('debug-solar-val', `${inp.weather?.solar_ghi_wm2 || '-'} W/m²`);
+        setEl('debug-status', inp.config?.is_open ? 'Open' : 'Closed');
+
+        // ===== Populate Detail Cards =====
+        setHtml('debug-input', `
+            <strong>Weather:</strong> ${inp.weather?.air_temp_c}°C, Wind: ${inp.weather?.wind_speed_ms} m/s, RH: ${inp.weather?.humidity_pct}%<br>
+            <strong>Pool:</strong> ${inp.pool?.water_temp_c}°C, ${inp.pool?.area_m2} m²<br>
+            <strong>Config:</strong> Wind×${inp.config?.wind_factor}, Cover: ${inp.config?.has_cover ? 'Yes' : 'No'}
+        `);
+        setHtml('debug-evaporation', renderTable(data.evaporation));
+        setHtml('debug-convection', renderTable(data.convection));
+        setHtml('debug-radiation', renderTable(data.radiation));
+        setHtml('debug-solar', renderTable(data.solar_gain));
+        setHtml('debug-conduction', renderTable(data.conduction));
+
+        // Heat pump detail
+        setHtml('debug-heatpump', `
+            <table class="data-table compact" style="font-size: 11px;">
+                <tr><td>Strategy</td><td><code>${hp.strategy || 'reactive'}</code></td></tr>
+                <tr><td>Capacity</td><td><code>${hp.capacity_kw} kW</code></td></tr>
+                <tr><td>COP @ ${inp.weather?.air_temp_c}°C</td><td><code>${hp.cop}</code></td></tr>
+                <tr><td>Output</td><td><code><strong>${hp.output_kw} kW</strong></code></td></tr>
+                <tr><td>Electricity</td><td><code>${hp.electricity_kw} kW</code></td></tr>
+            </table>
+        `);
+
+        // Boiler detail
+        setHtml('debug-boiler', `
+            <table class="data-table compact" style="font-size: 11px;">
+                <tr><td>Capacity</td><td><code>${boiler.capacity_kw} kW</code></td></tr>
+                <tr><td>Efficiency</td><td><code>${((boiler.efficiency || 0.92) * 100).toFixed(0)}%</code></td></tr>
+                <tr><td>Output</td><td><code><strong>${boiler.output_kw} kW</strong></code></td></tr>
+                <tr><td>Fuel input</td><td><code>${boiler.fuel_kw} kW</code></td></tr>
+            </table>
+        `);
+
+        // Summary
+        const sum = data.summary || {};
+        setHtml('debug-summary', `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                <div>Evap: <strong>${sum.evaporation_kw}</strong> kW</div>
+                <div>Conv: <strong>${sum.convection_kw}</strong> kW</div>
+                <div>Rad: <strong>${sum.radiation_kw}</strong> kW</div>
+                <div>Cond: <strong>${(sum.wall_loss_kw + sum.floor_loss_kw).toFixed(3)}</strong> kW</div>
+                <div>Solar: <strong>-${sum.solar_gain_kw}</strong> kW</div>
+                <div><strong>Net: ${sum.net_requirement_kw} kW</strong></div>
+                <div style="color: #2196F3;">HP: <strong>${hs.hp_output_kw}</strong> kW</div>
+                <div style="color: #ff9800;">Boiler: <strong>${hs.boiler_output_kw}</strong> kW</div>
             </div>
-            <div class="card">
-                <h4>Summary Comparison (PHP vs Excel)</h4>
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Component</th>
-                            <th>PHP</th>
-                            <th>Excel Reference</th>
-                            <th>Difference</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${compareRow('Evaporation', sum.evaporation_kw, excel.excel_evaporation)}
-                        ${compareRow('Convection', sum.convection_kw, excel.excel_convection)}
-                        ${compareRow('Radiation', sum.radiation_kw, excel.excel_radiation)}
-                        ${compareRow('Wall Loss', sum.wall_loss_kw, excel.excel_wall_loss)}
-                        ${compareRow('Floor Loss', sum.floor_loss_kw, excel.excel_floor_loss)}
-                        ${compareRow('Solar Gain', sum.solar_gain_kw, Math.abs(excel.excel_solar_gain))}
-                        <tr class="total">
-                            <td><strong>Total Loss</strong></td>
-                            <td><strong>${sum.total_loss_kw?.toFixed(3) || '-'}</strong> kW</td>
-                            <td>-</td>
-                            <td>-</td>
-                            <td>-</td>
-                        </tr>
-                        <tr class="total">
-                            <td><strong>Net Requirement</strong></td>
-                            <td><strong>${sum.net_requirement_kw?.toFixed(3) || '-'}</strong> kW</td>
-                            <td>-</td>
-                            <td>-</td>
-                            <td>-</td>
-                        </tr>
-                    </tbody>
-                </table>
-                <p class="text-muted" style="margin-top: 10px;">
-                    ✓ = Match (&lt;1 kW diff), ~ = Close (1-5 kW), ✗ = Needs review (&gt;5 kW)<br>
-                    Note: Excel reference values are for 2024-07-27 hour 1 with specific weather conditions.
-                </p>
-            </div>
-        `;
-        resultsDiv.style.display = 'block';
+        `);
+
+        // Show results
+        const resultsDiv = document.getElementById('debug-results');
+        if (resultsDiv) resultsDiv.style.display = 'block';
+    },
+
+    // Weekly chart instances (for cleanup)
+    weeklyCharts: {
+        production: null,
+        weather: null
+    },
+
+    /**
+     * Load weekly chart data and render charts
+     */
+    loadWeeklyChart: async function() {
+        const dateInput = document.getElementById('debug-date');
+        const configSelect = document.getElementById('debug-config-select');
+
+        if (!dateInput || !dateInput.value) {
+            alert('Please select a date first');
+            return;
+        }
+
+        const date = dateInput.value;
+        const configId = configSelect?.value || '';
+
+        // Show loading
+        const placeholder = document.getElementById('debug-weekly-chart-placeholder');
+        const chartsDiv = document.getElementById('debug-weekly-charts');
+        if (placeholder) placeholder.innerHTML = '<span style="color: #666;">Loading weekly data...</span>';
+
+        try {
+            const url = `/api/simulation_api.php?action=debug_week&date=${date}&config_id=${configId}`;
+            const response = await fetch(url);
+            const result = await response.json();
+
+            if (result.error) {
+                throw new Error(result.error);
+            }
+
+            if (!result.data || result.data.length === 0) {
+                throw new Error('No data returned for this week');
+            }
+
+            // Hide placeholder, show charts
+            if (placeholder) placeholder.style.display = 'none';
+            if (chartsDiv) chartsDiv.style.display = 'block';
+
+            // Render charts
+            this.renderWeeklyProductionChart(result);
+            this.renderWeeklyWeatherChart(result);
+
+        } catch (error) {
+            console.error('Failed to load weekly data:', error);
+            if (placeholder) {
+                placeholder.innerHTML = `<span style="color: #dc3545;">Error: ${error.message}</span>`;
+            }
+        }
+    },
+
+    /**
+     * Render production chart (HP + Boiler stacked vs heat loss line)
+     */
+    renderWeeklyProductionChart: function(weekData) {
+        const canvas = document.getElementById('weekly-production-chart');
+        if (!canvas || typeof Chart === 'undefined') {
+            console.error('Chart.js not loaded or canvas not found');
+            return;
+        }
+
+        // Destroy existing chart
+        if (this.weeklyCharts.production) {
+            this.weeklyCharts.production.destroy();
+        }
+
+        const data = weekData.data;
+        const labels = data.map((d, i) => {
+            // Show day abbreviation every 24 hours
+            if (i % 24 === 0) {
+                const date = new Date(d.timestamp);
+                return date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+            }
+            return '';
+        });
+
+        this.weeklyCharts.production = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Heat Loss',
+                        data: data.map(d => d.net_demand > 0 ? d.net_demand : 0),
+                        borderColor: '#333',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.1,
+                        order: 1
+                    },
+                    {
+                        label: 'Heat Pump',
+                        data: data.map(d => d.hp_output),
+                        backgroundColor: 'rgba(40, 167, 69, 0.7)',
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        borderWidth: 1,
+                        fill: true,
+                        pointRadius: 0,
+                        order: 2
+                    },
+                    {
+                        label: 'Boiler',
+                        data: data.map(d => d.boiler_output),
+                        backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        borderWidth: 1,
+                        fill: true,
+                        pointRadius: 0,
+                        order: 3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: `Heat Production: ${weekData.start_date} to ${weekData.end_date}`,
+                        font: { size: 12 }
+                    },
+                    legend: {
+                        position: 'top',
+                        labels: { boxWidth: 12, font: { size: 10 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                const idx = context[0].dataIndex;
+                                return data[idx]?.timestamp || '';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        grid: { display: false },
+                        ticks: { maxRotation: 0, font: { size: 9 } }
+                    },
+                    y: {
+                        display: true,
+                        stacked: false,
+                        title: { display: true, text: 'kW', font: { size: 10 } },
+                        beginAtZero: true,
+                        ticks: { font: { size: 9 } }
+                    }
+                }
+            }
+        });
+    },
+
+    /**
+     * Render weather chart (temperature + wind with dual y-axis)
+     */
+    renderWeeklyWeatherChart: function(weekData) {
+        const canvas = document.getElementById('weekly-weather-chart');
+        if (!canvas || typeof Chart === 'undefined') {
+            console.error('Chart.js not loaded or canvas not found');
+            return;
+        }
+
+        // Destroy existing chart
+        if (this.weeklyCharts.weather) {
+            this.weeklyCharts.weather.destroy();
+        }
+
+        const data = weekData.data;
+        const labels = data.map((d, i) => {
+            if (i % 24 === 0) {
+                const date = new Date(d.timestamp);
+                return date.toLocaleDateString('en-US', { weekday: 'short' });
+            }
+            return '';
+        });
+
+        this.weeklyCharts.weather = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Air Temp (°C)',
+                        data: data.map(d => d.air_temp),
+                        borderColor: 'rgb(54, 162, 235)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        tension: 0.2,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Wind (m/s)',
+                        data: data.map(d => d.wind_speed),
+                        borderColor: 'rgba(0, 188, 212, 0.7)',
+                        backgroundColor: 'transparent',
+                        borderWidth: 1,
+                        borderDash: [3, 3],
+                        pointRadius: 0,
+                        tension: 0.2,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { boxWidth: 12, font: { size: 10 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                const idx = context[0].dataIndex;
+                                return data[idx]?.timestamp || '';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        grid: { display: false },
+                        ticks: { maxRotation: 0, font: { size: 9 } }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: { display: true, text: '°C', font: { size: 10 } },
+                        ticks: { font: { size: 9 } }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: { display: true, text: 'm/s', font: { size: 10 } },
+                        grid: { drawOnChartArea: false },
+                        ticks: { font: { size: 9 } }
+                    }
+                }
+            }
+        });
     },
 
     /**
