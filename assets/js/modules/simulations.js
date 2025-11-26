@@ -611,22 +611,118 @@ const SimulationsModule = {
     },
 
     /**
-     * Toggle config override fields
+     * Populate config values in the override table
+     * Called when config is loaded or changed
      */
-    toggleOverride: function() {
-        const checkbox = document.getElementById('sim-use-override');
-        const overrideFields = document.getElementById('sim-override-fields');
-        const projectConfig = document.getElementById('sim-project-config');
+    populateConfigValues: function(config) {
+        if (!config) return;
 
-        if (checkbox && overrideFields && projectConfig) {
-            if (checkbox.checked) {
-                overrideFields.style.display = 'block';
-                projectConfig.style.display = 'none';
-            } else {
-                overrideFields.style.display = 'none';
-                projectConfig.style.display = 'block';
+        // Map config values to display elements
+        const mappings = {
+            'cfg-val-hp-capacity': config.equipment?.hp_capacity_kw,
+            'cfg-val-boiler-capacity': config.equipment?.boiler_capacity_kw,
+            'cfg-val-target-temp': config.control?.target_temp,
+            'cfg-val-upper-tol': config.control?.upper_tolerance ?? config.control?.temp_tolerance,
+            'cfg-val-lower-tol': config.control?.lower_tolerance ?? config.control?.temp_tolerance,
+            'cfg-val-bathers': config.bathers?.per_day,
+            'cfg-val-activity': config.bathers?.activity_factor,
+            'cfg-val-wind': config.pool?.wind_exposure,
+            'cfg-val-solar': config.solar?.absorption
+        };
+
+        for (const [id, value] of Object.entries(mappings)) {
+            const el = document.getElementById(id);
+            if (el && value !== undefined) {
+                el.textContent = value;
             }
         }
+
+        // Load any saved overrides from localStorage
+        this.loadSavedOverrides();
+    },
+
+    /**
+     * Load saved override values from localStorage
+     */
+    loadSavedOverrides: function() {
+        const key = this.getUserKey('sim_overrides');
+        const saved = localStorage.getItem(key);
+        if (saved) {
+            try {
+                const overrides = JSON.parse(saved);
+                const fields = [
+                    'sim-hp-override', 'sim-boiler-override', 'sim-target-override',
+                    'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
+                    'sim-activity-override', 'sim-wind-override', 'sim-solar-override'
+                ];
+                fields.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el && overrides[id]) {
+                        el.value = overrides[id];
+                    }
+                });
+            } catch (e) {
+                console.error('Failed to load saved overrides:', e);
+            }
+        }
+    },
+
+    /**
+     * Save override values to localStorage
+     */
+    saveOverrides: function() {
+        const fields = [
+            'sim-hp-override', 'sim-boiler-override', 'sim-target-override',
+            'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
+            'sim-activity-override', 'sim-wind-override', 'sim-solar-override'
+        ];
+        const overrides = {};
+        fields.forEach(id => {
+            const el = document.getElementById(id);
+            if (el && el.value) {
+                overrides[id] = el.value;
+            }
+        });
+        const key = this.getUserKey('sim_overrides');
+        localStorage.setItem(key, JSON.stringify(overrides));
+    },
+
+    /**
+     * Get effective config with overrides applied
+     */
+    getEffectiveConfig: function(baseConfig) {
+        const config = JSON.parse(JSON.stringify(baseConfig)); // Deep clone
+
+        // Apply overrides if set
+        const getOverride = (id) => {
+            const el = document.getElementById(id);
+            return el && el.value ? parseFloat(el.value) : null;
+        };
+
+        const hpOverride = getOverride('sim-hp-override');
+        const boilerOverride = getOverride('sim-boiler-override');
+        const targetOverride = getOverride('sim-target-override');
+        const upperTolOverride = getOverride('sim-upper-tol-override');
+        const lowerTolOverride = getOverride('sim-lower-tol-override');
+        const bathersOverride = getOverride('sim-bathers-override');
+        const activityOverride = getOverride('sim-activity-override');
+        const windOverride = getOverride('sim-wind-override');
+        const solarOverride = getOverride('sim-solar-override');
+
+        if (hpOverride !== null) config.equipment.hp_capacity_kw = hpOverride;
+        if (boilerOverride !== null) config.equipment.boiler_capacity_kw = boilerOverride;
+        if (targetOverride !== null) config.control.target_temp = targetOverride;
+        if (upperTolOverride !== null) config.control.upper_tolerance = upperTolOverride;
+        if (lowerTolOverride !== null) config.control.lower_tolerance = lowerTolOverride;
+        if (bathersOverride !== null) config.bathers.per_day = Math.round(bathersOverride);
+        if (activityOverride !== null) config.bathers.activity_factor = activityOverride;
+        if (windOverride !== null) config.pool.wind_exposure = windOverride;
+        if (solarOverride !== null) config.solar.absorption = solarOverride;
+
+        // Save overrides for next time
+        this.saveOverrides();
+
+        return config;
     },
 
     /**

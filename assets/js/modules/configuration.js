@@ -32,7 +32,8 @@ const ConfigurationModule = {
         },
         control: {
             target_temp: 28,
-            temp_tolerance: 2,      // ±°C
+            upper_tolerance: 1,     // °C above target
+            lower_tolerance: 2,     // °C below target
             strategy: 'predictive'  // reactive, predictive, cost_optimizing
         },
         bathers: {
@@ -96,10 +97,13 @@ const ConfigurationModule = {
                 this.configs = data.configs;
                 this.renderConfigSelector();
 
-                // Auto-select first config if available
-                if (this.configs.length > 0 && !this.currentConfigId) {
-                    this.currentConfigId = this.configs[0].template_id;
+                if (this.configs.length > 0) {
+                    // Auto-select first config if none selected
+                    if (!this.currentConfigId) {
+                        this.currentConfigId = this.configs[0].template_id;
+                    }
                     document.getElementById('config-selector').value = this.currentConfigId;
+                    // Always reload selected config to reflect latest saved values
                     this.loadSelected();
                 } else {
                     this.loadDefaults();
@@ -185,7 +189,17 @@ const ConfigurationModule = {
         // Control Settings
         if (config.control) {
             this.setVal('cfg-target-temp', config.control.target_temp);
-            this.setVal('cfg-temp-tolerance', config.control.temp_tolerance);
+            // Handle both old single tolerance and new upper/lower tolerances
+            if (config.control.upper_tolerance !== undefined) {
+                this.setVal('cfg-upper-tolerance', config.control.upper_tolerance);
+            } else if (config.control.temp_tolerance !== undefined) {
+                this.setVal('cfg-upper-tolerance', config.control.temp_tolerance);
+            }
+            if (config.control.lower_tolerance !== undefined) {
+                this.setVal('cfg-lower-tolerance', config.control.lower_tolerance);
+            } else if (config.control.temp_tolerance !== undefined) {
+                this.setVal('cfg-lower-tolerance', config.control.temp_tolerance);
+            }
             this.setVal('cfg-strategy', config.control.strategy);
         }
 
@@ -287,15 +301,20 @@ const ConfigurationModule = {
     setupEventListeners: function() {
         // Temperature range updates
         const targetTemp = document.getElementById('cfg-target-temp');
-        const tolerance = document.getElementById('cfg-temp-tolerance');
+        const upperTol = document.getElementById('cfg-upper-tolerance');
+        const lowerTol = document.getElementById('cfg-lower-tolerance');
 
         if (targetTemp) {
             targetTemp.addEventListener('change', () => this.updateTempRange());
             targetTemp.addEventListener('input', () => this.updateTempRange());
         }
-        if (tolerance) {
-            tolerance.addEventListener('change', () => this.updateTempRange());
-            tolerance.addEventListener('input', () => this.updateTempRange());
+        if (upperTol) {
+            upperTol.addEventListener('change', () => this.updateTempRange());
+            upperTol.addEventListener('input', () => this.updateTempRange());
+        }
+        if (lowerTol) {
+            lowerTol.addEventListener('change', () => this.updateTempRange());
+            lowerTol.addEventListener('input', () => this.updateTempRange());
         }
     },
 
@@ -312,10 +331,11 @@ const ConfigurationModule = {
     // Update calculated temperature range display
     updateTempRange: function() {
         const target = parseFloat(this.getVal('cfg-target-temp')) || 28;
-        const tolerance = parseFloat(this.getVal('cfg-temp-tolerance')) || 2;
+        const upperTol = parseFloat(this.getVal('cfg-upper-tolerance')) || 1;
+        const lowerTol = parseFloat(this.getVal('cfg-lower-tolerance')) || 2;
 
-        const minTemp = target - tolerance;
-        const maxTemp = target + tolerance;
+        const minTemp = target - lowerTol;
+        const maxTemp = target + upperTol;
 
         const rangeEl = document.getElementById('cfg-temp-range');
         if (rangeEl) {
@@ -356,7 +376,8 @@ const ConfigurationModule = {
             },
             control: {
                 target_temp: parseFloat(this.getVal('cfg-target-temp')),
-                temp_tolerance: parseFloat(this.getVal('cfg-temp-tolerance')),
+                upper_tolerance: parseFloat(this.getVal('cfg-upper-tolerance')),
+                lower_tolerance: parseFloat(this.getVal('cfg-lower-tolerance')),
                 strategy: this.getVal('cfg-strategy')
             },
             bathers: {

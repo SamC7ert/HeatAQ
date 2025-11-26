@@ -436,6 +436,54 @@ p.loading {
     padding: 6px 10px;
 }
 
+/* Override Table (Config | Override columns) */
+#sim-override-table {
+    font-size: 13px;
+}
+
+#sim-override-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 2px solid #dee2e6;
+}
+
+#sim-override-table th:nth-child(1) { width: 45%; }
+#sim-override-table th:nth-child(2) { width: 25%; text-align: center; }
+#sim-override-table th:nth-child(3) { width: 30%; }
+
+#sim-override-table td:nth-child(2) {
+    text-align: center;
+    font-weight: 500;
+    color: #666;
+    background: #f8f9fa;
+}
+
+#sim-override-table td:nth-child(3) input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+    text-align: center;
+}
+
+#sim-override-table td:nth-child(3) input:focus {
+    outline: none;
+    border-color: #007bff;
+    background: #fff8e7;
+}
+
+#sim-override-table td:nth-child(3) input:not(:placeholder-shown) {
+    background: #e8f5e9;
+    border-color: #4caf50;
+}
+
+.config-value {
+    font-family: 'Courier New', monospace;
+}
+
 /* Config Toggle */
 .config-toggle {
     margin-bottom: 15px;
@@ -468,6 +516,84 @@ p.loading {
 .vs-label {
     font-weight: 600;
     color: #666;
+}
+
+/* Analyse Matrix (Scenario Comparison) */
+.analyse-matrix {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.analyse-matrix th {
+    background: #f8f9fa;
+    padding: 10px;
+    font-weight: 600;
+    text-align: center;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.analyse-matrix th:first-child {
+    text-align: left;
+}
+
+.analyse-matrix td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #eee;
+    text-align: center;
+}
+
+.analyse-matrix td:first-child {
+    text-align: left;
+    font-weight: 500;
+    color: #555;
+}
+
+.analyse-matrix .input-row input,
+.analyse-matrix .input-row select {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 12px;
+    text-align: center;
+}
+
+.analyse-matrix .input-row select {
+    cursor: pointer;
+}
+
+.analyse-matrix .input-row input:focus,
+.analyse-matrix .input-row select:focus {
+    outline: none;
+    border-color: #007bff;
+    background: #f8f9ff;
+}
+
+.analyse-matrix .output-row td {
+    background: #f8f9fa;
+}
+
+.analyse-matrix .result-cell {
+    font-family: 'Courier New', monospace;
+    font-weight: 600;
+}
+
+.analyse-matrix .result-cell.good {
+    color: #28a745;
+}
+
+.analyse-matrix .result-cell.warning {
+    color: #ffc107;
+}
+
+.analyse-matrix .result-cell.bad {
+    color: #dc3545;
+}
+
+.analyse-matrix .result-cell.loading {
+    color: #888;
+    font-style: italic;
 }
 
 /* Large Button */
