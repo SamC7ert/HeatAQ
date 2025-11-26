@@ -1534,8 +1534,8 @@ class HeatAQAPI {
     // ====================================
 
     private function getSolarStatus() {
-        // Check if solar_hourly_data table exists
-        $tableExists = $this->columnExists('solar_hourly_data', 'site_id');
+        // Check if site_solar_hourly table exists
+        $tableExists = $this->columnExists('site_solar_hourly', 'site_id');
 
         if (!$tableExists) {
             $this->sendResponse([
@@ -1553,7 +1553,7 @@ class HeatAQAPI {
                 MAX(timestamp) as data_end,
                 COUNT(*) as hour_count,
                 COUNT(DISTINCT DATE(timestamp)) as day_count
-            FROM solar_hourly_data
+            FROM site_solar_hourly
             WHERE site_id = ?
         ");
         $stmt->execute([$this->siteId]);

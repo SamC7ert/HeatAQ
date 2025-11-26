@@ -132,31 +132,53 @@ class NasaSolarFetcher {
     }
 
     /**
-     * Fetch and store solar data for a site
+     * Fetch and store solar data for a site (both daily and hourly)
      */
     public function fetchAndStore(float $latitude, float $longitude, string $startYear, string $endYear): array {
         // Fetch from NASA
         $nasaData = $this->fetchFromNasa($latitude, $longitude, $startYear, $endYear);
 
-        // Prepare insert statement
-        $stmt = $this->db->prepare("
-            INSERT INTO solar_hourly_data
-            (site_id, timestamp, solar_radiation_wh_m2, solar_clear_sky_wh_m2, cloud_factor)
+        // Prepare insert statements for both tables
+        $dailyStmt = $this->db->prepare("
+            INSERT INTO site_solar_daily
+            (site_id, date, daily_kwh_m2, clear_sky_kwh_m2, cloud_factor)
             VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                daily_kwh_m2 = VALUES(daily_kwh_m2),
+                clear_sky_kwh_m2 = VALUES(clear_sky_kwh_m2),
+                cloud_factor = VALUES(cloud_factor)
+        ");
+
+        $hourlyStmt = $this->db->prepare("
+            INSERT INTO site_solar_hourly
+            (site_id, timestamp, solar_wh_m2, clear_sky_wh_m2)
+            VALUES (?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                solar_wh_m2 = VALUES(solar_wh_m2),
+                clear_sky_wh_m2 = VALUES(clear_sky_wh_m2)
         ");
 
         // Clear existing data for this site in the date range
         $this->db->prepare("
-            DELETE FROM solar_hourly_data
-            WHERE site_id = ?
-            AND DATE(timestamp) BETWEEN ? AND ?
+            DELETE FROM site_solar_daily
+            WHERE site_id = ? AND date BETWEEN ? AND ?
         ")->execute([
             $this->siteId,
             $startYear . '-01-01',
             $endYear . '-12-31'
         ]);
 
-        $insertCount = 0;
+        $this->db->prepare("
+            DELETE FROM site_solar_hourly
+            WHERE site_id = ? AND DATE(timestamp) BETWEEN ? AND ?
+        ")->execute([
+            $this->siteId,
+            $startYear . '-01-01',
+            $endYear . '-12-31'
+        ]);
+
+        $dailyCount = 0;
+        $hourlyCount = 0;
         $this->db->beginTransaction();
 
         try {
@@ -167,25 +189,35 @@ class NasaSolarFetcher {
                 $date = DateTime::createFromFormat('Ymd', $dateStr);
                 if (!$date) continue;
 
+                $dateFormatted = $date->format('Y-m-d');
                 $clearSkyKwh = $nasaData['clear_sky'][$dateStr] ?? 0;
                 $cloudFactor = $clearSkyKwh > 0 ? $dailyKwhM2 / $clearSkyKwh : 1;
 
-                // Distribute to hourly
+                // Store daily data (raw from NASA)
+                $dailyStmt->execute([
+                    $this->siteId,
+                    $dateFormatted,
+                    round($dailyKwhM2, 4),
+                    round($clearSkyKwh, 4),
+                    round($cloudFactor, 4)
+                ]);
+                $dailyCount++;
+
+                // Distribute to hourly using solar position
                 $hourlyActual = $this->distributeDailyToHourly($dailyKwhM2, $latitude, $date);
                 $hourlyClearSky = $this->distributeDailyToHourly($clearSkyKwh, $latitude, $date);
 
-                // Insert each hour
+                // Store hourly data
                 for ($hour = 0; $hour < 24; $hour++) {
-                    $timestamp = $date->format('Y-m-d') . ' ' . sprintf('%02d:00:00', $hour);
+                    $timestamp = $dateFormatted . ' ' . sprintf('%02d:00:00', $hour);
 
-                    $stmt->execute([
+                    $hourlyStmt->execute([
                         $this->siteId,
                         $timestamp,
                         round($hourlyActual[$hour], 2),
-                        round($hourlyClearSky[$hour], 2),
-                        round($cloudFactor, 4)
+                        round($hourlyClearSky[$hour], 2)
                     ]);
-                    $insertCount++;
+                    $hourlyCount++;
                 }
             }
 
@@ -209,7 +241,8 @@ class NasaSolarFetcher {
 
             return [
                 'success' => true,
-                'records_inserted' => $insertCount,
+                'daily_records' => $dailyCount,
+                'hourly_records' => $hourlyCount,
                 'days_processed' => count($nasaData['all_sky']),
                 'date_range' => [
                     'start' => $startYear . '-01-01',
@@ -228,8 +261,8 @@ class NasaSolarFetcher {
      */
     public function getHourlySolar(string $timestamp): ?array {
         $stmt = $this->db->prepare("
-            SELECT solar_radiation_wh_m2, solar_clear_sky_wh_m2, cloud_factor
-            FROM solar_hourly_data
+            SELECT solar_wh_m2, clear_sky_wh_m2
+            FROM site_solar_hourly
             WHERE site_id = ? AND timestamp = ?
             LIMIT 1
         ");
@@ -243,10 +276,24 @@ class NasaSolarFetcher {
     public function getSolarDataRange(): ?array {
         $stmt = $this->db->prepare("
             SELECT MIN(timestamp) as min_date, MAX(timestamp) as max_date, COUNT(*) as hours
-            FROM solar_hourly_data
+            FROM site_solar_hourly
             WHERE site_id = ?
         ");
         $stmt->execute([$this->siteId]);
         return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Get daily solar data for a specific date (for debugging)
+     */
+    public function getDailySolar(string $date): ?array {
+        $stmt = $this->db->prepare("
+            SELECT daily_kwh_m2, clear_sky_kwh_m2, cloud_factor
+            FROM site_solar_daily
+            WHERE site_id = ? AND date = ?
+            LIMIT 1
+        ");
+        $stmt->execute([$this->siteId, $date]);
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 }
