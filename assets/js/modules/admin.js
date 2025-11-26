@@ -729,6 +729,52 @@ const AdminModule = {
             console.error('Failed to save user:', err);
             alert('Failed to save user');
         }
+    },
+
+    // ========================================
+    // SYSTEM TOOLS
+    // ========================================
+
+    loadSystemInfo: async function() {
+        try {
+            // Get simulator version from API
+            const response = await fetch('./api/simulation_api.php?action=get_version');
+            const data = await response.json();
+
+            if (data.version) {
+                const simVer = document.getElementById('sys-simulator-ver');
+                if (simVer) simVer.textContent = data.version;
+            }
+            if (data.php_version) {
+                const phpVer = document.getElementById('sys-php-ver');
+                if (phpVer) phpVer.textContent = data.php_version;
+            }
+        } catch (err) {
+            console.error('Failed to load system info:', err);
+        }
+    },
+
+    dumpSchema: async function() {
+        const status = document.getElementById('schema-status');
+        const result = document.getElementById('schema-result');
+
+        if (status) status.textContent = 'Exporting...';
+        if (result) result.style.display = 'none';
+
+        try {
+            const response = await fetch('./db/dump_schema.php');
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                if (status) status.textContent = `Done! ${data.tables} tables exported.`;
+                if (result) result.style.display = 'block';
+            } else {
+                if (status) status.textContent = 'Error: ' + (data.error || 'Unknown error');
+            }
+        } catch (err) {
+            console.error('Schema dump failed:', err);
+            if (status) status.textContent = 'Error: ' + err.message;
+        }
     }
 };
 

@@ -506,7 +506,9 @@ try {
 
         case 'get_version':
             sendResponse([
-                'simulator_version' => EnergySimulator::getVersion()
+                'version' => EnergySimulator::getVersion(),
+                'simulator_version' => EnergySimulator::getVersion(),
+                'php_version' => PHP_VERSION
             ]);
             break;
 
