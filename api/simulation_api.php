@@ -152,31 +152,55 @@ try {
 
             // Load and apply configuration if specified
             if ($configId) {
-                // Include legacy columns to merge with json_config
-                $configStmt = $pdo->prepare("
-                    SELECT json_config, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy
-                    FROM config_templates WHERE template_id = ?
-                ");
-                $configStmt->execute([$configId]);
-                $configRow = $configStmt->fetch();
+                $config = null;
+                $configRow = null;
+
+                // Try with all columns first (json_config + legacy columns)
+                try {
+                    $configStmt = $pdo->prepare("
+                        SELECT json_config, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy
+                        FROM config_templates WHERE template_id = ?
+                    ");
+                    $configStmt->execute([$configId]);
+                    $configRow = $configStmt->fetch();
+                } catch (PDOException $e) {
+                    // Columns may not exist, try fallback
+                    $configRow = null;
+                }
+
+                // Fallback: try config_json column (original schema name)
+                if (!$configRow) {
+                    try {
+                        $configStmt = $pdo->prepare("
+                            SELECT config_json as json_config
+                            FROM config_templates WHERE template_id = ?
+                        ");
+                        $configStmt->execute([$configId]);
+                        $configRow = $configStmt->fetch();
+                    } catch (PDOException $e) {
+                        // Neither column exists
+                        $configRow = null;
+                    }
+                }
+
                 if ($configRow) {
                     $config = json_decode($configRow['json_config'] ?? '{}', true) ?: [];
 
-                    // Ensure nested arrays exist (values come from pool_configurations + JSON overrides)
+                    // Ensure nested arrays exist
                     if (!isset($config['equipment'])) $config['equipment'] = [];
                     if (!isset($config['control'])) $config['control'] = [];
 
                     // Override with legacy column values if set (legacy columns take precedence)
-                    if ($configRow['hp_capacity_kw'] !== null) {
+                    if (isset($configRow['hp_capacity_kw']) && $configRow['hp_capacity_kw'] !== null) {
                         $config['equipment']['hp_capacity_kw'] = (float)$configRow['hp_capacity_kw'];
                     }
-                    if ($configRow['boiler_capacity_kw'] !== null) {
+                    if (isset($configRow['boiler_capacity_kw']) && $configRow['boiler_capacity_kw'] !== null) {
                         $config['equipment']['boiler_capacity_kw'] = (float)$configRow['boiler_capacity_kw'];
                     }
-                    if ($configRow['target_temp'] !== null) {
+                    if (isset($configRow['target_temp']) && $configRow['target_temp'] !== null) {
                         $config['control']['target_temp'] = (float)$configRow['target_temp'];
                     }
-                    if ($configRow['control_strategy'] !== null) {
+                    if (isset($configRow['control_strategy']) && $configRow['control_strategy'] !== null) {
                         $config['control']['strategy'] = $configRow['control_strategy'];
                     }
 
@@ -514,26 +538,48 @@ try {
 
             // Load config if specified
             if ($configId) {
-                $configStmt = $pdo->prepare("
-                    SELECT json_config, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy
-                    FROM config_templates WHERE template_id = ?
-                ");
-                $configStmt->execute([$configId]);
-                $configRow = $configStmt->fetch();
+                $configRow = null;
+
+                // Try with all columns first
+                try {
+                    $configStmt = $pdo->prepare("
+                        SELECT json_config, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy
+                        FROM config_templates WHERE template_id = ?
+                    ");
+                    $configStmt->execute([$configId]);
+                    $configRow = $configStmt->fetch();
+                } catch (PDOException $e) {
+                    $configRow = null;
+                }
+
+                // Fallback: try config_json column
+                if (!$configRow) {
+                    try {
+                        $configStmt = $pdo->prepare("
+                            SELECT config_json as json_config
+                            FROM config_templates WHERE template_id = ?
+                        ");
+                        $configStmt->execute([$configId]);
+                        $configRow = $configStmt->fetch();
+                    } catch (PDOException $e) {
+                        $configRow = null;
+                    }
+                }
+
                 if ($configRow) {
                     $config = json_decode($configRow['json_config'] ?? '{}', true) ?: [];
                     if (!isset($config['equipment'])) $config['equipment'] = [];
                     if (!isset($config['control'])) $config['control'] = [];
-                    if ($configRow['hp_capacity_kw'] !== null) {
+                    if (isset($configRow['hp_capacity_kw']) && $configRow['hp_capacity_kw'] !== null) {
                         $config['equipment']['hp_capacity_kw'] = (float)$configRow['hp_capacity_kw'];
                     }
-                    if ($configRow['boiler_capacity_kw'] !== null) {
+                    if (isset($configRow['boiler_capacity_kw']) && $configRow['boiler_capacity_kw'] !== null) {
                         $config['equipment']['boiler_capacity_kw'] = (float)$configRow['boiler_capacity_kw'];
                     }
-                    if ($configRow['target_temp'] !== null) {
+                    if (isset($configRow['target_temp']) && $configRow['target_temp'] !== null) {
                         $config['control']['target_temp'] = (float)$configRow['target_temp'];
                     }
-                    if ($configRow['control_strategy'] !== null) {
+                    if (isset($configRow['control_strategy']) && $configRow['control_strategy'] !== null) {
                         $config['control']['strategy'] = $configRow['control_strategy'];
                     }
                     $simulator->setConfigFromUI($config);

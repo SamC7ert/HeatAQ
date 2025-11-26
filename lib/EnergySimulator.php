@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.7.0';
+    const VERSION = '3.8.0';
 
     private $db;
     private $siteId;
