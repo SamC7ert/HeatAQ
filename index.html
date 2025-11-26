@@ -649,9 +649,22 @@
 
                         <!-- Weekly Graph -->
                         <div class="card" style="padding: 12px; margin-bottom: 15px;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px;">Weekly Heat Profile (Thu-Wed)</h4>
-                            <div id="debug-weekly-chart" style="height: 200px; background: #f9f9f9; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999;">
-                                Run calculation to show weekly data
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <h4 style="margin: 0; font-size: 14px;">Weekly Heat Profile (Thu-Wed)</h4>
+                                <button onclick="app.simulations.loadWeeklyChart()" class="btn btn-sm btn-primary" style="padding: 4px 12px; font-size: 12px;">Load Week</button>
+                            </div>
+                            <div id="debug-weekly-chart-placeholder" style="height: 100px; background: #f9f9f9; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999;">
+                                Click "Load Week" to fetch weekly data
+                            </div>
+                            <div id="debug-weekly-charts" style="display: none;">
+                                <!-- Production Chart (HP + Boiler vs Heat Loss) -->
+                                <div style="height: 180px; margin-bottom: 10px;">
+                                    <canvas id="weekly-production-chart"></canvas>
+                                </div>
+                                <!-- Weather Chart (Temperature + Wind) -->
+                                <div style="height: 120px;">
+                                    <canvas id="weekly-weather-chart"></canvas>
+                                </div>
                             </div>
                         </div>
 
@@ -930,6 +943,9 @@
         };
     </script>
     
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
     <script src="./assets/js/config.js"></script>

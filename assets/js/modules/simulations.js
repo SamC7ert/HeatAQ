@@ -913,6 +913,266 @@ const SimulationsModule = {
         if (resultsDiv) resultsDiv.style.display = 'block';
     },
 
+    // Weekly chart instances (for cleanup)
+    weeklyCharts: {
+        production: null,
+        weather: null
+    },
+
+    /**
+     * Load weekly chart data and render charts
+     */
+    loadWeeklyChart: async function() {
+        const dateInput = document.getElementById('debug-date');
+        const configSelect = document.getElementById('debug-config-select');
+
+        if (!dateInput || !dateInput.value) {
+            alert('Please select a date first');
+            return;
+        }
+
+        const date = dateInput.value;
+        const configId = configSelect?.value || '';
+
+        // Show loading
+        const placeholder = document.getElementById('debug-weekly-chart-placeholder');
+        const chartsDiv = document.getElementById('debug-weekly-charts');
+        if (placeholder) placeholder.innerHTML = '<span style="color: #666;">Loading weekly data...</span>';
+
+        try {
+            const url = `/api/simulation_api.php?action=debug_week&date=${date}&config_id=${configId}`;
+            const response = await fetch(url);
+            const result = await response.json();
+
+            if (result.error) {
+                throw new Error(result.error);
+            }
+
+            if (!result.data || result.data.length === 0) {
+                throw new Error('No data returned for this week');
+            }
+
+            // Hide placeholder, show charts
+            if (placeholder) placeholder.style.display = 'none';
+            if (chartsDiv) chartsDiv.style.display = 'block';
+
+            // Render charts
+            this.renderWeeklyProductionChart(result);
+            this.renderWeeklyWeatherChart(result);
+
+        } catch (error) {
+            console.error('Failed to load weekly data:', error);
+            if (placeholder) {
+                placeholder.innerHTML = `<span style="color: #dc3545;">Error: ${error.message}</span>`;
+            }
+        }
+    },
+
+    /**
+     * Render production chart (HP + Boiler stacked vs heat loss line)
+     */
+    renderWeeklyProductionChart: function(weekData) {
+        const canvas = document.getElementById('weekly-production-chart');
+        if (!canvas || typeof Chart === 'undefined') {
+            console.error('Chart.js not loaded or canvas not found');
+            return;
+        }
+
+        // Destroy existing chart
+        if (this.weeklyCharts.production) {
+            this.weeklyCharts.production.destroy();
+        }
+
+        const data = weekData.data;
+        const labels = data.map((d, i) => {
+            // Show day abbreviation every 24 hours
+            if (i % 24 === 0) {
+                const date = new Date(d.timestamp);
+                return date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+            }
+            return '';
+        });
+
+        this.weeklyCharts.production = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Heat Loss',
+                        data: data.map(d => d.net_demand > 0 ? d.net_demand : 0),
+                        borderColor: '#333',
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.1,
+                        order: 1
+                    },
+                    {
+                        label: 'Heat Pump',
+                        data: data.map(d => d.hp_output),
+                        backgroundColor: 'rgba(40, 167, 69, 0.7)',
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        borderWidth: 1,
+                        fill: true,
+                        pointRadius: 0,
+                        order: 2
+                    },
+                    {
+                        label: 'Boiler',
+                        data: data.map(d => d.boiler_output),
+                        backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        borderWidth: 1,
+                        fill: true,
+                        pointRadius: 0,
+                        order: 3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: `Heat Production: ${weekData.start_date} to ${weekData.end_date}`,
+                        font: { size: 12 }
+                    },
+                    legend: {
+                        position: 'top',
+                        labels: { boxWidth: 12, font: { size: 10 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                const idx = context[0].dataIndex;
+                                return data[idx]?.timestamp || '';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        grid: { display: false },
+                        ticks: { maxRotation: 0, font: { size: 9 } }
+                    },
+                    y: {
+                        display: true,
+                        stacked: false,
+                        title: { display: true, text: 'kW', font: { size: 10 } },
+                        beginAtZero: true,
+                        ticks: { font: { size: 9 } }
+                    }
+                }
+            }
+        });
+    },
+
+    /**
+     * Render weather chart (temperature + wind with dual y-axis)
+     */
+    renderWeeklyWeatherChart: function(weekData) {
+        const canvas = document.getElementById('weekly-weather-chart');
+        if (!canvas || typeof Chart === 'undefined') {
+            console.error('Chart.js not loaded or canvas not found');
+            return;
+        }
+
+        // Destroy existing chart
+        if (this.weeklyCharts.weather) {
+            this.weeklyCharts.weather.destroy();
+        }
+
+        const data = weekData.data;
+        const labels = data.map((d, i) => {
+            if (i % 24 === 0) {
+                const date = new Date(d.timestamp);
+                return date.toLocaleDateString('en-US', { weekday: 'short' });
+            }
+            return '';
+        });
+
+        this.weeklyCharts.weather = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Air Temp (°C)',
+                        data: data.map(d => d.air_temp),
+                        borderColor: 'rgb(54, 162, 235)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        tension: 0.2,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Wind (m/s)',
+                        data: data.map(d => d.wind_speed),
+                        borderColor: 'rgba(0, 188, 212, 0.7)',
+                        backgroundColor: 'transparent',
+                        borderWidth: 1,
+                        borderDash: [3, 3],
+                        pointRadius: 0,
+                        tension: 0.2,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { boxWidth: 12, font: { size: 10 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                const idx = context[0].dataIndex;
+                                return data[idx]?.timestamp || '';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        grid: { display: false },
+                        ticks: { maxRotation: 0, font: { size: 9 } }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: { display: true, text: '°C', font: { size: 10 } },
+                        ticks: { font: { size: 9 } }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: { display: true, text: 'm/s', font: { size: 10 } },
+                        grid: { drawOnChartArea: false },
+                        ticks: { font: { size: 9 } }
+                    }
+                }
+            }
+        });
+    },
+
     /**
      * Initialize debug section
      */

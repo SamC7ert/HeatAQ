@@ -594,8 +594,136 @@ try {
             sendResponse($debug);
             break;
 
+        case 'debug_week':
+            // Debug a week of hourly calculations for chart visualization
+            // Returns compact data for Thu-Wed week centered on selected date
+            $centerDate = getParam('date');
+            $configId = getParam('config_id');
+
+            if (!$centerDate) {
+                sendError('date parameter required (YYYY-MM-DD)');
+            }
+
+            if (!validateDate($centerDate)) {
+                sendError('Invalid date format. Use YYYY-MM-DD');
+            }
+
+            // Calculate Thu-Wed week range (Thu before to Wed after the selected date)
+            $centerDt = new DateTime($centerDate);
+            $dayOfWeek = (int) $centerDt->format('N'); // 1=Mon, 4=Thu, 7=Sun
+
+            // Find Thursday before or on the center date
+            $daysToThursday = ($dayOfWeek >= 4) ? ($dayOfWeek - 4) : ($dayOfWeek + 3);
+            $startDt = clone $centerDt;
+            $startDt->modify("-{$daysToThursday} days");
+
+            // End on Wednesday (6 days after Thursday)
+            $endDt = clone $startDt;
+            $endDt->modify("+6 days");
+
+            // Initialize scheduler and simulator
+            $scheduler = new PoolScheduler($pdo, $currentSiteId);
+            $simulator = new EnergySimulator($pdo, $currentSiteId, $scheduler);
+
+            // Load config if specified
+            if ($configId) {
+                $configRow = null;
+                try {
+                    $configStmt = $pdo->prepare("
+                        SELECT json_config, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy
+                        FROM config_templates WHERE template_id = ?
+                    ");
+                    $configStmt->execute([$configId]);
+                    $configRow = $configStmt->fetch();
+                } catch (PDOException $e) {
+                    $configRow = null;
+                }
+
+                if (!$configRow) {
+                    try {
+                        $configStmt = $pdo->prepare("
+                            SELECT config_json as json_config
+                            FROM config_templates WHERE template_id = ?
+                        ");
+                        $configStmt->execute([$configId]);
+                        $configRow = $configStmt->fetch();
+                    } catch (PDOException $e) {
+                        $configRow = null;
+                    }
+                }
+
+                if ($configRow) {
+                    $config = json_decode($configRow['json_config'] ?? '{}', true) ?: [];
+                    if (!isset($config['equipment'])) $config['equipment'] = [];
+                    if (!isset($config['control'])) $config['control'] = [];
+                    if (isset($configRow['hp_capacity_kw']) && $configRow['hp_capacity_kw'] !== null) {
+                        $config['equipment']['hp_capacity_kw'] = (float)$configRow['hp_capacity_kw'];
+                    }
+                    if (isset($configRow['boiler_capacity_kw']) && $configRow['boiler_capacity_kw'] !== null) {
+                        $config['equipment']['boiler_capacity_kw'] = (float)$configRow['boiler_capacity_kw'];
+                    }
+                    if (isset($configRow['target_temp']) && $configRow['target_temp'] !== null) {
+                        $config['control']['target_temp'] = (float)$configRow['target_temp'];
+                    }
+                    if (isset($configRow['control_strategy']) && $configRow['control_strategy'] !== null) {
+                        $config['control']['strategy'] = $configRow['control_strategy'];
+                    }
+                    $simulator->setConfigFromUI($config);
+                }
+            }
+
+            // Calculate hourly data for the week (168 hours)
+            $hourlyData = [];
+            $currentDt = clone $startDt;
+            $prevWaterTemp = 28.0; // Starting water temp assumption
+
+            while ($currentDt <= $endDt) {
+                $dateStr = $currentDt->format('Y-m-d');
+                for ($h = 0; $h < 24; $h++) {
+                    $debug = $simulator->debugSingleHour($dateStr, $h, $prevWaterTemp);
+
+                    if (isset($debug['error'])) {
+                        // Skip hours without weather data
+                        continue;
+                    }
+
+                    // Extract compact data for chart
+                    $hourlyData[] = [
+                        'timestamp' => $dateStr . ' ' . sprintf('%02d:00', $h),
+                        'hour' => count($hourlyData),
+                        'air_temp' => $debug['input']['weather']['air_temp_c'] ?? null,
+                        'wind_speed' => $debug['input']['weather']['wind_speed_ms'] ?? null,
+                        'water_temp' => $debug['input']['pool']['water_temp_c'] ?? 28,
+                        'total_loss' => $debug['summary']['total_loss_kw'] ?? 0,
+                        'net_demand' => $debug['summary']['net_requirement_kw'] ?? 0,
+                        'solar_gain' => $debug['summary']['solar_gain_kw'] ?? 0,
+                        'hp_output' => $debug['heat_pump']['output_kw'] ?? 0,
+                        'hp_electric' => $debug['heat_pump']['electricity_kw'] ?? 0,
+                        'hp_cop' => $debug['heat_pump']['cop'] ?? 0,
+                        'boiler_output' => $debug['boiler']['output_kw'] ?? 0,
+                        'boiler_fuel' => $debug['boiler']['fuel_kw'] ?? 0,
+                        'is_open' => $debug['input']['config']['is_open'] ?? false,
+                        'has_cover' => $debug['input']['config']['has_cover'] ?? false,
+                    ];
+
+                    // Use current water temp as starting point for next hour
+                    // This is a simplification - actual temp would depend on heating vs loss
+                    $prevWaterTemp = $debug['input']['pool']['water_temp_c'] ?? 28;
+                }
+                $currentDt->modify('+1 day');
+            }
+
+            sendResponse([
+                'start_date' => $startDt->format('Y-m-d'),
+                'end_date' => $endDt->format('Y-m-d'),
+                'center_date' => $centerDate,
+                'hours' => count($hourlyData),
+                'data' => $hourlyData,
+            ]);
+            break;
+
         default:
-            sendError('Invalid action. Valid actions: run_simulation, get_runs, get_run, get_summary, get_daily_results, get_results, delete_run, get_weather_range, get_pool_config, get_version, debug_hour');
+            sendError('Invalid action. Valid actions: run_simulation, get_runs, get_run, get_summary, get_daily_results, get_results, delete_run, get_weather_range, get_pool_config, get_version, debug_hour, debug_week');
     }
 
 } catch (PDOException $e) {
