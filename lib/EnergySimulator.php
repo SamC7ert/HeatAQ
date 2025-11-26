@@ -345,9 +345,8 @@ class EnergySimulator {
                 }
             }
 
-            // Get solar for this day
-            $dailySolar = $solarData[$date] ?? ['daily_total_kwh_m2' => 0];
-            $hourlySolar = $this->distributeSolarToHour($dailySolar, $hourOfDay);
+            // Get solar for this hour (uses pre-calculated hourly if available)
+            $hourlySolar = $this->getSolarForHour($solarData, $date, $hourOfDay);
 
             // Calculate heat losses
             $losses = $this->calculateHeatLosses(
@@ -557,10 +556,63 @@ class EnergySimulator {
     }
 
     /**
-     * Get solar data for date range
+     * Check if hourly solar data is available for this site
+     */
+    private function hasHourlySolarData() {
+        try {
+            $stmt = $this->db->prepare("
+                SELECT COUNT(*) FROM solar_hourly_data WHERE site_id = ? LIMIT 1
+            ");
+            $stmt->execute([$this->siteId]);
+            return $stmt->fetchColumn() > 0;
+        } catch (PDOException $e) {
+            // Table doesn't exist yet
+            return false;
+        }
+    }
+
+    /**
+     * Get hourly solar data for date range (new method - pre-calculated values)
+     */
+    private function getHourlySolarData($startDate, $endDate) {
+        $stmt = $this->db->prepare("
+            SELECT
+                timestamp,
+                solar_radiation_wh_m2,
+                solar_clear_sky_wh_m2,
+                cloud_factor
+            FROM solar_hourly_data
+            WHERE site_id = ?
+              AND DATE(timestamp) BETWEEN ? AND ?
+            ORDER BY timestamp
+        ");
+        $stmt->execute([$this->siteId, $startDate, $endDate]);
+        $rows = $stmt->fetchAll();
+
+        // Index by timestamp
+        $solarByTimestamp = [];
+        foreach ($rows as $row) {
+            $ts = $row['timestamp'];
+            // Convert Wh/m² to kWh/m² for consistency with existing code
+            $solarByTimestamp[$ts] = [
+                'hourly_kwh_m2' => $row['solar_radiation_wh_m2'] / 1000,
+                'hourly_clear_sky_kwh_m2' => $row['solar_clear_sky_wh_m2'] / 1000,
+                'cloud_factor' => $row['cloud_factor']
+            ];
+        }
+        return $solarByTimestamp;
+    }
+
+    /**
+     * Get solar data for date range (legacy - daily data)
      */
     private function getSolarData($startDate, $endDate) {
-        // TODO: Link solar_daily_data to site_id instead of station_id
+        // First check if we have hourly data (preferred)
+        if ($this->hasHourlySolarData()) {
+            return $this->getHourlySolarData($startDate, $endDate);
+        }
+
+        // Fallback to legacy daily data via weather station
         $stmt = $this->db->prepare("
             SELECT
                 sd.date,
@@ -577,7 +629,7 @@ class EnergySimulator {
         $stmt->execute([$this->siteId, $startDate, $endDate]);
         $rows = $stmt->fetchAll();
 
-        // Index by date
+        // Index by date (legacy format)
         $solarByDate = [];
         foreach ($rows as $row) {
             $solarByDate[$row['date']] = $row;
@@ -586,7 +638,24 @@ class EnergySimulator {
     }
 
     /**
-     * Distribute daily solar to hourly (simple bell curve)
+     * Get solar for a specific hour - handles both hourly and daily data
+     */
+    private function getSolarForHour($solarData, $date, $hour) {
+        // Check if this is hourly data (has timestamp keys)
+        $timestamp = $date . ' ' . sprintf('%02d:00:00', $hour);
+
+        if (isset($solarData[$timestamp])) {
+            // Hourly data - return pre-calculated value
+            return $solarData[$timestamp]['hourly_kwh_m2'];
+        }
+
+        // Legacy daily data - distribute to hourly
+        $dailySolar = $solarData[$date] ?? ['daily_total_kwh_m2' => 0];
+        return $this->distributeSolarToHour($dailySolar, $hour);
+    }
+
+    /**
+     * Distribute daily solar to hourly (legacy fallback - simple bell curve)
      */
     private function distributeSolarToHour($dailySolar, $hour) {
         // Solar primarily between 6am and 8pm with peak at noon
@@ -1084,17 +1153,46 @@ class EnergySimulator {
             return ['error' => "No weather data found for $timestamp"];
         }
 
-        // Get solar data for this day
-        $stmt = $this->db->prepare("
-            SELECT daily_total_kwh_m2, daily_clear_sky_kwh_m2
-            FROM solar_daily_data sd
-            JOIN weather_stations ws ON sd.station_id = ws.station_id
-            JOIN pool_sites ps ON ws.station_id = ps.default_weather_station
-            WHERE ps.site_id = ? AND sd.date = ?
-            LIMIT 1
-        ");
-        $stmt->execute([$this->siteId, $date]);
-        $solar = $stmt->fetch();
+        // Get solar data for this hour (prefer hourly data if available)
+        $hourlySolar = 0;
+        $dailySolar = 0;
+        $solarSource = 'none';
+
+        // First try hourly data
+        if ($this->hasHourlySolarData()) {
+            $stmt = $this->db->prepare("
+                SELECT solar_radiation_wh_m2, solar_clear_sky_wh_m2
+                FROM solar_hourly_data
+                WHERE site_id = ? AND timestamp = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$this->siteId, $timestamp]);
+            $hourlyRow = $stmt->fetch();
+            if ($hourlyRow) {
+                $hourlySolar = $hourlyRow['solar_radiation_wh_m2'] / 1000; // Wh to kWh
+                $dailySolar = $hourlySolar * 24; // Estimate for display
+                $solarSource = 'hourly';
+            }
+        }
+
+        // Fallback to legacy daily data
+        if ($solarSource === 'none') {
+            $stmt = $this->db->prepare("
+                SELECT daily_total_kwh_m2, daily_clear_sky_kwh_m2
+                FROM solar_daily_data sd
+                JOIN weather_stations ws ON sd.station_id = ws.station_id
+                JOIN pool_sites ps ON ws.station_id = ps.default_weather_station
+                WHERE ps.site_id = ? AND sd.date = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$this->siteId, $date]);
+            $solar = $stmt->fetch();
+            if ($solar) {
+                $dailySolar = (float) $solar['daily_total_kwh_m2'];
+                $hourlySolar = $this->distributeSolarToHour(['daily_total_kwh_m2' => $dailySolar], $hour);
+                $solarSource = 'daily';
+            }
+        }
 
         // Get schedule info
         $isOpen = false;
@@ -1116,9 +1214,7 @@ class EnergySimulator {
         $humidity = (float) ($weather['humidity'] ?? 70);
         $tunnelTemp = $weather['tunnel_temp'] ? (float) $weather['tunnel_temp'] : null;
 
-        // Solar for this hour
-        $dailySolar = $solar ? (float) $solar['daily_total_kwh_m2'] : 0;
-        $hourlySolar = $this->distributeSolarToHour(['daily_total_kwh_m2' => $dailySolar], $hour);
+        // Solar irradiance - already calculated above ($hourlySolar in kWh/m²)
         // Convert kWh/m² to W/m² for this hour (kWh/m²/hour = kW/m² = 1000 W/m²)
         $solarIrradiance = $hourlySolar * 1000; // W/m²
 
@@ -1301,6 +1397,7 @@ class EnergySimulator {
                 'rad_loss_kw' => round($radLossKW, 3),
             ],
             'solar_gain' => [
+                'source' => $solarSource, // 'hourly' = pre-calculated, 'daily' = legacy bell curve
                 'daily_total_kwh_m2' => round($dailySolar, 3),
                 'hourly_kwh_m2' => round($hourlySolar, 4),
                 'solar_absorption' => $solarAbsorption,

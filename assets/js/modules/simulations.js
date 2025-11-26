@@ -939,21 +939,12 @@ const SimulationsModule = {
     /**
      * Initialize debug section
      */
-    initDebug: async function() {
-        // Load configs for debug dropdown
-        try {
-            const response = await fetch('./api/heataq_api.php?action=get_project_configs');
-            const data = await response.json();
-            const select = document.getElementById('debug-config-select');
-            if (select && data.configs) {
-                let html = '<option value="">-- Use Project Defaults --</option>';
-                data.configs.forEach(c => {
-                    html += `<option value="${c.template_id}">${this.escapeHtml(c.name)}</option>`;
-                });
-                select.innerHTML = html;
-            }
-        } catch (err) {
-            console.error('Failed to load configs for debug:', err);
+    initDebug: function() {
+        // Restore saved config selection (dropdown populated by SimControlModule.loadConfigOptions)
+        const select = document.getElementById('debug-config-select');
+        const savedConfig = localStorage.getItem('heataq_selected_config') || '';
+        if (select && savedConfig) {
+            select.value = savedConfig;
         }
     }
 };

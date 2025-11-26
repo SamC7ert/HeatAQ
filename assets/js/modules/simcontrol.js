@@ -82,18 +82,43 @@ const SimControlModule = {
         }
     },
 
-    // Load configuration options
+    // Load configuration options (shared between New Run and Debug Hour)
     loadConfigOptions: async function() {
         try {
             const response = await fetch('./api/heataq_api.php?action=get_project_configs');
             const data = await response.json();
 
-            const select = document.getElementById('sim-config-select');
-            if (select && data.configs) {
-                select.innerHTML = '<option value="">-- Use Project Config --</option>' +
-                    data.configs.map(c =>
-                        `<option value="${c.template_id}">${c.name}</option>`
-                    ).join('');
+            if (!data.configs) return;
+
+            const optionsHtml = '<option value="">-- Use Project Config --</option>' +
+                data.configs.map(c =>
+                    `<option value="${c.template_id}">${c.name}</option>`
+                ).join('');
+
+            // Populate both dropdowns
+            const simSelect = document.getElementById('sim-config-select');
+            const debugSelect = document.getElementById('debug-config-select');
+
+            if (simSelect) simSelect.innerHTML = optionsHtml;
+            if (debugSelect) debugSelect.innerHTML = optionsHtml;
+
+            // Restore saved selection
+            const savedConfig = localStorage.getItem('heataq_selected_config') || '';
+            if (simSelect) simSelect.value = savedConfig;
+            if (debugSelect) debugSelect.value = savedConfig;
+
+            // Sync dropdowns on change
+            if (simSelect) {
+                simSelect.addEventListener('change', () => {
+                    localStorage.setItem('heataq_selected_config', simSelect.value);
+                    if (debugSelect) debugSelect.value = simSelect.value;
+                });
+            }
+            if (debugSelect) {
+                debugSelect.addEventListener('change', () => {
+                    localStorage.setItem('heataq_selected_config', debugSelect.value);
+                    if (simSelect) simSelect.value = debugSelect.value;
+                });
             }
         } catch (err) {
             console.error('Failed to load config options:', err);
