@@ -793,17 +793,16 @@ const SimulationsModule = {
     },
 
     /**
-     * Render debug calculation results
+     * Render debug calculation results - builds entire HTML structure
      */
     renderDebugResults: function(data) {
         const resultsDiv = document.getElementById('debug-results');
-        resultsDiv.style.display = 'block';
 
         // Helper to render a table from object
         const renderTable = (obj) => {
             let html = '<table class="data-table compact">';
             for (const [key, value] of Object.entries(obj)) {
-                if (typeof value === 'object' && value !== null) continue; // Skip nested
+                if (typeof value === 'object' && value !== null) continue;
                 const displayKey = key.replace(/_/g, ' ');
                 const displayVal = typeof value === 'number' ? value.toLocaleString() : value;
                 html += `<tr><td>${displayKey}</td><td><code>${displayVal}</code></td></tr>`;
@@ -812,37 +811,7 @@ const SimulationsModule = {
             return html;
         };
 
-        // Input values
-        document.getElementById('debug-input').innerHTML = `
-            <strong>Weather:</strong> ${data.input?.weather?.air_temp_c}°C,
-            Wind: ${data.input?.weather?.wind_speed_ms} m/s,
-            Humidity: ${data.input?.weather?.humidity_pct}%,
-            GHI: ${data.input?.weather?.solar_ghi_wm2} W/m²<br>
-            <strong>Pool:</strong> ${data.input?.pool?.water_temp_c}°C,
-            Area: ${data.input?.pool?.area_m2} m²,
-            Volume: ${data.input?.pool?.volume_m3} m³<br>
-            <strong>Config:</strong> Wind factor: ${data.input?.config?.wind_factor},
-            Years operating: ${data.input?.config?.years_operating},
-            Has cover: ${data.input?.config?.has_cover ? 'Yes' : 'No'},
-            Is open: ${data.input?.config?.is_open ? 'Yes' : 'No'}
-        `;
-
-        // Evaporation
-        document.getElementById('debug-evaporation').innerHTML = renderTable(data.evaporation || {});
-
-        // Convection
-        document.getElementById('debug-convection').innerHTML = renderTable(data.convection || {});
-
-        // Radiation
-        document.getElementById('debug-radiation').innerHTML = renderTable(data.radiation || {});
-
-        // Solar
-        document.getElementById('debug-solar').innerHTML = renderTable(data.solar_gain || {});
-
-        // Conduction
-        document.getElementById('debug-conduction').innerHTML = renderTable(data.conduction || {});
-
-        // Summary comparison
+        // Build comparison rows
         const sum = data.summary || {};
         const excel = data.excel_comparison || {};
 
@@ -862,45 +831,88 @@ const SimulationsModule = {
             `;
         };
 
-        document.getElementById('debug-summary').innerHTML = `
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Component</th>
-                        <th>PHP</th>
-                        <th>Excel Reference</th>
-                        <th>Difference</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${compareRow('Evaporation', sum.evaporation_kw, excel.excel_evaporation)}
-                    ${compareRow('Convection', sum.convection_kw, excel.excel_convection)}
-                    ${compareRow('Radiation', sum.radiation_kw, excel.excel_radiation)}
-                    ${compareRow('Wall Loss', sum.wall_loss_kw, excel.excel_wall_loss)}
-                    ${compareRow('Floor Loss', sum.floor_loss_kw, excel.excel_floor_loss)}
-                    ${compareRow('Solar Gain', sum.solar_gain_kw, Math.abs(excel.excel_solar_gain))}
-                    <tr class="total">
-                        <td><strong>Total Loss</strong></td>
-                        <td><strong>${sum.total_loss_kw?.toFixed(3) || '-'}</strong> kW</td>
-                        <td>-</td>
-                        <td>-</td>
-                        <td>-</td>
-                    </tr>
-                    <tr class="total">
-                        <td><strong>Net Requirement</strong></td>
-                        <td><strong>${sum.net_requirement_kw?.toFixed(3) || '-'}</strong> kW</td>
-                        <td>-</td>
-                        <td>-</td>
-                        <td>-</td>
-                    </tr>
-                </tbody>
-            </table>
-            <p class="text-muted" style="margin-top: 10px;">
-                ✓ = Match (&lt;1 kW diff), ~ = Close (1-5 kW), ✗ = Needs review (&gt;5 kW)<br>
-                Note: Excel reference values are for 2024-07-27 hour 1 with specific weather conditions.
-            </p>
+        // Build entire HTML structure
+        resultsDiv.innerHTML = `
+            <div class="debug-grid">
+                <div class="card">
+                    <h4>Input Values</h4>
+                    <div id="debug-input">
+                        <strong>Weather:</strong> ${data.input?.weather?.air_temp_c}°C,
+                        Wind: ${data.input?.weather?.wind_speed_ms} m/s,
+                        Humidity: ${data.input?.weather?.humidity_pct}%,
+                        GHI: ${data.input?.weather?.solar_ghi_wm2} W/m²<br>
+                        <strong>Pool:</strong> ${data.input?.pool?.water_temp_c}°C,
+                        Area: ${data.input?.pool?.area_m2} m²,
+                        Volume: ${data.input?.pool?.volume_m3} m³<br>
+                        <strong>Config:</strong> Wind factor: ${data.input?.config?.wind_factor},
+                        Years operating: ${data.input?.config?.years_operating},
+                        Has cover: ${data.input?.config?.has_cover ? 'Yes' : 'No'},
+                        Is open: ${data.input?.config?.is_open ? 'Yes' : 'No'}
+                    </div>
+                </div>
+                <div class="card">
+                    <h4>Evaporation</h4>
+                    ${renderTable(data.evaporation || {})}
+                </div>
+                <div class="card">
+                    <h4>Convection</h4>
+                    ${renderTable(data.convection || {})}
+                </div>
+                <div class="card">
+                    <h4>Radiation</h4>
+                    ${renderTable(data.radiation || {})}
+                </div>
+                <div class="card">
+                    <h4>Solar Gain</h4>
+                    ${renderTable(data.solar_gain || {})}
+                </div>
+                <div class="card">
+                    <h4>Conduction (Floor + Wall)</h4>
+                    ${renderTable(data.conduction || {})}
+                </div>
+            </div>
+            <div class="card">
+                <h4>Summary Comparison (PHP vs Excel)</h4>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Component</th>
+                            <th>PHP</th>
+                            <th>Excel Reference</th>
+                            <th>Difference</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${compareRow('Evaporation', sum.evaporation_kw, excel.excel_evaporation)}
+                        ${compareRow('Convection', sum.convection_kw, excel.excel_convection)}
+                        ${compareRow('Radiation', sum.radiation_kw, excel.excel_radiation)}
+                        ${compareRow('Wall Loss', sum.wall_loss_kw, excel.excel_wall_loss)}
+                        ${compareRow('Floor Loss', sum.floor_loss_kw, excel.excel_floor_loss)}
+                        ${compareRow('Solar Gain', sum.solar_gain_kw, Math.abs(excel.excel_solar_gain))}
+                        <tr class="total">
+                            <td><strong>Total Loss</strong></td>
+                            <td><strong>${sum.total_loss_kw?.toFixed(3) || '-'}</strong> kW</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                        </tr>
+                        <tr class="total">
+                            <td><strong>Net Requirement</strong></td>
+                            <td><strong>${sum.net_requirement_kw?.toFixed(3) || '-'}</strong> kW</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p class="text-muted" style="margin-top: 10px;">
+                    ✓ = Match (&lt;1 kW diff), ~ = Close (1-5 kW), ✗ = Needs review (&gt;5 kW)<br>
+                    Note: Excel reference values are for 2024-07-27 hour 1 with specific weather conditions.
+                </p>
+            </div>
         `;
+        resultsDiv.style.display = 'block';
     },
 
     /**
