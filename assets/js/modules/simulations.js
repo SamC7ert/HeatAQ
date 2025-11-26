@@ -786,8 +786,8 @@ const SimulationsModule = {
             return;
         }
 
-        // Save date to localStorage for persistence
-        localStorage.setItem('heataq_debug_date', date);
+        // Save date to localStorage for persistence (user-specific)
+        localStorage.setItem(this.getUserKey('debug_date'), date);
 
         // Show results section without destroying card structure
         resultsDiv.style.display = 'block';
@@ -1004,8 +1004,8 @@ const SimulationsModule = {
         const newDate = currentDate.toISOString().split('T')[0];
         dateInput.value = newDate;
 
-        // Save to localStorage and reload
-        localStorage.setItem('heataq_debug_date', newDate);
+        // Save to localStorage and reload (user-specific)
+        localStorage.setItem(this.getUserKey('debug_date'), newDate);
         this.loadWeeklyChart();
     },
 
@@ -1052,7 +1052,7 @@ const SimulationsModule = {
 
         if (dateInput) {
             dateInput.value = date;
-            localStorage.setItem('heataq_debug_date', date);
+            localStorage.setItem(this.getUserKey('debug_date'), date);
         }
         if (hourSelect) {
             hourSelect.value = hour;
@@ -1330,27 +1330,38 @@ const SimulationsModule = {
     },
 
     /**
+     * Get user-specific localStorage key
+     */
+    getUserKey: function(key) {
+        // Use username from header for per-user storage
+        const userEl = document.getElementById('current-user');
+        const username = userEl?.textContent?.trim() || 'default';
+        return `heataq_${username}_${key}`;
+    },
+
+    /**
      * Initialize debug section
      */
     initDebug: function() {
         // Restore saved config selection (dropdown populated by SimControlModule.loadConfigOptions)
         const select = document.getElementById('debug-config-select');
-        const savedConfig = localStorage.getItem('heataq_selected_config') || '';
+        const savedConfig = localStorage.getItem(this.getUserKey('config')) || '';
         if (select && savedConfig) {
             select.value = savedConfig;
         }
 
         // Restore saved debug date
         const dateInput = document.getElementById('debug-date');
-        const savedDate = localStorage.getItem('heataq_debug_date');
+        const savedDate = localStorage.getItem(this.getUserKey('debug_date'));
         if (dateInput && savedDate) {
             dateInput.value = savedDate;
         }
 
         // Save date when changed
+        const self = this;
         if (dateInput) {
             dateInput.addEventListener('change', function() {
-                localStorage.setItem('heataq_debug_date', this.value);
+                localStorage.setItem(self.getUserKey('debug_date'), this.value);
             });
         }
     }
