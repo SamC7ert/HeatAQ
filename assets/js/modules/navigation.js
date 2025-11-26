@@ -1,11 +1,11 @@
 // Navigation module - Handles section switching and menu state
 
 const navigation = {
-    currentSection: 'schedules',
-    
+    currentSection: 'simcontrol',
+
     init() {
         // Set initial active state
-        this.switchSection('schedules', false);
+        this.switchSection('simcontrol', false);
     },
     
     switchSection(sectionName, updateUI = true) {
