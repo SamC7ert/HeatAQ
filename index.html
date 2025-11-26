@@ -464,7 +464,7 @@
                         <button class="sim-tab active" onclick="app.simcontrol.switchTab('new')">New Run</button>
                         <button class="sim-tab" onclick="app.simcontrol.switchTab('history')">History</button>
                         <button class="sim-tab" onclick="app.simcontrol.switchTab('compare')">Compare</button>
-                        <button class="sim-tab" onclick="app.simcontrol.switchTab('debug')">🔍 Debug Hour</button>
+                        <button class="sim-tab" onclick="app.simcontrol.switchTab('debug')">🔍 Debug</button>
                     </div>
 
                     <!-- New Run Tab Content -->
@@ -577,99 +577,132 @@
                         <div id="comparison-results" style="display: none;"></div>
                     </div>
 
-                    <!-- Debug Hour Tab Content -->
+                    <!-- Debug Tab Content -->
                     <div id="sim-tab-debug" class="sim-tab-content" style="display: none;">
-                        <div class="card">
-                            <h3>🔍 Debug Single Hour Calculation</h3>
-                            <p class="text-muted">Compare PHP calculations with Excel benchmark values</p>
-                            <table class="data-table form-table">
-                                <tr>
-                                    <td><label for="debug-date">Date</label></td>
-                                    <td><input type="date" id="debug-date" value="2024-07-27"></td>
-                                </tr>
-                                <tr>
-                                    <td><label for="debug-hour">Hour (0-23)</label></td>
-                                    <td>
-                                        <select id="debug-hour">
-                                            <option value="0">00:00</option>
-                                            <option value="1" selected>01:00</option>
-                                            <option value="2">02:00</option>
-                                            <option value="3">03:00</option>
-                                            <option value="4">04:00</option>
-                                            <option value="5">05:00</option>
-                                            <option value="6">06:00</option>
-                                            <option value="7">07:00</option>
-                                            <option value="8">08:00</option>
-                                            <option value="9">09:00</option>
-                                            <option value="10">10:00</option>
-                                            <option value="11">11:00</option>
-                                            <option value="12">12:00</option>
-                                            <option value="13">13:00</option>
-                                            <option value="14">14:00</option>
-                                            <option value="15">15:00</option>
-                                            <option value="16">16:00</option>
-                                            <option value="17">17:00</option>
-                                            <option value="18">18:00</option>
-                                            <option value="19">19:00</option>
-                                            <option value="20">20:00</option>
-                                            <option value="21">21:00</option>
-                                            <option value="22">22:00</option>
-                                            <option value="23">23:00</option>
+                        <!-- Top row: Inputs (left) + Heat Output (right) -->
+                        <div style="display: grid; grid-template-columns: 280px 1fr; gap: 15px; margin-bottom: 15px;">
+                            <!-- Compact Inputs -->
+                            <div class="card" style="padding: 12px;">
+                                <h4 style="margin: 0 0 10px 0; font-size: 14px;">Debug Parameters</h4>
+                                <div style="display: grid; gap: 8px; font-size: 13px;">
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <label style="width: 70px;">Date</label>
+                                        <input type="date" id="debug-date" value="2024-07-27" style="flex: 1; padding: 4px;">
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <label style="width: 70px;">Hour</label>
+                                        <select id="debug-hour" style="flex: 1; padding: 4px;">
+                                            <option value="0">00:00</option><option value="1">01:00</option>
+                                            <option value="2">02:00</option><option value="3">03:00</option>
+                                            <option value="4">04:00</option><option value="5">05:00</option>
+                                            <option value="6">06:00</option><option value="7">07:00</option>
+                                            <option value="8">08:00</option><option value="9">09:00</option>
+                                            <option value="10">10:00</option><option value="11">11:00</option>
+                                            <option value="12" selected>12:00</option><option value="13">13:00</option>
+                                            <option value="14">14:00</option><option value="15">15:00</option>
+                                            <option value="16">16:00</option><option value="17">17:00</option>
+                                            <option value="18">18:00</option><option value="19">19:00</option>
+                                            <option value="20">20:00</option><option value="21">21:00</option>
+                                            <option value="22">22:00</option><option value="23">23:00</option>
                                         </select>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><label for="debug-water-temp">Water Temp (°C)</label></td>
-                                    <td><input type="number" id="debug-water-temp" step="0.01" value="28.59" placeholder="28.59"></td>
-                                </tr>
-                                <tr>
-                                    <td><label for="debug-config-select">Configuration</label></td>
-                                    <td>
-                                        <select id="debug-config-select">
-                                            <option value="">-- Use Project Defaults --</option>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <label style="width: 70px;">Water °C</label>
+                                        <input type="number" id="debug-water-temp" step="0.1" value="28.5" style="flex: 1; padding: 4px;">
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <label style="width: 70px;">Config</label>
+                                        <select id="debug-config-select" style="flex: 1; padding: 4px;">
+                                            <option value="">-- Defaults --</option>
                                         </select>
-                                    </td>
-                                </tr>
-                            </table>
-                            <button class="btn btn-primary" onclick="SimulationsModule.debugHour()">Run Debug Calculation</button>
-                        </div>
-                        <div id="debug-results" style="display: none;">
-                            <div class="debug-grid">
-                                <!-- Input Summary -->
-                                <div class="card">
-                                    <h4>Input Values</h4>
-                                    <div id="debug-input"></div>
-                                </div>
-                                <!-- Evaporation -->
-                                <div class="card">
-                                    <h4>Evaporation</h4>
-                                    <div id="debug-evaporation"></div>
-                                </div>
-                                <!-- Convection -->
-                                <div class="card">
-                                    <h4>Convection</h4>
-                                    <div id="debug-convection"></div>
-                                </div>
-                                <!-- Radiation -->
-                                <div class="card">
-                                    <h4>Radiation</h4>
-                                    <div id="debug-radiation"></div>
-                                </div>
-                                <!-- Solar Gain -->
-                                <div class="card">
-                                    <h4>Solar Gain</h4>
-                                    <div id="debug-solar"></div>
-                                </div>
-                                <!-- Conduction -->
-                                <div class="card">
-                                    <h4>Conduction (Floor + Wall)</h4>
-                                    <div id="debug-conduction"></div>
+                                    </div>
+                                    <button class="btn btn-primary btn-sm" onclick="SimulationsModule.debugHour()" style="margin-top: 5px;">Calculate</button>
                                 </div>
                             </div>
-                            <!-- Summary Comparison -->
-                            <div class="card">
-                                <h4>Summary Comparison (PHP vs Excel)</h4>
-                                <div id="debug-summary"></div>
+                            <!-- Heat Output Summary -->
+                            <div class="card" style="padding: 12px;">
+                                <h4 style="margin: 0 0 10px 0; font-size: 14px;">Heat Balance</h4>
+                                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;" id="debug-heat-balance">
+                                    <div>
+                                        <div style="font-size: 11px; color: #666;">Net Heat Demand</div>
+                                        <div style="font-size: 20px; font-weight: bold;" id="debug-net-demand">-</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 11px; color: #666;">Heat Pump Output</div>
+                                        <div style="font-size: 20px; font-weight: bold; color: #2196F3;" id="debug-hp-output">-</div>
+                                        <div style="font-size: 11px; color: #888;" id="debug-hp-detail">-</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: 11px; color: #666;">Boiler Output</div>
+                                        <div style="font-size: 20px; font-weight: bold; color: #ff9800;" id="debug-boiler-output">-</div>
+                                        <div style="font-size: 11px; color: #888;" id="debug-boiler-detail">-</div>
+                                    </div>
+                                </div>
+                                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; font-size: 12px;" id="debug-input-summary">
+                                    <div><span style="color: #666;">Air:</span> <span id="debug-air-temp">-</span></div>
+                                    <div><span style="color: #666;">Wind:</span> <span id="debug-wind">-</span></div>
+                                    <div><span style="color: #666;">Solar:</span> <span id="debug-solar-val">-</span></div>
+                                    <div><span style="color: #666;">Status:</span> <span id="debug-status">-</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Weekly Graph -->
+                        <div class="card" style="padding: 12px; margin-bottom: 15px;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 14px;">Weekly Heat Profile (Thu-Wed)</h4>
+                            <div id="debug-weekly-chart" style="height: 200px; background: #f9f9f9; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999;">
+                                Run calculation to show weekly data
+                            </div>
+                        </div>
+
+                        <!-- Detail Cards Grid -->
+                        <div id="debug-results" style="display: none;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                                <!-- Input Values -->
+                                <div class="card" style="padding: 10px;">
+                                    <h4 style="margin: 0 0 8px 0; font-size: 13px;">Input Values</h4>
+                                    <div id="debug-input" style="font-size: 12px;"></div>
+                                </div>
+                                <!-- Evaporation -->
+                                <div class="card" style="padding: 10px;">
+                                    <h4 style="margin: 0 0 8px 0; font-size: 13px;">Evaporation</h4>
+                                    <div id="debug-evaporation" style="font-size: 12px;"></div>
+                                </div>
+                                <!-- Convection -->
+                                <div class="card" style="padding: 10px;">
+                                    <h4 style="margin: 0 0 8px 0; font-size: 13px;">Convection</h4>
+                                    <div id="debug-convection" style="font-size: 12px;"></div>
+                                </div>
+                                <!-- Radiation -->
+                                <div class="card" style="padding: 10px;">
+                                    <h4 style="margin: 0 0 8px 0; font-size: 13px;">Radiation</h4>
+                                    <div id="debug-radiation" style="font-size: 12px;"></div>
+                                </div>
+                                <!-- Solar Gain -->
+                                <div class="card" style="padding: 10px;">
+                                    <h4 style="margin: 0 0 8px 0; font-size: 13px;">Solar Gain</h4>
+                                    <div id="debug-solar" style="font-size: 12px;"></div>
+                                </div>
+                                <!-- Conduction -->
+                                <div class="card" style="padding: 10px;">
+                                    <h4 style="margin: 0 0 8px 0; font-size: 13px;">Conduction</h4>
+                                    <div id="debug-conduction" style="font-size: 12px;"></div>
+                                </div>
+                                <!-- Heat Pump -->
+                                <div class="card" style="padding: 10px;">
+                                    <h4 style="margin: 0 0 8px 0; font-size: 13px; color: #2196F3;">Heat Pump</h4>
+                                    <div id="debug-heatpump" style="font-size: 12px;"></div>
+                                </div>
+                                <!-- Boiler -->
+                                <div class="card" style="padding: 10px;">
+                                    <h4 style="margin: 0 0 8px 0; font-size: 13px; color: #ff9800;">Boiler</h4>
+                                    <div id="debug-boiler" style="font-size: 12px;"></div>
+                                </div>
+                            </div>
+                            <!-- Summary -->
+                            <div class="card" style="margin-top: 12px; padding: 10px;">
+                                <h4 style="margin: 0 0 8px 0; font-size: 13px;">Summary</h4>
+                                <div id="debug-summary" style="font-size: 12px;"></div>
                             </div>
                         </div>
                     </div>

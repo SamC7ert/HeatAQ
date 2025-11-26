@@ -809,19 +809,15 @@ const SimulationsModule = {
     },
 
     /**
-     * Render debug calculation results - builds entire HTML structure
+     * Render debug calculation results - populates new UI structure
      */
     renderDebugResults: function(data) {
-        console.log('V52 renderDebugResults called');
-        const resultsDiv = document.getElementById('debug-results');
-        if (!resultsDiv) {
-            alert('renderDebugResults: debug-results element not found!');
-            return;
-        }
+        console.log('V59 renderDebugResults called', data);
 
         // Helper to render a table from object
         const renderTable = (obj) => {
-            let html = '<table class="data-table compact">';
+            if (!obj) return '<p class="text-muted">No data</p>';
+            let html = '<table class="data-table compact" style="font-size: 11px;">';
             for (const [key, value] of Object.entries(obj)) {
                 if (typeof value === 'object' && value !== null) continue;
                 const displayKey = key.replace(/_/g, ' ');
@@ -832,108 +828,89 @@ const SimulationsModule = {
             return html;
         };
 
-        // Build comparison rows
-        const sum = data.summary || {};
-        const excel = data.excel_comparison || {};
+        // ===== Populate Heat Balance Summary (top right) =====
+        const hs = data.heating_summary || {};
+        const hp = data.heat_pump || {};
+        const boiler = data.boiler || {};
 
-        const compareRow = (label, phpVal, excelVal, unit = 'kW') => {
-            const diff = phpVal - excelVal;
-            const pctDiff = excelVal !== 0 ? ((diff / excelVal) * 100).toFixed(1) : '-';
-            const status = Math.abs(diff) < 1 ? '✓' : (Math.abs(diff) < 5 ? '~' : '✗');
-            const color = status === '✓' ? 'green' : (status === '~' ? 'orange' : 'red');
-            return `
-                <tr>
-                    <td>${label}</td>
-                    <td><strong>${phpVal?.toFixed(3) || '-'}</strong> ${unit}</td>
-                    <td>${excelVal?.toFixed(3) || '-'} ${unit}</td>
-                    <td style="color:${color}">${diff?.toFixed(3) || '-'} (${pctDiff}%)</td>
-                    <td style="color:${color}">${status}</td>
-                </tr>
-            `;
+        const setEl = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val;
+        };
+        const setHtml = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = val;
         };
 
-        // Build entire HTML structure
-        resultsDiv.innerHTML = `
-            <div class="debug-grid">
-                <div class="card">
-                    <h4>Input Values</h4>
-                    <div id="debug-input">
-                        <strong>Weather:</strong> ${data.input?.weather?.air_temp_c}°C,
-                        Wind: ${data.input?.weather?.wind_speed_ms} m/s,
-                        Humidity: ${data.input?.weather?.humidity_pct}%,
-                        GHI: ${data.input?.weather?.solar_ghi_wm2} W/m²<br>
-                        <strong>Pool:</strong> ${data.input?.pool?.water_temp_c}°C,
-                        Area: ${data.input?.pool?.area_m2} m²,
-                        Volume: ${data.input?.pool?.volume_m3} m³<br>
-                        <strong>Config:</strong> Wind factor: ${data.input?.config?.wind_factor},
-                        Years operating: ${data.input?.config?.years_operating},
-                        Has cover: ${data.input?.config?.has_cover ? 'Yes' : 'No'},
-                        Is open: ${data.input?.config?.is_open ? 'Yes' : 'No'}
-                    </div>
-                </div>
-                <div class="card">
-                    <h4>Evaporation</h4>
-                    ${renderTable(data.evaporation || {})}
-                </div>
-                <div class="card">
-                    <h4>Convection</h4>
-                    ${renderTable(data.convection || {})}
-                </div>
-                <div class="card">
-                    <h4>Radiation</h4>
-                    ${renderTable(data.radiation || {})}
-                </div>
-                <div class="card">
-                    <h4>Solar Gain</h4>
-                    ${renderTable(data.solar_gain || {})}
-                </div>
-                <div class="card">
-                    <h4>Conduction (Floor + Wall)</h4>
-                    ${renderTable(data.conduction || {})}
-                </div>
+        // Net demand
+        setEl('debug-net-demand', `${hs.net_demand_kw?.toFixed(1) || '0'} kW`);
+
+        // Heat pump output
+        setEl('debug-hp-output', `${hs.hp_output_kw?.toFixed(1) || '0'} kW`);
+        setEl('debug-hp-detail', `COP ${hp.cop || '-'} | ${hp.electricity_kw?.toFixed(1) || '0'} kW elec`);
+
+        // Boiler output
+        setEl('debug-boiler-output', `${hs.boiler_output_kw?.toFixed(1) || '0'} kW`);
+        setEl('debug-boiler-detail', `${((boiler.efficiency || 0.92) * 100).toFixed(0)}% eff | ${boiler.fuel_kw?.toFixed(1) || '0'} kW fuel`);
+
+        // Input summary bar
+        const inp = data.input || {};
+        setEl('debug-air-temp', `${inp.weather?.air_temp_c || '-'}°C`);
+        setEl('debug-wind', `${inp.weather?.wind_speed_ms || '-'} m/s`);
+        setEl('debug-solar-val', `${inp.weather?.solar_ghi_wm2 || '-'} W/m²`);
+        setEl('debug-status', inp.config?.is_open ? 'Open' : 'Closed');
+
+        // ===== Populate Detail Cards =====
+        setHtml('debug-input', `
+            <strong>Weather:</strong> ${inp.weather?.air_temp_c}°C, Wind: ${inp.weather?.wind_speed_ms} m/s, RH: ${inp.weather?.humidity_pct}%<br>
+            <strong>Pool:</strong> ${inp.pool?.water_temp_c}°C, ${inp.pool?.area_m2} m²<br>
+            <strong>Config:</strong> Wind×${inp.config?.wind_factor}, Cover: ${inp.config?.has_cover ? 'Yes' : 'No'}
+        `);
+        setHtml('debug-evaporation', renderTable(data.evaporation));
+        setHtml('debug-convection', renderTable(data.convection));
+        setHtml('debug-radiation', renderTable(data.radiation));
+        setHtml('debug-solar', renderTable(data.solar_gain));
+        setHtml('debug-conduction', renderTable(data.conduction));
+
+        // Heat pump detail
+        setHtml('debug-heatpump', `
+            <table class="data-table compact" style="font-size: 11px;">
+                <tr><td>Strategy</td><td><code>${hp.strategy || 'reactive'}</code></td></tr>
+                <tr><td>Capacity</td><td><code>${hp.capacity_kw} kW</code></td></tr>
+                <tr><td>COP @ ${inp.weather?.air_temp_c}°C</td><td><code>${hp.cop}</code></td></tr>
+                <tr><td>Output</td><td><code><strong>${hp.output_kw} kW</strong></code></td></tr>
+                <tr><td>Electricity</td><td><code>${hp.electricity_kw} kW</code></td></tr>
+            </table>
+        `);
+
+        // Boiler detail
+        setHtml('debug-boiler', `
+            <table class="data-table compact" style="font-size: 11px;">
+                <tr><td>Capacity</td><td><code>${boiler.capacity_kw} kW</code></td></tr>
+                <tr><td>Efficiency</td><td><code>${((boiler.efficiency || 0.92) * 100).toFixed(0)}%</code></td></tr>
+                <tr><td>Output</td><td><code><strong>${boiler.output_kw} kW</strong></code></td></tr>
+                <tr><td>Fuel input</td><td><code>${boiler.fuel_kw} kW</code></td></tr>
+            </table>
+        `);
+
+        // Summary
+        const sum = data.summary || {};
+        setHtml('debug-summary', `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
+                <div>Evap: <strong>${sum.evaporation_kw}</strong> kW</div>
+                <div>Conv: <strong>${sum.convection_kw}</strong> kW</div>
+                <div>Rad: <strong>${sum.radiation_kw}</strong> kW</div>
+                <div>Cond: <strong>${(sum.wall_loss_kw + sum.floor_loss_kw).toFixed(3)}</strong> kW</div>
+                <div>Solar: <strong>-${sum.solar_gain_kw}</strong> kW</div>
+                <div><strong>Net: ${sum.net_requirement_kw} kW</strong></div>
+                <div style="color: #2196F3;">HP: <strong>${hs.hp_output_kw}</strong> kW</div>
+                <div style="color: #ff9800;">Boiler: <strong>${hs.boiler_output_kw}</strong> kW</div>
             </div>
-            <div class="card">
-                <h4>Summary Comparison (PHP vs Excel)</h4>
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Component</th>
-                            <th>PHP</th>
-                            <th>Excel Reference</th>
-                            <th>Difference</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${compareRow('Evaporation', sum.evaporation_kw, excel.excel_evaporation)}
-                        ${compareRow('Convection', sum.convection_kw, excel.excel_convection)}
-                        ${compareRow('Radiation', sum.radiation_kw, excel.excel_radiation)}
-                        ${compareRow('Wall Loss', sum.wall_loss_kw, excel.excel_wall_loss)}
-                        ${compareRow('Floor Loss', sum.floor_loss_kw, excel.excel_floor_loss)}
-                        ${compareRow('Solar Gain', sum.solar_gain_kw, Math.abs(excel.excel_solar_gain))}
-                        <tr class="total">
-                            <td><strong>Total Loss</strong></td>
-                            <td><strong>${sum.total_loss_kw?.toFixed(3) || '-'}</strong> kW</td>
-                            <td>-</td>
-                            <td>-</td>
-                            <td>-</td>
-                        </tr>
-                        <tr class="total">
-                            <td><strong>Net Requirement</strong></td>
-                            <td><strong>${sum.net_requirement_kw?.toFixed(3) || '-'}</strong> kW</td>
-                            <td>-</td>
-                            <td>-</td>
-                            <td>-</td>
-                        </tr>
-                    </tbody>
-                </table>
-                <p class="text-muted" style="margin-top: 10px;">
-                    ✓ = Match (&lt;1 kW diff), ~ = Close (1-5 kW), ✗ = Needs review (&gt;5 kW)<br>
-                    Note: Excel reference values are for 2024-07-27 hour 1 with specific weather conditions.
-                </p>
-            </div>
-        `;
-        resultsDiv.style.display = 'block';
+        `);
+
+        // Show results
+        const resultsDiv = document.getElementById('debug-results');
+        if (resultsDiv) resultsDiv.style.display = 'block';
     },
 
     /**

@@ -1346,6 +1346,45 @@ class EnergySimulator {
         $totalLossKW = $evapLossKW + $convLossKW + $radLossKW + $condLossKW + $waterHeatingKW;
         $netRequirementKW = $totalLossKW - $solarGainKW;
 
+        // ========== HEATING OUTPUT ==========
+        $hpOutput = 0;
+        $hpElectricity = 0;
+        $hpCop = 0;
+        $boilerOutput = 0;
+        $boilerFuel = 0;
+        $remainingHeat = max(0, $netRequirementKW);
+        $strategy = $this->poolConfig['control_strategy'] ?? 'reactive';
+
+        // Calculate heat pump output (if heat needed and not boiler_priority)
+        if ($remainingHeat > 0 && $strategy !== 'boiler_priority') {
+            $hpCop = $this->calculateHeatPumpCOP($airTemp);
+            $hpCapacity = $this->equipment['heat_pump']['capacity_kw'] ?? 50;
+            $hpEnabled = $this->equipment['heat_pump']['enabled'] ?? true;
+            $minOpTemp = $this->equipment['heat_pump']['min_operating_temp'] ?? -5;
+
+            if ($hpEnabled && $airTemp >= $minOpTemp) {
+                $hpOutput = min($remainingHeat, $hpCapacity);
+                $hpElectricity = $hpOutput / $hpCop;
+                $remainingHeat -= $hpOutput;
+            }
+        }
+
+        // Calculate boiler output (for remaining heat)
+        if ($remainingHeat > 0) {
+            $boilerCapacity = $this->equipment['boiler']['capacity_kw'] ?? 100;
+            $boilerEnabled = $this->equipment['boiler']['enabled'] ?? true;
+            $boilerEfficiency = $this->equipment['boiler']['efficiency'] ?? 0.92;
+
+            if ($boilerEnabled) {
+                $boilerOutput = min($remainingHeat, $boilerCapacity);
+                $boilerFuel = $boilerOutput / $boilerEfficiency;
+                $remainingHeat -= $boilerOutput;
+            }
+        }
+
+        $unmetHeat = $remainingHeat;
+        $totalHeating = $hpOutput + $boilerOutput;
+
         // Return detailed breakdown matching Excel format
         return [
             'timestamp' => $timestamp,
@@ -1431,6 +1470,29 @@ class EnergySimulator {
                 'kwh_per_visit' => $kwhPerVisit,
                 'open_hours' => $openHours,
                 'water_heating_kw' => round($waterHeatingKW, 3),
+            ],
+            'heat_pump' => [
+                'strategy' => $strategy,
+                'capacity_kw' => $this->equipment['heat_pump']['capacity_kw'] ?? 50,
+                'enabled' => $this->equipment['heat_pump']['enabled'] ?? true,
+                'min_temp_c' => $this->equipment['heat_pump']['min_operating_temp'] ?? -5,
+                'cop' => round($hpCop, 2),
+                'output_kw' => round($hpOutput, 3),
+                'electricity_kw' => round($hpElectricity, 3),
+            ],
+            'boiler' => [
+                'capacity_kw' => $this->equipment['boiler']['capacity_kw'] ?? 100,
+                'enabled' => $this->equipment['boiler']['enabled'] ?? true,
+                'efficiency' => $this->equipment['boiler']['efficiency'] ?? 0.92,
+                'output_kw' => round($boilerOutput, 3),
+                'fuel_kw' => round($boilerFuel, 3),
+            ],
+            'heating_summary' => [
+                'net_demand_kw' => round(max(0, $netRequirementKW), 3),
+                'hp_output_kw' => round($hpOutput, 3),
+                'boiler_output_kw' => round($boilerOutput, 3),
+                'total_heating_kw' => round($totalHeating, 3),
+                'unmet_kw' => round($unmetHeat, 3),
             ],
             'summary' => [
                 'evaporation_kw' => round($evapLossKW, 3),
