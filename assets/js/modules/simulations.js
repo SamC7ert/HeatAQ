@@ -759,9 +759,25 @@ const SimulationsModule = {
      * Run debug calculation for a single hour
      */
     debugHour: async function() {
-        const date = document.getElementById('debug-date').value;
-        const hour = document.getElementById('debug-hour').value;
-        const waterTemp = document.getElementById('debug-water-temp').value;
+        const dateEl = document.getElementById('debug-date');
+        const hourEl = document.getElementById('debug-hour');
+        const waterTempEl = document.getElementById('debug-water-temp');
+        const resultsDiv = document.getElementById('debug-results');
+
+        // Debug: check which elements are missing
+        if (!dateEl || !hourEl || !waterTempEl || !resultsDiv) {
+            const missing = [];
+            if (!dateEl) missing.push('debug-date');
+            if (!hourEl) missing.push('debug-hour');
+            if (!waterTempEl) missing.push('debug-water-temp');
+            if (!resultsDiv) missing.push('debug-results');
+            alert('Missing elements: ' + missing.join(', ') + '\n\nTry refreshing with Ctrl+Shift+R to clear cache.');
+            return;
+        }
+
+        const date = dateEl.value;
+        const hour = hourEl.value;
+        const waterTemp = waterTempEl.value;
         const configId = document.getElementById('debug-config-select')?.value || null;
 
         if (!date) {
@@ -769,7 +785,6 @@ const SimulationsModule = {
             return;
         }
 
-        const resultsDiv = document.getElementById('debug-results');
         resultsDiv.innerHTML = '<p class="loading">Calculating...</p>';
         resultsDiv.style.display = 'block';
 
