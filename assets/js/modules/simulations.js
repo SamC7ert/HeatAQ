@@ -786,8 +786,18 @@ const SimulationsModule = {
             return;
         }
 
-        resultsDiv.innerHTML = '<p class="loading">Calculating...</p>';
+        // Save date to localStorage for persistence
+        localStorage.setItem('heataq_debug_date', date);
+
+        // Show results section without destroying card structure
         resultsDiv.style.display = 'block';
+
+        // Clear individual card contents to show loading state
+        ['debug-input', 'debug-evaporation', 'debug-convection', 'debug-radiation',
+         'debug-solar', 'debug-conduction', 'debug-heatpump', 'debug-boiler', 'debug-summary'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.innerHTML = '<span style="color: #999;">Loading...</span>';
+        });
 
         try {
             let url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}`;
@@ -803,8 +813,15 @@ const SimulationsModule = {
 
             this.renderDebugResults(data);
 
+            // Also load weekly chart automatically
+            this.loadWeeklyChart();
+
         } catch (error) {
-            resultsDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            // Show error in summary card without destroying structure
+            const summaryEl = document.getElementById('debug-summary');
+            if (summaryEl) {
+                summaryEl.innerHTML = `<p class="error" style="color: #dc3545;">Error: ${error.message}</p>`;
+            }
         }
     },
 
@@ -952,13 +969,18 @@ const SimulationsModule = {
                 throw new Error('No data returned for this week');
             }
 
-            // Hide placeholder, show charts
+            // Hide placeholder, show charts and nav buttons
             if (placeholder) placeholder.style.display = 'none';
             if (chartsDiv) chartsDiv.style.display = 'block';
+            const navButtons = document.getElementById('week-nav-buttons');
+            if (navButtons) navButtons.style.display = 'block';
 
             // Render charts
             this.renderWeeklyProductionChart(result);
             this.renderWeeklyWeatherChart(result);
+
+            // Calculate and display top 3 peak demand periods
+            this.displayTopHeatLossPeriods(result.data);
 
         } catch (error) {
             console.error('Failed to load weekly data:', error);
@@ -966,6 +988,78 @@ const SimulationsModule = {
                 placeholder.innerHTML = `<span style="color: #dc3545;">Error: ${error.message}</span>`;
             }
         }
+    },
+
+    /**
+     * Navigate week forward or backward
+     */
+    navigateWeek: function(direction) {
+        const dateInput = document.getElementById('debug-date');
+        if (!dateInput || !dateInput.value) return;
+
+        const currentDate = new Date(dateInput.value);
+        currentDate.setDate(currentDate.getDate() + (direction * 7));
+
+        // Format as YYYY-MM-DD
+        const newDate = currentDate.toISOString().split('T')[0];
+        dateInput.value = newDate;
+
+        // Save to localStorage and reload
+        localStorage.setItem('heataq_debug_date', newDate);
+        this.loadWeeklyChart();
+    },
+
+    /**
+     * Display top 3 heat loss periods with clickable links
+     */
+    displayTopHeatLossPeriods: function(data) {
+        const container = document.getElementById('peak-periods-list');
+        if (!container || !data || data.length === 0) return;
+
+        // Sort by net_demand descending and take top 3
+        const sorted = [...data]
+            .filter(d => d.net_demand > 0)
+            .sort((a, b) => b.net_demand - a.net_demand)
+            .slice(0, 3);
+
+        if (sorted.length === 0) {
+            container.innerHTML = '<em>No heating demand in this period</em>';
+            return;
+        }
+
+        const links = sorted.map((d, i) => {
+            const dateTime = d.timestamp.split(' ');
+            const displayDate = dateTime[0].substring(5); // MM-DD
+            const displayTime = dateTime[1]?.substring(0, 5) || '00:00'; // HH:MM
+            return `<a href="#" onclick="app.simulations.jumpToTime('${d.timestamp}'); return false;"
+                       style="color: #1976d2; text-decoration: none; margin-left: ${i > 0 ? '10px' : '5px'};"
+                       title="${d.net_demand.toFixed(1)} kW demand">${displayDate} ${displayTime} (${d.net_demand.toFixed(0)} kW)</a>`;
+        });
+
+        container.innerHTML = links.join(' | ');
+    },
+
+    /**
+     * Jump to a specific timestamp and recalculate
+     */
+    jumpToTime: function(timestamp) {
+        const parts = timestamp.split(' ');
+        const date = parts[0];
+        const hour = parseInt(parts[1]?.split(':')[0] || '0');
+
+        const dateInput = document.getElementById('debug-date');
+        const hourSelect = document.getElementById('debug-hour');
+
+        if (dateInput) {
+            dateInput.value = date;
+            localStorage.setItem('heataq_debug_date', date);
+        }
+        if (hourSelect) {
+            hourSelect.value = hour;
+        }
+
+        // Trigger recalculation
+        this.debugHour();
     },
 
     /**
@@ -985,8 +1079,8 @@ const SimulationsModule = {
 
         const data = weekData.data;
         const labels = data.map((d, i) => {
-            // Show day abbreviation every 24 hours
-            if (i % 24 === 0) {
+            // Show day abbreviation at hour 2 (slightly right of day boundary gridline)
+            if (i % 24 === 2) {
                 const date = new Date(d.timestamp);
                 return date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
             }
@@ -1077,14 +1171,15 @@ const SimulationsModule = {
                         display: true,
                         grid: {
                             display: true,
+                            drawTicks: false,
                             color: function(context) {
                                 // Major gridline every 24 hours (day boundary)
                                 if (context.index % 24 === 0) {
-                                    return 'rgba(0, 0, 0, 0.3)';
+                                    return 'rgba(0, 0, 0, 0.25)';
                                 }
                                 // Minor gridline every 6 hours
                                 if (context.index % 6 === 0) {
-                                    return 'rgba(0, 0, 0, 0.1)';
+                                    return 'rgba(0, 0, 0, 0.08)';
                                 }
                                 return 'transparent';
                             },
@@ -1092,7 +1187,7 @@ const SimulationsModule = {
                                 return context.index % 24 === 0 ? 1.5 : 1;
                             }
                         },
-                        ticks: { maxRotation: 0, font: { size: 9 } }
+                        ticks: { maxRotation: 0, font: { size: 9 }, padding: 4 }
                     },
                     y: {
                         type: 'linear',
@@ -1138,7 +1233,8 @@ const SimulationsModule = {
 
         const data = weekData.data;
         const labels = data.map((d, i) => {
-            if (i % 24 === 0) {
+            // Show day abbreviation at hour 2 (right of day boundary)
+            if (i % 24 === 2) {
                 const date = new Date(d.timestamp);
                 return date.toLocaleDateString('en-US', { weekday: 'short' });
             }
@@ -1199,23 +1295,26 @@ const SimulationsModule = {
                         display: true,
                         grid: {
                             display: true,
+                            drawTicks: false,
                             color: function(context) {
-                                if (context.index % 24 === 0) return 'rgba(0, 0, 0, 0.3)';
-                                if (context.index % 6 === 0) return 'rgba(0, 0, 0, 0.1)';
+                                // Dimmer gridlines for weather chart
+                                if (context.index % 24 === 0) return 'rgba(0, 0, 0, 0.15)';
+                                if (context.index % 6 === 0) return 'rgba(0, 0, 0, 0.05)';
                                 return 'transparent';
                             },
                             lineWidth: function(context) {
                                 return context.index % 24 === 0 ? 1.5 : 1;
                             }
                         },
-                        ticks: { maxRotation: 0, font: { size: 9 } }
+                        ticks: { maxRotation: 0, font: { size: 9 }, padding: 4 }
                     },
                     y: {
                         type: 'linear',
                         display: true,
                         position: 'left',
                         title: { display: true, text: '°C', font: { size: 10 } },
-                        ticks: { font: { size: 9 } }
+                        ticks: { font: { size: 9 } },
+                        grid: { color: 'rgba(0, 0, 0, 0.05)' }
                     },
                     y1: {
                         type: 'linear',
@@ -1239,6 +1338,20 @@ const SimulationsModule = {
         const savedConfig = localStorage.getItem('heataq_selected_config') || '';
         if (select && savedConfig) {
             select.value = savedConfig;
+        }
+
+        // Restore saved debug date
+        const dateInput = document.getElementById('debug-date');
+        const savedDate = localStorage.getItem('heataq_debug_date');
+        if (dateInput && savedDate) {
+            dateInput.value = savedDate;
+        }
+
+        // Save date when changed
+        if (dateInput) {
+            dateInput.addEventListener('change', function() {
+                localStorage.setItem('heataq_debug_date', this.value);
+            });
         }
     }
 };
