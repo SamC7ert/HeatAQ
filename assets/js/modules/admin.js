@@ -754,20 +754,37 @@ const AdminModule = {
         }
     },
 
-    dumpSchema: async function() {
+    dumpSchema: async function(pushToGit = false) {
         const status = document.getElementById('schema-status');
         const result = document.getElementById('schema-result');
+        const gitResult = document.getElementById('git-result');
 
-        if (status) status.textContent = 'Exporting...';
+        if (status) status.textContent = pushToGit ? 'Exporting and pushing...' : 'Exporting...';
         if (result) result.style.display = 'none';
+        if (gitResult) gitResult.textContent = '';
 
         try {
-            const response = await fetch('./db/dump_schema.php');
+            const url = pushToGit ? './db/dump_schema.php?push=1' : './db/dump_schema.php';
+            const response = await fetch(url);
             const data = await response.json();
 
             if (data.status === 'success') {
                 if (status) status.textContent = `Done! ${data.tables} tables exported.`;
                 if (result) result.style.display = 'block';
+
+                if (data.git) {
+                    if (data.git.pushed) {
+                        if (gitResult) {
+                            gitResult.innerHTML = `<strong style="color: green;">Pushed to branch: ${data.git.branch}</strong><br>
+                                <small>You can now create a PR to merge this branch.</small>`;
+                        }
+                    } else {
+                        if (gitResult) {
+                            gitResult.innerHTML = `<strong style="color: red;">Git push failed</strong><br>
+                                <small>${data.git.output || 'Unknown error'}</small>`;
+                        }
+                    }
+                }
             } else {
                 if (status) status.textContent = 'Error: ' + (data.error || 'Unknown error');
             }
@@ -775,6 +792,10 @@ const AdminModule = {
             console.error('Schema dump failed:', err);
             if (status) status.textContent = 'Error: ' + err.message;
         }
+    },
+
+    dumpSchemaAndPush: async function() {
+        await this.dumpSchema(true);
     },
 
     downloadSchema: async function() {

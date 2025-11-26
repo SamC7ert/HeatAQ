@@ -824,14 +824,18 @@
                     <div class="card">
                         <h3>Database Schema</h3>
                         <p>Export current database structure for version control and documentation.</p>
-                        <button class="btn btn-primary" onclick="app.admin.dumpSchema()">Export Schema</button>
-                        <span id="schema-status" style="margin-left: 10px;"></span>
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <button class="btn btn-secondary" onclick="app.admin.dumpSchema()">Export Schema</button>
+                            <button class="btn btn-primary" onclick="app.admin.dumpSchemaAndPush()">Export & Push to Git</button>
+                            <span id="schema-status"></span>
+                        </div>
                         <div id="schema-result" style="margin-top: 15px; display: none;">
                             <p><strong>Files generated:</strong></p>
                             <ul>
                                 <li><a href="db/schema.json" target="_blank">schema.json</a> - Machine readable</li>
                                 <li><a href="db/schema.md" target="_blank">schema.md</a> - Documentation</li>
                             </ul>
+                            <p id="git-result"></p>
                         </div>
                     </div>
 
