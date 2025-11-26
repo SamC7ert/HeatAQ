@@ -1353,7 +1353,8 @@ class EnergySimulator {
         $boilerOutput = 0;
         $boilerFuel = 0;
         $remainingHeat = max(0, $netRequirementKW);
-        $strategy = $this->poolConfig['control_strategy'] ?? 'reactive';
+        // Use equipment config for strategy (same as main simulation)
+        $strategy = $this->equipment['control_strategy'] ?? 'hp_priority';
 
         // Calculate heat pump output (if heat needed and not boiler_priority)
         if ($remainingHeat > 0 && $strategy !== 'boiler_priority') {
