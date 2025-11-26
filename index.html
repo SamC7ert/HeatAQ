@@ -837,7 +837,7 @@
             window.location.href = './login.html';
         }
         
-        // Add session header to all API calls
+        // Add session header to all API calls and handle session timeout
         const originalFetch = window.fetch;
         window.fetch = function(...args) {
             if (args[0] && args[0].includes('api/')) {
@@ -846,7 +846,18 @@
                 args[1].headers = args[1].headers || {};
                 args[1].headers['X-Session-ID'] = localStorage.getItem('heataq_session');
             }
-            return originalFetch.apply(this, args);
+            return originalFetch.apply(this, args).then(response => {
+                // Handle session timeout (401 Unauthorized)
+                if (response.status === 401) {
+                    // Clear session and redirect to login
+                    localStorage.removeItem('heataq_session');
+                    localStorage.removeItem('heataq_project');
+                    alert('Session expired. Please log in again.');
+                    window.location.href = './login.html';
+                    return Promise.reject(new Error('Session expired'));
+                }
+                return response;
+            });
         };
     </script>
     
