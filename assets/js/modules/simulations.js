@@ -786,8 +786,8 @@ const SimulationsModule = {
             return;
         }
 
-        // Save date to localStorage for persistence
-        localStorage.setItem('heataq_debug_date', date);
+        // Save date to localStorage for persistence (user-specific)
+        localStorage.setItem(this.getUserKey('debug_date'), date);
 
         // Show results section without destroying card structure
         resultsDiv.style.display = 'block';
@@ -1004,8 +1004,8 @@ const SimulationsModule = {
         const newDate = currentDate.toISOString().split('T')[0];
         dateInput.value = newDate;
 
-        // Save to localStorage and reload
-        localStorage.setItem('heataq_debug_date', newDate);
+        // Save to localStorage and reload (user-specific)
+        localStorage.setItem(this.getUserKey('debug_date'), newDate);
         this.loadWeeklyChart();
     },
 
@@ -1027,13 +1027,18 @@ const SimulationsModule = {
             return;
         }
 
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
         const links = sorted.map((d, i) => {
-            const dateTime = d.timestamp.split(' ');
-            const displayDate = dateTime[0].substring(5); // MM-DD
-            const displayTime = dateTime[1]?.substring(0, 5) || '00:00'; // HH:MM
+            const dt = new Date(d.timestamp);
+            const day = dt.getDate();
+            const month = monthNames[dt.getMonth()];
+            const hour = dt.getHours().toString().padStart(2, '0');
+            const displayDate = `${day}.${month}`;
+            const kw = d.net_demand.toFixed(1);
             return `<a href="#" onclick="app.simulations.jumpToTime('${d.timestamp}'); return false;"
                        style="color: #1976d2; text-decoration: none; margin-left: ${i > 0 ? '10px' : '5px'};"
-                       title="${d.net_demand.toFixed(1)} kW demand">${displayDate} ${displayTime} (${d.net_demand.toFixed(0)} kW)</a>`;
+                       title="Click to analyze this hour">${displayDate} ${hour}h (${kw} kW)</a>`;
         });
 
         container.innerHTML = links.join(' | ');
@@ -1052,7 +1057,7 @@ const SimulationsModule = {
 
         if (dateInput) {
             dateInput.value = date;
-            localStorage.setItem('heataq_debug_date', date);
+            localStorage.setItem(this.getUserKey('debug_date'), date);
         }
         if (hourSelect) {
             hourSelect.value = hour;
@@ -1063,7 +1068,7 @@ const SimulationsModule = {
     },
 
     /**
-     * Render production chart (HP + Boiler stacked vs heat loss line, with water temp)
+     * Render production chart (HP + Boiler stacked bars vs heat demand line, with water temp)
      */
     renderWeeklyProductionChart: function(weekData) {
         const canvas = document.getElementById('weekly-production-chart');
@@ -1079,8 +1084,8 @@ const SimulationsModule = {
 
         const data = weekData.data;
         const labels = data.map((d, i) => {
-            // Show day abbreviation at hour 2 (slightly right of day boundary gridline)
-            if (i % 24 === 2) {
+            // Show day label at start of each day (hour 0)
+            if (i % 24 === 0) {
                 const date = new Date(d.timestamp);
                 return date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
             }
@@ -1088,11 +1093,11 @@ const SimulationsModule = {
         });
 
         this.weeklyCharts.production = new Chart(canvas, {
-            type: 'line',
             data: {
                 labels: labels,
                 datasets: [
                     {
+                        type: 'line',
                         label: 'Water Temp',
                         data: data.map(d => d.water_temp),
                         borderColor: 'rgb(33, 150, 243)',
@@ -1104,39 +1109,42 @@ const SimulationsModule = {
                         order: 0
                     },
                     {
+                        type: 'line',
                         label: 'Heat Demand',
                         data: data.map(d => d.net_demand > 0 ? d.net_demand : 0),
                         borderColor: '#333',
                         backgroundColor: 'transparent',
-                        borderWidth: 2,
+                        borderWidth: 1.5,
                         pointRadius: 0,
                         tension: 0.1,
                         yAxisID: 'y',
                         order: 1
                     },
                     {
+                        type: 'bar',
                         label: 'Boiler',
                         data: data.map(d => d.boiler_output),
-                        backgroundColor: 'rgba(220, 53, 69, 0.8)',
+                        backgroundColor: 'rgba(220, 53, 69, 0.85)',
                         borderColor: 'rgba(220, 53, 69, 1)',
                         borderWidth: 0,
-                        fill: true,
-                        pointRadius: 0,
                         yAxisID: 'y',
                         stack: 'heating',
-                        order: 3
+                        order: 3,
+                        barPercentage: 1.0,
+                        categoryPercentage: 1.0
                     },
                     {
+                        type: 'bar',
                         label: 'Heat Pump',
                         data: data.map(d => d.hp_output),
-                        backgroundColor: 'rgba(40, 167, 69, 0.8)',
+                        backgroundColor: 'rgba(40, 167, 69, 0.85)',
                         borderColor: 'rgba(40, 167, 69, 1)',
                         borderWidth: 0,
-                        fill: true,
-                        pointRadius: 0,
                         yAxisID: 'y',
                         stack: 'heating',
-                        order: 2
+                        order: 2,
+                        barPercentage: 1.0,
+                        categoryPercentage: 1.0
                     }
                 ]
             },
@@ -1169,17 +1177,18 @@ const SimulationsModule = {
                 scales: {
                     x: {
                         display: true,
+                        offset: false,
                         grid: {
                             display: true,
-                            drawTicks: false,
+                            drawTicks: true,
                             color: function(context) {
                                 // Major gridline every 24 hours (day boundary)
                                 if (context.index % 24 === 0) {
-                                    return 'rgba(0, 0, 0, 0.25)';
+                                    return 'rgba(0, 0, 0, 0.3)';
                                 }
-                                // Minor gridline every 6 hours
+                                // Minor gridline every 6 hours (6, 12, 18)
                                 if (context.index % 6 === 0) {
-                                    return 'rgba(0, 0, 0, 0.08)';
+                                    return 'rgba(0, 0, 0, 0.15)';
                                 }
                                 return 'transparent';
                             },
@@ -1187,7 +1196,18 @@ const SimulationsModule = {
                                 return context.index % 24 === 0 ? 1.5 : 1;
                             }
                         },
-                        ticks: { maxRotation: 0, font: { size: 9 }, padding: 4 }
+                        ticks: {
+                            maxRotation: 0,
+                            font: { size: 9 },
+                            padding: 2,
+                            callback: function(value, index) {
+                                // Show day label at hour 0
+                                if (index % 24 === 0) {
+                                    return this.getLabelForValue(value);
+                                }
+                                return '';
+                            }
+                        }
                     },
                     y: {
                         type: 'linear',
@@ -1233,8 +1253,8 @@ const SimulationsModule = {
 
         const data = weekData.data;
         const labels = data.map((d, i) => {
-            // Show day abbreviation at hour 2 (right of day boundary)
-            if (i % 24 === 2) {
+            // Show day abbreviation at hour 0 (day boundary)
+            if (i % 24 === 0) {
                 const date = new Date(d.timestamp);
                 return date.toLocaleDateString('en-US', { weekday: 'short' });
             }
@@ -1295,18 +1315,28 @@ const SimulationsModule = {
                         display: true,
                         grid: {
                             display: true,
-                            drawTicks: false,
+                            drawTicks: true,
                             color: function(context) {
-                                // Dimmer gridlines for weather chart
-                                if (context.index % 24 === 0) return 'rgba(0, 0, 0, 0.15)';
-                                if (context.index % 6 === 0) return 'rgba(0, 0, 0, 0.05)';
+                                // Match production chart gridlines
+                                if (context.index % 24 === 0) return 'rgba(0, 0, 0, 0.25)';
+                                if (context.index % 6 === 0) return 'rgba(0, 0, 0, 0.12)';
                                 return 'transparent';
                             },
                             lineWidth: function(context) {
                                 return context.index % 24 === 0 ? 1.5 : 1;
                             }
                         },
-                        ticks: { maxRotation: 0, font: { size: 9 }, padding: 4 }
+                        ticks: {
+                            maxRotation: 0,
+                            font: { size: 9 },
+                            padding: 2,
+                            callback: function(value, index) {
+                                if (index % 24 === 0) {
+                                    return this.getLabelForValue(value);
+                                }
+                                return '';
+                            }
+                        }
                     },
                     y: {
                         type: 'linear',
@@ -1314,7 +1344,7 @@ const SimulationsModule = {
                         position: 'left',
                         title: { display: true, text: '°C', font: { size: 10 } },
                         ticks: { font: { size: 9 } },
-                        grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                        grid: { color: 'rgba(0, 0, 0, 0.08)' }
                     },
                     y1: {
                         type: 'linear',
@@ -1330,27 +1360,38 @@ const SimulationsModule = {
     },
 
     /**
+     * Get user-specific localStorage key
+     */
+    getUserKey: function(key) {
+        // Use username from header for per-user storage
+        const userEl = document.getElementById('current-user');
+        const username = userEl?.textContent?.trim() || 'default';
+        return `heataq_${username}_${key}`;
+    },
+
+    /**
      * Initialize debug section
      */
     initDebug: function() {
         // Restore saved config selection (dropdown populated by SimControlModule.loadConfigOptions)
         const select = document.getElementById('debug-config-select');
-        const savedConfig = localStorage.getItem('heataq_selected_config') || '';
+        const savedConfig = localStorage.getItem(this.getUserKey('config')) || '';
         if (select && savedConfig) {
             select.value = savedConfig;
         }
 
         // Restore saved debug date
         const dateInput = document.getElementById('debug-date');
-        const savedDate = localStorage.getItem('heataq_debug_date');
+        const savedDate = localStorage.getItem(this.getUserKey('debug_date'));
         if (dateInput && savedDate) {
             dateInput.value = savedDate;
         }
 
         // Save date when changed
+        const self = this;
         if (dateInput) {
             dateInput.addEventListener('change', function() {
-                localStorage.setItem('heataq_debug_date', this.value);
+                localStorage.setItem(self.getUserKey('debug_date'), this.value);
             });
         }
     }
