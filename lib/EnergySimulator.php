@@ -561,7 +561,7 @@ class EnergySimulator {
     private function hasHourlySolarData() {
         try {
             $stmt = $this->db->prepare("
-                SELECT COUNT(*) FROM solar_hourly_data WHERE site_id = ? LIMIT 1
+                SELECT COUNT(*) FROM site_solar_hourly WHERE site_id = ? LIMIT 1
             ");
             $stmt->execute([$this->siteId]);
             return $stmt->fetchColumn() > 0;
@@ -578,10 +578,10 @@ class EnergySimulator {
         $stmt = $this->db->prepare("
             SELECT
                 timestamp,
-                solar_radiation_wh_m2,
-                solar_clear_sky_wh_m2,
+                solar_wh_m2,
+                clear_sky_wh_m2,
                 cloud_factor
-            FROM solar_hourly_data
+            FROM site_solar_hourly
             WHERE site_id = ?
               AND DATE(timestamp) BETWEEN ? AND ?
             ORDER BY timestamp
@@ -595,8 +595,8 @@ class EnergySimulator {
             $ts = $row['timestamp'];
             // Convert Wh/m² to kWh/m² for consistency with existing code
             $solarByTimestamp[$ts] = [
-                'hourly_kwh_m2' => $row['solar_radiation_wh_m2'] / 1000,
-                'hourly_clear_sky_kwh_m2' => $row['solar_clear_sky_wh_m2'] / 1000,
+                'hourly_kwh_m2' => $row['solar_wh_m2'] / 1000,
+                'hourly_clear_sky_kwh_m2' => $row['clear_sky_wh_m2'] / 1000,
                 'cloud_factor' => $row['cloud_factor']
             ];
         }
@@ -1161,15 +1161,15 @@ class EnergySimulator {
         // First try hourly data
         if ($this->hasHourlySolarData()) {
             $stmt = $this->db->prepare("
-                SELECT solar_radiation_wh_m2, solar_clear_sky_wh_m2
-                FROM solar_hourly_data
+                SELECT solar_wh_m2, clear_sky_wh_m2
+                FROM site_solar_hourly
                 WHERE site_id = ? AND timestamp = ?
                 LIMIT 1
             ");
             $stmt->execute([$this->siteId, $timestamp]);
             $hourlyRow = $stmt->fetch();
             if ($hourlyRow) {
-                $hourlySolar = $hourlyRow['solar_radiation_wh_m2'] / 1000; // Wh to kWh
+                $hourlySolar = $hourlyRow['solar_wh_m2'] / 1000; // Wh to kWh
                 $dailySolar = $hourlySolar * 24; // Estimate for display
                 $solarSource = 'hourly';
             }
