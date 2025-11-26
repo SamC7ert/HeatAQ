@@ -775,6 +775,29 @@ const AdminModule = {
             console.error('Schema dump failed:', err);
             if (status) status.textContent = 'Error: ' + err.message;
         }
+    },
+
+    downloadSchema: async function() {
+        try {
+            const response = await fetch('./db/schema.json');
+            const data = await response.json();
+
+            // Create downloadable blob
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+
+            // Trigger download
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'schema.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Download failed:', err);
+            alert('Failed to download schema: ' + err.message);
+        }
     }
 };
 
