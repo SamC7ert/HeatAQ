@@ -1027,13 +1027,18 @@ const SimulationsModule = {
             return;
         }
 
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
         const links = sorted.map((d, i) => {
-            const dateTime = d.timestamp.split(' ');
-            const displayDate = dateTime[0].substring(5); // MM-DD
-            const displayTime = dateTime[1]?.substring(0, 5) || '00:00'; // HH:MM
+            const dt = new Date(d.timestamp);
+            const day = dt.getDate();
+            const month = monthNames[dt.getMonth()];
+            const hour = dt.getHours().toString().padStart(2, '0');
+            const displayDate = `${day}.${month}`;
+            const kw = d.net_demand.toFixed(1);
             return `<a href="#" onclick="app.simulations.jumpToTime('${d.timestamp}'); return false;"
                        style="color: #1976d2; text-decoration: none; margin-left: ${i > 0 ? '10px' : '5px'};"
-                       title="${d.net_demand.toFixed(1)} kW demand">${displayDate} ${displayTime} (${d.net_demand.toFixed(0)} kW)</a>`;
+                       title="Click to analyze this hour">${displayDate} ${hour}h (${kw} kW)</a>`;
         });
 
         container.innerHTML = links.join(' | ');
