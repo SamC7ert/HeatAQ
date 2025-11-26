@@ -759,6 +759,7 @@ const SimulationsModule = {
      * Run debug calculation for a single hour
      */
     debugHour: async function() {
+        console.log('V52 debugHour called');
         const dateEl = document.getElementById('debug-date');
         const hourEl = document.getElementById('debug-hour');
         const waterTempEl = document.getElementById('debug-water-temp');
@@ -811,7 +812,12 @@ const SimulationsModule = {
      * Render debug calculation results - builds entire HTML structure
      */
     renderDebugResults: function(data) {
+        console.log('V52 renderDebugResults called');
         const resultsDiv = document.getElementById('debug-results');
+        if (!resultsDiv) {
+            alert('renderDebugResults: debug-results element not found!');
+            return;
+        }
 
         // Helper to render a table from object
         const renderTable = (obj) => {
