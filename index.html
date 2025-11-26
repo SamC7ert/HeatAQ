@@ -74,7 +74,7 @@
         <div class="user-info">
             <span class="project-name" id="current-project"></span>
             <span class="user-name" id="current-user"></span>
-            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">V54</span>
+            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">V55</span>
             <button onclick="logout()" class="btn-logout">Logout</button>
         </div>
         
@@ -673,9 +673,8 @@
                     <!-- Benchmark Report Section -->
                     <div id="benchmark-report" class="benchmark-report card" style="display: none;">
                         <h3>Simulation Results - Benchmark Report</h3>
-                        <div class="benchmark-config">
-                            <strong>Configuration:</strong>
-                            <span id="bench-config-summary">-</span>
+                        <div class="benchmark-config" id="bench-config-summary" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 5px 20px; margin-bottom: 15px; font-size: 13px; line-height: 1.6;">
+                            <!-- Config will be populated by JS -->
                         </div>
                         <div class="benchmark-grid">
                             <div class="benchmark-section">
