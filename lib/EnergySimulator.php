@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.7.0';
+    const VERSION = '3.8.0';
 
     private $db;
     private $siteId;
@@ -975,8 +975,9 @@ class EnergySimulator {
 
         $remainingHeat = $requiredHeat;
 
-        // Heat pump first (more efficient)
-        if ($strategy === 'hp_priority' || $strategy === 'cost_optimal') {
+        // Heat pump first (unless boiler_priority)
+        // Default behavior: use HP first as it's more efficient
+        if ($strategy !== 'boiler_priority') {
             $hpResult = $this->applyHeatPump($remainingHeat, $airTemp);
             $result['hp_heat'] = $hpResult['heat'];
             $result['hp_electricity'] = $hpResult['electricity'];
@@ -985,13 +986,23 @@ class EnergySimulator {
             $remainingHeat -= $hpResult['heat'];
         }
 
-        // Boiler for remaining
+        // Boiler for remaining (or first if boiler_priority)
         if ($remainingHeat > 0 && $this->equipment['boiler']['enabled']) {
             $boilerResult = $this->applyBoiler($remainingHeat);
             $result['boiler_heat'] = $boilerResult['heat'];
             $result['boiler_fuel'] = $boilerResult['fuel'];
             $result['cost'] += $boilerResult['cost'];
             $remainingHeat -= $boilerResult['heat'];
+        }
+
+        // If boiler_priority and still need heat, try HP as backup
+        if ($strategy === 'boiler_priority' && $remainingHeat > 0) {
+            $hpResult = $this->applyHeatPump($remainingHeat, $airTemp);
+            $result['hp_heat'] = $hpResult['heat'];
+            $result['hp_electricity'] = $hpResult['electricity'];
+            $result['hp_cop'] = $hpResult['cop'];
+            $result['cost'] += $hpResult['cost'];
+            $remainingHeat -= $hpResult['heat'];
         }
 
         $result['total_heat'] = $result['hp_heat'] + $result['boiler_heat'];

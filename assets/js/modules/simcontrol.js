@@ -165,16 +165,23 @@ const SimControlModule = {
         const volume = config.volume_m3 || 625;
         const depth = config.depth_m || 2;
 
-        // Build config HTML
+        // Build config HTML - show actual values to verify config is being applied
+        const hpKw = equip.heat_pump?.capacity_kw ?? 'not set';
+        const boilerKw = equip.boiler?.capacity_kw ?? 'not set';
+        const hpCop = equip.heat_pump?.cop_nominal ?? '-';
+        const boilerEff = equip.boiler?.efficiency ? (equip.boiler.efficiency * 100).toFixed(0) + '%' : '-';
+        const strategy = equip.heat_pump?.strategy || config.control_strategy || 'reactive';
+        const targetTemp = config.target_temp || equip.control?.target_temp || 28;
+
         const configHtml = `
             <div><strong>Period:</strong> ${year} (${days} days, ${hours.toLocaleString()} hours)</div>
             <div><strong>Pool:</strong> ${area} m², ${volume} m³, depth ${depth}m</div>
-            <div><strong>Capacity:</strong> ${equip.heat_pump?.capacity_kw || 125} kW HP + ${equip.boiler?.capacity_kw || 200} kW boiler</div>
-            <div><strong>Wind factor:</strong> ${((config.wind_exposure_factor || 1) * 100).toFixed(1)}% exposure</div>
-            <div><strong>Cover:</strong> R=${config.cover_r_value || 5} m²K/W, transmittance ${((config.cover_solar_transmittance || 0.1) * 100).toFixed(0)}%</div>
-            <div><strong>Solar absorption:</strong> ${((config.solar_absorption || 0.6) * 100).toFixed(0)}%</div>
-            <div><strong>Years operating:</strong> ${config.years_operating || 3}</div>
-            <div><strong>Strategy:</strong> ${equip.control?.strategy || 'reactive'}</div>
+            <div><strong>Heat Pump:</strong> ${hpKw} kW, COP ${hpCop}</div>
+            <div><strong>Boiler:</strong> ${boilerKw} kW, ${boilerEff} efficiency</div>
+            <div><strong>Strategy:</strong> ${strategy}, target ${targetTemp}°C</div>
+            <div><strong>Wind:</strong> ${((config.wind_exposure_factor || 1) * 100).toFixed(0)}% exposure</div>
+            <div><strong>Cover:</strong> R=${config.cover_r_value || 5} m²K/W, ${((config.cover_solar_transmittance || 0.1) * 100).toFixed(0)}% transmit</div>
+            <div><strong>Solar abs:</strong> ${((config.solar_absorption || 0.6) * 100).toFixed(0)}%, Years: ${config.years_operating || 3}</div>
         `;
         document.getElementById('bench-config-summary').innerHTML = configHtml;
 
