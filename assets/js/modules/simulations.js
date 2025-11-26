@@ -803,6 +803,9 @@ const SimulationsModule = {
 
             this.renderDebugResults(data);
 
+            // Also load weekly chart automatically
+            this.loadWeeklyChart();
+
         } catch (error) {
             resultsDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
         }
