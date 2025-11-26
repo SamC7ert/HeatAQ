@@ -151,11 +151,32 @@ const SimControlModule = {
         // Fill in the values
         const summary = results.summary || {};
 
-        // Config summary
-        document.getElementById('bench-config-summary').textContent =
-            `${summary.total_hours || 0} hours, Pool: ${results.meta?.pool_config?.area_m2 || 312.5}m², ` +
-            `HP: ${results.meta?.equipment?.heat_pump?.capacity_kw || 125}kW, ` +
-            `Boiler: ${results.meta?.equipment?.boiler?.capacity_kw || 200}kW`;
+        // Config summary - detailed multi-column layout
+        const config = results.meta?.pool_config || {};
+        const equip = results.meta?.equipment || {};
+        const startDate = results.meta?.start_date || '';
+        const endDate = results.meta?.end_date || '';
+        const year = startDate ? startDate.substring(0, 4) : '';
+        const hours = summary.total_hours || 0;
+        const days = Math.round(hours / 24);
+
+        // Calculate pool dimensions from area (approximate)
+        const area = config.area_m2 || 312.5;
+        const volume = config.volume_m3 || 625;
+        const depth = config.depth_m || 2;
+
+        // Build config HTML
+        const configHtml = `
+            <div><strong>Period:</strong> ${year} (${days} days, ${hours.toLocaleString()} hours)</div>
+            <div><strong>Pool:</strong> ${area} m², ${volume} m³, depth ${depth}m</div>
+            <div><strong>Capacity:</strong> ${equip.heat_pump?.capacity_kw || 125} kW HP + ${equip.boiler?.capacity_kw || 200} kW boiler</div>
+            <div><strong>Wind factor:</strong> ${((config.wind_exposure_factor || 1) * 100).toFixed(1)}% exposure</div>
+            <div><strong>Cover:</strong> R=${config.cover_r_value || 5} m²K/W, transmittance ${((config.cover_solar_transmittance || 0.1) * 100).toFixed(0)}%</div>
+            <div><strong>Solar absorption:</strong> ${((config.solar_absorption || 0.6) * 100).toFixed(0)}%</div>
+            <div><strong>Years operating:</strong> ${config.years_operating || 3}</div>
+            <div><strong>Strategy:</strong> ${equip.control?.strategy || 'reactive'}</div>
+        `;
+        document.getElementById('bench-config-summary').innerHTML = configHtml;
 
         // Thermal losses (convert kWh to MWh)
         const toMWh = (val) => val ? (val / 1000).toFixed(1) : '-';
