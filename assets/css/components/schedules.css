@@ -342,3 +342,46 @@
     padding: 4px 6px;
     vertical-align: middle;
 }
+
+/* iPad and tablet responsive styles */
+@media (max-width: 1024px) {
+    .period-table {
+        overflow-x: auto;
+    }
+
+    .period-table table {
+        min-width: 100%;
+    }
+
+    #periods-table input[type="time"] {
+        width: 90px !important;
+    }
+
+    #periods-table input[type="number"] {
+        width: 60px !important;
+    }
+
+    .tabs-header {
+        flex-wrap: wrap;
+    }
+
+    .tab-btn {
+        flex: 1 1 auto;
+        min-width: 100px;
+        padding: 12px 10px;
+        font-size: 13px;
+    }
+
+    .week-days-grid {
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    }
+
+    .ohc-header {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .ohc-header select {
+        flex: 1 1 200px;
+    }
+}

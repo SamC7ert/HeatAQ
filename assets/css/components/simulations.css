@@ -530,6 +530,19 @@ p.loading {
     }
 }
 
+/* iPad and tablets - single column for better readability */
+@media (max-width: 1024px) {
+    .schedule-grid-3 {
+        grid-template-columns: 1fr;
+    }
+
+    .schedule-calendar,
+    .schedule-week,
+    .schedule-days {
+        max-height: none;
+    }
+}
+
 @media (max-width: 768px) {
     .schedule-grid-3 {
         grid-template-columns: 1fr;
