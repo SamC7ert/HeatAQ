@@ -307,7 +307,7 @@
                                 </div>
                             </div>
                             <div style="padding: 10px; border-top: 1px solid var(--neutral-200);">
-                                <button class="btn btn-sm btn-secondary" onclick="app.navigation.showSection('configuration')" style="width: 100%;">Configure</button>
+                                <button class="btn btn-sm btn-secondary" onclick="app.project.editPool()" style="width: 100%;">Edit Pool</button>
                             </div>
                         </div>
 
@@ -1318,6 +1318,101 @@
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
                 <button class="btn btn-secondary" onclick="app.project.hideSiteModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="app.project.saveSite()">Save Site</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Pool Modal -->
+    <div id="edit-pool-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content" style="max-width: 550px;">
+            <h3 style="margin-top: 0;">Edit Pool</h3>
+
+            <!-- Pool Name -->
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Pool Name</label>
+                <input type="text" id="edit-pool-name" class="form-control" placeholder="e.g., Main Pool">
+            </div>
+
+            <!-- Dimensions: Length x Width x Depth -->
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500;">Dimensions</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                    <div>
+                        <label style="font-size: 12px; color: #666;">Length (m)</label>
+                        <input type="number" id="edit-pool-length" class="form-control" step="0.1" placeholder="25" oninput="app.project.calcPoolDimensions()">
+                    </div>
+                    <div>
+                        <label style="font-size: 12px; color: #666;">Width (m)</label>
+                        <input type="number" id="edit-pool-width" class="form-control" step="0.1" placeholder="12.5" oninput="app.project.calcPoolDimensions()">
+                    </div>
+                    <div>
+                        <label style="font-size: 12px; color: #666;">Avg Depth (m)</label>
+                        <input type="number" id="edit-pool-depth" class="form-control" step="0.1" placeholder="2.0" oninput="app.project.calcPoolDimensions()">
+                    </div>
+                </div>
+                <!-- Calculated values -->
+                <div style="margin-top: 10px; padding: 10px; background: var(--neutral-100); border-radius: 4px; display: flex; gap: 20px;">
+                    <div><span style="color: #666; font-size: 12px;">Surface Area:</span> <strong id="calc-pool-area">- m²</strong></div>
+                    <div><span style="color: #666; font-size: 12px;">Volume:</span> <strong id="calc-pool-volume">- m³</strong></div>
+                </div>
+            </div>
+
+            <!-- Wind & Solar -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                <div>
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Wind Exposure</label>
+                    <input type="number" id="edit-pool-wind" class="form-control" step="0.01" min="0" max="1" value="0.535">
+                    <small class="text-muted">0 = sheltered, 1 = fully exposed</small>
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Solar Absorption (%)</label>
+                    <input type="number" id="edit-pool-solar" class="form-control" step="1" min="0" max="100" value="60">
+                </div>
+            </div>
+
+            <!-- Cover Settings -->
+            <div style="margin-bottom: 15px; padding: 12px; background: var(--neutral-100); border-radius: 6px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <label style="font-weight: 500;">Pool Cover</label>
+                    <select id="edit-pool-has-cover" class="form-control" style="width: auto;" onchange="app.project.togglePoolCover()">
+                        <option value="1">Yes - Has Cover</option>
+                        <option value="0">No Cover</option>
+                    </select>
+                </div>
+                <div id="pool-cover-settings" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div>
+                        <label style="font-size: 12px; color: #666;">U-value (W/m²K)</label>
+                        <input type="number" id="edit-pool-cover-u" class="form-control" step="0.1" value="5.0">
+                    </div>
+                    <div>
+                        <label style="font-size: 12px; color: #666;">Solar Transmittance (%)</label>
+                        <input type="number" id="edit-pool-cover-solar" class="form-control" step="1" min="0" max="100" value="10">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tunnel & Floor -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                <div>
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Pool Tunnel</label>
+                    <select id="edit-pool-has-tunnel" class="form-control">
+                        <option value="1">Yes - Has Tunnel</option>
+                        <option value="0">No Tunnel</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Floor Insulation</label>
+                    <select id="edit-pool-floor-insulated" class="form-control">
+                        <option value="1">Insulated</option>
+                        <option value="0">Uninsulated</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="app.project.hidePoolModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="app.project.savePool()">Save Pool</button>
             </div>
         </div>
     </div>

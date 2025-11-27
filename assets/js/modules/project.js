@@ -26,6 +26,9 @@ const ProjectModule = {
             // Load site data
             await this.loadSiteData();
 
+            // Load pool data
+            this.loadPoolData();
+
             // Load project summary
             await this.loadSummary();
 
@@ -515,30 +518,162 @@ const ProjectModule = {
 
     // Show add pool modal (placeholder)
     showAddPoolModal() {
-        alert('Multi-pool support coming soon. Configure your pool in the Configuration section.');
+        alert('Multi-pool support coming soon. Use Edit Pool to configure the main pool.');
+    },
+
+    // Current pool data
+    currentPool: null,
+
+    // Load pool data
+    loadPoolData() {
+        const poolData = localStorage.getItem('heataq_pool');
+        if (poolData) {
+            this.currentPool = JSON.parse(poolData);
+        } else {
+            // Default pool matching benchmark
+            this.currentPool = {
+                name: 'Main Pool',
+                length: 25,
+                width: 12.5,
+                depth: 2.0,
+                area: 312.5,
+                volume: 625,
+                wind_exposure: 0.535,
+                solar_absorption: 60,
+                has_cover: true,
+                cover_u_value: 5.0,
+                cover_solar_trans: 10,
+                has_tunnel: true,
+                floor_insulated: true
+            };
+        }
+    },
+
+    // Edit pool - show modal
+    editPool() {
+        const modal = document.getElementById('edit-pool-modal');
+        if (!modal) return;
+
+        // Load pool data if not loaded
+        if (!this.currentPool) {
+            this.loadPoolData();
+        }
+
+        const pool = this.currentPool;
+
+        // Populate form
+        document.getElementById('edit-pool-name').value = pool.name || 'Main Pool';
+        document.getElementById('edit-pool-length').value = pool.length || '';
+        document.getElementById('edit-pool-width').value = pool.width || '';
+        document.getElementById('edit-pool-depth').value = pool.depth || '';
+        document.getElementById('edit-pool-wind').value = pool.wind_exposure ?? 0.535;
+        document.getElementById('edit-pool-solar').value = pool.solar_absorption ?? 60;
+        document.getElementById('edit-pool-has-cover').value = pool.has_cover ? '1' : '0';
+        document.getElementById('edit-pool-cover-u').value = pool.cover_u_value ?? 5.0;
+        document.getElementById('edit-pool-cover-solar').value = pool.cover_solar_trans ?? 10;
+        document.getElementById('edit-pool-has-tunnel').value = pool.has_tunnel ? '1' : '0';
+        document.getElementById('edit-pool-floor-insulated').value = pool.floor_insulated ? '1' : '0';
+
+        // Calculate and show dimensions
+        this.calcPoolDimensions();
+        this.togglePoolCover();
+
+        modal.style.display = 'flex';
+    },
+
+    // Hide pool modal
+    hidePoolModal() {
+        const modal = document.getElementById('edit-pool-modal');
+        if (modal) modal.style.display = 'none';
+    },
+
+    // Calculate pool dimensions from length/width/depth
+    calcPoolDimensions() {
+        const length = parseFloat(document.getElementById('edit-pool-length')?.value) || 0;
+        const width = parseFloat(document.getElementById('edit-pool-width')?.value) || 0;
+        const depth = parseFloat(document.getElementById('edit-pool-depth')?.value) || 0;
+
+        const area = length * width;
+        const volume = area * depth;
+
+        document.getElementById('calc-pool-area').textContent = area > 0 ? `${area.toFixed(1)} m²` : '- m²';
+        document.getElementById('calc-pool-volume').textContent = volume > 0 ? `${volume.toFixed(1)} m³` : '- m³';
+    },
+
+    // Toggle pool cover settings visibility
+    togglePoolCover() {
+        const hasCover = document.getElementById('edit-pool-has-cover')?.value === '1';
+        const settings = document.getElementById('pool-cover-settings');
+        if (settings) {
+            settings.style.display = hasCover ? 'grid' : 'none';
+        }
+    },
+
+    // Save pool
+    savePool() {
+        const length = parseFloat(document.getElementById('edit-pool-length')?.value) || 0;
+        const width = parseFloat(document.getElementById('edit-pool-width')?.value) || 0;
+        const depth = parseFloat(document.getElementById('edit-pool-depth')?.value) || 0;
+
+        this.currentPool = {
+            name: document.getElementById('edit-pool-name')?.value?.trim() || 'Main Pool',
+            length: length,
+            width: width,
+            depth: depth,
+            area: length * width,
+            volume: length * width * depth,
+            wind_exposure: parseFloat(document.getElementById('edit-pool-wind')?.value) || 0.535,
+            solar_absorption: parseFloat(document.getElementById('edit-pool-solar')?.value) || 60,
+            has_cover: document.getElementById('edit-pool-has-cover')?.value === '1',
+            cover_u_value: parseFloat(document.getElementById('edit-pool-cover-u')?.value) || 5.0,
+            cover_solar_trans: parseFloat(document.getElementById('edit-pool-cover-solar')?.value) || 10,
+            has_tunnel: document.getElementById('edit-pool-has-tunnel')?.value === '1',
+            floor_insulated: document.getElementById('edit-pool-floor-insulated')?.value === '1'
+        };
+
+        // Save to localStorage
+        localStorage.setItem('heataq_pool', JSON.stringify(this.currentPool));
+
+        // Update displays
+        this.updatePoolCard();
+        this.hidePoolModal();
+
+        console.log('[Project] Pool saved:', this.currentPool);
     },
 
     // Update pool card display
     updatePoolCard() {
-        if (typeof app.configuration === 'undefined') return;
+        // Load pool data if not loaded
+        if (!this.currentPool) {
+            this.loadPoolData();
+        }
 
-        const cfg = app.configuration.getConfig();
-        if (!cfg) return;
+        const pool = this.currentPool;
+        const cfg = typeof app.configuration !== 'undefined' ? app.configuration.getConfig() : null;
 
-        // Pool info
+        // Pool name
+        const nameEl = document.getElementById('pool-name');
+        if (nameEl) nameEl.textContent = pool.name || 'Main Pool';
+
+        // Pool physical properties from pool data
         const areaEl = document.getElementById('pool-area');
         const volumeEl = document.getElementById('pool-volume');
         const depthEl = document.getElementById('pool-depth');
+
+        if (areaEl) areaEl.textContent = pool.area ? `${pool.area} m²` : '- m²';
+        if (volumeEl) volumeEl.textContent = pool.volume ? `${pool.volume} m³` : '- m³';
+        if (depthEl) depthEl.textContent = pool.depth ? `${pool.depth} m` : '- m';
+
+        // Equipment from configuration
         const targetEl = document.getElementById('pool-target-temp');
         const hpEl = document.getElementById('pool-hp-capacity');
         const boilerEl = document.getElementById('pool-boiler-capacity');
 
-        if (areaEl) areaEl.textContent = cfg.pool?.surface_area ? `${cfg.pool.surface_area} m²` : '- m²';
-        if (volumeEl) volumeEl.textContent = cfg.pool?.volume ? `${cfg.pool.volume} m³` : '- m³';
-        if (depthEl) depthEl.textContent = cfg.pool?.depth ? `${cfg.pool.depth} m` : '- m';
-        if (targetEl) targetEl.textContent = cfg.control?.target_temp ? `${cfg.control.target_temp}°C` : '28°C';
-        if (hpEl) hpEl.textContent = cfg.equipment?.hp_capacity_kw ? `${cfg.equipment.hp_capacity_kw} kW` : '- kW';
-        if (boilerEl) boilerEl.textContent = cfg.equipment?.boiler_capacity_kw ? `${cfg.equipment.boiler_capacity_kw} kW` : '- kW';
+        if (cfg) {
+            if (targetEl) targetEl.textContent = cfg.control?.target_temp ? `${cfg.control.target_temp}°C` : '28°C';
+            if (hpEl) hpEl.textContent = cfg.equipment?.hp_capacity_kw ? `${cfg.equipment.hp_capacity_kw} kW` : '- kW';
+            if (boilerEl) boilerEl.textContent = cfg.equipment?.boiler_capacity_kw ? `${cfg.equipment.boiler_capacity_kw} kW` : '- kW';
+        }
     },
 
     // Update project name and description display
