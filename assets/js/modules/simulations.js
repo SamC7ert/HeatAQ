@@ -369,10 +369,21 @@ const SimulationsModule = {
             return;
         }
 
-        // Prepare data - use thermal output (heat delivered) not electricity/fuel consumed
+        // Prepare data - use thermal output (heat delivered), NOT electricity/fuel consumed
+        // For old runs without thermal columns, estimate using typical COP/efficiency
         const labels = dailyResults.map(d => d.date);
-        const hpData = dailyResults.map(d => parseFloat(d.hp_thermal_kwh) || parseFloat(d.total_hp_kwh) || 0);
-        const boilerData = dailyResults.map(d => parseFloat(d.boiler_thermal_kwh) || parseFloat(d.total_boiler_kwh) || 0);
+        const hpData = dailyResults.map(d => {
+            const thermal = parseFloat(d.hp_thermal_kwh);
+            if (thermal > 0) return thermal;
+            const elec = parseFloat(d.total_hp_kwh) || 0;
+            return elec * 3.5;  // Estimated thermal output
+        });
+        const boilerData = dailyResults.map(d => {
+            const thermal = parseFloat(d.boiler_thermal_kwh);
+            if (thermal > 0) return thermal;
+            const fuel = parseFloat(d.total_boiler_kwh) || 0;
+            return fuel * 0.92;  // Estimated thermal output
+        });
         const lossData = dailyResults.map(d => parseFloat(d.total_loss_kwh) || 0);
 
         new Chart(canvas, {
@@ -1035,7 +1046,7 @@ const SimulationsModule = {
      * Run debug calculation for a single hour
      */
     debugHour: async function() {
-        console.log('V52 debugHour called');
+        console.log('V67 debugHour called');
         const dateEl = document.getElementById('debug-date');
         const hourEl = document.getElementById('debug-hour');
         const waterTempEl = document.getElementById('debug-water-temp');
@@ -1055,12 +1066,14 @@ const SimulationsModule = {
         const date = dateEl.value;
         const hour = hourEl.value;
         const waterTemp = waterTempEl.value;
-        const configId = document.getElementById('debug-config-select')?.value || null;
 
         if (!date) {
             alert('Please select a date');
             return;
         }
+
+        // Set button to loading state
+        this.setDebugButtonState('loading');
 
         // Save date to localStorage for persistence (user-specific)
         localStorage.setItem(this.getUserKey('debug_date'), date);
@@ -1081,7 +1094,6 @@ const SimulationsModule = {
         try {
             let url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}`;
             if (waterTemp) url += `&water_temp=${waterTemp}`;
-            if (configId) url += `&config_id=${configId}`;
 
             const response = await fetch(url);
             const data = await response.json();
@@ -1093,7 +1105,10 @@ const SimulationsModule = {
             this.renderDebugResults(data);
 
             // Also load weekly chart automatically
-            this.loadWeeklyChart();
+            await this.loadWeeklyChart();
+
+            // Success - button green (data in sync)
+            this.setDebugButtonState('synced');
 
         } catch (error) {
             // Show error in summary card without destroying structure
@@ -1101,6 +1116,8 @@ const SimulationsModule = {
             if (summaryEl) {
                 summaryEl.innerHTML = `<p class="error" style="color: #dc3545;">Error: ${error.message}</p>`;
             }
+            // Error - button red (needs recalculation)
+            this.setDebugButtonState('changed');
         }
     },
 
@@ -1782,6 +1799,8 @@ const SimulationsModule = {
      * Initialize debug section
      */
     initDebug: function() {
+        const self = this;
+
         // Restore saved config selection (dropdown populated by SimControlModule.loadConfigOptions)
         const select = document.getElementById('debug-config-select');
         const savedConfig = localStorage.getItem(this.getUserKey('config')) || '';
@@ -1796,12 +1815,296 @@ const SimulationsModule = {
             dateInput.value = savedDate;
         }
 
-        // Save date when changed
-        const self = this;
-        if (dateInput) {
-            dateInput.addEventListener('change', function() {
-                localStorage.setItem(self.getUserKey('debug_date'), this.value);
-            });
+        // Track parameter changes to update button state
+        const paramInputs = ['debug-date', 'debug-hour', 'debug-water-temp', 'debug-config-select'];
+        paramInputs.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', function() {
+                    self.setDebugButtonState('changed');
+                    if (id === 'debug-date') {
+                        localStorage.setItem(self.getUserKey('debug_date'), this.value);
+                    }
+                });
+            }
+        });
+
+        // Auto-load last run data if we have a date
+        if (dateInput && dateInput.value) {
+            this.autoLoadDebugData();
+        }
+    },
+
+    /**
+     * Set debug Calculate button state
+     * @param {string} state - 'synced' (green), 'changed' (red), 'loading' (disabled)
+     */
+    setDebugButtonState: function(state) {
+        const btn = document.getElementById('debug-calculate-btn');
+        if (!btn) return;
+
+        btn.classList.remove('btn-success', 'btn-danger', 'btn-secondary');
+        btn.disabled = false;
+
+        switch (state) {
+            case 'synced':
+                btn.classList.add('btn-success');
+                btn.textContent = 'Calculate';
+                break;
+            case 'changed':
+                btn.classList.add('btn-danger');
+                btn.textContent = 'Calculate';
+                break;
+            case 'loading':
+                btn.classList.add('btn-secondary');
+                btn.textContent = 'Loading...';
+                btn.disabled = true;
+                break;
+        }
+    },
+
+    /**
+     * Auto-load last simulation run results for Simulate tab
+     */
+    autoLoadLastRun: async function() {
+        try {
+            // Get the most recent completed run
+            const response = await fetch('/api/simulation_api.php?action=get_runs&limit=1');
+            const data = await response.json();
+
+            if (!data.runs || data.runs.length === 0) {
+                // No runs yet - hide the results section
+                const resultsDiv = document.getElementById('sim-last-run-results');
+                if (resultsDiv) resultsDiv.style.display = 'none';
+                return;
+            }
+
+            const lastRun = data.runs[0];
+
+            // Show results section
+            const resultsDiv = document.getElementById('sim-last-run-results');
+            if (resultsDiv) resultsDiv.style.display = 'block';
+
+            // Show run info
+            const infoEl = document.getElementById('sim-last-run-info');
+            if (infoEl) {
+                const dateStr = lastRun.start_date && lastRun.end_date
+                    ? `${lastRun.start_date} - ${lastRun.end_date}`
+                    : '';
+                infoEl.textContent = `${lastRun.scenario_name} (${dateStr})`;
+            }
+
+            // Render summary cards
+            this.renderSimSummaryCards(lastRun.summary || {});
+
+            // Load and render yearly chart
+            await this.loadYearlyChart(lastRun.run_id);
+
+        } catch (error) {
+            console.error('[Simulate] Failed to auto-load last run:', error);
+        }
+    },
+
+    /**
+     * Render summary cards for Simulate tab
+     */
+    renderSimSummaryCards: function(summary) {
+        const container = document.getElementById('sim-summary-cards');
+        if (!container) return;
+
+        // Calculate thermal output (heat delivered), not electricity/fuel consumed
+        // For old runs without thermal columns, estimate using typical COP/efficiency
+        const hpThermal = summary.hp_thermal_kwh > 0
+            ? summary.hp_thermal_kwh
+            : (summary.total_hp_energy_kwh || 0) * 3.5;
+        const boilerThermal = summary.boiler_thermal_kwh > 0
+            ? summary.boiler_thermal_kwh
+            : (summary.total_boiler_energy_kwh || 0) * 0.92;
+
+        const cards = [
+            { label: 'Total Cost', value: this.formatCurrency(summary.total_cost) },
+            { label: 'Heat Loss', value: this.formatEnergy(summary.total_heat_loss_kwh) },
+            { label: 'Solar Gain', value: this.formatEnergy(summary.total_solar_gain_kwh) },
+            { label: 'HP Thermal', value: this.formatEnergy(hpThermal) },
+            { label: 'Boiler Thermal', value: this.formatEnergy(boilerThermal) },
+            { label: 'Avg COP', value: summary.avg_cop?.toFixed(2) || '-' }
+        ];
+
+        container.innerHTML = cards.map(c => `
+            <div class="summary-card">
+                <div class="card-value">${c.value}</div>
+                <div class="card-label">${c.label}</div>
+            </div>
+        `).join('');
+    },
+
+    // Store yearly chart instance
+    yearlyChart: null,
+
+    /**
+     * Load and render yearly chart for Simulate tab
+     */
+    loadYearlyChart: async function(runId) {
+        try {
+            const response = await fetch(`/api/simulation_api.php?action=get_daily_results&run_id=${runId}`);
+            const data = await response.json();
+
+            if (data.daily_results) {
+                this.renderYearlyChart(data.daily_results);
+            }
+        } catch (error) {
+            console.error('[Simulate] Failed to load yearly chart:', error);
+        }
+    },
+
+    /**
+     * Render yearly chart (daily energy stacked area)
+     */
+    renderYearlyChart: function(dailyResults) {
+        const canvas = document.getElementById('sim-yearly-chart');
+        if (!canvas || typeof Chart === 'undefined') {
+            console.error('Chart.js not loaded or canvas not found');
+            return;
+        }
+
+        // Destroy existing chart
+        if (this.yearlyChart) {
+            this.yearlyChart.destroy();
+        }
+
+        // Prepare data - use thermal output (heat delivered), NOT electricity consumed
+        // For old runs without thermal columns, estimate: HP thermal ≈ electricity × COP (assume 3.5)
+        const labels = dailyResults.map(d => d.date);
+        const hpData = dailyResults.map(d => {
+            const thermal = parseFloat(d.hp_thermal_kwh);
+            if (thermal > 0) return thermal;
+            // Fallback: estimate from electricity × average COP
+            const elec = parseFloat(d.total_hp_kwh) || 0;
+            return elec * 3.5;  // Estimated thermal output
+        });
+        const boilerData = dailyResults.map(d => {
+            const thermal = parseFloat(d.boiler_thermal_kwh);
+            if (thermal > 0) return thermal;
+            // Fallback: estimate from fuel × efficiency (assume 92%)
+            const fuel = parseFloat(d.total_boiler_kwh) || 0;
+            return fuel * 0.92;  // Estimated thermal output
+        });
+        const lossData = dailyResults.map(d => parseFloat(d.total_loss_kwh) || 0);
+
+        this.yearlyChart = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Heat Demand (kWh)',
+                        data: lossData,
+                        borderColor: 'rgba(100, 100, 100, 0.8)',
+                        backgroundColor: 'rgba(100, 100, 100, 0.1)',
+                        fill: true,
+                        pointRadius: 0,
+                        borderWidth: 1,
+                        tension: 0.1,
+                        order: 3
+                    },
+                    {
+                        label: 'Heat Pump (kWh)',
+                        data: hpData,
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        backgroundColor: 'rgba(40, 167, 69, 0.6)',
+                        fill: true,
+                        pointRadius: 0,
+                        borderWidth: 1,
+                        tension: 0.1,
+                        order: 1
+                    },
+                    {
+                        label: 'Boiler (kWh)',
+                        data: boilerData,
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        backgroundColor: 'rgba(220, 53, 69, 0.6)',
+                        fill: true,
+                        pointRadius: 0,
+                        borderWidth: 1,
+                        tension: 0.1,
+                        order: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { boxWidth: 12, font: { size: 10 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                return context[0].label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        ticks: {
+                            maxTicksLimit: 12,
+                            font: { size: 9 }
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: { display: true, text: 'Energy (kWh)' }
+                    }
+                }
+            }
+        });
+    },
+
+    /**
+     * Auto-load debug data from last simulation run
+     */
+    autoLoadDebugData: async function() {
+        const dateInput = document.getElementById('debug-date');
+        const hourSelect = document.getElementById('debug-hour');
+        if (!dateInput || !dateInput.value) return;
+
+        const date = dateInput.value;
+        const hour = hourSelect ? hourSelect.value : '12';
+
+        this.setDebugButtonState('loading');
+
+        try {
+            // Load debug hour data
+            const url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}`;
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.error) {
+                console.log('[Debug] No stored run for this date:', data.error);
+                this.setDebugButtonState('changed'); // Red - needs calculation
+                return;
+            }
+
+            // Render results
+            this.renderDebugResults(data);
+
+            // Load weekly chart
+            await this.loadWeeklyChart();
+
+            // Button green - data is in sync
+            this.setDebugButtonState('synced');
+
+        } catch (err) {
+            console.error('[Debug] Auto-load failed:', err);
+            this.setDebugButtonState('changed');
         }
     }
 };

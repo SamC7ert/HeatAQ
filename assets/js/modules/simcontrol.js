@@ -45,7 +45,10 @@ const SimControlModule = {
         // Load tab-specific data
         switch (tabName) {
             case 'new':
-                // New run tab - already loaded in init
+                // Auto-load last simulation results
+                if (typeof SimulationsModule !== 'undefined') {
+                    SimulationsModule.autoLoadLastRun();
+                }
                 break;
             case 'history':
                 if (typeof SimulationsModule !== 'undefined') {
