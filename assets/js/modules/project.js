@@ -145,7 +145,7 @@ const ProjectModule = {
 
         if (lat && lng) {
             // Use OpenStreetMap embed iframe (more reliable than static image)
-            const zoom = 14;
+            const zoom = 17; // High zoom for good detail
             const bbox = this.calculateBbox(lat, lng, zoom);
             const embedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
             container.innerHTML = `<iframe src="${embedUrl}" style="width:100%;height:100%;border:none;" loading="lazy"></iframe>`;
@@ -164,6 +164,70 @@ const ProjectModule = {
         const east = lng + lngDelta;
         const north = lat + latDelta;
         return `${west},${south},${east},${north}`;
+    },
+
+    // Fetch NASA solar data for site coordinates
+    async fetchNasaSolar() {
+        const lat = parseFloat(document.getElementById('edit-site-lat')?.value);
+        const lng = parseFloat(document.getElementById('edit-site-lng')?.value);
+
+        if (!lat || !lng) {
+            alert('Please enter latitude and longitude first');
+            return;
+        }
+
+        const btn = document.getElementById('btn-fetch-solar');
+        const statusEl = document.getElementById('solar-fetch-status');
+
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Fetching...';
+        }
+        if (statusEl) {
+            statusEl.textContent = 'Fetching 10 years of solar data from NASA POWER API...';
+            statusEl.style.color = '#666';
+        }
+
+        try {
+            const response = await fetch(`${config.API_BASE_URL}?action=fetch_nasa_solar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    latitude: lat,
+                    longitude: lng,
+                    start_year: new Date().getFullYear() - 10,
+                    end_year: new Date().getFullYear() - 1
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.error) {
+                throw new Error(result.error);
+            }
+
+            // Update site with fetch info
+            this.currentSite.solar_last_fetched = new Date().toISOString();
+            this.currentSite.solar_days = result.daily_records;
+            localStorage.setItem('heataq_site', JSON.stringify(this.currentSite));
+
+            // Update status display
+            this.updateSolarStatus();
+
+            console.log('[Project] NASA solar data fetched:', result);
+
+        } catch (error) {
+            console.error('[Project] NASA solar fetch error:', error);
+            if (statusEl) {
+                statusEl.textContent = `✗ Error: ${error.message}`;
+                statusEl.style.color = '#dc3545';
+            }
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Fetch Solar Data';
+            }
+        }
     },
 
     // Update pools list in site card
@@ -261,6 +325,9 @@ const ProjectModule = {
         // Update map preview in modal
         this.updateMapPreview('site-map-preview', site.latitude, site.longitude);
 
+        // Show solar data status
+        this.updateSolarStatus();
+
         // Add event listeners for coordinate changes (remove old ones first to avoid duplicates)
         const newLatEl = document.getElementById('edit-site-lat');
         const newLngEl = document.getElementById('edit-site-lng');
@@ -274,6 +341,32 @@ const ProjectModule = {
         }
 
         modal.style.display = 'flex';
+    },
+
+    // Update solar data status display
+    updateSolarStatus() {
+        const statusEl = document.getElementById('solar-fetch-status');
+        const lastUpdatedEl = document.getElementById('solar-last-updated');
+        const site = this.currentSite || {};
+
+        if (statusEl) {
+            if (site.solar_last_fetched) {
+                statusEl.textContent = `✓ Solar data loaded (${site.solar_days || '?'} days)`;
+                statusEl.style.color = '#28a745';
+            } else {
+                statusEl.textContent = 'Not fetched - click to load 10 years of hourly solar radiation data';
+                statusEl.style.color = '#666';
+            }
+        }
+
+        if (lastUpdatedEl) {
+            if (site.solar_last_fetched) {
+                const date = new Date(site.solar_last_fetched);
+                lastUpdatedEl.textContent = `Last updated: ${date.toLocaleDateString()} at ${date.toLocaleTimeString()}`;
+            } else {
+                lastUpdatedEl.textContent = '';
+            }
+        }
     },
 
     // Handle coordinate change in edit modal
@@ -306,19 +399,11 @@ const ProjectModule = {
     },
 
     // Save site
-    saveSite() {
+    async saveSite() {
         const nameEl = document.getElementById('edit-site-name');
         const latEl = document.getElementById('edit-site-lat');
         const lngEl = document.getElementById('edit-site-lng');
         const wsEl = document.getElementById('edit-site-weather');
-
-        // Debug: log raw values
-        console.log('[Project] Save - Raw values:', {
-            name: nameEl?.value,
-            lat: latEl?.value,
-            lng: lngEl?.value,
-            ws: wsEl?.value
-        });
 
         const name = nameEl?.value?.trim() || '';
         const latRaw = latEl?.value;
@@ -327,8 +412,12 @@ const ProjectModule = {
         const lng = lngRaw ? parseFloat(lngRaw) : null;
         const wsId = wsEl?.value || null;
 
-        // Debug: log parsed values
-        console.log('[Project] Save - Parsed values:', { name, lat, lng, wsId });
+        // Check if coordinates changed
+        const oldLat = this.currentSite?.latitude;
+        const oldLng = this.currentSite?.longitude;
+        const coordsChanged = lat && lng && (lat !== oldLat || lng !== oldLng);
+
+        console.log('[Project] Save - Coords changed:', coordsChanged, { old: [oldLat, oldLng], new: [lat, lng] });
 
         // Find weather station name
         let wsName = null;
@@ -355,6 +444,65 @@ const ProjectModule = {
         this.hideSiteModal();
 
         console.log('[Project] Site saved:', this.currentSite);
+
+        // Auto-fetch NASA solar data if coordinates changed
+        if (coordsChanged) {
+            console.log('[Project] Coordinates changed - fetching NASA solar data...');
+            // Small delay to let modal close
+            setTimeout(() => this.fetchNasaSolarBackground(lat, lng), 500);
+        }
+    },
+
+    // Fetch NASA solar data in background (after save)
+    async fetchNasaSolarBackground(lat, lng) {
+        try {
+            console.log('[Project] Background NASA fetch for:', lat, lng);
+
+            const response = await fetch(`${config.API_BASE_URL}?action=fetch_nasa_solar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    latitude: lat,
+                    longitude: lng,
+                    start_year: new Date().getFullYear() - 10,
+                    end_year: new Date().getFullYear() - 1
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.error) {
+                console.error('[Project] NASA solar fetch error:', result.error);
+                return;
+            }
+
+            // Update site with fetch info
+            this.currentSite.solar_last_fetched = new Date().toISOString();
+            this.currentSite.solar_days = result.daily_records;
+            localStorage.setItem('heataq_site', JSON.stringify(this.currentSite));
+
+            console.log('[Project] NASA solar data fetched:', result);
+
+            // Show notification
+            this.showNotification(`Solar data loaded: ${result.daily_records} days from NASA`, 'success');
+
+        } catch (error) {
+            console.error('[Project] NASA solar background fetch error:', error);
+        }
+    },
+
+    // Show a brief notification
+    showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed; bottom: 20px; right: 20px; padding: 12px 20px;
+            background: ${type === 'success' ? '#28a745' : '#007bff'}; color: white;
+            border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 10000; font-size: 14px; animation: slideIn 0.3s ease;
+        `;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        setTimeout(() => notification.remove(), 4000);
     },
 
     // Show add site modal (placeholder)
