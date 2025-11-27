@@ -202,9 +202,7 @@ const SimulationsModule = {
             // Show success
             progressDiv.innerHTML = `
                 <div class="progress-success">
-                    Simulation completed!<br>
-                    <span class="summary-line">Total Cost: ${this.formatCurrency(data.summary?.total_cost || 0)}</span>
-                    <span class="summary-line">Hours Simulated: ${data.hourly_count?.toLocaleString() || 0}</span>
+                    Simulation completed! (${data.hourly_count?.toLocaleString() || 0} hours)
                 </div>
             `;
 
@@ -1180,31 +1178,44 @@ const SimulationsModule = {
      * Load run info to display config and schedule names in debug panel
      */
     loadRunInfoForDebug: async function(runId) {
+        const configDisplay = document.getElementById('debug-config-display');
+        const ohcDisplay = document.getElementById('debug-ohc-display');
+
         try {
             const response = await fetch(`/api/simulation_api.php?action=get_run&run_id=${runId}`);
             const data = await response.json();
 
-            if (data.run && data.run.config) {
-                const config = data.run.config;
+            if (data.error) {
+                console.warn('Error loading run info:', data.error);
+                if (configDisplay) configDisplay.textContent = 'Run not found';
+                if (ohcDisplay) ohcDisplay.textContent = '-';
+                return;
+            }
 
-                // Display config name (from equipment settings)
-                const configDisplay = document.getElementById('debug-config-display');
+            if (data.run) {
+                const config = data.run.config || {};
+                const equipment = config.equipment || {};
+
+                // Display config info (from equipment settings)
                 if (configDisplay) {
-                    const hpCap = config.equipment?.hp_capacity_kw;
-                    const boilerCap = config.equipment?.boiler_capacity_kw;
-                    configDisplay.textContent = hpCap && boilerCap ?
-                        `HP: ${hpCap}kW, Boiler: ${boilerCap}kW` :
-                        (data.run.scenario_name || 'Default');
+                    const hpCap = equipment.hp_capacity_kw;
+                    const boilerCap = equipment.boiler_capacity_kw;
+                    if (hpCap && boilerCap) {
+                        configDisplay.textContent = `HP: ${hpCap}kW, Boiler: ${boilerCap}kW`;
+                    } else {
+                        configDisplay.textContent = data.run.scenario_name || `Run #${runId}`;
+                    }
                 }
 
                 // Display schedule/OHC name
-                const ohcDisplay = document.getElementById('debug-ohc-display');
                 if (ohcDisplay) {
-                    ohcDisplay.textContent = config.schedule_template_name || 'Default Schedule';
+                    ohcDisplay.textContent = config.schedule_template_name || 'Default';
                 }
             }
         } catch (err) {
             console.warn('Failed to load run info for debug:', err);
+            if (configDisplay) configDisplay.textContent = 'Error loading';
+            if (ohcDisplay) ohcDisplay.textContent = '-';
         }
     },
 
