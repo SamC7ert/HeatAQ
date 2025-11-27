@@ -1058,18 +1058,16 @@ const SimulationsModule = {
      * Run debug calculation for a single hour
      */
     debugHour: async function() {
-        console.log('V67 debugHour called');
+        console.log('V69 debugHour called');
         const dateEl = document.getElementById('debug-date');
         const hourEl = document.getElementById('debug-hour');
-        const waterTempEl = document.getElementById('debug-water-temp');
         const resultsDiv = document.getElementById('debug-results');
 
         // Debug: check which elements are missing
-        if (!dateEl || !hourEl || !waterTempEl || !resultsDiv) {
+        if (!dateEl || !hourEl || !resultsDiv) {
             const missing = [];
             if (!dateEl) missing.push('debug-date');
             if (!hourEl) missing.push('debug-hour');
-            if (!waterTempEl) missing.push('debug-water-temp');
             if (!resultsDiv) missing.push('debug-results');
             alert('Missing elements: ' + missing.join(', ') + '\n\nTry refreshing with Ctrl+Shift+R to clear cache.');
             return;
@@ -1077,7 +1075,6 @@ const SimulationsModule = {
 
         const date = dateEl.value;
         const hour = hourEl.value;
-        const waterTemp = waterTempEl.value;
 
         if (!date) {
             alert('Please select a date');
@@ -1104,8 +1101,8 @@ const SimulationsModule = {
         });
 
         try {
-            let url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}`;
-            if (waterTemp) url += `&water_temp=${waterTemp}`;
+            // Use stored water temp from simulation (no override)
+            const url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}`;
 
             const response = await fetch(url);
             const data = await response.json();
@@ -1134,10 +1131,88 @@ const SimulationsModule = {
     },
 
     /**
+     * Navigate to previous hour and recalculate
+     */
+    debugPrevHour: function() {
+        const hourEl = document.getElementById('debug-hour');
+        const dateEl = document.getElementById('debug-date');
+        if (!hourEl || !dateEl) return;
+
+        let hour = parseInt(hourEl.value);
+        let date = new Date(dateEl.value);
+
+        if (hour > 0) {
+            hour--;
+        } else {
+            // Go to previous day, hour 23
+            hour = 23;
+            date.setDate(date.getDate() - 1);
+            dateEl.value = date.toISOString().split('T')[0];
+        }
+        hourEl.value = hour;
+        this.debugHour();
+    },
+
+    /**
+     * Navigate to next hour and recalculate
+     */
+    debugNextHour: function() {
+        const hourEl = document.getElementById('debug-hour');
+        const dateEl = document.getElementById('debug-date');
+        if (!hourEl || !dateEl) return;
+
+        let hour = parseInt(hourEl.value);
+        let date = new Date(dateEl.value);
+
+        if (hour < 23) {
+            hour++;
+        } else {
+            // Go to next day, hour 0
+            hour = 0;
+            date.setDate(date.getDate() + 1);
+            dateEl.value = date.toISOString().split('T')[0];
+        }
+        hourEl.value = hour;
+        this.debugHour();
+    },
+
+    /**
+     * Load run info to display config and schedule names in debug panel
+     */
+    loadRunInfoForDebug: async function(runId) {
+        try {
+            const response = await fetch(`/api/simulation_api.php?action=get_run&run_id=${runId}`);
+            const data = await response.json();
+
+            if (data.run && data.run.config) {
+                const config = data.run.config;
+
+                // Display config name (from equipment settings)
+                const configDisplay = document.getElementById('debug-config-display');
+                if (configDisplay) {
+                    const hpCap = config.equipment?.hp_capacity_kw;
+                    const boilerCap = config.equipment?.boiler_capacity_kw;
+                    configDisplay.textContent = hpCap && boilerCap ?
+                        `HP: ${hpCap}kW, Boiler: ${boilerCap}kW` :
+                        (data.run.scenario_name || 'Default');
+                }
+
+                // Display schedule/OHC name
+                const ohcDisplay = document.getElementById('debug-ohc-display');
+                if (ohcDisplay) {
+                    ohcDisplay.textContent = config.schedule_template_name || 'Default Schedule';
+                }
+            }
+        } catch (err) {
+            console.warn('Failed to load run info for debug:', err);
+        }
+    },
+
+    /**
      * Render debug calculation results - populates new UI structure
      */
     renderDebugResults: function(data) {
-        console.log('V67 renderDebugResults called', data);
+        console.log('V69 renderDebugResults called', data);
 
         // Helper to render a table from object
         const renderTable = (obj) => {
@@ -1205,6 +1280,18 @@ const SimulationsModule = {
         const hasCover = inp.config?.has_cover;
         const coverOn = hasCover && !isOpen;
         setEl('debug-cover-status', coverOn ? 'Cover On' : 'Cover Off');
+
+        // Water temperature display (from stored simulation data)
+        const waterTemp = stored.water_temp || inp.pool?.water_temp_c;
+        const waterTempDisplay = document.getElementById('debug-water-temp-display');
+        if (waterTempDisplay && waterTemp) {
+            waterTempDisplay.textContent = `Water: ${parseFloat(waterTemp).toFixed(1)}°C`;
+        }
+
+        // Config and Schedule display (from run info)
+        if (stored.run_id) {
+            this.loadRunInfoForDebug(stored.run_id);
+        }
 
         // Update chart comparison display with stored run info
         const comparisonEl = document.getElementById('chart-data-comparison');
@@ -1279,7 +1366,6 @@ const SimulationsModule = {
      */
     loadWeeklyChart: async function() {
         const dateInput = document.getElementById('debug-date');
-        const configSelect = document.getElementById('debug-config-select');
 
         if (!dateInput || !dateInput.value) {
             alert('Please select a date first');
@@ -1287,7 +1373,6 @@ const SimulationsModule = {
         }
 
         const date = dateInput.value;
-        const configId = configSelect?.value || '';
 
         // Show loading
         const placeholder = document.getElementById('debug-weekly-chart-placeholder');
@@ -1813,13 +1898,6 @@ const SimulationsModule = {
     initDebug: function() {
         const self = this;
 
-        // Restore saved config selection (dropdown populated by SimControlModule.loadConfigOptions)
-        const select = document.getElementById('debug-config-select');
-        const savedConfig = localStorage.getItem(this.getUserKey('config')) || '';
-        if (select && savedConfig) {
-            select.value = savedConfig;
-        }
-
         // Restore saved debug date
         const dateInput = document.getElementById('debug-date');
         const savedDate = localStorage.getItem(this.getUserKey('debug_date'));
@@ -1828,7 +1906,7 @@ const SimulationsModule = {
         }
 
         // Track parameter changes to update button state
-        const paramInputs = ['debug-date', 'debug-hour', 'debug-water-temp', 'debug-config-select'];
+        const paramInputs = ['debug-date', 'debug-hour'];
         paramInputs.forEach(id => {
             const el = document.getElementById(id);
             if (el) {
@@ -2003,6 +2081,9 @@ const SimulationsModule = {
         });
         const lossData = dailyResults.map(d => parseFloat(d.total_loss_kwh) || 0);
 
+        // Stack data: Boiler on top of HP
+        const stackedBoilerData = boilerData.map((b, i) => b + hpData[i]);
+
         this.yearlyChart = new Chart(canvas, {
             type: 'line',
             data: {
@@ -2021,27 +2102,25 @@ const SimulationsModule = {
                     },
                     {
                         label: 'Boiler (kWh)',
-                        data: boilerData,
+                        data: stackedBoilerData,
                         borderColor: 'rgba(220, 53, 69, 1)',
                         backgroundColor: 'rgba(220, 53, 69, 0.7)',
-                        fill: true,
+                        fill: '-1',  // Fill down to HP dataset
                         pointRadius: 0,
                         borderWidth: 0,
                         tension: 0.1,
-                        stack: 'heating',
-                        order: 2
+                        order: 1
                     },
                     {
                         label: 'Heat Pump (kWh)',
                         data: hpData,
                         borderColor: 'rgba(40, 167, 69, 1)',
                         backgroundColor: 'rgba(40, 167, 69, 0.7)',
-                        fill: true,
+                        fill: 'origin',  // Fill down to x-axis
                         pointRadius: 0,
                         borderWidth: 0,
                         tension: 0.1,
-                        stack: 'heating',
-                        order: 1
+                        order: 2
                     }
                 ]
             },
@@ -2075,7 +2154,6 @@ const SimulationsModule = {
                     },
                     y: {
                         display: true,
-                        stacked: true,
                         title: { display: true, text: 'Energy (kWh)' }
                     }
                 }

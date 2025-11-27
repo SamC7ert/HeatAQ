@@ -74,7 +74,7 @@
         <div class="user-info">
             <span class="project-name" id="current-project"></span>
             <span class="user-name" id="current-user"></span>
-            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">V68</span>
+            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">V70</span>
             <button onclick="logout()" class="btn-logout">Logout</button>
         </div>
         
@@ -637,8 +637,11 @@
                                     <td><textarea id="sim-description" rows="2" placeholder="Optional notes..."></textarea></td>
                                 </tr>
                             </table>
-                            <div class="form-info">
-                                <span id="weather-range-info" class="text-muted">Loading weather data range...</span>
+                            <div class="form-info" style="display: flex; justify-content: flex-end; align-items: center; gap: 15px; margin-top: 10px;">
+                                <span id="weather-range-info" class="text-muted" style="font-size: 12px;">Loading weather data range...</span>
+                                <button id="run-simulation-btn" class="btn btn-success" onclick="SimulationsModule.startSimulation()">
+                                    Run Simulation
+                                </button>
                             </div>
                         </div>
 
@@ -705,11 +708,6 @@
                         </div>
                     </div>
 
-                    <div class="form-actions">
-                        <button id="run-simulation-btn" class="btn btn-success btn-lg" onclick="SimulationsModule.startSimulation()">
-                            ▶️ Run Simulation
-                        </button>
-                    </div>
                     <div id="simulation-progress" class="simulation-progress" style="display: none;"></div>
 
                     <!-- Last Run Results (auto-loaded) -->
@@ -719,12 +717,12 @@
                             <span id="sim-last-run-info" style="font-size: 12px; color: #666;"></span>
                         </div>
 
-                        <!-- Summary Stats -->
+                        <!-- Summary Stats Table -->
                         <div id="sim-summary-cards" class="run-summary-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 20px;">
                         </div>
 
-                        <!-- Yearly Chart -->
-                        <div id="sim-yearly-chart-container" style="height: 300px; position: relative;">
+                        <!-- Yearly Chart (below stats) -->
+                        <div id="sim-yearly-chart-container" style="height: 250px; position: relative; margin-top: 15px;">
                             <canvas id="sim-yearly-chart"></canvas>
                         </div>
                     </div>
@@ -920,16 +918,18 @@
                                         </select>
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 8px;">
-                                        <label style="width: 70px;">Water °C</label>
-                                        <input type="number" id="debug-water-temp" step="0.1" value="28.5" style="flex: 1; padding: 4px;">
+                                        <button class="btn btn-secondary btn-sm" onclick="SimulationsModule.debugPrevHour()" style="padding: 4px 12px;">◀</button>
+                                        <button id="debug-calculate-btn" class="btn btn-success btn-sm" onclick="SimulationsModule.debugHour()" style="flex: 1;">Calculate</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="SimulationsModule.debugNextHour()" style="padding: 4px 12px;">▶</button>
                                     </div>
-                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 11px; color: #666;">
                                         <label style="width: 70px;">Config</label>
-                                        <select id="debug-config-select" style="flex: 1; padding: 4px;">
-                                            <option value="">-- Defaults --</option>
-                                        </select>
+                                        <span id="debug-config-display" style="flex: 1;">-</span>
                                     </div>
-                                    <button id="debug-calculate-btn" class="btn btn-success btn-sm" onclick="SimulationsModule.debugHour()" style="margin-top: 5px;">Calculate</button>
+                                    <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; color: #666;">
+                                        <label style="width: 70px;">Schedule</label>
+                                        <span id="debug-ohc-display" style="flex: 1;">-</span>
+                                    </div>
                                 </div>
                             </div>
                             <!-- Heat Output Summary -->
@@ -940,6 +940,7 @@
                                         <div style="font-size: 11px; color: #666;">Status</div>
                                         <div style="font-size: 20px; font-weight: bold;" id="debug-status">-</div>
                                         <div style="font-size: 11px; color: #888;" id="debug-cover-status">-</div>
+                                        <div style="font-size: 13px; color: #17a2b8; margin-top: 4px;" id="debug-water-temp-display">-</div>
                                     </div>
                                     <div>
                                         <div style="font-size: 11px; color: #666;">Net Heat Demand</div>
@@ -1216,7 +1217,7 @@
                     <div class="card">
                         <h3>System Info</h3>
                         <table class="data-table compact">
-                            <tr><td><strong>App Version</strong></td><td>V68</td></tr>
+                            <tr><td><strong>App Version</strong></td><td>V70</td></tr>
                             <tr><td><strong>Simulator</strong></td><td id="sys-simulator-ver">-</td></tr>
                             <tr><td><strong>PHP</strong></td><td id="sys-php-ver">-</td></tr>
                         </table>
