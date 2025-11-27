@@ -8,6 +8,7 @@ const SimulationsModule = {
     runs: [],
     currentRun: null,
     weatherRange: null,
+    debugTimestamp: null,  // Current debug date+hour for chart highlighting
 
     /**
      * Initialize simulations module
@@ -1064,6 +1065,9 @@ const SimulationsModule = {
         // Save date to localStorage for persistence (user-specific)
         localStorage.setItem(this.getUserKey('debug_date'), date);
 
+        // Store current debug timestamp for chart highlighting (no seconds to match chart data format)
+        this.debugTimestamp = `${date} ${hour.padStart(2, '0')}:00`;
+
         // Show results section without destroying card structure
         resultsDiv.style.display = 'block';
 
@@ -1104,7 +1108,7 @@ const SimulationsModule = {
      * Render debug calculation results - populates new UI structure
      */
     renderDebugResults: function(data) {
-        console.log('V59 renderDebugResults called', data);
+        console.log('V67 renderDebugResults called', data);
 
         // Helper to render a table from object
         const renderTable = (obj) => {
@@ -1120,7 +1124,8 @@ const SimulationsModule = {
             return html;
         };
 
-        // ===== Populate Heat Balance Summary (top right) =====
+        // ===== Use STORED values as primary source (matches chart data) =====
+        const stored = data.stored || {};
         const hs = data.heating_summary || {};
         const hp = data.heat_pump || {};
         const boiler = data.boiler || {};
@@ -1134,15 +1139,23 @@ const SimulationsModule = {
             if (el) el.innerHTML = val;
         };
 
-        // Net demand
-        setEl('debug-net-demand', `${hs.net_demand_kw?.toFixed(1) || '0'} kW`);
+        // Net demand - use stored value (matches chart)
+        const storedNetDemand = stored.total_loss_kw - stored.solar_gain_kw;
+        setEl('debug-net-demand', `${storedNetDemand?.toFixed(1) || hs.net_demand_kw?.toFixed(1) || '0'} kW`);
 
-        // Heat pump output
-        setEl('debug-hp-output', `${hs.hp_output_kw?.toFixed(1) || '0'} kW`);
-        setEl('debug-hp-detail', `COP ${hp.cop || '-'} | ${hp.electricity_kw?.toFixed(1) || '0'} kW elec`);
+        // Show validation warning if recalc differs
+        if (data.validation_warning) {
+            console.warn('[Validation]', data.validation_warning);
+        }
 
-        // Boiler output
-        setEl('debug-boiler-output', `${hs.boiler_output_kw?.toFixed(1) || '0'} kW`);
+        // Heat pump output - use stored value (matches chart)
+        const hpOutput = stored.hp_heat_kw ?? hs.hp_output_kw ?? 0;
+        setEl('debug-hp-output', `${hpOutput?.toFixed(1)} kW`);
+        setEl('debug-hp-detail', `COP ${stored.hp_cop || hp.cop || '-'} | ${hp.electricity_kw?.toFixed(1) || '0'} kW elec`);
+
+        // Boiler output - use stored value (matches chart)
+        const boilerOutput = stored.boiler_heat_kw ?? hs.boiler_output_kw ?? 0;
+        setEl('debug-boiler-output', `${boilerOutput?.toFixed(1)} kW`);
         setEl('debug-boiler-detail', `${((boiler.efficiency || 0.92) * 100).toFixed(0)}% eff | ${boiler.fuel_kw?.toFixed(1) || '0'} kW fuel`);
 
         // Input summary bar
@@ -1151,8 +1164,8 @@ const SimulationsModule = {
         setEl('debug-wind', `${inp.weather?.wind_speed_ms || '-'} m/s`);
         setEl('debug-solar-val', `${inp.weather?.solar_ghi_wm2 || '-'} W/m²`);
 
-        // Status (Open/Closed) with color
-        const isOpen = inp.config?.is_open;
+        // Status (Open/Closed) - USE STORED VALUE (matches chart)
+        const isOpen = stored.is_open !== undefined ? stored.is_open : inp.config?.is_open;
         const statusEl = document.getElementById('debug-status');
         if (statusEl) {
             statusEl.textContent = isOpen ? 'Open' : 'Closed';
@@ -1163,6 +1176,15 @@ const SimulationsModule = {
         const hasCover = inp.config?.has_cover;
         const coverOn = hasCover && !isOpen;
         setEl('debug-cover-status', coverOn ? 'Cover On' : 'Cover Off');
+
+        // Update chart comparison display with stored run info
+        const comparisonEl = document.getElementById('chart-data-comparison');
+        if (comparisonEl && stored.run_id) {
+            comparisonEl.innerHTML = `<strong>From Run #${stored.run_id}:</strong> ${isOpen ? 'Open' : 'Closed'}, ` +
+                `Loss: ${stored.total_loss_kw?.toFixed(1)} kW, HP: ${stored.hp_heat_kw?.toFixed(1)} kW, ` +
+                `Boiler: ${stored.boiler_heat_kw?.toFixed(1)} kW` +
+                (data.validation_warning ? ` <span style="color: orange;">⚠ ${data.validation_warning}</span>` : '');
+        }
 
         // ===== Populate Detail Cards =====
         setHtml('debug-input', `
@@ -1378,6 +1400,39 @@ const SimulationsModule = {
         const openCount = data.filter(d => d.is_open).length;
         console.log(`[Schedule Debug] Total open hours: ${openCount}/${data.length} (${(openCount/data.length*100).toFixed(1)}%)`);
 
+        // Find index of current debug hour for highlighting
+        const debugIndex = this.debugTimestamp ?
+            data.findIndex(d => d.timestamp === this.debugTimestamp) : -1;
+
+        // Log and display chart data for verification against debug output
+        if (debugIndex >= 0) {
+            const d = data[debugIndex];
+            console.log('[Chart vs Debug] Highlighted hour data from chart:', {
+                timestamp: d.timestamp,
+                is_open: d.is_open,
+                net_demand: d.net_demand?.toFixed(1),
+                hp_output: d.hp_output?.toFixed(1),
+                boiler_output: d.boiler_output?.toFixed(1)
+            });
+
+            // Update comparison display in UI (if mismatch, show warning)
+            const comparisonEl = document.getElementById('chart-data-comparison');
+            if (comparisonEl) {
+                const chartStatus = d.is_open ? 'Open' : 'Closed';
+                const chartDemand = d.net_demand?.toFixed(1) || '0';
+                comparisonEl.innerHTML = `<strong>Chart data:</strong> ${chartStatus}, ${chartDemand} kW demand, HP: ${d.hp_output?.toFixed(1) || '0'} kW`;
+                comparisonEl.style.color = '#666';
+            }
+        } else if (this.debugTimestamp) {
+            console.log('[Chart vs Debug] Debug timestamp not found in chart data:', this.debugTimestamp);
+            console.log('[Chart vs Debug] Chart timestamps sample:', data.slice(0, 3).map(d => d.timestamp));
+
+            const comparisonEl = document.getElementById('chart-data-comparison');
+            if (comparisonEl) {
+                comparisonEl.innerHTML = `<span style="color: orange;">⚠ Hour not found in chart data</span>`;
+            }
+        }
+
         const labels = data.map((d, i) => {
             // Show day label at start of each day (hour 0)
             if (i % 24 === 0) {
@@ -1538,7 +1593,27 @@ const SimulationsModule = {
                         grid: { drawOnChartArea: false }
                     }
                 }
-            }
+            },
+            plugins: [{
+                id: 'debugHourHighlight',
+                beforeDraw: (chart) => {
+                    if (debugIndex < 0) return;
+
+                    const ctx = chart.ctx;
+                    const xAxis = chart.scales.x;
+                    const yAxis = chart.scales.y;
+
+                    // Get the pixel position for this bar
+                    const barWidth = xAxis.width / data.length;
+                    const x = xAxis.left + (debugIndex * barWidth);
+
+                    // Draw yellow highlight rectangle
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(255, 235, 59, 0.3)';  // Light yellow
+                    ctx.fillRect(x, yAxis.top, barWidth, yAxis.bottom - yAxis.top);
+                    ctx.restore();
+                }
+            }]
         });
     },
 
@@ -1558,6 +1633,11 @@ const SimulationsModule = {
         }
 
         const data = weekData.data;
+
+        // Find index of current debug hour for highlighting
+        const debugIndex = this.debugTimestamp ?
+            data.findIndex(d => d.timestamp === this.debugTimestamp) : -1;
+
         const labels = data.map((d, i) => {
             // Show day label at start of each day (hour 0)
             if (i % 24 === 0) {
@@ -1664,7 +1744,27 @@ const SimulationsModule = {
                         ticks: { font: { size: 9 } }
                     }
                 }
-            }
+            },
+            plugins: [{
+                id: 'debugHourHighlight',
+                beforeDraw: (chart) => {
+                    if (debugIndex < 0) return;
+
+                    const ctx = chart.ctx;
+                    const xAxis = chart.scales.x;
+                    const yAxis = chart.scales.y;
+
+                    // Get the pixel position for this data point
+                    const barWidth = xAxis.width / data.length;
+                    const x = xAxis.left + (debugIndex * barWidth);
+
+                    // Draw yellow highlight rectangle
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(255, 235, 59, 0.3)';  // Light yellow
+                    ctx.fillRect(x, yAxis.top, barWidth, yAxis.bottom - yAxis.top);
+                    ctx.restore();
+                }
+            }]
         });
     },
 
