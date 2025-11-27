@@ -941,14 +941,22 @@ class EnergySimulator {
             'cost' => 0,
         ];
 
-        // If no target temp (closed), maintain temperature near normal operating range
-        // This prevents massive reheat costs when pool reopens
+        // If no target temp (closed), behavior depends on control strategy
         if ($targetTemp === null) {
-            // Use setback temperature (configurable, default 26°C - 2° below typical target)
-            $setbackTemp = $this->poolConfig['setback_temp'] ?? 26.0;
-            $targetTemp = $setbackTemp;
-            $minTemp = $setbackTemp - 1;  // Start heating if drops 1° below setback
-            $maxTemp = $setbackTemp + 1;  // Stop heating 1° above setback
+            $controlStrategy = $this->poolConfig['control_strategy'] ?? 'reactive';
+
+            if ($controlStrategy === 'predictive') {
+                // Predictive: Maintain setback temperature when closed
+                // This prevents massive reheat costs when pool reopens
+                $setbackTemp = $this->poolConfig['setback_temp'] ?? 26.0;
+                $targetTemp = $setbackTemp;
+                $minTemp = $setbackTemp - 1;  // Start heating if drops 1° below setback
+                $maxTemp = $setbackTemp + 1;  // Stop heating 1° above setback
+            } else {
+                // Reactive: Only heat when pool is open, no maintenance when closed
+                // Pool temperature will drop naturally during closed hours
+                return $result;  // No heating when closed
+            }
         }
 
         // Default min/max if not provided
