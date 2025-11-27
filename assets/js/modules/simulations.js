@@ -1065,8 +1065,8 @@ const SimulationsModule = {
         // Save date to localStorage for persistence (user-specific)
         localStorage.setItem(this.getUserKey('debug_date'), date);
 
-        // Store current debug timestamp for chart highlighting
-        this.debugTimestamp = `${date} ${hour.padStart(2, '0')}:00:00`;
+        // Store current debug timestamp for chart highlighting (no seconds to match chart data format)
+        this.debugTimestamp = `${date} ${hour.padStart(2, '0')}:00`;
 
         // Show results section without destroying card structure
         resultsDiv.style.display = 'block';
@@ -1385,6 +1385,21 @@ const SimulationsModule = {
         // Find index of current debug hour for highlighting
         const debugIndex = this.debugTimestamp ?
             data.findIndex(d => d.timestamp === this.debugTimestamp) : -1;
+
+        // Log debug hour data for verification
+        if (debugIndex >= 0) {
+            const debugHourData = data[debugIndex];
+            console.log('[Chart vs Debug] Highlighted hour data from chart:', {
+                timestamp: debugHourData.timestamp,
+                is_open: debugHourData.is_open,
+                net_demand: debugHourData.net_demand?.toFixed(1),
+                hp_output: debugHourData.hp_output?.toFixed(1),
+                boiler_output: debugHourData.boiler_output?.toFixed(1)
+            });
+        } else if (this.debugTimestamp) {
+            console.log('[Chart vs Debug] Debug timestamp not found in chart data:', this.debugTimestamp);
+            console.log('[Chart vs Debug] Chart timestamps sample:', data.slice(0, 3).map(d => d.timestamp));
+        }
 
         const labels = data.map((d, i) => {
             // Show day label at start of each day (hour 0)
