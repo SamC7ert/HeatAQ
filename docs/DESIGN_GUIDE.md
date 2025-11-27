@@ -1,6 +1,6 @@
 # HeatAQ Design Guide
 
-**Version:** V63
+**Version:** V64
 **Last Updated:** November 2025
 
 ---
@@ -119,28 +119,93 @@ This system font stack provides:
 
 ## 5. Component Patterns
 
+### Elevation System (V64)
+
+Three shadow levels create visual hierarchy:
+
+```css
+/* Level 1 - Subtle (hover states, flat cards) */
+--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
+
+/* Level 2 - Default (cards, dropdowns) */
+--shadow-md: 0 2px 4px rgba(0, 0, 0, 0.04), 0 4px 8px rgba(0, 0, 0, 0.06);
+
+/* Level 3 - Elevated (modals, popovers) */
+--shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.08), 0 16px 32px rgba(0, 0, 0, 0.08);
+```
+
+| Level | Usage |
+|-------|-------|
+| `shadow-sm` | Flat cards, subtle hover effects |
+| `shadow-md` | Default cards, dropdowns |
+| `shadow-lg` | Modals, important overlays |
+
 ### Cards
 
-Cards are the primary container for content groups.
+Cards are the primary container with hover enhancement:
 
 ```css
 .card {
     background: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    padding: 20px;
-    margin-bottom: 20px;
+    border-radius: var(--radius-md);  /* 8px */
+    box-shadow: var(--shadow-md);
+    transition: box-shadow 0.2s ease;
+    border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.card:hover {
+    box-shadow: var(--shadow-lg);
 }
 ```
 
+Card variants:
+- `.card-flat` - Uses `shadow-sm`, elevates to `shadow-md` on hover
+- `.card-elevated` - Uses `shadow-lg` (for prominent content)
+
 ### Buttons
 
-| Type | Usage |
-|------|-------|
-| Primary | Main actions (Save, Run, Create) |
-| Secondary | Alternative actions (Cancel, Close) |
-| Danger | Destructive actions (Delete) |
-| Small (btn-sm) | Inline actions, table rows |
+| Type | Usage | Hover Effect |
+|------|-------|--------------|
+| Primary | Main actions (Save, Run) | Darkens + shadow |
+| Secondary | Alternative actions | Darkens |
+| Danger | Destructive actions | Darkens |
+| btn-sm | Inline actions | Same as parent |
+| btn-lg | Prominent CTAs | Same as parent |
+
+Button press effect: `transform: translateY(1px)` on `:active`
+
+### Form Controls (V64)
+
+Enhanced inputs with consistent styling:
+
+```css
+.form-control {
+    padding: 10px 12px;
+    border: 1.5px solid var(--neutral-300);
+    border-radius: var(--radius-sm);  /* 4px */
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.form-control:hover {
+    border-color: var(--neutral-400);
+}
+
+.form-control:focus {
+    border-color: var(--primary);
+    box-shadow: var(--focus-ring);  /* 3px blue glow */
+}
+```
+
+### Input Groups
+
+For inputs with unit suffixes (kW, °C, etc.):
+
+```html
+<div class="input-group">
+    <input type="number" class="form-control" value="125">
+    <span class="input-group-text">kW</span>
+</div>
+```
 
 ### Form Tables
 
@@ -260,21 +325,72 @@ HeatAQ uses emoji icons for simplicity:
 
 ---
 
-## 10. Modern UI Trends Applied
+## 10. Sidebar Design (V64)
+
+### Visual Enhancement
+
+The sidebar uses a gradient background with enhanced navigation:
+
+```css
+.sidebar {
+    background: linear-gradient(180deg, var(--primary-dark) 0%, #002a40 100%);
+    box-shadow: 2px 0 15px rgba(0,0,0,0.15);
+}
+
+.sidebar-header {
+    background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.05));
+}
+```
+
+### Navigation Item States
+
+| State | Visual Treatment |
+|-------|------------------|
+| Default | Transparent background |
+| Hover | Light background + 4px left shift + icon scale |
+| Active | Light background + orange left border + dot indicator |
+
+```css
+.nav-item:hover {
+    background: rgba(255,255,255,0.08);
+    padding-left: 24px;  /* Slides right on hover */
+}
+
+.nav-item.active::after {
+    /* Orange dot indicator */
+    content: '';
+    background: #f77f00;
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(247, 127, 0, 0.5);
+}
+```
+
+---
+
+## 11. Modern UI Trends Applied
 
 ### Clean White Space
 - Generous padding in cards (20px)
 - Clear separation between sections
 - Breathing room around form elements
 
-### Subtle Shadows
-- Cards use light shadow: `0 2px 4px rgba(0,0,0,0.05)`
-- Modals use deeper shadow: `0 10px 40px rgba(0,0,0,0.2)`
+### Elevation System (NEW)
+Three-level shadow hierarchy creates depth:
+- `shadow-sm` - Subtle, for hover states
+- `shadow-md` - Default cards
+- `shadow-lg` - Modals, elevated content
+
+### Micro-interactions (NEW)
+- Card hover: elevates from `shadow-md` to `shadow-lg`
+- Button press: `translateY(1px)` for tactile feedback
+- Nav item hover: slides right 4px + icon scales
+- Input focus: blue glow ring
 
 ### Rounded Corners
-- Cards: `8px`
-- Buttons: `4px`
-- Inputs: `4px`
+- Cards: `8px` (--radius-md)
+- Modals: `12px` (--radius-lg)
+- Buttons: `4px` (--radius-sm)
+- Inputs: `4px` (--radius-sm)
 
 ### Color Indicators
 - Blue for heat pump (efficient)
@@ -284,12 +400,13 @@ HeatAQ uses emoji icons for simplicity:
 
 ### Interactive Feedback
 - Hover states on all clickable elements
-- Focus rings on form inputs
+- Focus rings on form inputs (3px blue glow)
 - Loading states for async operations
+- Modal backdrop blur effect
 
 ---
 
-## 11. Future Enhancements
+## 12. Future Enhancements
 
 ### Consider Adding:
 1. **Dark Mode:** Toggle for reduced eye strain
@@ -306,10 +423,11 @@ HeatAQ uses emoji icons for simplicity:
 
 ---
 
-## 12. Version History
+## 13. Version History
 
 | Version | Changes |
 |---------|---------|
+| V64 | Sidebar enhancements, elevation system, form consistency |
 | V63 | Project management UI, modal styles |
 | V62 | Analyse tab, History metrics table |
 | V61 | Override table, tolerance split |
