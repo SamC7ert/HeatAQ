@@ -358,7 +358,7 @@ const SimulationsModule = {
     },
 
     /**
-     * Render daily energy chart
+     * Render daily energy chart (area chart matching debug colors)
      */
     renderDailyChart: function(dailyResults) {
         const canvas = document.getElementById('daily-energy-chart');
@@ -370,9 +370,9 @@ const SimulationsModule = {
 
         // Prepare data
         const labels = dailyResults.map(d => d.date);
-        const hpData = dailyResults.map(d => parseFloat(d.total_hp_kwh));
-        const boilerData = dailyResults.map(d => parseFloat(d.total_boiler_kwh));
-        const lossData = dailyResults.map(d => parseFloat(d.total_loss_kwh));
+        const hpData = dailyResults.map(d => parseFloat(d.total_hp_kwh) || 0);
+        const boilerData = dailyResults.map(d => parseFloat(d.total_boiler_kwh) || 0);
+        const lossData = dailyResults.map(d => parseFloat(d.total_loss_kwh) || 0);
 
         new Chart(canvas, {
             type: 'line',
@@ -380,35 +380,60 @@ const SimulationsModule = {
                 labels: labels,
                 datasets: [
                     {
-                        label: 'Heat Loss (kWh)',
+                        label: 'Heat Demand (kWh)',
                         data: lossData,
-                        borderColor: '#dc3545',
-                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                        fill: false
+                        borderColor: 'rgba(100, 100, 100, 0.8)',
+                        backgroundColor: 'rgba(100, 100, 100, 0.1)',
+                        fill: true,
+                        pointRadius: 0,
+                        borderWidth: 1,
+                        tension: 0.1,
+                        order: 3
                     },
                     {
                         label: 'Heat Pump (kWh)',
                         data: hpData,
-                        borderColor: '#28a745',
-                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                        fill: false
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        backgroundColor: 'rgba(40, 167, 69, 0.6)',
+                        fill: true,
+                        pointRadius: 0,
+                        borderWidth: 1,
+                        tension: 0.1,
+                        order: 1
                     },
                     {
                         label: 'Boiler (kWh)',
                         data: boilerData,
-                        borderColor: '#fd7e14',
-                        backgroundColor: 'rgba(253, 126, 20, 0.1)',
-                        fill: false
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        backgroundColor: 'rgba(220, 53, 69, 0.6)',
+                        fill: true,
+                        pointRadius: 0,
+                        borderWidth: 1,
+                        tension: 0.1,
+                        order: 2
                     }
                 ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { boxWidth: 12, font: { size: 10 } }
+                    }
+                },
                 scales: {
                     x: {
                         display: true,
-                        title: { display: true, text: 'Date' }
+                        ticks: {
+                            maxTicksLimit: 12,
+                            font: { size: 9 }
+                        }
                     },
                     y: {
                         display: true,
