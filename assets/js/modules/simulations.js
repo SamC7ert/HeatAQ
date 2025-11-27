@@ -1035,7 +1035,7 @@ const SimulationsModule = {
      * Run debug calculation for a single hour
      */
     debugHour: async function() {
-        console.log('V52 debugHour called');
+        console.log('V67 debugHour called');
         const dateEl = document.getElementById('debug-date');
         const hourEl = document.getElementById('debug-hour');
         const waterTempEl = document.getElementById('debug-water-temp');
@@ -1055,12 +1055,14 @@ const SimulationsModule = {
         const date = dateEl.value;
         const hour = hourEl.value;
         const waterTemp = waterTempEl.value;
-        const configId = document.getElementById('debug-config-select')?.value || null;
 
         if (!date) {
             alert('Please select a date');
             return;
         }
+
+        // Set button to loading state
+        this.setDebugButtonState('loading');
 
         // Save date to localStorage for persistence (user-specific)
         localStorage.setItem(this.getUserKey('debug_date'), date);
@@ -1081,7 +1083,6 @@ const SimulationsModule = {
         try {
             let url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}`;
             if (waterTemp) url += `&water_temp=${waterTemp}`;
-            if (configId) url += `&config_id=${configId}`;
 
             const response = await fetch(url);
             const data = await response.json();
@@ -1093,7 +1094,10 @@ const SimulationsModule = {
             this.renderDebugResults(data);
 
             // Also load weekly chart automatically
-            this.loadWeeklyChart();
+            await this.loadWeeklyChart();
+
+            // Success - button green (data in sync)
+            this.setDebugButtonState('synced');
 
         } catch (error) {
             // Show error in summary card without destroying structure
@@ -1101,6 +1105,8 @@ const SimulationsModule = {
             if (summaryEl) {
                 summaryEl.innerHTML = `<p class="error" style="color: #dc3545;">Error: ${error.message}</p>`;
             }
+            // Error - button red (needs recalculation)
+            this.setDebugButtonState('changed');
         }
     },
 
@@ -1782,6 +1788,8 @@ const SimulationsModule = {
      * Initialize debug section
      */
     initDebug: function() {
+        const self = this;
+
         // Restore saved config selection (dropdown populated by SimControlModule.loadConfigOptions)
         const select = document.getElementById('debug-config-select');
         const savedConfig = localStorage.getItem(this.getUserKey('config')) || '';
@@ -1796,12 +1804,91 @@ const SimulationsModule = {
             dateInput.value = savedDate;
         }
 
-        // Save date when changed
-        const self = this;
-        if (dateInput) {
-            dateInput.addEventListener('change', function() {
-                localStorage.setItem(self.getUserKey('debug_date'), this.value);
-            });
+        // Track parameter changes to update button state
+        const paramInputs = ['debug-date', 'debug-hour', 'debug-water-temp', 'debug-config-select'];
+        paramInputs.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', function() {
+                    self.setDebugButtonState('changed');
+                    if (id === 'debug-date') {
+                        localStorage.setItem(self.getUserKey('debug_date'), this.value);
+                    }
+                });
+            }
+        });
+
+        // Auto-load last run data if we have a date
+        if (dateInput && dateInput.value) {
+            this.autoLoadDebugData();
+        }
+    },
+
+    /**
+     * Set debug Calculate button state
+     * @param {string} state - 'synced' (green), 'changed' (red), 'loading' (disabled)
+     */
+    setDebugButtonState: function(state) {
+        const btn = document.getElementById('debug-calculate-btn');
+        if (!btn) return;
+
+        btn.classList.remove('btn-success', 'btn-danger', 'btn-secondary');
+        btn.disabled = false;
+
+        switch (state) {
+            case 'synced':
+                btn.classList.add('btn-success');
+                btn.textContent = 'Calculate';
+                break;
+            case 'changed':
+                btn.classList.add('btn-danger');
+                btn.textContent = 'Calculate';
+                break;
+            case 'loading':
+                btn.classList.add('btn-secondary');
+                btn.textContent = 'Loading...';
+                btn.disabled = true;
+                break;
+        }
+    },
+
+    /**
+     * Auto-load debug data from last simulation run
+     */
+    autoLoadDebugData: async function() {
+        const dateInput = document.getElementById('debug-date');
+        const hourSelect = document.getElementById('debug-hour');
+        if (!dateInput || !dateInput.value) return;
+
+        const date = dateInput.value;
+        const hour = hourSelect ? hourSelect.value : '12';
+
+        this.setDebugButtonState('loading');
+
+        try {
+            // Load debug hour data
+            const url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}`;
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.error) {
+                console.log('[Debug] No stored run for this date:', data.error);
+                this.setDebugButtonState('changed'); // Red - needs calculation
+                return;
+            }
+
+            // Render results
+            this.renderDebugResults(data);
+
+            // Load weekly chart
+            await this.loadWeeklyChart();
+
+            // Button green - data is in sync
+            this.setDebugButtonState('synced');
+
+        } catch (err) {
+            console.error('[Debug] Auto-load failed:', err);
+            this.setDebugButtonState('changed');
         }
     }
 };
