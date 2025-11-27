@@ -943,7 +943,7 @@ class EnergySimulator {
 
         // If no target temp (closed), behavior depends on control strategy
         if ($targetTemp === null) {
-            $controlStrategy = $this->poolConfig['control_strategy'] ?? 'reactive';
+            $controlStrategy = $this->equipment['control_strategy'] ?? 'reactive';
 
             if ($controlStrategy === 'predictive') {
                 // Predictive: Maintain setback temperature when closed
