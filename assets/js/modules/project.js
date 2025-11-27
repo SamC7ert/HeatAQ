@@ -715,7 +715,7 @@ const ProjectModule = {
             }
 
             // Get weather data range
-            const weatherResponse = await fetch(`${config.API_BASE_URL}?action=getWeatherRange`);
+            const weatherResponse = await fetch(`${config.API_BASE_URL}?action=get_weather_range`);
             if (weatherResponse.ok) {
                 const weatherData = await weatherResponse.json();
                 const rangeEl = document.getElementById('dash-weather-range');
@@ -739,7 +739,7 @@ const ProjectModule = {
     // Load recent simulation runs
     async loadRecentSimulations() {
         try {
-            const response = await fetch(`${config.API_BASE_URL}?action=getSimulationRuns`);
+            const response = await fetch(`${config.API_BASE_URL}?action=get_simulation_runs`);
             if (response.ok) {
                 const runs = await response.json();
                 const container = document.getElementById('dash-recent-runs');
@@ -766,7 +766,7 @@ const ProjectModule = {
     // Load list of available projects
     async loadProjectsList() {
         try {
-            const response = await fetch(`${config.API_BASE_URL}?action=getProjects`);
+            const response = await fetch(`${config.API_BASE_URL}?action=get_projects`);
             const container = document.getElementById('projects-list');
 
             if (response.ok) {
@@ -846,7 +846,7 @@ const ProjectModule = {
 
         try {
             // Update in backend (if API supports it)
-            const response = await fetch(`${config.API_BASE_URL}?action=updateProject`, {
+            const response = await fetch(`${config.API_BASE_URL}?action=update_project`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -905,7 +905,7 @@ const ProjectModule = {
 
         try {
             // Update in backend (if API supports it)
-            const response = await fetch(`${config.API_BASE_URL}?action=updateProject`, {
+            const response = await fetch(`${config.API_BASE_URL}?action=update_project`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -973,7 +973,7 @@ const ProjectModule = {
 
         try {
             // Create in backend
-            const response = await fetch(`${config.API_BASE_URL}?action=createProject`, {
+            const response = await fetch(`${config.API_BASE_URL}?action=create_project`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, description })
