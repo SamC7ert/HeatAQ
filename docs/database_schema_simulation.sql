@@ -332,6 +332,24 @@ INSERT IGNORE INTO holiday_definitions (name, is_moving, fixed_month, fixed_day,
     ('2. pinsedag', 1, NULL, NULL, 50, 'NO');
 
 -- ============================================
+-- USER PREFERENCES TABLE
+-- Stores per-user settings (syncs across devices)
+-- ============================================
+CREATE TABLE IF NOT EXISTS user_preferences (
+    user_id INT NOT NULL,
+    pref_key VARCHAR(50) NOT NULL,
+    pref_value VARCHAR(255),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, pref_key),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Known preference keys:
+-- 'selected_config' - Last selected config template ID
+-- 'selected_ohc'    - Last selected schedule template ID (Open Hours Calendar)
+-- 'selected_tab'    - Last selected tab in simulation control
+
+-- ============================================
 -- STORAGE ESTIMATES
 -- ============================================
 -- For 10 years of hourly data (87,672 rows):
