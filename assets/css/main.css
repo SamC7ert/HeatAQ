@@ -497,6 +497,332 @@ input[type="date"].inline-edit {
     color: var(--neutral-700);
 }
 
+/* ========================================
+   Loading States (V65)
+   ======================================== */
+
+/* Skeleton loader animation */
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: var(--radius-sm);
+}
+
+.skeleton-text {
+    height: 14px;
+    margin-bottom: 8px;
+}
+
+.skeleton-text.short {
+    width: 60%;
+}
+
+.skeleton-title {
+    height: 20px;
+    width: 40%;
+    margin-bottom: 12px;
+}
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Button loading state */
+.btn.loading {
+    position: relative;
+    color: transparent !important;
+    pointer-events: none;
+}
+
+.btn.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+/* Chart loading overlay */
+.chart-loading {
+    position: relative;
+}
+
+.chart-loading::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255,255,255,0.8);
+    z-index: 10;
+}
+
+.chart-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 32px;
+    height: 32px;
+    margin: -16px 0 0 -16px;
+    border: 3px solid var(--neutral-200);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    z-index: 11;
+}
+
+/* ========================================
+   Status Badges (V65)
+   ======================================== */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    gap: 5px;
+    white-space: nowrap;
+}
+
+.badge-success {
+    background: #d4edda;
+    color: #155724;
+}
+
+.badge-danger {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.badge-warning {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.badge-info {
+    background: #cce5ff;
+    color: #004085;
+}
+
+.badge-secondary {
+    background: var(--neutral-200);
+    color: var(--neutral-700);
+}
+
+.badge-running {
+    background: #cce5ff;
+    color: #004085;
+    animation: pulse-badge 2s infinite;
+}
+
+@keyframes pulse-badge {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* Badge icons */
+.badge .icon {
+    font-size: 10px;
+}
+
+/* ========================================
+   Run Button State Indicator (V65)
+   ======================================== */
+
+.btn-run {
+    min-width: 160px;
+    transition: all var(--transition-normal);
+}
+
+.btn-run.current {
+    background: var(--success);
+    box-shadow: 0 2px 4px rgba(82, 183, 136, 0.3);
+}
+
+.btn-run.current:hover {
+    background: #3d9970;
+}
+
+.btn-run.stale {
+    background: var(--warning);
+    box-shadow: 0 2px 4px rgba(247, 127, 0, 0.3);
+    animation: pulse-attention 2s infinite;
+}
+
+.btn-run.stale:hover {
+    background: #e06c00;
+    animation: none;
+}
+
+@keyframes pulse-attention {
+    0%, 100% { box-shadow: 0 2px 4px rgba(247, 127, 0, 0.3); }
+    50% { box-shadow: 0 2px 12px rgba(247, 127, 0, 0.5); }
+}
+
+/* Results status text */
+.results-status {
+    font-size: 12px;
+    margin-top: 8px;
+}
+
+.results-status.current {
+    color: var(--success);
+}
+
+.results-status.stale {
+    color: var(--warning);
+}
+
+/* ========================================
+   Site Cards (V65)
+   ======================================== */
+
+.site-card {
+    padding: 0;
+    overflow: hidden;
+}
+
+.site-card .site-header {
+    padding: 16px 20px;
+    background: var(--neutral-100);
+    border-bottom: 1px solid var(--neutral-200);
+}
+
+.site-card .site-header h4 {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--neutral-800);
+}
+
+.site-card .site-location {
+    font-size: 13px;
+    color: var(--neutral-600);
+}
+
+.site-card .site-map {
+    height: 150px;
+    background: var(--neutral-200);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.site-card .site-map img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.site-card .site-map-placeholder {
+    color: var(--neutral-500);
+    font-size: 13px;
+    text-align: center;
+}
+
+.site-card .site-details {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--neutral-200);
+}
+
+.site-card .detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 13px;
+}
+
+.site-card .detail-row .label {
+    color: var(--neutral-600);
+}
+
+.site-card .detail-row .value {
+    color: var(--neutral-800);
+    font-weight: 500;
+}
+
+.site-card .site-pools {
+    padding: 16px 20px;
+}
+
+.site-card .site-pools h5 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--neutral-600);
+}
+
+.site-card .pool-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 12px;
+}
+
+.site-card .pool-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 13px;
+    border-bottom: 1px solid var(--neutral-100);
+}
+
+.site-card .pool-list li:last-child {
+    border-bottom: none;
+}
+
+.site-card .pool-volume {
+    color: var(--neutral-600);
+}
+
+/* Add site card (dashed border) */
+.site-card.add-site {
+    border: 2px dashed var(--neutral-300);
+    background: transparent;
+    box-shadow: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+}
+
+.site-card.add-site:hover {
+    border-color: var(--primary);
+    background: rgba(0, 100, 148, 0.02);
+}
+
+.site-card.add-site .add-content {
+    text-align: center;
+    color: var(--neutral-500);
+}
+
+.site-card.add-site .add-icon {
+    font-size: 32px;
+    margin-bottom: 8px;
+}
+
+/* Sites grid */
+.sites-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .content-wrapper {
@@ -505,5 +831,9 @@ input[type="date"].inline-edit {
 
     .form-row {
         flex-direction: column;
+    }
+
+    .sites-grid {
+        grid-template-columns: 1fr;
     }
 }

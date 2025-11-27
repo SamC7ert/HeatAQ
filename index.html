@@ -74,7 +74,7 @@
         <div class="user-info">
             <span class="project-name" id="current-project"></span>
             <span class="user-name" id="current-user"></span>
-            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">V64</span>
+            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">V65</span>
             <button onclick="logout()" class="btn-logout">Logout</button>
         </div>
         
@@ -234,19 +234,71 @@
                         </div>
                     </div>
 
-                    <div class="dashboard-grid">
+                    <!-- Sites Section -->
+                    <h3 style="margin-bottom: 16px; color: var(--neutral-700);">Sites</h3>
+                    <div class="sites-grid" id="sites-grid">
+                        <!-- Sites will be loaded dynamically -->
+                        <div class="site-card card" id="default-site-card">
+                            <div class="site-header">
+                                <h4>📍 <span id="site-name">Main Site</span></h4>
+                                <span class="site-location" id="site-location">Location not set</span>
+                            </div>
+                            <div class="site-map" id="site-map">
+                                <div class="site-map-placeholder">
+                                    <div>🗺️</div>
+                                    <div>Enter coordinates to show map</div>
+                                </div>
+                            </div>
+                            <div class="site-details">
+                                <div class="detail-row">
+                                    <span class="label">Latitude</span>
+                                    <span class="value" id="site-latitude">-</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="label">Longitude</span>
+                                    <span class="value" id="site-longitude">-</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="label">Weather Station</span>
+                                    <span class="value" id="site-weather-station">Not connected</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="label">Annual Solar</span>
+                                    <span class="value" id="site-solar">-</span>
+                                </div>
+                            </div>
+                            <div class="site-pools">
+                                <h5>Pools</h5>
+                                <ul class="pool-list" id="site-pools-list">
+                                    <li>Loading...</li>
+                                </ul>
+                                <button class="btn btn-sm btn-secondary" onclick="app.project.editSite()">Edit Site</button>
+                            </div>
+                        </div>
+                        <!-- Add Site Card -->
+                        <div class="site-card card add-site" onclick="app.project.showAddSiteModal()">
+                            <div class="add-content">
+                                <div class="add-icon">+</div>
+                                <div>Add Site</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Summary Grid -->
+                    <div class="dashboard-grid" style="margin-top: 24px;">
                         <div class="card">
                             <h3>Project Summary</h3>
                             <table class="data-table compact">
-                                <tr><td>Site</td><td id="dash-site-name">Loading...</td></tr>
-                                <tr><td>Pool Area</td><td id="dash-pool-area">-</td></tr>
-                                <tr><td>Heat Pump</td><td id="dash-hp-capacity">-</td></tr>
-                                <tr><td>Boiler</td><td id="dash-boiler-capacity">-</td></tr>
+                                <tr><td>Total Sites</td><td id="dash-site-count">1</td></tr>
+                                <tr><td>Total Pools</td><td id="dash-pool-count">-</td></tr>
+                                <tr><td>Total Volume</td><td id="dash-total-volume">-</td></tr>
+                                <tr><td>HP Capacity</td><td id="dash-hp-capacity">-</td></tr>
                             </table>
                         </div>
                         <div class="card">
                             <h3>Weather Data</h3>
                             <table class="data-table compact">
+                                <tr><td>Station</td><td id="dash-weather-station">-</td></tr>
                                 <tr><td>Available Range</td><td id="dash-weather-range">-</td></tr>
                                 <tr><td>Data Points</td><td id="dash-weather-count">-</td></tr>
                             </table>
@@ -1104,7 +1156,7 @@
                     <div class="card">
                         <h3>System Info</h3>
                         <table class="data-table compact">
-                            <tr><td><strong>App Version</strong></td><td>V64</td></tr>
+                            <tr><td><strong>App Version</strong></td><td>V65</td></tr>
                             <tr><td><strong>Simulator</strong></td><td id="sys-simulator-ver">-</td></tr>
                             <tr><td><strong>PHP</strong></td><td id="sys-php-ver">-</td></tr>
                         </table>
@@ -1174,6 +1226,47 @@
             <div style="display: flex; gap: 10px; justify-content: flex-end;">
                 <button class="btn btn-secondary" onclick="app.project.hideNewProjectModal()">Cancel</button>
                 <button class="btn btn-primary" onclick="app.project.createNewProject()">Create Project</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Site Modal -->
+    <div id="edit-site-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content" style="max-width: 500px;">
+            <h3 style="margin-top: 0;">Edit Site</h3>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Site Name</label>
+                <input type="text" id="edit-site-name" class="form-control" placeholder="e.g., Main Facility">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                <div>
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Latitude</label>
+                    <input type="number" id="edit-site-lat" class="form-control" step="0.0001" placeholder="e.g., 58.4615">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Longitude</label>
+                    <input type="number" id="edit-site-lng" class="form-control" step="0.0001" placeholder="e.g., 8.7725">
+                </div>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Weather Station</label>
+                <select id="edit-site-weather" class="form-control">
+                    <option value="">-- Select Weather Station --</option>
+                </select>
+                <small class="text-muted" id="weather-station-distance"></small>
+            </div>
+            <div style="margin-bottom: 15px; padding: 12px; background: var(--neutral-100); border-radius: 6px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span style="font-size: 13px; color: var(--neutral-600);">Estimated Annual Solar</span>
+                    <span style="font-weight: 500;" id="edit-site-solar-estimate">-</span>
+                </div>
+                <div id="site-map-preview" style="height: 120px; background: var(--neutral-200); border-radius: 4px; display: flex; align-items: center; justify-content: center; color: var(--neutral-500); font-size: 13px;">
+                    Enter coordinates to preview map
+                </div>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="app.project.hideSiteModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="app.project.saveSite()">Save Site</button>
             </div>
         </div>
     </div>

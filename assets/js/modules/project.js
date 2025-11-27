@@ -3,6 +3,8 @@
 const ProjectModule = {
     currentProject: null,
     projects: [],
+    currentSite: null,
+    weatherStations: [],
 
     // Load project data
     async load() {
@@ -21,6 +23,9 @@ const ProjectModule = {
             // Update display
             this.updateDisplay();
 
+            // Load site data
+            await this.loadSiteData();
+
             // Load project summary
             await this.loadSummary();
 
@@ -29,6 +34,276 @@ const ProjectModule = {
         } catch (error) {
             console.error('Error loading project:', error);
         }
+    },
+
+    // Load site data from localStorage or API
+    async loadSiteData() {
+        try {
+            // Load from localStorage
+            const siteData = localStorage.getItem('heataq_site');
+            if (siteData) {
+                this.currentSite = JSON.parse(siteData);
+            } else {
+                // Default site
+                this.currentSite = {
+                    name: 'Main Site',
+                    latitude: null,
+                    longitude: null,
+                    weather_station_id: null,
+                    weather_station_name: null,
+                    pools: []
+                };
+            }
+
+            // Update site display
+            this.updateSiteDisplay();
+
+            // Load weather stations
+            await this.loadWeatherStations();
+        } catch (error) {
+            console.error('Error loading site data:', error);
+        }
+    },
+
+    // Update site card display
+    updateSiteDisplay() {
+        const site = this.currentSite;
+        if (!site) return;
+
+        // Update name
+        const nameEl = document.getElementById('site-name');
+        if (nameEl) nameEl.textContent = site.name || 'Main Site';
+
+        // Update location
+        const locationEl = document.getElementById('site-location');
+        if (locationEl) {
+            if (site.latitude && site.longitude) {
+                locationEl.textContent = this.getLocationName(site.latitude, site.longitude);
+            } else {
+                locationEl.textContent = 'Location not set';
+            }
+        }
+
+        // Update coordinates
+        const latEl = document.getElementById('site-latitude');
+        const lngEl = document.getElementById('site-longitude');
+        if (latEl) latEl.textContent = site.latitude ? `${site.latitude.toFixed(4)}°N` : '-';
+        if (lngEl) lngEl.textContent = site.longitude ? `${site.longitude.toFixed(4)}°E` : '-';
+
+        // Update weather station
+        const wsEl = document.getElementById('site-weather-station');
+        if (wsEl) wsEl.textContent = site.weather_station_name || 'Not connected';
+
+        // Update solar estimate
+        const solarEl = document.getElementById('site-solar');
+        if (solarEl) {
+            if (site.latitude) {
+                const solar = this.estimateSolar(site.latitude);
+                solarEl.textContent = `~${solar} kWh/m²/yr`;
+            } else {
+                solarEl.textContent = '-';
+            }
+        }
+
+        // Update map
+        this.updateMapPreview('site-map', site.latitude, site.longitude);
+
+        // Update pools list
+        this.updatePoolsList();
+
+        // Update dashboard weather station
+        const dashWs = document.getElementById('dash-weather-station');
+        if (dashWs) dashWs.textContent = site.weather_station_name || '-';
+    },
+
+    // Get approximate location name from coordinates
+    getLocationName(lat, lng) {
+        // Simple approximation for Norway
+        if (lat >= 69) return 'Northern Norway';
+        if (lat >= 63) return 'Central Norway';
+        if (lat >= 60) return 'Western Norway';
+        if (lat >= 58) return 'Southern Norway';
+        return `${lat.toFixed(2)}°N, ${lng.toFixed(2)}°E`;
+    },
+
+    // Estimate annual solar radiation based on latitude
+    estimateSolar(latitude) {
+        // Rough estimates for Norway latitudes (kWh/m²/year)
+        if (latitude >= 70) return 700;
+        if (latitude >= 67) return 780;
+        if (latitude >= 64) return 850;
+        if (latitude >= 62) return 920;
+        if (latitude >= 60) return 980;
+        if (latitude >= 58) return 1050;
+        return 1100;
+    },
+
+    // Update map preview
+    updateMapPreview(containerId, lat, lng) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        if (lat && lng) {
+            // Use OpenStreetMap static image (no API key needed)
+            const zoom = 12;
+            const mapUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=${zoom}&size=300x150&markers=${lat},${lng},red-pushpin`;
+            container.innerHTML = `<img src="${mapUrl}" alt="Site location" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<div class=\\'site-map-placeholder\\'><div>🗺️</div><div>Map unavailable</div></div>'">`;
+        } else {
+            container.innerHTML = `<div class="site-map-placeholder"><div>🗺️</div><div>Enter coordinates to show map</div></div>`;
+        }
+    },
+
+    // Update pools list in site card
+    updatePoolsList() {
+        const listEl = document.getElementById('site-pools-list');
+        if (!listEl) return;
+
+        // Get pools from configuration if available
+        let pools = this.currentSite?.pools || [];
+
+        if (typeof app.configuration !== 'undefined') {
+            const config = app.configuration.getConfig();
+            if (config?.pool) {
+                pools = [{
+                    name: 'Main Pool',
+                    volume: config.pool.volume,
+                    surface_area: config.pool.surface_area
+                }];
+            }
+        }
+
+        if (pools.length > 0) {
+            listEl.innerHTML = pools.map(pool =>
+                `<li>${pool.name} <span class="pool-volume">${pool.volume || '-'} m³</span></li>`
+            ).join('');
+
+            // Update dashboard
+            const poolCountEl = document.getElementById('dash-pool-count');
+            const totalVolEl = document.getElementById('dash-total-volume');
+            if (poolCountEl) poolCountEl.textContent = pools.length;
+            if (totalVolEl) {
+                const totalVol = pools.reduce((sum, p) => sum + (p.volume || 0), 0);
+                totalVolEl.textContent = totalVol > 0 ? `${totalVol} m³` : '-';
+            }
+        } else {
+            listEl.innerHTML = '<li class="text-muted">No pools configured</li>';
+        }
+    },
+
+    // Load weather stations
+    async loadWeatherStations() {
+        try {
+            const response = await fetch(`${config.apiBaseUrl}?action=getWeatherStations`);
+            if (response.ok) {
+                this.weatherStations = await response.json();
+            }
+        } catch (error) {
+            console.error('Error loading weather stations:', error);
+            this.weatherStations = [];
+        }
+    },
+
+    // Edit site - show modal
+    editSite() {
+        const modal = document.getElementById('edit-site-modal');
+        if (!modal) return;
+
+        const site = this.currentSite || {};
+
+        // Populate form
+        document.getElementById('edit-site-name').value = site.name || '';
+        document.getElementById('edit-site-lat').value = site.latitude || '';
+        document.getElementById('edit-site-lng').value = site.longitude || '';
+
+        // Populate weather station dropdown
+        const wsSelect = document.getElementById('edit-site-weather');
+        if (wsSelect) {
+            wsSelect.innerHTML = '<option value="">-- Select Weather Station --</option>';
+            this.weatherStations.forEach(ws => {
+                const selected = ws.station_id === site.weather_station_id ? 'selected' : '';
+                wsSelect.innerHTML += `<option value="${ws.station_id}" ${selected}>${ws.name} (${ws.station_id})</option>`;
+            });
+        }
+
+        // Update solar estimate
+        this.updateSolarEstimate();
+
+        // Update map preview in modal
+        this.updateMapPreview('site-map-preview', site.latitude, site.longitude);
+
+        // Add event listeners for coordinate changes
+        document.getElementById('edit-site-lat').addEventListener('input', () => this.onCoordinateChange());
+        document.getElementById('edit-site-lng').addEventListener('input', () => this.onCoordinateChange());
+
+        modal.style.display = 'flex';
+    },
+
+    // Handle coordinate change in edit modal
+    onCoordinateChange() {
+        const lat = parseFloat(document.getElementById('edit-site-lat').value);
+        const lng = parseFloat(document.getElementById('edit-site-lng').value);
+
+        this.updateSolarEstimate();
+        this.updateMapPreview('site-map-preview', lat || null, lng || null);
+    },
+
+    // Update solar estimate in modal
+    updateSolarEstimate() {
+        const lat = parseFloat(document.getElementById('edit-site-lat').value);
+        const solarEl = document.getElementById('edit-site-solar-estimate');
+
+        if (solarEl) {
+            if (lat && lat >= 50 && lat <= 75) {
+                solarEl.textContent = `~${this.estimateSolar(lat)} kWh/m²/yr`;
+            } else {
+                solarEl.textContent = '-';
+            }
+        }
+    },
+
+    // Hide site modal
+    hideSiteModal() {
+        const modal = document.getElementById('edit-site-modal');
+        if (modal) modal.style.display = 'none';
+    },
+
+    // Save site
+    saveSite() {
+        const name = document.getElementById('edit-site-name').value.trim();
+        const lat = parseFloat(document.getElementById('edit-site-lat').value) || null;
+        const lng = parseFloat(document.getElementById('edit-site-lng').value) || null;
+        const wsId = document.getElementById('edit-site-weather').value || null;
+
+        // Find weather station name
+        let wsName = null;
+        if (wsId) {
+            const ws = this.weatherStations.find(w => w.station_id === wsId);
+            if (ws) wsName = ws.name;
+        }
+
+        // Update site
+        this.currentSite = {
+            ...this.currentSite,
+            name: name || 'Main Site',
+            latitude: lat,
+            longitude: lng,
+            weather_station_id: wsId,
+            weather_station_name: wsName
+        };
+
+        // Save to localStorage
+        localStorage.setItem('heataq_site', JSON.stringify(this.currentSite));
+
+        // Update display
+        this.updateSiteDisplay();
+        this.hideSiteModal();
+
+        console.log('Site saved:', this.currentSite);
+    },
+
+    // Show add site modal (placeholder)
+    showAddSiteModal() {
+        alert('Multi-site support coming soon. Currently only one site per project is supported.');
     },
 
     // Update project name and description display
