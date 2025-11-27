@@ -26,8 +26,14 @@ const ProjectModule = {
             // Load site data
             await this.loadSiteData();
 
+            // Load pool data
+            this.loadPoolData();
+
             // Load project summary
             await this.loadSummary();
+
+            // Update pool card
+            this.updatePoolCard();
 
             // Load projects list
             await this.loadProjectsList();
@@ -145,7 +151,7 @@ const ProjectModule = {
 
         if (lat && lng) {
             // Use OpenStreetMap embed iframe (more reliable than static image)
-            const zoom = 14;
+            const zoom = 17; // High zoom for good detail
             const bbox = this.calculateBbox(lat, lng, zoom);
             const embedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
             container.innerHTML = `<iframe src="${embedUrl}" style="width:100%;height:100%;border:none;" loading="lazy"></iframe>`;
@@ -164,6 +170,70 @@ const ProjectModule = {
         const east = lng + lngDelta;
         const north = lat + latDelta;
         return `${west},${south},${east},${north}`;
+    },
+
+    // Fetch NASA solar data for site coordinates
+    async fetchNasaSolar() {
+        const lat = parseFloat(document.getElementById('edit-site-lat')?.value);
+        const lng = parseFloat(document.getElementById('edit-site-lng')?.value);
+
+        if (!lat || !lng) {
+            alert('Please enter latitude and longitude first');
+            return;
+        }
+
+        const btn = document.getElementById('btn-fetch-solar');
+        const statusEl = document.getElementById('solar-fetch-status');
+
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Fetching...';
+        }
+        if (statusEl) {
+            statusEl.textContent = 'Fetching 10 years of solar data from NASA POWER API...';
+            statusEl.style.color = '#666';
+        }
+
+        try {
+            const response = await fetch(`${config.API_BASE_URL}?action=fetch_nasa_solar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    latitude: lat,
+                    longitude: lng,
+                    start_year: new Date().getFullYear() - 10,
+                    end_year: new Date().getFullYear() - 1
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.error) {
+                throw new Error(result.error);
+            }
+
+            // Update site with fetch info
+            this.currentSite.solar_last_fetched = new Date().toISOString();
+            this.currentSite.solar_days = result.daily_records;
+            localStorage.setItem('heataq_site', JSON.stringify(this.currentSite));
+
+            // Update status display
+            this.updateSolarStatus();
+
+            console.log('[Project] NASA solar data fetched:', result);
+
+        } catch (error) {
+            console.error('[Project] NASA solar fetch error:', error);
+            if (statusEl) {
+                statusEl.textContent = `✗ Error: ${error.message}`;
+                statusEl.style.color = '#dc3545';
+            }
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Fetch Solar Data';
+            }
+        }
     },
 
     // Update pools list in site card
@@ -261,6 +331,9 @@ const ProjectModule = {
         // Update map preview in modal
         this.updateMapPreview('site-map-preview', site.latitude, site.longitude);
 
+        // Show solar data status
+        this.updateSolarStatus();
+
         // Add event listeners for coordinate changes (remove old ones first to avoid duplicates)
         const newLatEl = document.getElementById('edit-site-lat');
         const newLngEl = document.getElementById('edit-site-lng');
@@ -274,6 +347,32 @@ const ProjectModule = {
         }
 
         modal.style.display = 'flex';
+    },
+
+    // Update solar data status display
+    updateSolarStatus() {
+        const statusEl = document.getElementById('solar-fetch-status');
+        const lastUpdatedEl = document.getElementById('solar-last-updated');
+        const site = this.currentSite || {};
+
+        if (statusEl) {
+            if (site.solar_last_fetched) {
+                statusEl.textContent = `✓ Solar data loaded (${site.solar_days || '?'} days)`;
+                statusEl.style.color = '#28a745';
+            } else {
+                statusEl.textContent = 'Not fetched - click to load 10 years of hourly solar radiation data';
+                statusEl.style.color = '#666';
+            }
+        }
+
+        if (lastUpdatedEl) {
+            if (site.solar_last_fetched) {
+                const date = new Date(site.solar_last_fetched);
+                lastUpdatedEl.textContent = `Last updated: ${date.toLocaleDateString()} at ${date.toLocaleTimeString()}`;
+            } else {
+                lastUpdatedEl.textContent = '';
+            }
+        }
     },
 
     // Handle coordinate change in edit modal
@@ -306,19 +405,11 @@ const ProjectModule = {
     },
 
     // Save site
-    saveSite() {
+    async saveSite() {
         const nameEl = document.getElementById('edit-site-name');
         const latEl = document.getElementById('edit-site-lat');
         const lngEl = document.getElementById('edit-site-lng');
         const wsEl = document.getElementById('edit-site-weather');
-
-        // Debug: log raw values
-        console.log('[Project] Save - Raw values:', {
-            name: nameEl?.value,
-            lat: latEl?.value,
-            lng: lngEl?.value,
-            ws: wsEl?.value
-        });
 
         const name = nameEl?.value?.trim() || '';
         const latRaw = latEl?.value;
@@ -327,8 +418,12 @@ const ProjectModule = {
         const lng = lngRaw ? parseFloat(lngRaw) : null;
         const wsId = wsEl?.value || null;
 
-        // Debug: log parsed values
-        console.log('[Project] Save - Parsed values:', { name, lat, lng, wsId });
+        // Check if coordinates changed
+        const oldLat = this.currentSite?.latitude;
+        const oldLng = this.currentSite?.longitude;
+        const coordsChanged = lat && lng && (lat !== oldLat || lng !== oldLng);
+
+        console.log('[Project] Save - Coords changed:', coordsChanged, { old: [oldLat, oldLng], new: [lat, lng] });
 
         // Find weather station name
         let wsName = null;
@@ -355,11 +450,230 @@ const ProjectModule = {
         this.hideSiteModal();
 
         console.log('[Project] Site saved:', this.currentSite);
+
+        // Auto-fetch NASA solar data if coordinates changed
+        if (coordsChanged) {
+            console.log('[Project] Coordinates changed - fetching NASA solar data...');
+            // Small delay to let modal close
+            setTimeout(() => this.fetchNasaSolarBackground(lat, lng), 500);
+        }
+    },
+
+    // Fetch NASA solar data in background (after save)
+    async fetchNasaSolarBackground(lat, lng) {
+        try {
+            console.log('[Project] Background NASA fetch for:', lat, lng);
+
+            const response = await fetch(`${config.API_BASE_URL}?action=fetch_nasa_solar`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    latitude: lat,
+                    longitude: lng,
+                    start_year: new Date().getFullYear() - 10,
+                    end_year: new Date().getFullYear() - 1
+                })
+            });
+
+            const result = await response.json();
+
+            if (result.error) {
+                console.error('[Project] NASA solar fetch error:', result.error);
+                return;
+            }
+
+            // Update site with fetch info
+            this.currentSite.solar_last_fetched = new Date().toISOString();
+            this.currentSite.solar_days = result.daily_records;
+            localStorage.setItem('heataq_site', JSON.stringify(this.currentSite));
+
+            console.log('[Project] NASA solar data fetched:', result);
+
+            // Show notification
+            this.showNotification(`Solar data loaded: ${result.daily_records} days from NASA`, 'success');
+
+        } catch (error) {
+            console.error('[Project] NASA solar background fetch error:', error);
+        }
+    },
+
+    // Show a brief notification
+    showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed; bottom: 20px; right: 20px; padding: 12px 20px;
+            background: ${type === 'success' ? '#28a745' : '#007bff'}; color: white;
+            border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 10000; font-size: 14px; animation: slideIn 0.3s ease;
+        `;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        setTimeout(() => notification.remove(), 4000);
     },
 
     // Show add site modal (placeholder)
     showAddSiteModal() {
         alert('Multi-site support coming soon. Currently only one site per project is supported.');
+    },
+
+    // Show add pool modal (placeholder)
+    showAddPoolModal() {
+        alert('Multi-pool support coming soon. Use Edit Pool to configure the main pool.');
+    },
+
+    // Current pool data
+    currentPool: null,
+
+    // Load pool data
+    loadPoolData() {
+        const poolData = localStorage.getItem('heataq_pool');
+        if (poolData) {
+            this.currentPool = JSON.parse(poolData);
+        } else {
+            // Default pool matching benchmark
+            this.currentPool = {
+                name: 'Main Pool',
+                length: 25,
+                width: 12.5,
+                depth: 2.0,
+                area: 312.5,
+                volume: 625,
+                wind_exposure: 0.535,
+                solar_absorption: 60,
+                has_cover: true,
+                cover_u_value: 5.0,
+                cover_solar_trans: 10,
+                has_tunnel: true,
+                floor_insulated: true
+            };
+        }
+    },
+
+    // Edit pool - show modal
+    editPool() {
+        const modal = document.getElementById('edit-pool-modal');
+        if (!modal) return;
+
+        // Load pool data if not loaded
+        if (!this.currentPool) {
+            this.loadPoolData();
+        }
+
+        const pool = this.currentPool;
+
+        // Populate form
+        document.getElementById('edit-pool-name').value = pool.name || 'Main Pool';
+        document.getElementById('edit-pool-length').value = pool.length || '';
+        document.getElementById('edit-pool-width').value = pool.width || '';
+        document.getElementById('edit-pool-depth').value = pool.depth || '';
+        document.getElementById('edit-pool-wind').value = pool.wind_exposure ?? 0.535;
+        document.getElementById('edit-pool-solar').value = pool.solar_absorption ?? 60;
+        document.getElementById('edit-pool-has-cover').value = pool.has_cover ? '1' : '0';
+        document.getElementById('edit-pool-cover-u').value = pool.cover_u_value ?? 5.0;
+        document.getElementById('edit-pool-cover-solar').value = pool.cover_solar_trans ?? 10;
+        document.getElementById('edit-pool-has-tunnel').value = pool.has_tunnel ? '1' : '0';
+        document.getElementById('edit-pool-floor-insulated').value = pool.floor_insulated ? '1' : '0';
+
+        // Calculate and show dimensions
+        this.calcPoolDimensions();
+        this.togglePoolCover();
+
+        modal.style.display = 'flex';
+    },
+
+    // Hide pool modal
+    hidePoolModal() {
+        const modal = document.getElementById('edit-pool-modal');
+        if (modal) modal.style.display = 'none';
+    },
+
+    // Calculate pool dimensions from length/width/depth
+    calcPoolDimensions() {
+        const length = parseFloat(document.getElementById('edit-pool-length')?.value) || 0;
+        const width = parseFloat(document.getElementById('edit-pool-width')?.value) || 0;
+        const depth = parseFloat(document.getElementById('edit-pool-depth')?.value) || 0;
+
+        const area = length * width;
+        const volume = area * depth;
+
+        document.getElementById('calc-pool-area').textContent = area > 0 ? `${area.toFixed(1)} m²` : '- m²';
+        document.getElementById('calc-pool-volume').textContent = volume > 0 ? `${volume.toFixed(1)} m³` : '- m³';
+    },
+
+    // Toggle pool cover settings visibility
+    togglePoolCover() {
+        const hasCover = document.getElementById('edit-pool-has-cover')?.value === '1';
+        const settings = document.getElementById('pool-cover-settings');
+        if (settings) {
+            settings.style.display = hasCover ? 'grid' : 'none';
+        }
+    },
+
+    // Save pool
+    savePool() {
+        const length = parseFloat(document.getElementById('edit-pool-length')?.value) || 0;
+        const width = parseFloat(document.getElementById('edit-pool-width')?.value) || 0;
+        const depth = parseFloat(document.getElementById('edit-pool-depth')?.value) || 0;
+
+        this.currentPool = {
+            name: document.getElementById('edit-pool-name')?.value?.trim() || 'Main Pool',
+            length: length,
+            width: width,
+            depth: depth,
+            area: length * width,
+            volume: length * width * depth,
+            wind_exposure: parseFloat(document.getElementById('edit-pool-wind')?.value) || 0.535,
+            solar_absorption: parseFloat(document.getElementById('edit-pool-solar')?.value) || 60,
+            has_cover: document.getElementById('edit-pool-has-cover')?.value === '1',
+            cover_u_value: parseFloat(document.getElementById('edit-pool-cover-u')?.value) || 5.0,
+            cover_solar_trans: parseFloat(document.getElementById('edit-pool-cover-solar')?.value) || 10,
+            has_tunnel: document.getElementById('edit-pool-has-tunnel')?.value === '1',
+            floor_insulated: document.getElementById('edit-pool-floor-insulated')?.value === '1'
+        };
+
+        // Save to localStorage
+        localStorage.setItem('heataq_pool', JSON.stringify(this.currentPool));
+
+        // Update displays
+        this.updatePoolCard();
+        this.hidePoolModal();
+
+        console.log('[Project] Pool saved:', this.currentPool);
+    },
+
+    // Update pool card display
+    updatePoolCard() {
+        // Load pool data if not loaded
+        if (!this.currentPool) {
+            this.loadPoolData();
+        }
+
+        const pool = this.currentPool;
+        const cfg = typeof app.configuration !== 'undefined' ? app.configuration.getConfig() : null;
+
+        // Pool name
+        const nameEl = document.getElementById('pool-name');
+        if (nameEl) nameEl.textContent = pool.name || 'Main Pool';
+
+        // Pool physical properties from pool data
+        const areaEl = document.getElementById('pool-area');
+        const volumeEl = document.getElementById('pool-volume');
+        const depthEl = document.getElementById('pool-depth');
+
+        if (areaEl) areaEl.textContent = pool.area ? `${pool.area} m²` : '- m²';
+        if (volumeEl) volumeEl.textContent = pool.volume ? `${pool.volume} m³` : '- m³';
+        if (depthEl) depthEl.textContent = pool.depth ? `${pool.depth} m` : '- m';
+
+        // Equipment from configuration
+        const targetEl = document.getElementById('pool-target-temp');
+        const hpEl = document.getElementById('pool-hp-capacity');
+        const boilerEl = document.getElementById('pool-boiler-capacity');
+
+        if (cfg) {
+            if (targetEl) targetEl.textContent = cfg.control?.target_temp ? `${cfg.control.target_temp}°C` : '28°C';
+            if (hpEl) hpEl.textContent = cfg.equipment?.hp_capacity_kw ? `${cfg.equipment.hp_capacity_kw} kW` : '- kW';
+            if (boilerEl) boilerEl.textContent = cfg.equipment?.boiler_capacity_kw ? `${cfg.equipment.boiler_capacity_kw} kW` : '- kW';
+        }
     },
 
     // Update project name and description display
@@ -401,7 +715,7 @@ const ProjectModule = {
             }
 
             // Get weather data range
-            const weatherResponse = await fetch(`${config.API_BASE_URL}?action=getWeatherRange`);
+            const weatherResponse = await fetch(`${config.API_BASE_URL}?action=get_weather_range`);
             if (weatherResponse.ok) {
                 const weatherData = await weatherResponse.json();
                 const rangeEl = document.getElementById('dash-weather-range');
@@ -425,7 +739,7 @@ const ProjectModule = {
     // Load recent simulation runs
     async loadRecentSimulations() {
         try {
-            const response = await fetch(`${config.API_BASE_URL}?action=getSimulationRuns`);
+            const response = await fetch(`${config.API_BASE_URL}?action=get_simulation_runs`);
             if (response.ok) {
                 const runs = await response.json();
                 const container = document.getElementById('dash-recent-runs');
@@ -452,7 +766,7 @@ const ProjectModule = {
     // Load list of available projects
     async loadProjectsList() {
         try {
-            const response = await fetch(`${config.API_BASE_URL}?action=getProjects`);
+            const response = await fetch(`${config.API_BASE_URL}?action=get_projects`);
             const container = document.getElementById('projects-list');
 
             if (response.ok) {
@@ -532,7 +846,7 @@ const ProjectModule = {
 
         try {
             // Update in backend (if API supports it)
-            const response = await fetch(`${config.API_BASE_URL}?action=updateProject`, {
+            const response = await fetch(`${config.API_BASE_URL}?action=update_project`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -591,7 +905,7 @@ const ProjectModule = {
 
         try {
             // Update in backend (if API supports it)
-            const response = await fetch(`${config.API_BASE_URL}?action=updateProject`, {
+            const response = await fetch(`${config.API_BASE_URL}?action=update_project`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -659,7 +973,7 @@ const ProjectModule = {
 
         try {
             // Create in backend
-            const response = await fetch(`${config.API_BASE_URL}?action=createProject`, {
+            const response = await fetch(`${config.API_BASE_URL}?action=create_project`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, description })
