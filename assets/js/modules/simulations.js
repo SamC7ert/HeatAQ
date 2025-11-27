@@ -1386,19 +1386,33 @@ const SimulationsModule = {
         const debugIndex = this.debugTimestamp ?
             data.findIndex(d => d.timestamp === this.debugTimestamp) : -1;
 
-        // Log debug hour data for verification
+        // Log and display chart data for verification against debug output
         if (debugIndex >= 0) {
-            const debugHourData = data[debugIndex];
+            const d = data[debugIndex];
             console.log('[Chart vs Debug] Highlighted hour data from chart:', {
-                timestamp: debugHourData.timestamp,
-                is_open: debugHourData.is_open,
-                net_demand: debugHourData.net_demand?.toFixed(1),
-                hp_output: debugHourData.hp_output?.toFixed(1),
-                boiler_output: debugHourData.boiler_output?.toFixed(1)
+                timestamp: d.timestamp,
+                is_open: d.is_open,
+                net_demand: d.net_demand?.toFixed(1),
+                hp_output: d.hp_output?.toFixed(1),
+                boiler_output: d.boiler_output?.toFixed(1)
             });
+
+            // Update comparison display in UI (if mismatch, show warning)
+            const comparisonEl = document.getElementById('chart-data-comparison');
+            if (comparisonEl) {
+                const chartStatus = d.is_open ? 'Open' : 'Closed';
+                const chartDemand = d.net_demand?.toFixed(1) || '0';
+                comparisonEl.innerHTML = `<strong>Chart data:</strong> ${chartStatus}, ${chartDemand} kW demand, HP: ${d.hp_output?.toFixed(1) || '0'} kW`;
+                comparisonEl.style.color = '#666';
+            }
         } else if (this.debugTimestamp) {
             console.log('[Chart vs Debug] Debug timestamp not found in chart data:', this.debugTimestamp);
             console.log('[Chart vs Debug] Chart timestamps sample:', data.slice(0, 3).map(d => d.timestamp));
+
+            const comparisonEl = document.getElementById('chart-data-comparison');
+            if (comparisonEl) {
+                comparisonEl.innerHTML = `<span style="color: orange;">⚠ Hour not found in chart data</span>`;
+            }
         }
 
         const labels = data.map((d, i) => {
