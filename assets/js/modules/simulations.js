@@ -395,34 +395,36 @@ const SimulationsModule = {
                         label: 'Heat Demand (kWh)',
                         data: lossData,
                         borderColor: 'rgba(100, 100, 100, 0.8)',
-                        backgroundColor: 'rgba(100, 100, 100, 0.1)',
-                        fill: true,
+                        backgroundColor: 'transparent',
+                        fill: false,
                         pointRadius: 0,
-                        borderWidth: 1,
+                        borderWidth: 1.5,
                         tension: 0.1,
-                        order: 3
-                    },
-                    {
-                        label: 'Heat Pump (kWh)',
-                        data: hpData,
-                        borderColor: 'rgba(40, 167, 69, 1)',
-                        backgroundColor: 'rgba(40, 167, 69, 0.6)',
-                        fill: true,
-                        pointRadius: 0,
-                        borderWidth: 1,
-                        tension: 0.1,
-                        order: 1
+                        order: 0  // Draw on top
                     },
                     {
                         label: 'Boiler (kWh)',
                         data: boilerData,
                         borderColor: 'rgba(220, 53, 69, 1)',
-                        backgroundColor: 'rgba(220, 53, 69, 0.6)',
+                        backgroundColor: 'rgba(220, 53, 69, 0.7)',
                         fill: true,
                         pointRadius: 0,
-                        borderWidth: 1,
+                        borderWidth: 0,
                         tension: 0.1,
+                        stack: 'heating',
                         order: 2
+                    },
+                    {
+                        label: 'Heat Pump (kWh)',
+                        data: hpData,
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        backgroundColor: 'rgba(40, 167, 69, 0.7)',
+                        fill: true,
+                        pointRadius: 0,
+                        borderWidth: 0,
+                        tension: 0.1,
+                        stack: 'heating',
+                        order: 1
                     }
                 ]
             },
@@ -449,6 +451,7 @@ const SimulationsModule = {
                     },
                     y: {
                         display: true,
+                        stacked: true,
                         title: { display: true, text: 'Energy (kWh)' }
                     }
                 }
@@ -2000,34 +2003,36 @@ const SimulationsModule = {
                         label: 'Heat Demand (kWh)',
                         data: lossData,
                         borderColor: 'rgba(100, 100, 100, 0.8)',
-                        backgroundColor: 'rgba(100, 100, 100, 0.1)',
-                        fill: true,
+                        backgroundColor: 'transparent',
+                        fill: false,
                         pointRadius: 0,
-                        borderWidth: 1,
+                        borderWidth: 1.5,
                         tension: 0.1,
-                        order: 3
-                    },
-                    {
-                        label: 'Heat Pump (kWh)',
-                        data: hpData,
-                        borderColor: 'rgba(40, 167, 69, 1)',
-                        backgroundColor: 'rgba(40, 167, 69, 0.6)',
-                        fill: true,
-                        pointRadius: 0,
-                        borderWidth: 1,
-                        tension: 0.1,
-                        order: 1
+                        order: 0  // Draw on top
                     },
                     {
                         label: 'Boiler (kWh)',
                         data: boilerData,
                         borderColor: 'rgba(220, 53, 69, 1)',
-                        backgroundColor: 'rgba(220, 53, 69, 0.6)',
+                        backgroundColor: 'rgba(220, 53, 69, 0.7)',
                         fill: true,
                         pointRadius: 0,
-                        borderWidth: 1,
+                        borderWidth: 0,
                         tension: 0.1,
+                        stack: 'heating',
                         order: 2
+                    },
+                    {
+                        label: 'Heat Pump (kWh)',
+                        data: hpData,
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        backgroundColor: 'rgba(40, 167, 69, 0.7)',
+                        fill: true,
+                        pointRadius: 0,
+                        borderWidth: 0,
+                        tension: 0.1,
+                        stack: 'heating',
+                        order: 1
                     }
                 ]
             },
@@ -2061,6 +2066,7 @@ const SimulationsModule = {
                     },
                     y: {
                         display: true,
+                        stacked: true,
                         title: { display: true, text: 'Energy (kWh)' }
                     }
                 }
