@@ -406,7 +406,312 @@ Three-level shadow hierarchy creates depth:
 
 ---
 
-## 12. Future Enhancements
+## 12. Loading States (V65)
+
+### Skeleton Loaders
+
+Animated placeholder content while data loads:
+
+```css
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: var(--radius-sm);
+}
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+```
+
+| Component | Skeleton Treatment |
+|-----------|-------------------|
+| Card content | Gray bars matching text lines |
+| Table rows | Full-width row placeholders |
+| Charts | Centered spinner with dimmed background |
+
+### Button Loading State
+
+```css
+.btn.loading {
+    position: relative;
+    color: transparent;
+    pointer-events: none;
+}
+
+.btn.loading::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+```
+
+---
+
+## 13. Status Badges (V65)
+
+### Badge Styles
+
+```css
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    gap: 5px;
+}
+
+.badge-success { background: #d4edda; color: #155724; }
+.badge-danger  { background: #f8d7da; color: #721c24; }
+.badge-warning { background: #fff3cd; color: #856404; }
+.badge-info    { background: #cce5ff; color: #004085; }
+.badge-secondary { background: #e9ecef; color: #495057; }
+```
+
+### Simulation Status Badges
+
+| Status | Badge | Icon |
+|--------|-------|------|
+| Running | Blue + pulse animation | Spinner |
+| Completed | Green | Checkmark |
+| Failed | Red | X |
+| Queued | Gray | Clock |
+
+### Run State Indicator
+
+The Simulate/Calculate button changes color based on state:
+
+| State | Color | Meaning |
+|-------|-------|---------|
+| Green | `--success` | Results are current, no changes made |
+| Red/Orange | `--warning` | Parameters changed, re-run needed |
+
+```css
+.btn-run.current {
+    background: var(--success);
+}
+
+.btn-run.stale {
+    background: var(--warning);
+    animation: pulse-attention 2s infinite;
+}
+```
+
+---
+
+## 14. Chart Enhancements (V65)
+
+### Custom Tooltips
+
+```javascript
+tooltip: {
+    backgroundColor: 'white',
+    titleColor: '#333',
+    bodyColor: '#666',
+    borderColor: '#ddd',
+    borderWidth: 1,
+    cornerRadius: 8,
+    padding: 12,
+    boxShadow: true,
+    callbacks: {
+        label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} kW`
+    }
+}
+```
+
+### Crosshair Plugin
+
+Vertical line following cursor across chart:
+
+```javascript
+// Draw vertical line at hover position
+afterDraw: (chart) => {
+    if (chart.tooltip?.opacity) {
+        const x = chart.tooltip.caretX;
+        ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, chart.chartArea.top);
+        ctx.lineTo(x, chart.chartArea.bottom);
+        ctx.stroke();
+    }
+}
+```
+
+### Gradient Fills
+
+Subtle gradient under line charts:
+
+```javascript
+const gradient = ctx.createLinearGradient(0, 0, 0, chartHeight);
+gradient.addColorStop(0, 'rgba(33, 150, 243, 0.2)');
+gradient.addColorStop(1, 'rgba(33, 150, 243, 0)');
+
+datasets: [{
+    fill: true,
+    backgroundColor: gradient
+}]
+```
+
+---
+
+## 15. Simulation Data Persistence (V65)
+
+### Auto-Load Previous Results
+
+When opening SimControl tabs, automatically load last results:
+
+| Tab | Load Behavior |
+|-----|---------------|
+| Simulate | Load last run parameters + results |
+| Debug | Load last debug date/hour + weekly chart |
+| Analyse | Load last 5-scenario comparison |
+| History | Always fresh from API |
+
+### State Tracking
+
+Track if parameters have changed since last run:
+
+```javascript
+SimulationsModule.state = {
+    lastRunParams: null,      // Parameters from last successful run
+    currentParams: null,      // Current form values
+    hasChanges: false,        // true if currentParams !== lastRunParams
+    lastResults: null         // Cached results
+};
+```
+
+### Visual Indicator
+
+```
+[Parameters unchanged] → Green "Run Simulation" button
+[Parameters changed]   → Orange "Run Simulation" button + "Results outdated" text
+```
+
+---
+
+## 16. Site & Project Architecture (V65)
+
+### Data Model
+
+```
+Project (1)
+  └── Site (1..n)
+        ├── name
+        ├── latitude
+        ├── longitude
+        ├── weather_station_id
+        └── Pool (1..n)
+              ├── name
+              ├── volume
+              ├── surface_area
+              └── configuration
+```
+
+### Project Page Layout
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ PROJECT: Hisøy Swim Club                          [+ New]   │
+│ Energy optimization for outdoor swimming facility           │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  SITES                                                      │
+│  ┌──────────────────────┐  ┌──────────────────────┐        │
+│  │ 📍 Main Facility     │  │ 📍 [+ Add Site]      │        │
+│  │ Arendal, Norway      │  │                      │        │
+│  │ 58.4615°N, 8.7725°E  │  └──────────────────────┘        │
+│  │ ┌──────────────────┐ │                                  │
+│  │ │ 🗺️ Map Preview   │ │                                  │
+│  │ │                  │ │                                  │
+│  │ └──────────────────┘ │                                  │
+│  │ Weather: SN44560     │                                  │
+│  │ Solar: 1050 kWh/m²/yr│                                  │
+│  │                      │                                  │
+│  │ POOLS:               │                                  │
+│  │ • Main Pool (625m³)  │                                  │
+│  │ • Kids Pool (45m³)   │                                  │
+│  │ [Edit] [+ Add Pool]  │                                  │
+│  └──────────────────────┘                                  │
+│                                                             │
+│  PROJECT SUMMARY                    RECENT SIMULATIONS      │
+│  ┌────────────────────┐            ┌────────────────────┐  │
+│  │ Total Pools: 2     │            │ • 2024 Benchmark   │  │
+│  │ Total Volume: 670m³│            │ • Winter Test      │  │
+│  │ HP Capacity: 125kW │            │ • Solar Study      │  │
+│  └────────────────────┘            └────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Site Card Component
+
+```html
+<div class="site-card card">
+    <div class="site-header">
+        <h4>📍 Main Facility</h4>
+        <span class="site-location">Arendal, Norway</span>
+    </div>
+    <div class="site-map">
+        <!-- Google Maps Static Image -->
+        <img src="https://maps.googleapis.com/maps/api/staticmap?
+            center=58.4615,8.7725&zoom=14&size=280x150&markers=..." />
+    </div>
+    <div class="site-details">
+        <div class="detail-row">
+            <span class="label">Coordinates</span>
+            <span class="value">58.4615°N, 8.7725°E</span>
+        </div>
+        <div class="detail-row">
+            <span class="label">Weather Station</span>
+            <span class="value">SN44560 (Torungen)</span>
+        </div>
+        <div class="detail-row">
+            <span class="label">Annual Solar</span>
+            <span class="value">1,050 kWh/m²/yr</span>
+        </div>
+    </div>
+    <div class="site-pools">
+        <h5>Pools</h5>
+        <ul class="pool-list">
+            <li>Main Pool <span class="pool-volume">625 m³</span></li>
+            <li>Kids Pool <span class="pool-volume">45 m³</span></li>
+        </ul>
+        <button class="btn btn-sm btn-secondary">+ Add Pool</button>
+    </div>
+</div>
+```
+
+### Solar Data Display
+
+Based on latitude, show estimated annual solar radiation:
+
+| Latitude | Annual Solar (kWh/m²) |
+|----------|----------------------|
+| 58°N (Arendal) | ~1,050 |
+| 60°N (Oslo) | ~980 |
+| 63°N (Trondheim) | ~850 |
+| 70°N (Tromsø) | ~700 |
+
+### Weather Station Connection
+
+When site coordinates are set:
+1. Show nearby weather stations from database
+2. Allow selection or auto-select nearest
+3. Display station distance from site
+4. Show data availability range
+
+---
+
+## 17. Future Enhancements
 
 ### Consider Adding:
 1. **Dark Mode:** Toggle for reduced eye strain
@@ -423,10 +728,11 @@ Three-level shadow hierarchy creates depth:
 
 ---
 
-## 13. Version History
+## 18. Version History
 
 | Version | Changes |
 |---------|---------|
+| V65 | Loading states, status badges, chart improvements, simulation state, site architecture |
 | V64 | Sidebar enhancements, elevation system, form consistency |
 | V63 | Project management UI, modal styles |
 | V62 | Analyse tab, History metrics table |
