@@ -368,10 +368,10 @@ const SimulationsModule = {
             return;
         }
 
-        // Prepare data
+        // Prepare data - use thermal output (heat delivered) not electricity/fuel consumed
         const labels = dailyResults.map(d => d.date);
-        const hpData = dailyResults.map(d => parseFloat(d.total_hp_kwh) || 0);
-        const boilerData = dailyResults.map(d => parseFloat(d.total_boiler_kwh) || 0);
+        const hpData = dailyResults.map(d => parseFloat(d.hp_thermal_kwh) || parseFloat(d.total_hp_kwh) || 0);
+        const boilerData = dailyResults.map(d => parseFloat(d.boiler_thermal_kwh) || parseFloat(d.total_boiler_kwh) || 0);
         const lossData = dailyResults.map(d => parseFloat(d.total_loss_kwh) || 0);
 
         new Chart(canvas, {
@@ -464,8 +464,8 @@ const SimulationsModule = {
                             <th>Hrs Open</th>
                             <th>Avg Temp</th>
                             <th>Loss (kWh)</th>
-                            <th>HP (kWh)</th>
-                            <th>Boiler (kWh)</th>
+                            <th>HP Heat (kWh)</th>
+                            <th>Boiler Heat (kWh)</th>
                             <th>Cost</th>
                         </tr>
                     </thead>
@@ -476,8 +476,8 @@ const SimulationsModule = {
                                 <td>${d.open_hours}</td>
                                 <td>${parseFloat(d.avg_water_temp).toFixed(1)}°C</td>
                                 <td>${parseFloat(d.total_loss_kwh).toFixed(1)}</td>
-                                <td>${parseFloat(d.total_hp_kwh).toFixed(1)}</td>
-                                <td>${parseFloat(d.total_boiler_kwh).toFixed(1)}</td>
+                                <td>${parseFloat(d.hp_thermal_kwh || d.total_hp_kwh).toFixed(1)}</td>
+                                <td>${parseFloat(d.boiler_thermal_kwh || d.total_boiler_kwh).toFixed(1)}</td>
                                 <td>${this.formatCurrency(d.total_cost)}</td>
                             </tr>
                         `).join('')}
@@ -492,8 +492,8 @@ const SimulationsModule = {
                                 <td>${d.open_hours}</td>
                                 <td>${parseFloat(d.avg_water_temp).toFixed(1)}°C</td>
                                 <td>${parseFloat(d.total_loss_kwh).toFixed(1)}</td>
-                                <td>${parseFloat(d.total_hp_kwh).toFixed(1)}</td>
-                                <td>${parseFloat(d.total_boiler_kwh).toFixed(1)}</td>
+                                <td>${parseFloat(d.hp_thermal_kwh || d.total_hp_kwh).toFixed(1)}</td>
+                                <td>${parseFloat(d.boiler_thermal_kwh || d.total_boiler_kwh).toFixed(1)}</td>
                                 <td>${this.formatCurrency(d.total_cost)}</td>
                             </tr>
                         `).join('')}
@@ -518,9 +518,10 @@ const SimulationsModule = {
                 return;
             }
 
-            // Build CSV
+            // Build CSV - include both consumed energy and thermal output
             const headers = ['date', 'hours_count', 'open_hours', 'avg_air_temp', 'avg_water_temp',
-                           'total_loss_kwh', 'total_solar_kwh', 'total_hp_kwh', 'total_boiler_kwh', 'total_cost'];
+                           'total_loss_kwh', 'total_solar_kwh', 'total_hp_kwh', 'total_boiler_kwh',
+                           'hp_thermal_kwh', 'boiler_thermal_kwh', 'total_cost'];
             const csv = [
                 headers.join(','),
                 ...data.daily_results.map(row =>

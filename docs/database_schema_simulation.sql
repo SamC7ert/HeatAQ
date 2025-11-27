@@ -62,11 +62,15 @@ CREATE TABLE IF NOT EXISTS simulation_daily_results (
     avg_air_temp DECIMAL(5,2),
     avg_water_temp DECIMAL(5,2),
 
-    -- Energy totals (kWh)
+    -- Energy consumed (kWh)
     total_loss_kwh DECIMAL(10,3) NOT NULL DEFAULT 0,
     total_solar_kwh DECIMAL(10,3) NOT NULL DEFAULT 0,
     total_hp_kwh DECIMAL(10,3) NOT NULL DEFAULT 0,      -- HP electricity consumed
     total_boiler_kwh DECIMAL(10,3) NOT NULL DEFAULT 0,  -- Boiler fuel consumed
+
+    -- Thermal output (kWh) - heat delivered to pool
+    hp_thermal_kwh DECIMAL(10,3) NOT NULL DEFAULT 0,      -- HP heat delivered
+    boiler_thermal_kwh DECIMAL(10,3) NOT NULL DEFAULT 0,  -- Boiler heat delivered
 
     -- Cost (NOK)
     total_cost DECIMAL(10,2) NOT NULL DEFAULT 0,
