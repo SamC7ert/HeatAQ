@@ -8,6 +8,7 @@ const SimulationsModule = {
     runs: [],
     currentRun: null,
     weatherRange: null,
+    debugTimestamp: null,  // Current debug date+hour for chart highlighting
 
     /**
      * Initialize simulations module
@@ -1064,6 +1065,9 @@ const SimulationsModule = {
         // Save date to localStorage for persistence (user-specific)
         localStorage.setItem(this.getUserKey('debug_date'), date);
 
+        // Store current debug timestamp for chart highlighting
+        this.debugTimestamp = `${date} ${hour.padStart(2, '0')}:00:00`;
+
         // Show results section without destroying card structure
         resultsDiv.style.display = 'block';
 
@@ -1378,6 +1382,10 @@ const SimulationsModule = {
         const openCount = data.filter(d => d.is_open).length;
         console.log(`[Schedule Debug] Total open hours: ${openCount}/${data.length} (${(openCount/data.length*100).toFixed(1)}%)`);
 
+        // Find index of current debug hour for highlighting
+        const debugIndex = this.debugTimestamp ?
+            data.findIndex(d => d.timestamp === this.debugTimestamp) : -1;
+
         const labels = data.map((d, i) => {
             // Show day label at start of each day (hour 0)
             if (i % 24 === 0) {
@@ -1538,7 +1546,27 @@ const SimulationsModule = {
                         grid: { drawOnChartArea: false }
                     }
                 }
-            }
+            },
+            plugins: [{
+                id: 'debugHourHighlight',
+                beforeDraw: (chart) => {
+                    if (debugIndex < 0) return;
+
+                    const ctx = chart.ctx;
+                    const xAxis = chart.scales.x;
+                    const yAxis = chart.scales.y;
+
+                    // Get the pixel position for this bar
+                    const barWidth = xAxis.width / data.length;
+                    const x = xAxis.left + (debugIndex * barWidth);
+
+                    // Draw yellow highlight rectangle
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(255, 235, 59, 0.3)';  // Light yellow
+                    ctx.fillRect(x, yAxis.top, barWidth, yAxis.bottom - yAxis.top);
+                    ctx.restore();
+                }
+            }]
         });
     },
 
@@ -1558,6 +1586,11 @@ const SimulationsModule = {
         }
 
         const data = weekData.data;
+
+        // Find index of current debug hour for highlighting
+        const debugIndex = this.debugTimestamp ?
+            data.findIndex(d => d.timestamp === this.debugTimestamp) : -1;
+
         const labels = data.map((d, i) => {
             // Show day label at start of each day (hour 0)
             if (i % 24 === 0) {
@@ -1664,7 +1697,27 @@ const SimulationsModule = {
                         ticks: { font: { size: 9 } }
                     }
                 }
-            }
+            },
+            plugins: [{
+                id: 'debugHourHighlight',
+                beforeDraw: (chart) => {
+                    if (debugIndex < 0) return;
+
+                    const ctx = chart.ctx;
+                    const xAxis = chart.scales.x;
+                    const yAxis = chart.scales.y;
+
+                    // Get the pixel position for this data point
+                    const barWidth = xAxis.width / data.length;
+                    const x = xAxis.left + (debugIndex * barWidth);
+
+                    // Draw yellow highlight rectangle
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(255, 235, 59, 0.3)';  // Light yellow
+                    ctx.fillRect(x, yAxis.top, barWidth, yAxis.bottom - yAxis.top);
+                    ctx.restore();
+                }
+            }]
         });
     },
 
