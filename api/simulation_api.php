@@ -214,6 +214,7 @@ try {
             }
 
             // Create simulation run record
+            $scheduleTemplate = $scheduler->getTemplate();
             $runId = createSimulationRun($pdo, [
                 'site_id' => $currentSiteId,
                 'user_id' => $currentUserId,
@@ -225,7 +226,8 @@ try {
                     'simulator_version' => EnergySimulator::getVersion(),
                     'pool_config' => $simulator->getPoolConfig(),
                     'equipment' => $simulator->getEquipment(),
-                    'template_id' => $scheduler->getTemplate()['template_id'] ?? null,
+                    'schedule_template_id' => $scheduleTemplate['template_id'] ?? null,
+                    'schedule_template_name' => $scheduleTemplate['name'] ?? null,
                 ]),
             ]);
 

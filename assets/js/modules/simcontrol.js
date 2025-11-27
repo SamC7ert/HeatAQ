@@ -3,11 +3,14 @@
 const SimControlModule = {
     currentTab: 'new',
     initialized: false,
+    userPreferences: {},  // Cached preferences from server
 
     // Initialize SimControl
-    init: function() {
+    init: async function() {
         if (!this.initialized) {
             this.initialized = true;
+            // Load user preferences from server first (syncs across devices)
+            await this.loadUserPreferences();
             // Load OHC options for the dropdown
             this.loadOHCOptions();
             // Load configuration options
@@ -18,6 +21,41 @@ const SimControlModule = {
 
         // Initialize current tab
         this.switchTab(this.currentTab);
+    },
+
+    // Load user preferences from server (syncs across iPad, desktop, etc.)
+    loadUserPreferences: async function() {
+        try {
+            const response = await fetch('./api/heataq_api.php?action=get_preferences');
+            const data = await response.json();
+            this.userPreferences = data.preferences || {};
+        } catch (err) {
+            console.warn('Failed to load user preferences from server:', err);
+            this.userPreferences = {};
+        }
+    },
+
+    // Save a preference to server (with localStorage fallback)
+    savePreference: async function(key, value) {
+        // Always save to localStorage as fallback
+        localStorage.setItem('heataq_' + key, value);
+
+        // Try to save to server for cross-device sync
+        try {
+            await fetch('./api/heataq_api.php?action=save_preference', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key: key, value: value })
+            });
+            this.userPreferences[key] = value;
+        } catch (err) {
+            console.warn('Failed to save preference to server:', err);
+        }
+    },
+
+    // Get preference value (server preference takes priority over localStorage)
+    getPreference: function(key) {
+        return this.userPreferences[key] || localStorage.getItem('heataq_' + key) || '';
     },
 
     // Switch between tabs
@@ -79,6 +117,17 @@ const SimControlModule = {
                 select.innerHTML = data.templates.map(t =>
                     `<option value="${t.template_id}">${t.name}</option>`
                 ).join('');
+
+                // Restore saved selection (from server or localStorage)
+                const savedOHC = this.getPreference('selected_ohc');
+                if (savedOHC) {
+                    select.value = savedOHC;
+                }
+
+                // Save selection on change (to server + localStorage)
+                select.addEventListener('change', () => {
+                    this.savePreference('selected_ohc', select.value);
+                });
             }
         } catch (err) {
             console.error('Failed to load OHC options:', err);
@@ -110,21 +159,21 @@ const SimControlModule = {
             if (simSelect) simSelect.innerHTML = optionsHtml;
             if (debugSelect) debugSelect.innerHTML = optionsHtml;
 
-            // Restore saved selection
-            const savedConfig = localStorage.getItem('heataq_selected_config') || '';
+            // Restore saved selection (from server or localStorage)
+            const savedConfig = this.getPreference('selected_config');
             if (simSelect) simSelect.value = savedConfig;
             if (debugSelect) debugSelect.value = savedConfig;
 
-            // Sync dropdowns on change
+            // Sync dropdowns on change and save to server
             if (simSelect) {
                 simSelect.addEventListener('change', () => {
-                    localStorage.setItem('heataq_selected_config', simSelect.value);
+                    this.savePreference('selected_config', simSelect.value);
                     if (debugSelect) debugSelect.value = simSelect.value;
                 });
             }
             if (debugSelect) {
                 debugSelect.addEventListener('change', () => {
-                    localStorage.setItem('heataq_selected_config', debugSelect.value);
+                    this.savePreference('selected_config', debugSelect.value);
                     if (simSelect) simSelect.value = debugSelect.value;
                 });
             }

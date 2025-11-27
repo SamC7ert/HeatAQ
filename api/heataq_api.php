@@ -327,6 +327,14 @@ class HeatAQAPI {
                     $this->fetchNasaSolar();
                     break;
 
+                // User preferences (syncs across devices)
+                case 'get_preferences':
+                    $this->getUserPreferences();
+                    break;
+                case 'save_preference':
+                    $this->saveUserPreference();
+                    break;
+
                 default:
                     $this->sendError('Invalid action');
             }
@@ -1713,6 +1721,107 @@ class HeatAQAPI {
                 AND COLUMN_NAME = ?
             ");
             $stmt->execute([$table, $column]);
+            return $stmt->fetchColumn() > 0;
+        } catch (PDOException $e) {
+            return false;
+        }
+    }
+
+    // ====================================
+    // USER PREFERENCES (sync across devices)
+    // ====================================
+
+    private function getUserPreferences() {
+        if (!$this->userId) {
+            // Not authenticated - return empty preferences
+            $this->sendResponse(['preferences' => []]);
+            return;
+        }
+
+        try {
+            // Check if table exists
+            if (!$this->tableExists('user_preferences')) {
+                $this->sendResponse(['preferences' => [], 'note' => 'preferences table not yet created']);
+                return;
+            }
+
+            $stmt = $this->db->prepare("
+                SELECT pref_key, pref_value
+                FROM user_preferences
+                WHERE user_id = ?
+            ");
+            $stmt->execute([$this->userId]);
+            $rows = $stmt->fetchAll();
+
+            $preferences = [];
+            foreach ($rows as $row) {
+                $preferences[$row['pref_key']] = $row['pref_value'];
+            }
+
+            $this->sendResponse(['preferences' => $preferences]);
+        } catch (PDOException $e) {
+            $this->sendResponse(['preferences' => [], 'error' => 'Failed to load preferences']);
+        }
+    }
+
+    private function saveUserPreference() {
+        if (!$this->userId) {
+            $this->sendError('Authentication required to save preferences', 401);
+            return;
+        }
+
+        $input = $this->getPostInput();
+        $key = $input['key'] ?? null;
+        $value = $input['value'] ?? null;
+
+        if (!$key) {
+            $this->sendError('Preference key required');
+            return;
+        }
+
+        // Validate key (only allow known preference keys)
+        $allowedKeys = ['selected_config', 'selected_ohc', 'selected_tab'];
+        if (!in_array($key, $allowedKeys)) {
+            $this->sendError('Invalid preference key');
+            return;
+        }
+
+        try {
+            // Check if table exists, create if not
+            if (!$this->tableExists('user_preferences')) {
+                $this->db->exec("
+                    CREATE TABLE IF NOT EXISTS user_preferences (
+                        user_id INT NOT NULL,
+                        pref_key VARCHAR(50) NOT NULL,
+                        pref_value VARCHAR(255),
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        PRIMARY KEY (user_id, pref_key)
+                    )
+                ");
+            }
+
+            // Upsert preference
+            $stmt = $this->db->prepare("
+                INSERT INTO user_preferences (user_id, pref_key, pref_value)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE pref_value = VALUES(pref_value)
+            ");
+            $stmt->execute([$this->userId, $key, $value]);
+
+            $this->sendResponse(['success' => true]);
+        } catch (PDOException $e) {
+            $this->sendError('Failed to save preference: ' . $e->getMessage());
+        }
+    }
+
+    private function tableExists($table) {
+        try {
+            $stmt = $this->db->prepare("
+                SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+                WHERE TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME = ?
+            ");
+            $stmt->execute([$table]);
             return $stmt->fetchColumn() > 0;
         } catch (PDOException $e) {
             return false;

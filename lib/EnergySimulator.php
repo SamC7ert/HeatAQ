@@ -941,12 +941,23 @@ class EnergySimulator {
             'cost' => 0,
         ];
 
-        // If no target temp (closed), minimal heating to prevent freezing
-        if ($targetTemp === null) {
-            $targetTemp = 15; // Minimum maintenance temperature
-            $minTemp = 10;
-            $maxTemp = 20;
+        // Handle target temp based on control strategy
+        $controlStrategy = $this->equipment['control_strategy'] ?? 'reactive';
+
+        if ($controlStrategy === 'reactive') {
+            // Reactive: Simple thermostat - always heat to target_temp (ignores schedule)
+            // Uses pool config target temp, not schedule (which may have null for closed hours)
+            $targetTemp = $this->poolConfig['target_temp'] ?? 28.0;
+            // No min/max override - use default deadband around target
+        } elseif ($targetTemp === null) {
+            // Predictive mode with closed period: Maintain setback temperature
+            // This prevents massive reheat costs when pool reopens
+            $setbackTemp = $this->poolConfig['setback_temp'] ?? 26.0;
+            $targetTemp = $setbackTemp;
+            $minTemp = $setbackTemp - 1;  // Start heating if drops 1° below setback
+            $maxTemp = $setbackTemp + 1;  // Stop heating 1° above setback
         }
+        // Predictive mode with open period: use schedule's targetTemp as-is
 
         // Default min/max if not provided
         if ($minTemp === null) {
