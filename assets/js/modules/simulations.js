@@ -1853,6 +1853,189 @@ const SimulationsModule = {
     },
 
     /**
+     * Auto-load last simulation run results for Simulate tab
+     */
+    autoLoadLastRun: async function() {
+        try {
+            // Get the most recent completed run
+            const response = await fetch('/api/simulation_api.php?action=get_runs&limit=1');
+            const data = await response.json();
+
+            if (!data.runs || data.runs.length === 0) {
+                // No runs yet - hide the results section
+                const resultsDiv = document.getElementById('sim-last-run-results');
+                if (resultsDiv) resultsDiv.style.display = 'none';
+                return;
+            }
+
+            const lastRun = data.runs[0];
+
+            // Show results section
+            const resultsDiv = document.getElementById('sim-last-run-results');
+            if (resultsDiv) resultsDiv.style.display = 'block';
+
+            // Show run info
+            const infoEl = document.getElementById('sim-last-run-info');
+            if (infoEl) {
+                const dateStr = lastRun.start_date && lastRun.end_date
+                    ? `${lastRun.start_date} - ${lastRun.end_date}`
+                    : '';
+                infoEl.textContent = `${lastRun.scenario_name} (${dateStr})`;
+            }
+
+            // Render summary cards
+            this.renderSimSummaryCards(lastRun.summary || {});
+
+            // Load and render yearly chart
+            await this.loadYearlyChart(lastRun.run_id);
+
+        } catch (error) {
+            console.error('[Simulate] Failed to auto-load last run:', error);
+        }
+    },
+
+    /**
+     * Render summary cards for Simulate tab
+     */
+    renderSimSummaryCards: function(summary) {
+        const container = document.getElementById('sim-summary-cards');
+        if (!container) return;
+
+        const cards = [
+            { label: 'Total Cost', value: this.formatCurrency(summary.total_cost) },
+            { label: 'Heat Loss', value: this.formatEnergy(summary.total_heat_loss_kwh) },
+            { label: 'Solar Gain', value: this.formatEnergy(summary.total_solar_gain_kwh) },
+            { label: 'HP Output', value: this.formatEnergy(summary.hp_thermal_kwh || summary.total_hp_energy_kwh) },
+            { label: 'Boiler Output', value: this.formatEnergy(summary.boiler_thermal_kwh || summary.total_boiler_energy_kwh) },
+            { label: 'Avg COP', value: summary.avg_cop?.toFixed(2) || '-' }
+        ];
+
+        container.innerHTML = cards.map(c => `
+            <div class="summary-card">
+                <div class="card-value">${c.value}</div>
+                <div class="card-label">${c.label}</div>
+            </div>
+        `).join('');
+    },
+
+    // Store yearly chart instance
+    yearlyChart: null,
+
+    /**
+     * Load and render yearly chart for Simulate tab
+     */
+    loadYearlyChart: async function(runId) {
+        try {
+            const response = await fetch(`/api/simulation_api.php?action=get_daily_results&run_id=${runId}`);
+            const data = await response.json();
+
+            if (data.daily_results) {
+                this.renderYearlyChart(data.daily_results);
+            }
+        } catch (error) {
+            console.error('[Simulate] Failed to load yearly chart:', error);
+        }
+    },
+
+    /**
+     * Render yearly chart (daily energy stacked area)
+     */
+    renderYearlyChart: function(dailyResults) {
+        const canvas = document.getElementById('sim-yearly-chart');
+        if (!canvas || typeof Chart === 'undefined') {
+            console.error('Chart.js not loaded or canvas not found');
+            return;
+        }
+
+        // Destroy existing chart
+        if (this.yearlyChart) {
+            this.yearlyChart.destroy();
+        }
+
+        // Prepare data - use thermal output (heat delivered)
+        const labels = dailyResults.map(d => d.date);
+        const hpData = dailyResults.map(d => parseFloat(d.hp_thermal_kwh) || parseFloat(d.total_hp_kwh) || 0);
+        const boilerData = dailyResults.map(d => parseFloat(d.boiler_thermal_kwh) || parseFloat(d.total_boiler_kwh) || 0);
+        const lossData = dailyResults.map(d => parseFloat(d.total_loss_kwh) || 0);
+
+        this.yearlyChart = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Heat Demand (kWh)',
+                        data: lossData,
+                        borderColor: 'rgba(100, 100, 100, 0.8)',
+                        backgroundColor: 'rgba(100, 100, 100, 0.1)',
+                        fill: true,
+                        pointRadius: 0,
+                        borderWidth: 1,
+                        tension: 0.1,
+                        order: 3
+                    },
+                    {
+                        label: 'Heat Pump (kWh)',
+                        data: hpData,
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        backgroundColor: 'rgba(40, 167, 69, 0.6)',
+                        fill: true,
+                        pointRadius: 0,
+                        borderWidth: 1,
+                        tension: 0.1,
+                        order: 1
+                    },
+                    {
+                        label: 'Boiler (kWh)',
+                        data: boilerData,
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        backgroundColor: 'rgba(220, 53, 69, 0.6)',
+                        fill: true,
+                        pointRadius: 0,
+                        borderWidth: 1,
+                        tension: 0.1,
+                        order: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: { boxWidth: 12, font: { size: 10 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                return context[0].label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        ticks: {
+                            maxTicksLimit: 12,
+                            font: { size: 9 }
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: { display: true, text: 'Energy (kWh)' }
+                    }
+                }
+            }
+        });
+    },
+
+    /**
      * Auto-load debug data from last simulation run
      */
     autoLoadDebugData: async function() {

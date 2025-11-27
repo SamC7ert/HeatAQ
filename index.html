@@ -74,7 +74,7 @@
         <div class="user-info">
             <span class="project-name" id="current-project"></span>
             <span class="user-name" id="current-user"></span>
-            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">V65</span>
+            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">V68</span>
             <button onclick="logout()" class="btn-logout">Logout</button>
         </div>
         
@@ -706,11 +706,28 @@
                     </div>
 
                     <div class="form-actions">
-                        <button id="run-simulation-btn" class="btn btn-primary btn-lg" onclick="SimulationsModule.startSimulation()">
+                        <button id="run-simulation-btn" class="btn btn-success btn-lg" onclick="SimulationsModule.startSimulation()">
                             ▶️ Run Simulation
                         </button>
                     </div>
                     <div id="simulation-progress" class="simulation-progress" style="display: none;"></div>
+
+                    <!-- Last Run Results (auto-loaded) -->
+                    <div id="sim-last-run-results" class="card" style="margin-top: 20px; display: none;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h3 style="margin: 0;">Last Simulation Results</h3>
+                            <span id="sim-last-run-info" style="font-size: 12px; color: #666;"></span>
+                        </div>
+
+                        <!-- Summary Stats -->
+                        <div id="sim-summary-cards" class="run-summary-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 20px;">
+                        </div>
+
+                        <!-- Yearly Chart -->
+                        <div id="sim-yearly-chart-container" style="height: 300px; position: relative;">
+                            <canvas id="sim-yearly-chart"></canvas>
+                        </div>
+                    </div>
                     </div><!-- end sim-tab-new -->
 
                     <!-- History Tab Content -->
