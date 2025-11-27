@@ -212,6 +212,7 @@ class PoolScheduler {
                     week_schedule_id,
                     start_date,
                     end_date,
+                    is_recurring,
                     is_active
                 FROM calendar_date_ranges
                 WHERE schedule_template_id = ? AND is_active = 1
@@ -234,7 +235,7 @@ class PoolScheduler {
                     'start_day' => (int) $startDate->format('j'),
                     'end_month' => (int) $endDate->format('n'),
                     'end_day' => (int) $endDate->format('j'),
-                    'is_recurring' => true  // All date ranges are recurring annually
+                    'is_recurring' => isset($row['is_recurring']) ? (bool) $row['is_recurring'] : true
                 ];
             }
 
@@ -300,9 +301,12 @@ class PoolScheduler {
     private function loadHolidayDates() {
         try {
             // Try to get Easter dates from database
+            // Use COALESCE to handle both possible column names (easter_date or easter_sunday)
             $stmt = $this->db->prepare("
-                SELECT year, easter_sunday
+                SELECT year,
+                       COALESCE(easter_date, easter_sunday) as easter_date
                 FROM holiday_reference_days
+                WHERE country = 'NO'
                 ORDER BY year
             ");
             $stmt->execute();
@@ -310,7 +314,7 @@ class PoolScheduler {
 
             $holidays = [];
             foreach ($rows as $row) {
-                $holidays[$row['year']] = new DateTime($row['easter_sunday']);
+                $holidays[$row['year']] = new DateTime($row['easter_date']);
             }
 
             return $holidays;

@@ -86,7 +86,7 @@ const SimulationsModule = {
     },
 
     /**
-     * Render runs list
+     * Render runs list as metrics table
      */
     renderRunsList: function() {
         const container = document.getElementById('simulation-runs-list');
@@ -97,35 +97,49 @@ const SimulationsModule = {
             return;
         }
 
-        const html = this.runs.map(run => `
-            <div class="run-item ${run.status}" onclick="SimulationsModule.viewRun(${run.run_id})">
-                <div class="run-header">
-                    <span class="run-name">${this.escapeHtml(run.scenario_name)}</span>
-                    <span class="run-status status-${run.status}">${run.status}</span>
-                </div>
-                <div class="run-details">
-                    <span class="run-dates">${run.start_date} to ${run.end_date}</span>
-                    <span class="run-created">${this.formatDate(run.created_at)}</span>
-                </div>
-                ${run.summary ? this.renderRunSummary(run.summary) : ''}
-            </div>
-        `).join('');
+        // Build table with key metrics
+        const html = `
+            <table class="data-table history-table">
+                <thead>
+                    <tr>
+                        <th>Scenario</th>
+                        <th>Dates</th>
+                        <th>HP (kW)</th>
+                        <th>Boiler (kW)</th>
+                        <th>Electricity (MWh)</th>
+                        <th>Days &lt;1°C</th>
+                        <th>Days &lt;2°C</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${this.runs.map(run => {
+                        const s = run.summary || {};
+                        const config = run.config || {};
+                        const hpCap = config.equipment?.hp_capacity_kw || '-';
+                        const boilerCap = config.equipment?.boiler_capacity_kw || '-';
+                        const elecMwh = s.total_hp_electricity_kwh ? (s.total_hp_electricity_kwh / 1000).toFixed(1) : '-';
+                        const days1 = s.days_below_target_1c ?? '-';
+                        const days2 = s.days_below_target_2c ?? '-';
+
+                        return `
+                            <tr class="run-row ${run.status}" onclick="SimulationsModule.viewRun(${run.run_id})" style="cursor: pointer;">
+                                <td class="run-name">${this.escapeHtml(run.scenario_name)}</td>
+                                <td class="run-dates">${run.start_date.substring(5)} - ${run.end_date.substring(5)}</td>
+                                <td>${hpCap}</td>
+                                <td>${boilerCap}</td>
+                                <td>${elecMwh}</td>
+                                <td class="${days1 > 10 ? 'bad' : days1 > 0 ? 'warning' : ''}">${days1}</td>
+                                <td class="${days2 > 5 ? 'bad' : days2 > 0 ? 'warning' : ''}">${days2}</td>
+                                <td><span class="status-badge status-${run.status}">${run.status}</span></td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
 
         container.innerHTML = html;
-    },
-
-    /**
-     * Render mini summary for run list item
-     */
-    renderRunSummary: function(summary) {
-        if (!summary) return '';
-        return `
-            <div class="run-summary-mini">
-                <span>Cost: ${this.formatCurrency(summary.total_cost)}</span>
-                <span>HP: ${this.formatEnergy(summary.total_hp_energy_kwh)}</span>
-                <span>Boiler: ${this.formatEnergy(summary.total_boiler_energy_kwh)}</span>
-            </div>
-        `;
     },
 
     /**
@@ -611,21 +625,256 @@ const SimulationsModule = {
     },
 
     /**
-     * Toggle config override fields
+     * Populate config values in the override table
+     * Called when config is loaded or changed
      */
-    toggleOverride: function() {
-        const checkbox = document.getElementById('sim-use-override');
-        const overrideFields = document.getElementById('sim-override-fields');
-        const projectConfig = document.getElementById('sim-project-config');
+    populateConfigValues: function(config) {
+        if (!config) return;
 
-        if (checkbox && overrideFields && projectConfig) {
-            if (checkbox.checked) {
-                overrideFields.style.display = 'block';
-                projectConfig.style.display = 'none';
-            } else {
-                overrideFields.style.display = 'none';
-                projectConfig.style.display = 'block';
+        // Map config values to display elements
+        const mappings = {
+            'cfg-val-hp-capacity': config.equipment?.hp_capacity_kw,
+            'cfg-val-boiler-capacity': config.equipment?.boiler_capacity_kw,
+            'cfg-val-target-temp': config.control?.target_temp,
+            'cfg-val-upper-tol': config.control?.upper_tolerance ?? config.control?.temp_tolerance,
+            'cfg-val-lower-tol': config.control?.lower_tolerance ?? config.control?.temp_tolerance,
+            'cfg-val-bathers': config.bathers?.per_day,
+            'cfg-val-activity': config.bathers?.activity_factor,
+            'cfg-val-wind': config.pool?.wind_exposure,
+            'cfg-val-solar': config.solar?.absorption
+        };
+
+        for (const [id, value] of Object.entries(mappings)) {
+            const el = document.getElementById(id);
+            if (el && value !== undefined) {
+                el.textContent = value;
             }
+        }
+
+        // Load any saved overrides from localStorage
+        this.loadSavedOverrides();
+    },
+
+    /**
+     * Load saved override values from localStorage
+     */
+    loadSavedOverrides: function() {
+        const key = this.getUserKey('sim_overrides');
+        const saved = localStorage.getItem(key);
+        if (saved) {
+            try {
+                const overrides = JSON.parse(saved);
+                const fields = [
+                    'sim-hp-override', 'sim-boiler-override', 'sim-target-override',
+                    'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
+                    'sim-activity-override', 'sim-wind-override', 'sim-solar-override'
+                ];
+                fields.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el && overrides[id]) {
+                        el.value = overrides[id];
+                    }
+                });
+            } catch (e) {
+                console.error('Failed to load saved overrides:', e);
+            }
+        }
+    },
+
+    /**
+     * Save override values to localStorage
+     */
+    saveOverrides: function() {
+        const fields = [
+            'sim-hp-override', 'sim-boiler-override', 'sim-target-override',
+            'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
+            'sim-activity-override', 'sim-wind-override', 'sim-solar-override'
+        ];
+        const overrides = {};
+        fields.forEach(id => {
+            const el = document.getElementById(id);
+            if (el && el.value) {
+                overrides[id] = el.value;
+            }
+        });
+        const key = this.getUserKey('sim_overrides');
+        localStorage.setItem(key, JSON.stringify(overrides));
+    },
+
+    /**
+     * Get effective config with overrides applied
+     */
+    getEffectiveConfig: function(baseConfig) {
+        const config = JSON.parse(JSON.stringify(baseConfig)); // Deep clone
+
+        // Apply overrides if set
+        const getOverride = (id) => {
+            const el = document.getElementById(id);
+            return el && el.value ? parseFloat(el.value) : null;
+        };
+
+        const hpOverride = getOverride('sim-hp-override');
+        const boilerOverride = getOverride('sim-boiler-override');
+        const targetOverride = getOverride('sim-target-override');
+        const upperTolOverride = getOverride('sim-upper-tol-override');
+        const lowerTolOverride = getOverride('sim-lower-tol-override');
+        const bathersOverride = getOverride('sim-bathers-override');
+        const activityOverride = getOverride('sim-activity-override');
+        const windOverride = getOverride('sim-wind-override');
+        const solarOverride = getOverride('sim-solar-override');
+
+        if (hpOverride !== null) config.equipment.hp_capacity_kw = hpOverride;
+        if (boilerOverride !== null) config.equipment.boiler_capacity_kw = boilerOverride;
+        if (targetOverride !== null) config.control.target_temp = targetOverride;
+        if (upperTolOverride !== null) config.control.upper_tolerance = upperTolOverride;
+        if (lowerTolOverride !== null) config.control.lower_tolerance = lowerTolOverride;
+        if (bathersOverride !== null) config.bathers.per_day = Math.round(bathersOverride);
+        if (activityOverride !== null) config.bathers.activity_factor = activityOverride;
+        if (windOverride !== null) config.pool.wind_exposure = windOverride;
+        if (solarOverride !== null) config.solar.absorption = solarOverride;
+
+        // Save overrides for next time
+        this.saveOverrides();
+
+        return config;
+    },
+
+    /**
+     * Run multi-scenario analysis (Analyse tab)
+     * Runs all 5 scenarios in parallel and displays results
+     */
+    runAnalysis: async function() {
+        const statusEl = document.getElementById('analyse-status');
+        const btn = document.getElementById('analyse-calculate-btn');
+
+        // Clear previous results and show loading
+        for (let i = 1; i <= 5; i++) {
+            ['hp', 'boiler', 'elec', 'days1', 'days2'].forEach(metric => {
+                const cell = document.getElementById(`result-${metric}-${i}`);
+                if (cell) {
+                    cell.textContent = '...';
+                    cell.className = 'result-cell loading';
+                }
+            });
+        }
+
+        if (btn) btn.disabled = true;
+        if (statusEl) statusEl.textContent = 'Running scenarios...';
+
+        try {
+            // Build scenario configs
+            const scenarios = [];
+            for (let i = 1; i <= 5; i++) {
+                scenarios.push({
+                    case: i,
+                    hp_capacity: parseFloat(document.getElementById(`analyse-hp-${i}`).value) || 125,
+                    boiler_capacity: parseFloat(document.getElementById(`analyse-boiler-${i}`).value) || 200,
+                    strategy: document.getElementById(`analyse-strategy-${i}`).value || 'predictive',
+                    schedule_id: document.getElementById(`analyse-schedule-${i}`).value || '1'
+                });
+            }
+
+            // Get date range from Simulate tab
+            const startDate = document.getElementById('sim-start-date')?.value || '2024-01-01';
+            const endDate = document.getElementById('sim-end-date')?.value || '2024-12-31';
+
+            // Run all scenarios in parallel
+            const promises = scenarios.map(async (scenario, idx) => {
+                try {
+                    const response = await fetch('/api/simulation_api.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'run_simulation',
+                            scenario_name: `Analysis Case ${scenario.case}`,
+                            start_date: startDate,
+                            end_date: endDate,
+                            config_override: {
+                                equipment: {
+                                    hp_capacity_kw: scenario.hp_capacity,
+                                    boiler_capacity_kw: scenario.boiler_capacity
+                                },
+                                control: {
+                                    strategy: scenario.strategy
+                                }
+                            },
+                            schedule_id: scenario.schedule_id,
+                            save_run: false // Don't save to history
+                        })
+                    });
+                    return await response.json();
+                } catch (err) {
+                    return { error: err.message, case: scenario.case };
+                }
+            });
+
+            const results = await Promise.all(promises);
+
+            // Display results
+            results.forEach((result, idx) => {
+                const caseNum = idx + 1;
+                if (result.error) {
+                    // Show error
+                    ['hp', 'boiler', 'elec', 'days1', 'days2'].forEach(metric => {
+                        const cell = document.getElementById(`result-${metric}-${caseNum}`);
+                        if (cell) {
+                            cell.textContent = 'ERR';
+                            cell.className = 'result-cell bad';
+                        }
+                    });
+                } else {
+                    // Extract summary data
+                    const summary = result.summary || result.run?.summary || {};
+
+                    // HP Use (MWh)
+                    const hpCell = document.getElementById(`result-hp-${caseNum}`);
+                    if (hpCell) {
+                        const hpMwh = (summary.total_hp_heat_kwh || 0) / 1000;
+                        hpCell.textContent = hpMwh.toFixed(1);
+                        hpCell.className = 'result-cell';
+                    }
+
+                    // Boiler Use (MWh)
+                    const boilerCell = document.getElementById(`result-boiler-${caseNum}`);
+                    if (boilerCell) {
+                        const boilerMwh = (summary.total_boiler_heat_kwh || 0) / 1000;
+                        boilerCell.textContent = boilerMwh.toFixed(1);
+                        boilerCell.className = boilerMwh > 50 ? 'result-cell warning' : 'result-cell';
+                    }
+
+                    // Electricity (MWh)
+                    const elecCell = document.getElementById(`result-elec-${caseNum}`);
+                    if (elecCell) {
+                        const elecMwh = (summary.total_hp_electricity_kwh || 0) / 1000;
+                        elecCell.textContent = elecMwh.toFixed(1);
+                        elecCell.className = 'result-cell';
+                    }
+
+                    // Days below target (1°C)
+                    const days1Cell = document.getElementById(`result-days1-${caseNum}`);
+                    if (days1Cell) {
+                        const days1 = summary.days_below_target_1c || 0;
+                        days1Cell.textContent = days1;
+                        days1Cell.className = days1 > 10 ? 'result-cell bad' : days1 > 0 ? 'result-cell warning' : 'result-cell good';
+                    }
+
+                    // Days below target (2°C)
+                    const days2Cell = document.getElementById(`result-days2-${caseNum}`);
+                    if (days2Cell) {
+                        const days2 = summary.days_below_target_2c || 0;
+                        days2Cell.textContent = days2;
+                        days2Cell.className = days2 > 5 ? 'result-cell bad' : days2 > 0 ? 'result-cell warning' : 'result-cell good';
+                    }
+                }
+            });
+
+            if (statusEl) statusEl.textContent = 'Analysis complete';
+
+        } catch (error) {
+            console.error('Analysis failed:', error);
+            if (statusEl) statusEl.textContent = 'Error: ' + error.message;
+        } finally {
+            if (btn) btn.disabled = false;
         }
     },
 
@@ -1102,11 +1351,18 @@ const SimulationsModule = {
                         type: 'line',
                         label: 'Water Temp',
                         data: data.map(d => d.water_temp),
+                        segment: {
+                            borderColor: ctx => {
+                                // Red when pool is closed, blue when open
+                                const idx = ctx.p0DataIndex;
+                                return data[idx]?.is_open ? 'rgb(33, 150, 243)' : 'rgb(220, 53, 69)';
+                            }
+                        },
                         borderColor: 'rgb(33, 150, 243)',
                         backgroundColor: 'transparent',
                         borderWidth: 2,
                         pointRadius: 0,
-                        tension: 0.2,
+                        tension: 0,
                         yAxisID: 'yTemp',
                         order: 0
                     },

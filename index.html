@@ -74,7 +74,7 @@
         <div class="user-info">
             <span class="project-name" id="current-project"></span>
             <span class="user-name" id="current-user"></span>
-            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">V59</span>
+            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">V62</span>
             <button onclick="logout()" class="btn-logout">Logout</button>
         </div>
         
@@ -363,12 +363,16 @@
                                     <td><input type="number" id="cfg-target-temp" step="0.5" value="28"></td>
                                 </tr>
                                 <tr>
-                                    <td><label for="cfg-temp-tolerance">Temp Tolerance (±°C)</label></td>
-                                    <td><input type="number" id="cfg-temp-tolerance" step="0.5" value="2" min="0.5" max="5"></td>
+                                    <td><label for="cfg-upper-tolerance">Upper Tolerance (°C above)</label></td>
+                                    <td><input type="number" id="cfg-upper-tolerance" step="0.5" value="1" min="0" max="5"></td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-lower-tolerance">Lower Tolerance (°C below)</label></td>
+                                    <td><input type="number" id="cfg-lower-tolerance" step="0.5" value="2" min="0" max="5"></td>
                                 </tr>
                                 <tr class="calculated">
                                     <td>Allowed Range</td>
-                                    <td id="cfg-temp-range">26 - 30°C</td>
+                                    <td id="cfg-temp-range">26 - 29°C</td>
                                 </tr>
                                 <tr>
                                     <td><label for="cfg-strategy">Strategy</label></td>
@@ -461,9 +465,9 @@
 
                     <!-- SimControl Tabs -->
                     <div class="sim-tabs">
-                        <button class="sim-tab active" onclick="app.simcontrol.switchTab('new')">New Run</button>
+                        <button class="sim-tab active" onclick="app.simcontrol.switchTab('new')">Simulate</button>
                         <button class="sim-tab" onclick="app.simcontrol.switchTab('history')">History</button>
-                        <button class="sim-tab" onclick="app.simcontrol.switchTab('compare')">Compare</button>
+                        <button class="sim-tab" onclick="app.simcontrol.switchTab('compare')">Analyse</button>
                         <button class="sim-tab" onclick="app.simcontrol.switchTab('debug')">🔍 Debug</button>
                     </div>
 
@@ -512,34 +516,66 @@
                             </div>
                         </div>
 
-                        <!-- Config Override (use project defaults or override) -->
+                        <!-- Config Override (Config | Override columns) -->
                         <div class="card">
-                            <h3>Configuration</h3>
-                            <div class="config-toggle">
-                                <label>
-                                    <input type="checkbox" id="sim-use-override" onchange="SimulationsModule.toggleOverride()">
-                                    Override project configuration
-                                </label>
-                            </div>
-                            <div id="sim-override-fields" style="display: none;">
-                                <table class="data-table form-table compact">
+                            <h3>Configuration Overrides</h3>
+                            <p class="text-muted" style="font-size: 11px; margin-bottom: 8px;">Leave override blank to use config value</p>
+                            <table class="data-table form-table compact" id="sim-override-table">
+                                <thead>
                                     <tr>
-                                        <td>Heat Pump (kW)</td>
-                                        <td><input type="number" id="sim-hp-override" step="1" value="125"></td>
+                                        <th>Parameter</th>
+                                        <th>Config</th>
+                                        <th>Override</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>HP Capacity (kW)</td>
+                                        <td id="cfg-val-hp-capacity" class="config-value">-</td>
+                                        <td><input type="number" id="sim-hp-override" step="1" placeholder="-"></td>
                                     </tr>
                                     <tr>
-                                        <td>Boiler (kW)</td>
-                                        <td><input type="number" id="sim-boiler-override" step="1" value="200"></td>
+                                        <td>Boiler Capacity (kW)</td>
+                                        <td id="cfg-val-boiler-capacity" class="config-value">-</td>
+                                        <td><input type="number" id="sim-boiler-override" step="1" placeholder="-"></td>
                                     </tr>
                                     <tr>
-                                        <td>Wind Factor</td>
-                                        <td><input type="number" id="sim-wind-override" step="0.01" value="0.535"></td>
+                                        <td>Target Temp (°C)</td>
+                                        <td id="cfg-val-target-temp" class="config-value">-</td>
+                                        <td><input type="number" id="sim-target-override" step="0.1" placeholder="-"></td>
                                     </tr>
-                                </table>
-                            </div>
-                            <div id="sim-project-config">
-                                <p class="text-muted">Using project configuration</p>
-                            </div>
+                                    <tr>
+                                        <td>Upper Tolerance (°C)</td>
+                                        <td id="cfg-val-upper-tol" class="config-value">-</td>
+                                        <td><input type="number" id="sim-upper-tol-override" step="0.1" placeholder="-"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Lower Tolerance (°C)</td>
+                                        <td id="cfg-val-lower-tol" class="config-value">-</td>
+                                        <td><input type="number" id="sim-lower-tol-override" step="0.1" placeholder="-"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Bathers/Day</td>
+                                        <td id="cfg-val-bathers" class="config-value">-</td>
+                                        <td><input type="number" id="sim-bathers-override" step="1" placeholder="-"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Activity Factor</td>
+                                        <td id="cfg-val-activity" class="config-value">-</td>
+                                        <td><input type="number" id="sim-activity-override" step="0.1" placeholder="-"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Wind Exposure</td>
+                                        <td id="cfg-val-wind" class="config-value">-</td>
+                                        <td><input type="number" id="sim-wind-override" step="0.01" placeholder="-"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Solar Absorption</td>
+                                        <td id="cfg-val-solar" class="config-value">-</td>
+                                        <td><input type="number" id="sim-solar-override" step="0.01" placeholder="-"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
@@ -559,22 +595,156 @@
                         <div id="simulation-detail" class="simulation-detail card" style="display: none;"></div>
                     </div>
 
-                    <!-- Compare Tab Content -->
+                    <!-- Analyse Tab Content (Multi-Scenario Comparison) -->
                     <div id="sim-tab-compare" class="sim-tab-content" style="display: none;">
                         <div class="card">
-                            <h3>Select Runs to Compare</h3>
-                            <div class="compare-selectors">
-                                <select id="compare-run-1" class="form-control">
-                                    <option value="">Select Run 1...</option>
-                                </select>
-                                <span class="vs-label">vs</span>
-                                <select id="compare-run-2" class="form-control">
-                                    <option value="">Select Run 2...</option>
-                                </select>
-                                <button class="btn btn-primary" onclick="SimulationsModule.compareRuns()">Compare</button>
+                            <h3>Scenario Analysis</h3>
+                            <p class="text-muted" style="font-size: 12px; margin-bottom: 15px;">
+                                Compare up to 5 scenarios with different parameters. Click Calculate to run all.
+                            </p>
+                            <div class="analyse-table-container" style="overflow-x: auto;">
+                                <table class="data-table analyse-matrix" id="analyse-matrix">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 140px;">Parameter</th>
+                                            <th>Case 1</th>
+                                            <th>Case 2</th>
+                                            <th>Case 3</th>
+                                            <th>Case 4</th>
+                                            <th>Case 5</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="input-row">
+                                            <td class="param-label">HP Capacity (kW)</td>
+                                            <td><input type="number" id="analyse-hp-1" value="125" step="5"></td>
+                                            <td><input type="number" id="analyse-hp-2" value="150" step="5"></td>
+                                            <td><input type="number" id="analyse-hp-3" value="150" step="5"></td>
+                                            <td><input type="number" id="analyse-hp-4" value="175" step="5"></td>
+                                            <td><input type="number" id="analyse-hp-5" value="200" step="5"></td>
+                                        </tr>
+                                        <tr class="input-row">
+                                            <td class="param-label">Boiler Capacity (kW)</td>
+                                            <td><input type="number" id="analyse-boiler-1" value="200" step="10"></td>
+                                            <td><input type="number" id="analyse-boiler-2" value="200" step="10"></td>
+                                            <td><input type="number" id="analyse-boiler-3" value="250" step="10"></td>
+                                            <td><input type="number" id="analyse-boiler-4" value="200" step="10"></td>
+                                            <td><input type="number" id="analyse-boiler-5" value="150" step="10"></td>
+                                        </tr>
+                                        <tr class="input-row">
+                                            <td class="param-label">Strategy</td>
+                                            <td>
+                                                <select id="analyse-strategy-1">
+                                                    <option value="reactive">Reactive</option>
+                                                    <option value="predictive" selected>Predictive</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <select id="analyse-strategy-2">
+                                                    <option value="reactive">Reactive</option>
+                                                    <option value="predictive" selected>Predictive</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <select id="analyse-strategy-3">
+                                                    <option value="reactive">Reactive</option>
+                                                    <option value="predictive" selected>Predictive</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <select id="analyse-strategy-4">
+                                                    <option value="reactive" selected>Reactive</option>
+                                                    <option value="predictive">Predictive</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <select id="analyse-strategy-5">
+                                                    <option value="reactive" selected>Reactive</option>
+                                                    <option value="predictive">Predictive</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        <tr class="input-row">
+                                            <td class="param-label">Schedule</td>
+                                            <td>
+                                                <select id="analyse-schedule-1" class="schedule-select">
+                                                    <option value="1">Standard</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <select id="analyse-schedule-2" class="schedule-select">
+                                                    <option value="1">Standard</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <select id="analyse-schedule-3" class="schedule-select">
+                                                    <option value="1">Standard</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <select id="analyse-schedule-4" class="schedule-select">
+                                                    <option value="1">Standard</option>
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <select id="analyse-schedule-5" class="schedule-select">
+                                                    <option value="1">Standard</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                        <tr class="divider-row">
+                                            <td colspan="6" style="background: #e9ecef; height: 2px; padding: 0;"></td>
+                                        </tr>
+                                        <tr class="output-row">
+                                            <td class="param-label"><strong>HP Use (MWh)</strong></td>
+                                            <td id="result-hp-1" class="result-cell">-</td>
+                                            <td id="result-hp-2" class="result-cell">-</td>
+                                            <td id="result-hp-3" class="result-cell">-</td>
+                                            <td id="result-hp-4" class="result-cell">-</td>
+                                            <td id="result-hp-5" class="result-cell">-</td>
+                                        </tr>
+                                        <tr class="output-row">
+                                            <td class="param-label"><strong>Boiler Use (MWh)</strong></td>
+                                            <td id="result-boiler-1" class="result-cell">-</td>
+                                            <td id="result-boiler-2" class="result-cell">-</td>
+                                            <td id="result-boiler-3" class="result-cell">-</td>
+                                            <td id="result-boiler-4" class="result-cell">-</td>
+                                            <td id="result-boiler-5" class="result-cell">-</td>
+                                        </tr>
+                                        <tr class="output-row">
+                                            <td class="param-label"><strong>Electricity (MWh)</strong></td>
+                                            <td id="result-elec-1" class="result-cell">-</td>
+                                            <td id="result-elec-2" class="result-cell">-</td>
+                                            <td id="result-elec-3" class="result-cell">-</td>
+                                            <td id="result-elec-4" class="result-cell">-</td>
+                                            <td id="result-elec-5" class="result-cell">-</td>
+                                        </tr>
+                                        <tr class="output-row">
+                                            <td class="param-label"><strong>Days &lt;1°C below</strong></td>
+                                            <td id="result-days1-1" class="result-cell">-</td>
+                                            <td id="result-days1-2" class="result-cell">-</td>
+                                            <td id="result-days1-3" class="result-cell">-</td>
+                                            <td id="result-days1-4" class="result-cell">-</td>
+                                            <td id="result-days1-5" class="result-cell">-</td>
+                                        </tr>
+                                        <tr class="output-row">
+                                            <td class="param-label"><strong>Days &lt;2°C below</strong></td>
+                                            <td id="result-days2-1" class="result-cell">-</td>
+                                            <td id="result-days2-2" class="result-cell">-</td>
+                                            <td id="result-days2-3" class="result-cell">-</td>
+                                            <td id="result-days2-4" class="result-cell">-</td>
+                                            <td id="result-days2-5" class="result-cell">-</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="form-actions" style="margin-top: 15px;">
+                                <button id="analyse-calculate-btn" class="btn btn-primary" onclick="SimulationsModule.runAnalysis()">
+                                    Calculate All Scenarios
+                                </button>
+                                <span id="analyse-status" class="text-muted" style="margin-left: 15px;"></span>
                             </div>
                         </div>
-                        <div id="comparison-results" style="display: none;"></div>
                     </div>
 
                     <!-- Debug Tab Content -->
@@ -896,7 +1066,7 @@
                     <div class="card">
                         <h3>System Info</h3>
                         <table class="data-table compact">
-                            <tr><td><strong>App Version</strong></td><td>V59</td></tr>
+                            <tr><td><strong>App Version</strong></td><td>V62</td></tr>
                             <tr><td><strong>Simulator</strong></td><td id="sys-simulator-ver">-</td></tr>
                             <tr><td><strong>PHP</strong></td><td id="sys-php-ver">-</td></tr>
                         </table>
