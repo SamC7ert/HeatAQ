@@ -193,35 +193,52 @@ const ProjectModule = {
     // Load weather stations
     async loadWeatherStations() {
         try {
-            const response = await fetch(`${config.apiBaseUrl}?action=getWeatherStations`);
+            const response = await fetch(`${config.apiBaseUrl}?action=get_weather_stations`);
             if (response.ok) {
-                this.weatherStations = await response.json();
+                const data = await response.json();
+                // Handle both array and object with stations property
+                this.weatherStations = Array.isArray(data) ? data : (data.stations || []);
+                console.log('[Project] Loaded weather stations:', this.weatherStations.length);
+            } else {
+                console.warn('[Project] Weather stations API returned:', response.status);
+                this.weatherStations = [];
             }
         } catch (error) {
-            console.error('Error loading weather stations:', error);
+            console.error('[Project] Error loading weather stations:', error);
             this.weatherStations = [];
         }
     },
 
     // Edit site - show modal
-    editSite() {
+    async editSite() {
         const modal = document.getElementById('edit-site-modal');
         if (!modal) return;
 
+        // Ensure weather stations are loaded
+        if (this.weatherStations.length === 0) {
+            await this.loadWeatherStations();
+        }
+
         const site = this.currentSite || {};
+        console.log('[Project] Editing site:', site);
 
         // Populate form
-        document.getElementById('edit-site-name').value = site.name || '';
-        document.getElementById('edit-site-lat').value = site.latitude || '';
-        document.getElementById('edit-site-lng').value = site.longitude || '';
+        const nameEl = document.getElementById('edit-site-name');
+        const latEl = document.getElementById('edit-site-lat');
+        const lngEl = document.getElementById('edit-site-lng');
+
+        if (nameEl) nameEl.value = site.name || '';
+        if (latEl) latEl.value = site.latitude || '';
+        if (lngEl) lngEl.value = site.longitude || '';
 
         // Populate weather station dropdown
         const wsSelect = document.getElementById('edit-site-weather');
         if (wsSelect) {
             wsSelect.innerHTML = '<option value="">-- Select Weather Station --</option>';
+            console.log('[Project] Populating weather stations:', this.weatherStations.length);
             this.weatherStations.forEach(ws => {
                 const selected = ws.station_id === site.weather_station_id ? 'selected' : '';
-                wsSelect.innerHTML += `<option value="${ws.station_id}" ${selected}>${ws.name} (${ws.station_id})</option>`;
+                wsSelect.innerHTML += `<option value="${ws.station_id}" ${selected}>${ws.name || ws.station_name} (${ws.station_id})</option>`;
             });
         }
 
@@ -231,9 +248,17 @@ const ProjectModule = {
         // Update map preview in modal
         this.updateMapPreview('site-map-preview', site.latitude, site.longitude);
 
-        // Add event listeners for coordinate changes
-        document.getElementById('edit-site-lat').addEventListener('input', () => this.onCoordinateChange());
-        document.getElementById('edit-site-lng').addEventListener('input', () => this.onCoordinateChange());
+        // Add event listeners for coordinate changes (remove old ones first to avoid duplicates)
+        const newLatEl = document.getElementById('edit-site-lat');
+        const newLngEl = document.getElementById('edit-site-lng');
+        if (newLatEl) {
+            newLatEl.onchange = () => this.onCoordinateChange();
+            newLatEl.oninput = () => this.onCoordinateChange();
+        }
+        if (newLngEl) {
+            newLngEl.onchange = () => this.onCoordinateChange();
+            newLngEl.oninput = () => this.onCoordinateChange();
+        }
 
         modal.style.display = 'flex';
     },
@@ -269,16 +294,34 @@ const ProjectModule = {
 
     // Save site
     saveSite() {
-        const name = document.getElementById('edit-site-name').value.trim();
-        const lat = parseFloat(document.getElementById('edit-site-lat').value) || null;
-        const lng = parseFloat(document.getElementById('edit-site-lng').value) || null;
-        const wsId = document.getElementById('edit-site-weather').value || null;
+        const nameEl = document.getElementById('edit-site-name');
+        const latEl = document.getElementById('edit-site-lat');
+        const lngEl = document.getElementById('edit-site-lng');
+        const wsEl = document.getElementById('edit-site-weather');
+
+        // Debug: log raw values
+        console.log('[Project] Save - Raw values:', {
+            name: nameEl?.value,
+            lat: latEl?.value,
+            lng: lngEl?.value,
+            ws: wsEl?.value
+        });
+
+        const name = nameEl?.value?.trim() || '';
+        const latRaw = latEl?.value;
+        const lngRaw = lngEl?.value;
+        const lat = latRaw ? parseFloat(latRaw) : null;
+        const lng = lngRaw ? parseFloat(lngRaw) : null;
+        const wsId = wsEl?.value || null;
+
+        // Debug: log parsed values
+        console.log('[Project] Save - Parsed values:', { name, lat, lng, wsId });
 
         // Find weather station name
         let wsName = null;
         if (wsId) {
             const ws = this.weatherStations.find(w => w.station_id === wsId);
-            if (ws) wsName = ws.name;
+            if (ws) wsName = ws.name || ws.station_name;
         }
 
         // Update site
@@ -298,7 +341,7 @@ const ProjectModule = {
         this.updateSiteDisplay();
         this.hideSiteModal();
 
-        console.log('Site saved:', this.currentSite);
+        console.log('[Project] Site saved:', this.currentSite);
     },
 
     // Show add site modal (placeholder)
