@@ -1058,18 +1058,16 @@ const SimulationsModule = {
      * Run debug calculation for a single hour
      */
     debugHour: async function() {
-        console.log('V67 debugHour called');
+        console.log('V69 debugHour called');
         const dateEl = document.getElementById('debug-date');
         const hourEl = document.getElementById('debug-hour');
-        const waterTempEl = document.getElementById('debug-water-temp');
         const resultsDiv = document.getElementById('debug-results');
 
         // Debug: check which elements are missing
-        if (!dateEl || !hourEl || !waterTempEl || !resultsDiv) {
+        if (!dateEl || !hourEl || !resultsDiv) {
             const missing = [];
             if (!dateEl) missing.push('debug-date');
             if (!hourEl) missing.push('debug-hour');
-            if (!waterTempEl) missing.push('debug-water-temp');
             if (!resultsDiv) missing.push('debug-results');
             alert('Missing elements: ' + missing.join(', ') + '\n\nTry refreshing with Ctrl+Shift+R to clear cache.');
             return;
@@ -1077,7 +1075,6 @@ const SimulationsModule = {
 
         const date = dateEl.value;
         const hour = hourEl.value;
-        const waterTemp = waterTempEl.value;
 
         if (!date) {
             alert('Please select a date');
@@ -1104,8 +1101,8 @@ const SimulationsModule = {
         });
 
         try {
-            let url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}`;
-            if (waterTemp) url += `&water_temp=${waterTemp}`;
+            // Use stored water temp from simulation (no override)
+            const url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}`;
 
             const response = await fetch(url);
             const data = await response.json();
@@ -1205,6 +1202,13 @@ const SimulationsModule = {
         const hasCover = inp.config?.has_cover;
         const coverOn = hasCover && !isOpen;
         setEl('debug-cover-status', coverOn ? 'Cover On' : 'Cover Off');
+
+        // Water temperature display (from stored simulation data)
+        const waterTemp = stored.water_temp || inp.pool?.water_temp_c;
+        const waterTempDisplay = document.getElementById('debug-water-temp-display');
+        if (waterTempDisplay && waterTemp) {
+            waterTempDisplay.textContent = `Water: ${parseFloat(waterTemp).toFixed(1)}°C`;
+        }
 
         // Update chart comparison display with stored run info
         const comparisonEl = document.getElementById('chart-data-comparison');
@@ -1828,7 +1832,7 @@ const SimulationsModule = {
         }
 
         // Track parameter changes to update button state
-        const paramInputs = ['debug-date', 'debug-hour', 'debug-water-temp', 'debug-config-select'];
+        const paramInputs = ['debug-date', 'debug-hour', 'debug-config-select'];
         paramInputs.forEach(id => {
             const el = document.getElementById(id);
             if (el) {

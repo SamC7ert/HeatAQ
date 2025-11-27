@@ -74,7 +74,7 @@
         <div class="user-info">
             <span class="project-name" id="current-project"></span>
             <span class="user-name" id="current-user"></span>
-            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">V68</span>
+            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">V69</span>
             <button onclick="logout()" class="btn-logout">Logout</button>
         </div>
         
@@ -920,10 +920,6 @@
                                         </select>
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 8px;">
-                                        <label style="width: 70px;">Water °C</label>
-                                        <input type="number" id="debug-water-temp" step="0.1" value="28.5" style="flex: 1; padding: 4px;">
-                                    </div>
-                                    <div style="display: flex; align-items: center; gap: 8px;">
                                         <label style="width: 70px;">Config</label>
                                         <select id="debug-config-select" style="flex: 1; padding: 4px;">
                                             <option value="">-- Defaults --</option>
@@ -940,6 +936,7 @@
                                         <div style="font-size: 11px; color: #666;">Status</div>
                                         <div style="font-size: 20px; font-weight: bold;" id="debug-status">-</div>
                                         <div style="font-size: 11px; color: #888;" id="debug-cover-status">-</div>
+                                        <div style="font-size: 13px; color: #17a2b8; margin-top: 4px;" id="debug-water-temp-display">-</div>
                                     </div>
                                     <div>
                                         <div style="font-size: 11px; color: #666;">Net Heat Demand</div>
@@ -1216,7 +1213,7 @@
                     <div class="card">
                         <h3>System Info</h3>
                         <table class="data-table compact">
-                            <tr><td><strong>App Version</strong></td><td>V68</td></tr>
+                            <tr><td><strong>App Version</strong></td><td>V69</td></tr>
                             <tr><td><strong>Simulator</strong></td><td id="sys-simulator-ver">-</td></tr>
                             <tr><td><strong>PHP</strong></td><td id="sys-php-ver">-</td></tr>
                         </table>
