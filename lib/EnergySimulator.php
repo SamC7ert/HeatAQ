@@ -941,23 +941,23 @@ class EnergySimulator {
             'cost' => 0,
         ];
 
-        // If no target temp (closed), behavior depends on control strategy
-        if ($targetTemp === null) {
-            $controlStrategy = $this->equipment['control_strategy'] ?? 'reactive';
+        // Handle target temp based on control strategy
+        $controlStrategy = $this->equipment['control_strategy'] ?? 'reactive';
 
-            if ($controlStrategy === 'predictive') {
-                // Predictive: Maintain setback temperature when closed
-                // This prevents massive reheat costs when pool reopens
-                $setbackTemp = $this->poolConfig['setback_temp'] ?? 26.0;
-                $targetTemp = $setbackTemp;
-                $minTemp = $setbackTemp - 1;  // Start heating if drops 1° below setback
-                $maxTemp = $setbackTemp + 1;  // Stop heating 1° above setback
-            } else {
-                // Reactive: Only heat when pool is open, no maintenance when closed
-                // Pool temperature will drop naturally during closed hours
-                return $result;  // No heating when closed
-            }
+        if ($controlStrategy === 'reactive') {
+            // Reactive: Simple thermostat - always heat to target_temp (ignores schedule)
+            // Uses pool config target temp, not schedule (which may have null for closed hours)
+            $targetTemp = $this->poolConfig['target_temp'] ?? 28.0;
+            // No min/max override - use default deadband around target
+        } elseif ($targetTemp === null) {
+            // Predictive mode with closed period: Maintain setback temperature
+            // This prevents massive reheat costs when pool reopens
+            $setbackTemp = $this->poolConfig['setback_temp'] ?? 26.0;
+            $targetTemp = $setbackTemp;
+            $minTemp = $setbackTemp - 1;  // Start heating if drops 1° below setback
+            $maxTemp = $setbackTemp + 1;  // Stop heating 1° above setback
         }
+        // Predictive mode with open period: use schedule's targetTemp as-is
 
         // Default min/max if not provided
         if ($minTemp === null) {
