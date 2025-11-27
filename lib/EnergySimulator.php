@@ -322,8 +322,8 @@ class EnergySimulator {
             ]
         ];
 
-        // Track state
-        $currentWaterTemp = 20.0; // Starting water temperature
+        // Track state - start at target temp (will be set from first hour's schedule)
+        $currentWaterTemp = null;
         $dailyStats = [];
         $currentDay = null;
 
@@ -344,6 +344,11 @@ class EnergySimulator {
                     $minTemp = $period['min_temp'] ?? ($targetTemp - 2);  // Default: target - 2°C
                     $maxTemp = $period['max_temp'] ?? ($targetTemp + 2);  // Default: target + 2°C
                 }
+            }
+
+            // Initialize water temp on first iteration (start at target, not arbitrary 20°C)
+            if ($currentWaterTemp === null) {
+                $currentWaterTemp = $targetTemp ?? 28.0;  // Use target or default 28°C
             }
 
             // Get solar for this hour (uses pre-calculated hourly if available)
