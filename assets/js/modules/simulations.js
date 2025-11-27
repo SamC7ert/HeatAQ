@@ -105,11 +105,12 @@ const SimulationsModule = {
                     <tr>
                         <th>Scenario</th>
                         <th>Dates</th>
+                        <th>Schedule</th>
                         <th>HP (kW)</th>
                         <th>Boiler (kW)</th>
-                        <th>Electricity (MWh)</th>
-                        <th>Days &lt;1°C</th>
-                        <th>Days &lt;2°C</th>
+                        <th>Elec (MWh)</th>
+                        <th>&lt;1°C</th>
+                        <th>&lt;2°C</th>
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -119,6 +120,7 @@ const SimulationsModule = {
                         const config = run.config || {};
                         const hpCap = config.equipment?.hp_capacity_kw || '-';
                         const boilerCap = config.equipment?.boiler_capacity_kw || '-';
+                        const scheduleName = config.schedule_template_name || '-';
                         const elecMwh = s.total_hp_electricity_kwh ? (s.total_hp_electricity_kwh / 1000).toFixed(1) : '-';
                         const days1 = s.days_below_target_1c ?? '-';
                         const days2 = s.days_below_target_2c ?? '-';
@@ -127,6 +129,7 @@ const SimulationsModule = {
                             <tr class="run-row ${run.status}" onclick="SimulationsModule.viewRun(${run.run_id})" style="cursor: pointer;">
                                 <td class="run-name">${this.escapeHtml(run.scenario_name)}</td>
                                 <td class="run-dates">${run.start_date.substring(5)} - ${run.end_date.substring(5)}</td>
+                                <td class="run-schedule" title="${this.escapeHtml(scheduleName)}">${this.escapeHtml(scheduleName.substring(0, 15))}</td>
                                 <td>${hpCap}</td>
                                 <td>${boilerCap}</td>
                                 <td>${elecMwh}</td>
@@ -262,6 +265,8 @@ const SimulationsModule = {
 
         const run = this.currentRun;
         const summary = run.summary || {};
+        const config = run.config || {};
+        const scheduleName = config.schedule_template_name || 'Unknown';
 
         container.innerHTML = `
             <div class="run-detail-header">
@@ -273,6 +278,10 @@ const SimulationsModule = {
                 <div class="info-row">
                     <span class="label">Period:</span>
                     <span class="value">${run.start_date} to ${run.end_date}</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">Schedule:</span>
+                    <span class="value">${this.escapeHtml(scheduleName)}</span>
                 </div>
                 <div class="info-row">
                     <span class="label">Status:</span>
