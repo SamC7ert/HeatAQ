@@ -637,8 +637,11 @@
                                     <td><textarea id="sim-description" rows="2" placeholder="Optional notes..."></textarea></td>
                                 </tr>
                             </table>
-                            <div class="form-info">
+                            <div class="form-info" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
                                 <span id="weather-range-info" class="text-muted">Loading weather data range...</span>
+                                <button id="run-simulation-btn" class="btn btn-success" onclick="SimulationsModule.startSimulation()">
+                                    Run Simulation
+                                </button>
                             </div>
                         </div>
 
@@ -705,11 +708,6 @@
                         </div>
                     </div>
 
-                    <div class="form-actions">
-                        <button id="run-simulation-btn" class="btn btn-success btn-lg" onclick="SimulationsModule.startSimulation()">
-                            ▶️ Run Simulation
-                        </button>
-                    </div>
                     <div id="simulation-progress" class="simulation-progress" style="display: none;"></div>
 
                     <!-- Last Run Results (auto-loaded) -->
