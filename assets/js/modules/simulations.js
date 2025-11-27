@@ -1108,7 +1108,7 @@ const SimulationsModule = {
      * Render debug calculation results - populates new UI structure
      */
     renderDebugResults: function(data) {
-        console.log('V59 renderDebugResults called', data);
+        console.log('V67 renderDebugResults called', data);
 
         // Helper to render a table from object
         const renderTable = (obj) => {
@@ -1124,7 +1124,8 @@ const SimulationsModule = {
             return html;
         };
 
-        // ===== Populate Heat Balance Summary (top right) =====
+        // ===== Use STORED values as primary source (matches chart data) =====
+        const stored = data.stored || {};
         const hs = data.heating_summary || {};
         const hp = data.heat_pump || {};
         const boiler = data.boiler || {};
@@ -1138,15 +1139,23 @@ const SimulationsModule = {
             if (el) el.innerHTML = val;
         };
 
-        // Net demand
-        setEl('debug-net-demand', `${hs.net_demand_kw?.toFixed(1) || '0'} kW`);
+        // Net demand - use stored value (matches chart)
+        const storedNetDemand = stored.total_loss_kw - stored.solar_gain_kw;
+        setEl('debug-net-demand', `${storedNetDemand?.toFixed(1) || hs.net_demand_kw?.toFixed(1) || '0'} kW`);
 
-        // Heat pump output
-        setEl('debug-hp-output', `${hs.hp_output_kw?.toFixed(1) || '0'} kW`);
-        setEl('debug-hp-detail', `COP ${hp.cop || '-'} | ${hp.electricity_kw?.toFixed(1) || '0'} kW elec`);
+        // Show validation warning if recalc differs
+        if (data.validation_warning) {
+            console.warn('[Validation]', data.validation_warning);
+        }
 
-        // Boiler output
-        setEl('debug-boiler-output', `${hs.boiler_output_kw?.toFixed(1) || '0'} kW`);
+        // Heat pump output - use stored value (matches chart)
+        const hpOutput = stored.hp_heat_kw ?? hs.hp_output_kw ?? 0;
+        setEl('debug-hp-output', `${hpOutput?.toFixed(1)} kW`);
+        setEl('debug-hp-detail', `COP ${stored.hp_cop || hp.cop || '-'} | ${hp.electricity_kw?.toFixed(1) || '0'} kW elec`);
+
+        // Boiler output - use stored value (matches chart)
+        const boilerOutput = stored.boiler_heat_kw ?? hs.boiler_output_kw ?? 0;
+        setEl('debug-boiler-output', `${boilerOutput?.toFixed(1)} kW`);
         setEl('debug-boiler-detail', `${((boiler.efficiency || 0.92) * 100).toFixed(0)}% eff | ${boiler.fuel_kw?.toFixed(1) || '0'} kW fuel`);
 
         // Input summary bar
@@ -1155,8 +1164,8 @@ const SimulationsModule = {
         setEl('debug-wind', `${inp.weather?.wind_speed_ms || '-'} m/s`);
         setEl('debug-solar-val', `${inp.weather?.solar_ghi_wm2 || '-'} W/m²`);
 
-        // Status (Open/Closed) with color
-        const isOpen = inp.config?.is_open;
+        // Status (Open/Closed) - USE STORED VALUE (matches chart)
+        const isOpen = stored.is_open !== undefined ? stored.is_open : inp.config?.is_open;
         const statusEl = document.getElementById('debug-status');
         if (statusEl) {
             statusEl.textContent = isOpen ? 'Open' : 'Closed';
@@ -1167,6 +1176,15 @@ const SimulationsModule = {
         const hasCover = inp.config?.has_cover;
         const coverOn = hasCover && !isOpen;
         setEl('debug-cover-status', coverOn ? 'Cover On' : 'Cover Off');
+
+        // Update chart comparison display with stored run info
+        const comparisonEl = document.getElementById('chart-data-comparison');
+        if (comparisonEl && stored.run_id) {
+            comparisonEl.innerHTML = `<strong>From Run #${stored.run_id}:</strong> ${isOpen ? 'Open' : 'Closed'}, ` +
+                `Loss: ${stored.total_loss_kw?.toFixed(1)} kW, HP: ${stored.hp_heat_kw?.toFixed(1)} kW, ` +
+                `Boiler: ${stored.boiler_heat_kw?.toFixed(1)} kW` +
+                (data.validation_warning ? ` <span style="color: orange;">⚠ ${data.validation_warning}</span>` : '');
+        }
 
         // ===== Populate Detail Cards =====
         setHtml('debug-input', `

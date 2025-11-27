@@ -513,12 +513,11 @@ try {
             break;
 
         case 'debug_hour':
-            // Debug a single hour calculation with detailed breakdown
-            // For comparing PHP calculations with Excel benchmark
+            // Debug a single hour - reads from stored simulation data + detailed recalc
             $date = getParam('date');
             $hour = (int) getParam('hour', 0);
-            $waterTemp = getParam('water_temp'); // Optional override
-            $configId = getParam('config_id');
+            $runId = getParam('run_id'); // Optional: specific run
+            $waterTempOverride = getParam('water_temp'); // Optional manual override
 
             if (!$date) {
                 sendError('date parameter required (YYYY-MM-DD)');
@@ -532,73 +531,85 @@ try {
                 sendError('hour must be between 0 and 23');
             }
 
-            // Initialize scheduler
-            $scheduler = new PoolScheduler($pdo, $currentSiteId);
+            $timestamp = sprintf('%s %02d:00:00', $date, $hour);
 
-            // Initialize simulator
-            $simulator = new EnergySimulator($pdo, $currentSiteId, $scheduler);
+            // Get run_id (specified or most recent completed run covering this date)
+            if (!$runId) {
+                $stmt = $pdo->prepare("
+                    SELECT run_id, scenario_name
+                    FROM simulation_runs
+                    WHERE site_id = ?
+                      AND status = 'completed'
+                      AND start_date <= ?
+                      AND end_date >= ?
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ");
+                $stmt->execute([$currentSiteId, $date, $date]);
+                $run = $stmt->fetch();
 
-            // Load config if specified
-            if ($configId) {
-                $configRow = null;
-
-                // Try with all columns first
-                try {
-                    $configStmt = $pdo->prepare("
-                        SELECT json_config, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy
-                        FROM config_templates WHERE template_id = ?
-                    ");
-                    $configStmt->execute([$configId]);
-                    $configRow = $configStmt->fetch();
-                } catch (PDOException $e) {
-                    $configRow = null;
+                if (!$run) {
+                    sendError("No simulation run found covering date $date. Run a simulation first.", 404);
                 }
-
-                // Fallback: try config_json column
-                if (!$configRow) {
-                    try {
-                        $configStmt = $pdo->prepare("
-                            SELECT config_json as json_config
-                            FROM config_templates WHERE template_id = ?
-                        ");
-                        $configStmt->execute([$configId]);
-                        $configRow = $configStmt->fetch();
-                    } catch (PDOException $e) {
-                        $configRow = null;
-                    }
-                }
-
-                if ($configRow) {
-                    $config = json_decode($configRow['json_config'] ?? '{}', true) ?: [];
-                    if (!isset($config['equipment'])) $config['equipment'] = [];
-                    if (!isset($config['control'])) $config['control'] = [];
-                    if (isset($configRow['hp_capacity_kw']) && $configRow['hp_capacity_kw'] !== null) {
-                        $config['equipment']['hp_capacity_kw'] = (float)$configRow['hp_capacity_kw'];
-                    }
-                    if (isset($configRow['boiler_capacity_kw']) && $configRow['boiler_capacity_kw'] !== null) {
-                        $config['equipment']['boiler_capacity_kw'] = (float)$configRow['boiler_capacity_kw'];
-                    }
-                    if (isset($configRow['target_temp']) && $configRow['target_temp'] !== null) {
-                        $config['control']['target_temp'] = (float)$configRow['target_temp'];
-                    }
-                    if (isset($configRow['control_strategy']) && $configRow['control_strategy'] !== null) {
-                        $config['control']['strategy'] = $configRow['control_strategy'];
-                    }
-                    $simulator->setConfigFromUI($config);
-                }
+                $runId = $run['run_id'];
             }
 
-            // Run debug calculation
-            $debug = $simulator->debugSingleHour($date, $hour, $waterTemp ? (float)$waterTemp : null);
+            // Get stored hourly data for this timestamp
+            $stmt = $pdo->prepare("
+                SELECT *
+                FROM simulation_hourly_results
+                WHERE run_id = ? AND timestamp = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$runId, $timestamp]);
+            $stored = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$stored) {
+                sendError("No stored data found for $timestamp in run $runId", 404);
+            }
+
+            // Use stored water temp unless overridden
+            $waterTemp = $waterTempOverride ? (float)$waterTempOverride : (float)$stored['water_temp'];
+
+            // Initialize scheduler and simulator for detailed recalculation
+            $scheduler = new PoolScheduler($pdo, $currentSiteId);
+            $simulator = new EnergySimulator($pdo, $currentSiteId, $scheduler);
+
+            // Run detailed debug calculation using stored/specified water temp
+            $debug = $simulator->debugSingleHour($date, $hour, $waterTemp);
+
+            // Add stored values for comparison
+            $debug['stored'] = [
+                'run_id' => (int)$runId,
+                'water_temp' => (float)$stored['water_temp'],
+                'is_open' => (bool)$stored['is_open'],
+                'total_loss_kw' => (float)$stored['total_loss_kw'],
+                'solar_gain_kw' => (float)$stored['solar_gain_kw'],
+                'hp_heat_kw' => (float)$stored['hp_heat_kw'],
+                'boiler_heat_kw' => (float)$stored['boiler_heat_kw'],
+                'hp_cop' => (float)$stored['hp_cop'],
+            ];
+
+            // Validation: check if recalc matches stored (warn if different)
+            $storedNetDemand = (float)$stored['total_loss_kw'] - (float)$stored['solar_gain_kw'];
+            $recalcNetDemand = $debug['heating_summary']['net_demand_kw'] ?? 0;
+            $demandDiff = abs($storedNetDemand - $recalcNetDemand);
+
+            if ($demandDiff > 1.0) { // More than 1 kW difference
+                $debug['validation_warning'] = sprintf(
+                    'Recalc differs from stored: stored=%.1f kW, recalc=%.1f kW (diff=%.1f)',
+                    $storedNetDemand, $recalcNetDemand, $demandDiff
+                );
+            }
 
             sendResponse($debug);
             break;
 
         case 'debug_week':
-            // Debug a week of hourly calculations for chart visualization
-            // Returns compact data for Thu-Wed week centered on selected date
+            // Get hourly data from stored simulation results for chart visualization
+            // Returns data for Thu-Wed week centered on selected date
             $centerDate = getParam('date');
-            $configId = getParam('config_id');
+            $runId = getParam('run_id'); // Optional: specific run, defaults to most recent
 
             if (!$centerDate) {
                 sendError('date parameter required (YYYY-MM-DD)');
@@ -608,114 +619,97 @@ try {
                 sendError('Invalid date format. Use YYYY-MM-DD');
             }
 
-            // Calculate Thu-Wed week range (Thu before to Wed after the selected date)
+            // Calculate Thu-Wed week range
             $centerDt = new DateTime($centerDate);
             $dayOfWeek = (int) $centerDt->format('N'); // 1=Mon, 4=Thu, 7=Sun
-
-            // Find Thursday before or on the center date
             $daysToThursday = ($dayOfWeek >= 4) ? ($dayOfWeek - 4) : ($dayOfWeek + 3);
             $startDt = clone $centerDt;
             $startDt->modify("-{$daysToThursday} days");
-
-            // End on Wednesday (6 days after Thursday)
             $endDt = clone $startDt;
             $endDt->modify("+6 days");
 
-            // Initialize scheduler and simulator
-            $scheduler = new PoolScheduler($pdo, $currentSiteId);
-            $simulator = new EnergySimulator($pdo, $currentSiteId, $scheduler);
+            $startDate = $startDt->format('Y-m-d');
+            $endDate = $endDt->format('Y-m-d');
 
-            // Load config if specified
-            if ($configId) {
-                $configRow = null;
-                try {
-                    $configStmt = $pdo->prepare("
-                        SELECT json_config, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy
-                        FROM config_templates WHERE template_id = ?
-                    ");
-                    $configStmt->execute([$configId]);
-                    $configRow = $configStmt->fetch();
-                } catch (PDOException $e) {
-                    $configRow = null;
-                }
+            // Get run_id (specified or most recent completed run that covers this date range)
+            if (!$runId) {
+                $stmt = $pdo->prepare("
+                    SELECT run_id, scenario_name, start_date, end_date
+                    FROM simulation_runs
+                    WHERE site_id = ?
+                      AND status = 'completed'
+                      AND start_date <= ?
+                      AND end_date >= ?
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                ");
+                $stmt->execute([$currentSiteId, $startDate, $endDate]);
+                $run = $stmt->fetch();
 
-                if (!$configRow) {
-                    try {
-                        $configStmt = $pdo->prepare("
-                            SELECT config_json as json_config
-                            FROM config_templates WHERE template_id = ?
-                        ");
-                        $configStmt->execute([$configId]);
-                        $configRow = $configStmt->fetch();
-                    } catch (PDOException $e) {
-                        $configRow = null;
-                    }
+                if (!$run) {
+                    sendError("No simulation run found covering dates $startDate to $endDate. Run a simulation first.", 404);
                 }
-
-                if ($configRow) {
-                    $config = json_decode($configRow['json_config'] ?? '{}', true) ?: [];
-                    if (!isset($config['equipment'])) $config['equipment'] = [];
-                    if (!isset($config['control'])) $config['control'] = [];
-                    if (isset($configRow['hp_capacity_kw']) && $configRow['hp_capacity_kw'] !== null) {
-                        $config['equipment']['hp_capacity_kw'] = (float)$configRow['hp_capacity_kw'];
-                    }
-                    if (isset($configRow['boiler_capacity_kw']) && $configRow['boiler_capacity_kw'] !== null) {
-                        $config['equipment']['boiler_capacity_kw'] = (float)$configRow['boiler_capacity_kw'];
-                    }
-                    if (isset($configRow['target_temp']) && $configRow['target_temp'] !== null) {
-                        $config['control']['target_temp'] = (float)$configRow['target_temp'];
-                    }
-                    if (isset($configRow['control_strategy']) && $configRow['control_strategy'] !== null) {
-                        $config['control']['strategy'] = $configRow['control_strategy'];
-                    }
-                    $simulator->setConfigFromUI($config);
-                }
+                $runId = $run['run_id'];
             }
 
-            // Calculate hourly data for the week (168 hours)
+            // Get hourly results from stored data
+            $stmt = $pdo->prepare("
+                SELECT
+                    timestamp,
+                    air_temp,
+                    wind_speed,
+                    water_temp,
+                    is_open,
+                    total_loss_kw,
+                    solar_gain_kw,
+                    hp_heat_kw,
+                    boiler_heat_kw,
+                    hp_electricity_kwh,
+                    boiler_fuel_kwh,
+                    hp_cop
+                FROM simulation_hourly_results
+                WHERE run_id = ?
+                  AND DATE(timestamp) >= ?
+                  AND DATE(timestamp) <= ?
+                ORDER BY timestamp
+            ");
+            $stmt->execute([$runId, $startDate, $endDate]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if (empty($rows)) {
+                sendError("No hourly data found for run $runId in date range $startDate to $endDate", 404);
+            }
+
+            // Format data for chart (matching expected structure)
             $hourlyData = [];
-            $currentDt = clone $startDt;
-            $prevWaterTemp = 28.0; // Starting water temp assumption
+            foreach ($rows as $i => $row) {
+                $ts = new DateTime($row['timestamp']);
+                $netDemand = (float)$row['total_loss_kw'] - (float)$row['solar_gain_kw'];
 
-            while ($currentDt <= $endDt) {
-                $dateStr = $currentDt->format('Y-m-d');
-                for ($h = 0; $h < 24; $h++) {
-                    $debug = $simulator->debugSingleHour($dateStr, $h, $prevWaterTemp);
-
-                    if (isset($debug['error'])) {
-                        // Skip hours without weather data
-                        continue;
-                    }
-
-                    // Extract compact data for chart
-                    $hourlyData[] = [
-                        'timestamp' => $dateStr . ' ' . sprintf('%02d:00', $h),
-                        'hour' => count($hourlyData),
-                        'air_temp' => $debug['input']['weather']['air_temp_c'] ?? null,
-                        'wind_speed' => $debug['input']['weather']['wind_speed_ms'] ?? null,
-                        'water_temp' => $debug['input']['pool']['water_temp_c'] ?? 28,
-                        'total_loss' => $debug['summary']['total_loss_kw'] ?? 0,
-                        'net_demand' => $debug['summary']['net_requirement_kw'] ?? 0,
-                        'solar_gain' => $debug['summary']['solar_gain_kw'] ?? 0,
-                        'hp_output' => $debug['heat_pump']['output_kw'] ?? 0,
-                        'hp_electric' => $debug['heat_pump']['electricity_kw'] ?? 0,
-                        'hp_cop' => $debug['heat_pump']['cop'] ?? 0,
-                        'boiler_output' => $debug['boiler']['output_kw'] ?? 0,
-                        'boiler_fuel' => $debug['boiler']['fuel_kw'] ?? 0,
-                        'is_open' => $debug['input']['config']['is_open'] ?? false,
-                        'has_cover' => $debug['input']['config']['has_cover'] ?? false,
-                    ];
-
-                    // Use current water temp as starting point for next hour
-                    // This is a simplification - actual temp would depend on heating vs loss
-                    $prevWaterTemp = $debug['input']['pool']['water_temp_c'] ?? 28;
-                }
-                $currentDt->modify('+1 day');
+                $hourlyData[] = [
+                    'timestamp' => $ts->format('Y-m-d H:i'),
+                    'hour' => $i,
+                    'air_temp' => (float)$row['air_temp'],
+                    'wind_speed' => (float)$row['wind_speed'],
+                    'water_temp' => (float)$row['water_temp'],
+                    'total_loss' => (float)$row['total_loss_kw'],
+                    'net_demand' => $netDemand,
+                    'solar_gain' => (float)$row['solar_gain_kw'],
+                    'hp_output' => (float)$row['hp_heat_kw'],
+                    'hp_electric' => (float)$row['hp_electricity_kwh'],
+                    'hp_cop' => (float)$row['hp_cop'],
+                    'boiler_output' => (float)$row['boiler_heat_kw'],
+                    'boiler_fuel' => (float)$row['boiler_fuel_kwh'],
+                    'is_open' => (bool)$row['is_open'],
+                    'has_cover' => !((bool)$row['is_open']), // Cover on when closed
+                ];
             }
 
             sendResponse([
-                'start_date' => $startDt->format('Y-m-d'),
-                'end_date' => $endDt->format('Y-m-d'),
+                'run_id' => (int)$runId,
+                'source' => 'stored', // Indicates data comes from DB, not recalculated
+                'start_date' => $startDate,
+                'end_date' => $endDate,
                 'center_date' => $centerDate,
                 'hours' => count($hourlyData),
                 'data' => $hourlyData,
