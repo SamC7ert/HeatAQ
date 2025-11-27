@@ -1124,7 +1124,19 @@ const SimulationsModule = {
         setEl('debug-air-temp', `${inp.weather?.air_temp_c || '-'}°C`);
         setEl('debug-wind', `${inp.weather?.wind_speed_ms || '-'} m/s`);
         setEl('debug-solar-val', `${inp.weather?.solar_ghi_wm2 || '-'} W/m²`);
-        setEl('debug-status', inp.config?.is_open ? 'Open' : 'Closed');
+
+        // Status (Open/Closed) with color
+        const isOpen = inp.config?.is_open;
+        const statusEl = document.getElementById('debug-status');
+        if (statusEl) {
+            statusEl.textContent = isOpen ? 'Open' : 'Closed';
+            statusEl.style.color = isOpen ? '#28a745' : '#dc3545';
+        }
+
+        // Cover status (Cover On/Off)
+        const hasCover = inp.config?.has_cover;
+        const coverOn = hasCover && !isOpen;
+        setEl('debug-cover-status', coverOn ? 'Cover On' : 'Cover Off');
 
         // ===== Populate Detail Cards =====
         setHtml('debug-input', `
@@ -1332,6 +1344,14 @@ const SimulationsModule = {
         }
 
         const data = weekData.data;
+
+        // Debug: Log schedule status pattern (show first day's is_open values)
+        const firstDayOpen = data.slice(0, 24).map((d, h) => d.is_open ? 'O' : 'C');
+        console.log('[Schedule Debug] First day is_open pattern by hour (0-23):', firstDayOpen.join(''));
+        console.log('[Schedule Debug] Expected for 10-20: CCCCCCCCCCOOOOOOOOOOOCCCCC (10 open hours from h10-h19)');
+        const openCount = data.filter(d => d.is_open).length;
+        console.log(`[Schedule Debug] Total open hours: ${openCount}/${data.length} (${(openCount/data.length*100).toFixed(1)}%)`);
+
         const labels = data.map((d, i) => {
             // Show day label at start of each day (hour 0)
             if (i % 24 === 0) {
