@@ -1131,10 +1131,88 @@ const SimulationsModule = {
     },
 
     /**
+     * Navigate to previous hour and recalculate
+     */
+    debugPrevHour: function() {
+        const hourEl = document.getElementById('debug-hour');
+        const dateEl = document.getElementById('debug-date');
+        if (!hourEl || !dateEl) return;
+
+        let hour = parseInt(hourEl.value);
+        let date = new Date(dateEl.value);
+
+        if (hour > 0) {
+            hour--;
+        } else {
+            // Go to previous day, hour 23
+            hour = 23;
+            date.setDate(date.getDate() - 1);
+            dateEl.value = date.toISOString().split('T')[0];
+        }
+        hourEl.value = hour;
+        this.debugHour();
+    },
+
+    /**
+     * Navigate to next hour and recalculate
+     */
+    debugNextHour: function() {
+        const hourEl = document.getElementById('debug-hour');
+        const dateEl = document.getElementById('debug-date');
+        if (!hourEl || !dateEl) return;
+
+        let hour = parseInt(hourEl.value);
+        let date = new Date(dateEl.value);
+
+        if (hour < 23) {
+            hour++;
+        } else {
+            // Go to next day, hour 0
+            hour = 0;
+            date.setDate(date.getDate() + 1);
+            dateEl.value = date.toISOString().split('T')[0];
+        }
+        hourEl.value = hour;
+        this.debugHour();
+    },
+
+    /**
+     * Load run info to display config and schedule names in debug panel
+     */
+    loadRunInfoForDebug: async function(runId) {
+        try {
+            const response = await fetch(`/api/simulation_api.php?action=get_run&run_id=${runId}`);
+            const data = await response.json();
+
+            if (data.run && data.run.config) {
+                const config = data.run.config;
+
+                // Display config name (from equipment settings)
+                const configDisplay = document.getElementById('debug-config-display');
+                if (configDisplay) {
+                    const hpCap = config.equipment?.hp_capacity_kw;
+                    const boilerCap = config.equipment?.boiler_capacity_kw;
+                    configDisplay.textContent = hpCap && boilerCap ?
+                        `HP: ${hpCap}kW, Boiler: ${boilerCap}kW` :
+                        (data.run.scenario_name || 'Default');
+                }
+
+                // Display schedule/OHC name
+                const ohcDisplay = document.getElementById('debug-ohc-display');
+                if (ohcDisplay) {
+                    ohcDisplay.textContent = config.schedule_template_name || 'Default Schedule';
+                }
+            }
+        } catch (err) {
+            console.warn('Failed to load run info for debug:', err);
+        }
+    },
+
+    /**
      * Render debug calculation results - populates new UI structure
      */
     renderDebugResults: function(data) {
-        console.log('V67 renderDebugResults called', data);
+        console.log('V69 renderDebugResults called', data);
 
         // Helper to render a table from object
         const renderTable = (obj) => {
@@ -1210,6 +1288,11 @@ const SimulationsModule = {
             waterTempDisplay.textContent = `Water: ${parseFloat(waterTemp).toFixed(1)}°C`;
         }
 
+        // Config and Schedule display (from run info)
+        if (stored.run_id) {
+            this.loadRunInfoForDebug(stored.run_id);
+        }
+
         // Update chart comparison display with stored run info
         const comparisonEl = document.getElementById('chart-data-comparison');
         if (comparisonEl && stored.run_id) {
@@ -1283,7 +1366,6 @@ const SimulationsModule = {
      */
     loadWeeklyChart: async function() {
         const dateInput = document.getElementById('debug-date');
-        const configSelect = document.getElementById('debug-config-select');
 
         if (!dateInput || !dateInput.value) {
             alert('Please select a date first');
@@ -1291,7 +1373,6 @@ const SimulationsModule = {
         }
 
         const date = dateInput.value;
-        const configId = configSelect?.value || '';
 
         // Show loading
         const placeholder = document.getElementById('debug-weekly-chart-placeholder');
@@ -1817,13 +1898,6 @@ const SimulationsModule = {
     initDebug: function() {
         const self = this;
 
-        // Restore saved config selection (dropdown populated by SimControlModule.loadConfigOptions)
-        const select = document.getElementById('debug-config-select');
-        const savedConfig = localStorage.getItem(this.getUserKey('config')) || '';
-        if (select && savedConfig) {
-            select.value = savedConfig;
-        }
-
         // Restore saved debug date
         const dateInput = document.getElementById('debug-date');
         const savedDate = localStorage.getItem(this.getUserKey('debug_date'));
@@ -1832,7 +1906,7 @@ const SimulationsModule = {
         }
 
         // Track parameter changes to update button state
-        const paramInputs = ['debug-date', 'debug-hour', 'debug-config-select'];
+        const paramInputs = ['debug-date', 'debug-hour'];
         paramInputs.forEach(id => {
             const el = document.getElementById(id);
             if (el) {

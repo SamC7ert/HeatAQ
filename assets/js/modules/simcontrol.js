@@ -152,29 +152,19 @@ const SimControlModule = {
                     `<option value="${c.template_id}">${c.name}</option>`
                 ).join('');
 
-            // Populate both dropdowns
+            // Populate config dropdown (simulation only - debug uses run info)
             const simSelect = document.getElementById('sim-config-select');
-            const debugSelect = document.getElementById('debug-config-select');
 
             if (simSelect) simSelect.innerHTML = optionsHtml;
-            if (debugSelect) debugSelect.innerHTML = optionsHtml;
 
             // Restore saved selection (from server or localStorage)
             const savedConfig = this.getPreference('selected_config');
             if (simSelect) simSelect.value = savedConfig;
-            if (debugSelect) debugSelect.value = savedConfig;
 
-            // Sync dropdowns on change and save to server
+            // Save to server on change
             if (simSelect) {
                 simSelect.addEventListener('change', () => {
                     this.savePreference('selected_config', simSelect.value);
-                    if (debugSelect) debugSelect.value = simSelect.value;
-                });
-            }
-            if (debugSelect) {
-                debugSelect.addEventListener('change', () => {
-                    this.savePreference('selected_config', debugSelect.value);
-                    if (simSelect) simSelect.value = debugSelect.value;
                 });
             }
         } catch (err) {

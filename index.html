@@ -920,12 +920,18 @@
                                         </select>
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 8px;">
-                                        <label style="width: 70px;">Config</label>
-                                        <select id="debug-config-select" style="flex: 1; padding: 4px;">
-                                            <option value="">-- Defaults --</option>
-                                        </select>
+                                        <button class="btn btn-secondary btn-sm" onclick="SimulationsModule.debugPrevHour()" style="padding: 4px 12px;">◀</button>
+                                        <button id="debug-calculate-btn" class="btn btn-success btn-sm" onclick="SimulationsModule.debugHour()" style="flex: 1;">Calculate</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="SimulationsModule.debugNextHour()" style="padding: 4px 12px;">▶</button>
                                     </div>
-                                    <button id="debug-calculate-btn" class="btn btn-success btn-sm" onclick="SimulationsModule.debugHour()" style="margin-top: 5px;">Calculate</button>
+                                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 11px; color: #666;">
+                                        <label style="width: 70px;">Config</label>
+                                        <span id="debug-config-display" style="flex: 1;">-</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; color: #666;">
+                                        <label style="width: 70px;">Schedule</label>
+                                        <span id="debug-ohc-display" style="flex: 1;">-</span>
+                                    </div>
                                 </div>
                             </div>
                             <!-- Heat Output Summary -->
