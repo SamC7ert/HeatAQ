@@ -291,6 +291,53 @@ input[type="date"].inline-edit {
     width: auto;
 }
 
+/* Modal Overlay */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 8px;
+    padding: 25px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-content h3 {
+    margin-bottom: 20px;
+    color: var(--neutral-800);
+}
+
+/* Dashboard/Project Grid */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.dashboard-grid .card {
+    padding: 20px;
+}
+
+.dashboard-grid .card h3 {
+    margin-bottom: 15px;
+    font-size: 1rem;
+    color: var(--neutral-700);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .content-wrapper {
