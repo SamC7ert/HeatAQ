@@ -79,6 +79,17 @@ const SimControlModule = {
                 select.innerHTML = data.templates.map(t =>
                     `<option value="${t.template_id}">${t.name}</option>`
                 ).join('');
+
+                // Restore saved selection
+                const savedOHC = localStorage.getItem('heataq_selected_ohc') || '';
+                if (savedOHC) {
+                    select.value = savedOHC;
+                }
+
+                // Save selection on change
+                select.addEventListener('change', () => {
+                    localStorage.setItem('heataq_selected_ohc', select.value);
+                });
             }
         } catch (err) {
             console.error('Failed to load OHC options:', err);
