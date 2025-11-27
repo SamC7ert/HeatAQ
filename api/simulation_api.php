@@ -781,31 +781,66 @@ function updateRunStatus($pdo, $runId, $status, $summary = null) {
  * Store simulation results
  */
 function storeSimulationResults($pdo, $runId, $results) {
-    // Store daily results
-    $dailyStmt = $pdo->prepare("
-        INSERT INTO simulation_daily_results
-        (run_id, date, hours_count, open_hours, avg_air_temp, avg_water_temp,
-         total_loss_kwh, total_solar_kwh, total_hp_kwh, total_boiler_kwh,
-         hp_thermal_kwh, boiler_thermal_kwh, total_cost)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ");
+    // Check if thermal columns exist (backward compatibility)
+    $hasThermalColumns = false;
+    try {
+        $checkStmt = $pdo->query("SHOW COLUMNS FROM simulation_daily_results LIKE 'hp_thermal_kwh'");
+        $hasThermalColumns = $checkStmt->rowCount() > 0;
+    } catch (PDOException $e) {
+        // Columns don't exist
+    }
 
-    foreach ($results['daily'] as $day) {
-        $dailyStmt->execute([
-            $runId,
-            $day['date'],
-            $day['hours'],
-            $day['open_hours'],
-            round($day['avg_air_temp'], 2),
-            round($day['avg_water_temp'], 2),
-            round($day['total_loss_kwh'], 3),
-            round($day['total_solar_kwh'], 3),
-            round($day['total_hp_kwh'], 3),
-            round($day['total_boiler_kwh'], 3),
-            round($day['hp_thermal_kwh'] ?? 0, 3),
-            round($day['boiler_thermal_kwh'] ?? 0, 3),
-            round($day['total_cost'], 2)
-        ]);
+    // Store daily results - use appropriate schema
+    if ($hasThermalColumns) {
+        $dailyStmt = $pdo->prepare("
+            INSERT INTO simulation_daily_results
+            (run_id, date, hours_count, open_hours, avg_air_temp, avg_water_temp,
+             total_loss_kwh, total_solar_kwh, total_hp_kwh, total_boiler_kwh,
+             hp_thermal_kwh, boiler_thermal_kwh, total_cost)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ");
+
+        foreach ($results['daily'] as $day) {
+            $dailyStmt->execute([
+                $runId,
+                $day['date'],
+                $day['hours'],
+                $day['open_hours'],
+                round($day['avg_air_temp'], 2),
+                round($day['avg_water_temp'], 2),
+                round($day['total_loss_kwh'], 3),
+                round($day['total_solar_kwh'], 3),
+                round($day['total_hp_kwh'], 3),
+                round($day['total_boiler_kwh'], 3),
+                round($day['hp_thermal_kwh'] ?? 0, 3),
+                round($day['boiler_thermal_kwh'] ?? 0, 3),
+                round($day['total_cost'], 2)
+            ]);
+        }
+    } else {
+        // Legacy schema without thermal columns
+        $dailyStmt = $pdo->prepare("
+            INSERT INTO simulation_daily_results
+            (run_id, date, hours_count, open_hours, avg_air_temp, avg_water_temp,
+             total_loss_kwh, total_solar_kwh, total_hp_kwh, total_boiler_kwh, total_cost)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ");
+
+        foreach ($results['daily'] as $day) {
+            $dailyStmt->execute([
+                $runId,
+                $day['date'],
+                $day['hours'],
+                $day['open_hours'],
+                round($day['avg_air_temp'], 2),
+                round($day['avg_water_temp'], 2),
+                round($day['total_loss_kwh'], 3),
+                round($day['total_solar_kwh'], 3),
+                round($day['total_hp_kwh'], 3),
+                round($day['total_boiler_kwh'], 3),
+                round($day['total_cost'], 2)
+            ]);
+        }
     }
 
     // Store hourly results (in batches for performance)
