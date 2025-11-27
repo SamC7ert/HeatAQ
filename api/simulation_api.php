@@ -785,8 +785,9 @@ function storeSimulationResults($pdo, $runId, $results) {
     $dailyStmt = $pdo->prepare("
         INSERT INTO simulation_daily_results
         (run_id, date, hours_count, open_hours, avg_air_temp, avg_water_temp,
-         total_loss_kwh, total_solar_kwh, total_hp_kwh, total_boiler_kwh, total_cost)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         total_loss_kwh, total_solar_kwh, total_hp_kwh, total_boiler_kwh,
+         hp_thermal_kwh, boiler_thermal_kwh, total_cost)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
 
     foreach ($results['daily'] as $day) {
@@ -801,6 +802,8 @@ function storeSimulationResults($pdo, $runId, $results) {
             round($day['total_solar_kwh'], 3),
             round($day['total_hp_kwh'], 3),
             round($day['total_boiler_kwh'], 3),
+            round($day['hp_thermal_kwh'] ?? 0, 3),
+            round($day['boiler_thermal_kwh'] ?? 0, 3),
             round($day['total_cost'], 2)
         ]);
     }

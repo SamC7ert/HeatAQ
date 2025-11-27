@@ -433,8 +433,10 @@ class EnergySimulator {
                     'min_water_temp' => 999,
                     'total_loss_kwh' => 0,
                     'total_solar_kwh' => 0,
-                    'total_hp_kwh' => 0,
-                    'total_boiler_kwh' => 0,
+                    'total_hp_kwh' => 0,           // Electricity consumed
+                    'total_boiler_kwh' => 0,       // Fuel consumed
+                    'hp_thermal_kwh' => 0,         // Thermal output (for charts)
+                    'boiler_thermal_kwh' => 0,     // Thermal output (for charts)
                     'total_cost' => 0,
                 ];
             }
@@ -449,6 +451,8 @@ class EnergySimulator {
             $dailyStats['total_solar_kwh'] += $solarGain;
             $dailyStats['total_hp_kwh'] += $heating['hp_electricity'];
             $dailyStats['total_boiler_kwh'] += $heating['boiler_fuel'];
+            $dailyStats['hp_thermal_kwh'] += $heating['hp_heat'];
+            $dailyStats['boiler_thermal_kwh'] += $heating['boiler_heat'];
             $dailyStats['total_cost'] += $heating['cost'];
 
             // Accumulate summary totals
