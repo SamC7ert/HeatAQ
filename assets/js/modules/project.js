@@ -144,13 +144,26 @@ const ProjectModule = {
         if (!container) return;
 
         if (lat && lng) {
-            // Use OpenStreetMap static image (no API key needed)
-            const zoom = 12;
-            const mapUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=${zoom}&size=300x150&markers=${lat},${lng},red-pushpin`;
-            container.innerHTML = `<img src="${mapUrl}" alt="Site location" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<div class=\\'site-map-placeholder\\'><div>🗺️</div><div>Map unavailable</div></div>'">`;
+            // Use OpenStreetMap embed iframe (more reliable than static image)
+            const zoom = 14;
+            const bbox = this.calculateBbox(lat, lng, zoom);
+            const embedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
+            container.innerHTML = `<iframe src="${embedUrl}" style="width:100%;height:100%;border:none;" loading="lazy"></iframe>`;
         } else {
             container.innerHTML = `<div class="site-map-placeholder"><div>🗺️</div><div>Enter coordinates to show map</div></div>`;
         }
+    },
+
+    // Calculate bounding box for map embed
+    calculateBbox(lat, lng, zoom) {
+        // Approximate bbox calculation for given zoom level
+        const latDelta = 0.01 * Math.pow(2, 14 - zoom);
+        const lngDelta = 0.015 * Math.pow(2, 14 - zoom);
+        const west = lng - lngDelta;
+        const south = lat - latDelta;
+        const east = lng + lngDelta;
+        const north = lat + latDelta;
+        return `${west},${south},${east},${north}`;
     },
 
     // Update pools list in site card
@@ -193,7 +206,7 @@ const ProjectModule = {
     // Load weather stations
     async loadWeatherStations() {
         try {
-            const response = await fetch(`${config.apiBaseUrl}?action=get_weather_stations`);
+            const response = await fetch(`${config.API_BASE_URL}?action=get_weather_stations`);
             if (response.ok) {
                 const data = await response.json();
                 // Handle both array and object with stations property
@@ -388,7 +401,7 @@ const ProjectModule = {
             }
 
             // Get weather data range
-            const weatherResponse = await fetch(`${config.apiBaseUrl}?action=getWeatherRange`);
+            const weatherResponse = await fetch(`${config.API_BASE_URL}?action=getWeatherRange`);
             if (weatherResponse.ok) {
                 const weatherData = await weatherResponse.json();
                 const rangeEl = document.getElementById('dash-weather-range');
@@ -412,7 +425,7 @@ const ProjectModule = {
     // Load recent simulation runs
     async loadRecentSimulations() {
         try {
-            const response = await fetch(`${config.apiBaseUrl}?action=getSimulationRuns`);
+            const response = await fetch(`${config.API_BASE_URL}?action=getSimulationRuns`);
             if (response.ok) {
                 const runs = await response.json();
                 const container = document.getElementById('dash-recent-runs');
@@ -439,7 +452,7 @@ const ProjectModule = {
     // Load list of available projects
     async loadProjectsList() {
         try {
-            const response = await fetch(`${config.apiBaseUrl}?action=getProjects`);
+            const response = await fetch(`${config.API_BASE_URL}?action=getProjects`);
             const container = document.getElementById('projects-list');
 
             if (response.ok) {
@@ -519,7 +532,7 @@ const ProjectModule = {
 
         try {
             // Update in backend (if API supports it)
-            const response = await fetch(`${config.apiBaseUrl}?action=updateProject`, {
+            const response = await fetch(`${config.API_BASE_URL}?action=updateProject`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -578,7 +591,7 @@ const ProjectModule = {
 
         try {
             // Update in backend (if API supports it)
-            const response = await fetch(`${config.apiBaseUrl}?action=updateProject`, {
+            const response = await fetch(`${config.API_BASE_URL}?action=updateProject`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -646,7 +659,7 @@ const ProjectModule = {
 
         try {
             // Create in backend
-            const response = await fetch(`${config.apiBaseUrl}?action=createProject`, {
+            const response = await fetch(`${config.API_BASE_URL}?action=createProject`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, description })
