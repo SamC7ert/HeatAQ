@@ -605,6 +605,14 @@
                             <h3>Run Settings</h3>
                             <table class="data-table form-table">
                                 <tr>
+                                    <td><label for="sim-config-select">Configuration</label></td>
+                                    <td>
+                                        <select id="sim-config-select">
+                                            <option value="">Loading...</option>
+                                        </select>
+                                    </td>
+                                </tr>
+                                <tr>
                                     <td><label for="sim-scenario-name">Scenario Name</label></td>
                                     <td><input type="text" id="sim-scenario-name" placeholder="e.g., 2024 Benchmark"></td>
                                 </tr>
@@ -621,14 +629,6 @@
                                     <td>
                                         <select id="sim-ohc-select">
                                             <option value="1">Hisøy Swim Club - Standard Hours</option>
-                                        </select>
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><label for="sim-config-select">Configuration</label></td>
-                                    <td>
-                                        <select id="sim-config-select">
-                                            <option value="">-- Use Project Config --</option>
                                         </select>
                                     </td>
                                 </tr>

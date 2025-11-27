@@ -84,11 +84,16 @@ const SimControlModule = {
 
     // Load configuration options (shared between New Run and Debug Hour)
     loadConfigOptions: async function() {
+        console.log('[SimControl] Loading config options...');
         try {
             const response = await fetch('./api/heataq_api.php?action=get_project_configs');
             const data = await response.json();
+            console.log('[SimControl] Config response:', data);
 
-            if (!data.configs) return;
+            if (!data.configs) {
+                console.warn('[SimControl] No configs in response');
+                return;
+            }
 
             const optionsHtml = '<option value="">-- Use Project Config --</option>' +
                 data.configs.map(c =>
