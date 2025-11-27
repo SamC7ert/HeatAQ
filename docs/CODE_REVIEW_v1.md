@@ -1,5 +1,32 @@
 # HeatAQ Code Review - Potential Issues & Fixes
 
+**Last Updated:** V63 - November 2025
+
+## EXECUTIVE SUMMARY
+
+This document provides a comprehensive security and code quality review of the HeatAQ pool energy management system. The application consists of a PHP backend API, JavaScript frontend modules, and a MySQL database.
+
+### Security Status Overview
+
+| Category | Status | Priority |
+|----------|--------|----------|
+| PHP Code Exposure | **SAFE** | - |
+| Database Credentials | **NEEDS ATTENTION** | High |
+| SQL Injection | **MITIGATED** | Medium |
+| Input Validation | **PARTIAL** | Medium |
+| Authentication | **BASIC** | Medium |
+| Frontend Security | **SAFE** | - |
+
+### Key Finding: PHP Code is NOT Exposed
+
+**IMPORTANT:** The PHP source code is NOT visible to users in the browser. When users open F12 Developer Tools:
+- They can only see HTML, CSS, and JavaScript (client-side code)
+- PHP code executes on the server and only returns JSON responses
+- The simulator logic, database queries, and business logic remain hidden
+- Users cannot see the API implementation, only the API endpoints they call
+
+---
+
 ## 1. API SECURITY ISSUES
 
 ### CRITICAL: Database credentials exposed
@@ -288,3 +315,96 @@ try {
 ```
 
 This review identifies the main issues. The system works but needs security and robustness improvements before production use. The most critical items are the exposed database credentials and lack of input validation.
+
+---
+
+## 11. WHAT USERS CAN SEE (F12 Developer Tools)
+
+### Visible to Users:
+- **HTML Structure:** The complete DOM including element IDs, classes, and structure
+- **CSS Styles:** All styling rules and CSS files
+- **JavaScript Code:** All frontend modules (navigation.js, simulations.js, etc.)
+- **API Endpoints:** The URLs being called (e.g., `heataq_api.php?action=runSimulation`)
+- **API Responses:** JSON data returned from the server
+- **Network Traffic:** All HTTP requests and responses
+- **LocalStorage:** Session data, project settings, override values
+
+### NOT Visible to Users:
+- **PHP Source Code:** All `.php` files execute server-side
+- **Database Connection:** Credentials, host, database name
+- **Database Queries:** SQL statements and query logic
+- **Simulator Algorithms:** Heat loss calculations, COP curves, control logic
+- **Schedule Resolution:** Priority-based scheduling logic
+- **Server File System:** No access to server directories
+
+### Security Implication:
+The separation between client (visible) and server (hidden) code means:
+- Business logic is protected
+- Proprietary algorithms remain confidential
+- Database structure is not directly exposed
+- Users can see WHAT data is sent/received but not HOW it's processed
+
+---
+
+## 12. SCHEDULER COMPARISON (Python vs PHP)
+
+A detailed comparison of the Python and PHP scheduler implementations was performed. See `docs/SCHEDULER_COMPARISON.md` for full details.
+
+### Issues Found and Fixed:
+
+1. **Holiday Column Name (FIXED):** Added COALESCE to handle both `easter_date` and `easter_sunday` column names
+2. **is_recurring Flag (FIXED):** Now reads from database instead of hardcoding `true`
+3. **Country Filter (NOTED):** PHP loads all countries; acceptable if single-country database
+
+### Verified Logic (Identical in Both):
+- Priority resolution: Exceptions → Date Ranges → Base Week
+- Day of week mapping (0-6)
+- Year-crossing date range handling
+- Easter calculation algorithm
+- Period time matching (including overnight periods)
+
+---
+
+## 13. FRONTEND MODULE REVIEW
+
+### Module Structure (V63):
+```
+assets/js/
+├── config.js         - API base URL, constants
+├── app.js            - Main application controller
+└── modules/
+    ├── api.js        - API wrapper functions
+    ├── navigation.js - Section switching
+    ├── schedules.js  - OHC management
+    ├── calendar.js   - Date ranges, exceptions
+    ├── simulations.js - Simulation runner, debug, analyse
+    ├── simcontrol.js - Tab management
+    ├── configuration.js - Project config forms
+    ├── admin.js      - Admin sections
+    └── project.js    - Project management (NEW in V63)
+```
+
+### Security Notes:
+- All modules use the global `config.apiBaseUrl` for API calls
+- Session token stored in localStorage and sent via fetch headers
+- Override values persist locally (user-specific, not shared)
+- No sensitive data stored in frontend code
+
+---
+
+## 14. RECOMMENDED PRIORITY ORDER
+
+### Immediate (Before Production):
+1. Move database credentials to environment file outside web root
+2. Add input validation for all form fields
+3. Implement rate limiting on API endpoints
+
+### Short-term:
+4. Add API authentication tokens
+5. Implement audit logging
+6. Add HTTPS-only headers
+
+### Long-term:
+7. Add role-based access control
+8. Implement data export/import functionality
+9. Add automated backup system

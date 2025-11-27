@@ -55,9 +55,9 @@ const navigation = {
     loadSectionData(sectionName) {
         switch (sectionName) {
             // PROJECT sections
-            case 'dashboard':
-                if (typeof app.dashboard !== 'undefined') {
-                    app.dashboard.load();
+            case 'project':
+                if (typeof app.project !== 'undefined') {
+                    app.project.load();
                 }
                 break;
 

@@ -74,7 +74,7 @@
         <div class="user-info">
             <span class="project-name" id="current-project"></span>
             <span class="user-name" id="current-user"></span>
-            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">V62</span>
+            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">V64</span>
             <button onclick="logout()" class="btn-logout">Logout</button>
         </div>
         
@@ -88,9 +88,9 @@
             <nav class="nav-menu">
                 <!-- PROJECT Section -->
                 <div class="nav-section-header">PROJECT</div>
-                <a href="#" class="nav-item" onclick="app.navigation.switchSection('dashboard')">
-                    <span class="nav-icon">📊</span>
-                    <span>Dashboard</span>
+                <a href="#" class="nav-item" onclick="app.navigation.switchSection('project')">
+                    <span class="nav-icon">📋</span>
+                    <span>Project</span>
                 </a>
                 <a href="#" class="nav-item active" onclick="app.navigation.switchSection('simcontrol')">
                     <span class="nav-icon">▶️</span>
@@ -201,9 +201,39 @@
                     </div>
                 </section>
                 
-                <!-- Dashboard Section -->
-                <section id="dashboard-section" class="content-section">
-                    <h2>Project Dashboard</h2>
+                <!-- Project Section -->
+                <section id="project-section" class="content-section">
+                    <h2>Project</h2>
+
+                    <!-- Project Info Card -->
+                    <div class="project-header-card card" style="margin-bottom: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div style="flex: 1;">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                    <h3 id="project-display-name" style="margin: 0; cursor: pointer;" onclick="app.project.editName()" title="Click to edit">Loading...</h3>
+                                    <button class="btn btn-sm btn-secondary" onclick="app.project.editName()" style="padding: 2px 8px; font-size: 11px;">Edit</button>
+                                </div>
+                                <p id="project-display-desc" class="text-muted" style="margin: 0; cursor: pointer;" onclick="app.project.editDescription()" title="Click to edit">Loading description...</p>
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="app.project.showNewProjectModal()">+ New Project</button>
+                        </div>
+                        <!-- Edit forms (hidden by default) -->
+                        <div id="project-edit-name-form" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <input type="text" id="project-name-input" class="form-control" style="width: 250px;" placeholder="Project name">
+                                <button class="btn btn-primary btn-sm" onclick="app.project.saveName()">Save</button>
+                                <button class="btn btn-secondary btn-sm" onclick="app.project.cancelEditName()">Cancel</button>
+                            </div>
+                        </div>
+                        <div id="project-edit-desc-form" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+                            <textarea id="project-desc-input" class="form-control" rows="3" style="width: 100%; margin-bottom: 8px;" placeholder="Project description"></textarea>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-primary btn-sm" onclick="app.project.saveDescription()">Save</button>
+                                <button class="btn btn-secondary btn-sm" onclick="app.project.cancelEditDescription()">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="dashboard-grid">
                         <div class="card">
                             <h3>Project Summary</h3>
@@ -224,6 +254,14 @@
                         <div class="card">
                             <h3>Recent Simulations</h3>
                             <div id="dash-recent-runs">No runs yet</div>
+                        </div>
+                    </div>
+
+                    <!-- Project Switcher -->
+                    <div class="card" style="margin-top: 20px;">
+                        <h3>My Projects</h3>
+                        <div id="projects-list" style="margin-top: 10px;">
+                            <p class="loading">Loading projects...</p>
                         </div>
                     </div>
                 </section>
@@ -1066,7 +1104,7 @@
                     <div class="card">
                         <h3>System Info</h3>
                         <table class="data-table compact">
-                            <tr><td><strong>App Version</strong></td><td>V62</td></tr>
+                            <tr><td><strong>App Version</strong></td><td>V64</td></tr>
                             <tr><td><strong>Simulator</strong></td><td id="sys-simulator-ver">-</td></tr>
                             <tr><td><strong>PHP</strong></td><td id="sys-php-ver">-</td></tr>
                         </table>
@@ -1121,6 +1159,25 @@
         };
     </script>
     
+    <!-- New Project Modal -->
+    <div id="new-project-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content" style="max-width: 450px;">
+            <h3 style="margin-top: 0;">Create New Project</h3>
+            <div style="margin-bottom: 15px;">
+                <label for="new-project-name" style="display: block; margin-bottom: 5px; font-weight: 500;">Project Name</label>
+                <input type="text" id="new-project-name" class="form-control" placeholder="e.g., Oslo Swimming Hall">
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label for="new-project-desc" style="display: block; margin-bottom: 5px; font-weight: 500;">Description (optional)</label>
+                <textarea id="new-project-desc" class="form-control" rows="3" placeholder="Brief project description..."></textarea>
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="app.project.hideNewProjectModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="app.project.createNewProject()">Create Project</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Chart.js for visualizations -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
@@ -1136,6 +1193,7 @@
     <script src="./assets/js/modules/simcontrol.js"></script>
     <script src="./assets/js/modules/configuration.js"></script>
     <script src="./assets/js/modules/admin.js"></script>
+    <script src="./assets/js/modules/project.js"></script>
     <script src="./assets/js/app.js"></script>
 </body>
 </html>

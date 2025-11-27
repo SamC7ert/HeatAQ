@@ -135,6 +135,7 @@ const app = {
     simcontrol: typeof SimControlModule !== 'undefined' ? SimControlModule : null,
     configuration: typeof ConfigurationModule !== 'undefined' ? ConfigurationModule : null,
     admin: typeof AdminModule !== 'undefined' ? AdminModule : null,
+    project: typeof ProjectModule !== 'undefined' ? ProjectModule : null,
     api: api,
     config: config
 };
