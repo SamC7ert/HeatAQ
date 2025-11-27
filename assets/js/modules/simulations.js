@@ -2081,6 +2081,9 @@ const SimulationsModule = {
         });
         const lossData = dailyResults.map(d => parseFloat(d.total_loss_kwh) || 0);
 
+        // Stack data: Boiler on top of HP
+        const stackedBoilerData = boilerData.map((b, i) => b + hpData[i]);
+
         this.yearlyChart = new Chart(canvas, {
             type: 'line',
             data: {
@@ -2099,27 +2102,25 @@ const SimulationsModule = {
                     },
                     {
                         label: 'Boiler (kWh)',
-                        data: boilerData,
+                        data: stackedBoilerData,
                         borderColor: 'rgba(220, 53, 69, 1)',
                         backgroundColor: 'rgba(220, 53, 69, 0.7)',
-                        fill: true,
+                        fill: '-1',  // Fill down to HP dataset
                         pointRadius: 0,
                         borderWidth: 0,
                         tension: 0.1,
-                        stack: 'heating',
-                        order: 2
+                        order: 1
                     },
                     {
                         label: 'Heat Pump (kWh)',
                         data: hpData,
                         borderColor: 'rgba(40, 167, 69, 1)',
                         backgroundColor: 'rgba(40, 167, 69, 0.7)',
-                        fill: true,
+                        fill: 'origin',  // Fill down to x-axis
                         pointRadius: 0,
                         borderWidth: 0,
                         tension: 0.1,
-                        stack: 'heating',
-                        order: 1
+                        order: 2
                     }
                 ]
             },
@@ -2153,7 +2154,6 @@ const SimulationsModule = {
                     },
                     y: {
                         display: true,
-                        stacked: true,
                         title: { display: true, text: 'Energy (kWh)' }
                     }
                 }
