@@ -941,11 +941,14 @@ class EnergySimulator {
             'cost' => 0,
         ];
 
-        // If no target temp (closed), minimal heating to prevent freezing
+        // If no target temp (closed), maintain temperature near normal operating range
+        // This prevents massive reheat costs when pool reopens
         if ($targetTemp === null) {
-            $targetTemp = 15; // Minimum maintenance temperature
-            $minTemp = 10;
-            $maxTemp = 20;
+            // Use setback temperature (configurable, default 26°C - 2° below typical target)
+            $setbackTemp = $this->poolConfig['setback_temp'] ?? 26.0;
+            $targetTemp = $setbackTemp;
+            $minTemp = $setbackTemp - 1;  // Start heating if drops 1° below setback
+            $maxTemp = $setbackTemp + 1;  // Stop heating 1° above setback
         }
 
         // Default min/max if not provided
