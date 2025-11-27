@@ -824,7 +824,7 @@ const SimulationsModule = {
                                     strategy: scenario.strategy
                                 }
                             },
-                            schedule_id: scenario.schedule_id,
+                            template_id: scenario.schedule_id,
                             save_run: false // Don't save to history
                         })
                     });
