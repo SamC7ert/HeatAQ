@@ -234,16 +234,18 @@
                         </div>
                     </div>
 
-                    <!-- Sites Section -->
-                    <h3 style="margin-bottom: 16px; color: var(--neutral-700);">Sites</h3>
-                    <div class="sites-grid" id="sites-grid">
-                        <!-- Sites will be loaded dynamically -->
-                        <div class="site-card card" id="default-site-card">
+                    <!-- Sites & Pools Section -->
+                    <h3 style="margin-bottom: 16px; color: var(--neutral-700);">Site & Pools</h3>
+
+                    <!-- Site Row: Site + its Pools -->
+                    <div class="site-row" style="display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px;">
+                        <!-- Site Card -->
+                        <div class="site-card card" id="default-site-card" style="flex: 0 0 280px; max-width: 300px;">
                             <div class="site-header">
                                 <h4>📍 <span id="site-name">Main Site</span></h4>
                                 <span class="site-location" id="site-location">Location not set</span>
                             </div>
-                            <div class="site-map" id="site-map">
+                            <div class="site-map" id="site-map" style="height: 140px;">
                                 <div class="site-map-placeholder">
                                     <div>🗺️</div>
                                     <div>Enter coordinates to show map</div>
@@ -267,19 +269,53 @@
                                     <span class="value" id="site-solar">-</span>
                                 </div>
                             </div>
-                            <div class="site-pools">
-                                <h5>Pools</h5>
-                                <ul class="pool-list" id="site-pools-list">
-                                    <li>Loading...</li>
-                                </ul>
-                                <button class="btn btn-sm btn-secondary" onclick="app.project.editSite()">Edit Site</button>
+                            <div style="padding: 12px; border-top: 1px solid var(--neutral-200);">
+                                <button class="btn btn-sm btn-secondary" onclick="app.project.editSite()" style="width: 100%;">Edit Site</button>
                             </div>
                         </div>
-                        <!-- Add Site Card -->
-                        <div class="site-card card add-site" onclick="app.project.showAddSiteModal()">
-                            <div class="add-content">
-                                <div class="add-icon">+</div>
-                                <div>Add Site</div>
+
+                        <!-- Pool Card -->
+                        <div class="pool-card card" id="main-pool-card" style="flex: 0 0 240px; max-width: 260px;">
+                            <div class="site-header" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);">
+                                <h4>🏊 <span id="pool-name">Main Pool</span></h4>
+                                <span class="site-location" id="pool-type">Outdoor Pool</span>
+                            </div>
+                            <div class="site-details" style="padding: 12px;">
+                                <div class="detail-row">
+                                    <span class="label">Surface Area</span>
+                                    <span class="value" id="pool-area">- m²</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="label">Volume</span>
+                                    <span class="value" id="pool-volume">- m³</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="label">Depth</span>
+                                    <span class="value" id="pool-depth">- m</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="label">Target Temp</span>
+                                    <span class="value" id="pool-target-temp">28°C</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="label">Heat Pump</span>
+                                    <span class="value" id="pool-hp-capacity">- kW</span>
+                                </div>
+                                <div class="detail-row">
+                                    <span class="label">Boiler</span>
+                                    <span class="value" id="pool-boiler-capacity">- kW</span>
+                                </div>
+                            </div>
+                            <div style="padding: 10px; border-top: 1px solid var(--neutral-200);">
+                                <button class="btn btn-sm btn-secondary" onclick="app.navigation.showSection('configuration')" style="width: 100%;">Configure</button>
+                            </div>
+                        </div>
+
+                        <!-- Add Pool Card -->
+                        <div class="card add-site" onclick="app.project.showAddPoolModal()" style="flex: 0 0 120px; min-height: 180px; display: flex; align-items: center; justify-content: center;">
+                            <div class="add-content" style="text-align: center;">
+                                <div class="add-icon" style="font-size: 32px; color: var(--neutral-400);">+</div>
+                                <div style="font-size: 13px; color: var(--neutral-500);">Add Pool</div>
                             </div>
                         </div>
                     </div>

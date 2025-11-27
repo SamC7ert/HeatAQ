@@ -29,6 +29,9 @@ const ProjectModule = {
             // Load project summary
             await this.loadSummary();
 
+            // Update pool card
+            this.updatePoolCard();
+
             // Load projects list
             await this.loadProjectsList();
         } catch (error) {
@@ -508,6 +511,34 @@ const ProjectModule = {
     // Show add site modal (placeholder)
     showAddSiteModal() {
         alert('Multi-site support coming soon. Currently only one site per project is supported.');
+    },
+
+    // Show add pool modal (placeholder)
+    showAddPoolModal() {
+        alert('Multi-pool support coming soon. Configure your pool in the Configuration section.');
+    },
+
+    // Update pool card display
+    updatePoolCard() {
+        if (typeof app.configuration === 'undefined') return;
+
+        const cfg = app.configuration.getConfig();
+        if (!cfg) return;
+
+        // Pool info
+        const areaEl = document.getElementById('pool-area');
+        const volumeEl = document.getElementById('pool-volume');
+        const depthEl = document.getElementById('pool-depth');
+        const targetEl = document.getElementById('pool-target-temp');
+        const hpEl = document.getElementById('pool-hp-capacity');
+        const boilerEl = document.getElementById('pool-boiler-capacity');
+
+        if (areaEl) areaEl.textContent = cfg.pool?.surface_area ? `${cfg.pool.surface_area} m²` : '- m²';
+        if (volumeEl) volumeEl.textContent = cfg.pool?.volume ? `${cfg.pool.volume} m³` : '- m³';
+        if (depthEl) depthEl.textContent = cfg.pool?.depth ? `${cfg.pool.depth} m` : '- m';
+        if (targetEl) targetEl.textContent = cfg.control?.target_temp ? `${cfg.control.target_temp}°C` : '28°C';
+        if (hpEl) hpEl.textContent = cfg.equipment?.hp_capacity_kw ? `${cfg.equipment.hp_capacity_kw} kW` : '- kW';
+        if (boilerEl) boilerEl.textContent = cfg.equipment?.boiler_capacity_kw ? `${cfg.equipment.boiler_capacity_kw} kW` : '- kW';
     },
 
     // Update project name and description display
