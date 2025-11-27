@@ -369,10 +369,21 @@ const SimulationsModule = {
             return;
         }
 
-        // Prepare data - use thermal output (heat delivered) not electricity/fuel consumed
+        // Prepare data - use thermal output (heat delivered), NOT electricity/fuel consumed
+        // For old runs without thermal columns, estimate using typical COP/efficiency
         const labels = dailyResults.map(d => d.date);
-        const hpData = dailyResults.map(d => parseFloat(d.hp_thermal_kwh) || parseFloat(d.total_hp_kwh) || 0);
-        const boilerData = dailyResults.map(d => parseFloat(d.boiler_thermal_kwh) || parseFloat(d.total_boiler_kwh) || 0);
+        const hpData = dailyResults.map(d => {
+            const thermal = parseFloat(d.hp_thermal_kwh);
+            if (thermal > 0) return thermal;
+            const elec = parseFloat(d.total_hp_kwh) || 0;
+            return elec * 3.5;  // Estimated thermal output
+        });
+        const boilerData = dailyResults.map(d => {
+            const thermal = parseFloat(d.boiler_thermal_kwh);
+            if (thermal > 0) return thermal;
+            const fuel = parseFloat(d.total_boiler_kwh) || 0;
+            return fuel * 0.92;  // Estimated thermal output
+        });
         const lossData = dailyResults.map(d => parseFloat(d.total_loss_kwh) || 0);
 
         new Chart(canvas, {
@@ -1901,12 +1912,21 @@ const SimulationsModule = {
         const container = document.getElementById('sim-summary-cards');
         if (!container) return;
 
+        // Calculate thermal output (heat delivered), not electricity/fuel consumed
+        // For old runs without thermal columns, estimate using typical COP/efficiency
+        const hpThermal = summary.hp_thermal_kwh > 0
+            ? summary.hp_thermal_kwh
+            : (summary.total_hp_energy_kwh || 0) * 3.5;
+        const boilerThermal = summary.boiler_thermal_kwh > 0
+            ? summary.boiler_thermal_kwh
+            : (summary.total_boiler_energy_kwh || 0) * 0.92;
+
         const cards = [
             { label: 'Total Cost', value: this.formatCurrency(summary.total_cost) },
             { label: 'Heat Loss', value: this.formatEnergy(summary.total_heat_loss_kwh) },
             { label: 'Solar Gain', value: this.formatEnergy(summary.total_solar_gain_kwh) },
-            { label: 'HP Output', value: this.formatEnergy(summary.hp_thermal_kwh || summary.total_hp_energy_kwh) },
-            { label: 'Boiler Output', value: this.formatEnergy(summary.boiler_thermal_kwh || summary.total_boiler_energy_kwh) },
+            { label: 'HP Thermal', value: this.formatEnergy(hpThermal) },
+            { label: 'Boiler Thermal', value: this.formatEnergy(boilerThermal) },
             { label: 'Avg COP', value: summary.avg_cop?.toFixed(2) || '-' }
         ];
 
@@ -1952,10 +1972,23 @@ const SimulationsModule = {
             this.yearlyChart.destroy();
         }
 
-        // Prepare data - use thermal output (heat delivered)
+        // Prepare data - use thermal output (heat delivered), NOT electricity consumed
+        // For old runs without thermal columns, estimate: HP thermal ≈ electricity × COP (assume 3.5)
         const labels = dailyResults.map(d => d.date);
-        const hpData = dailyResults.map(d => parseFloat(d.hp_thermal_kwh) || parseFloat(d.total_hp_kwh) || 0);
-        const boilerData = dailyResults.map(d => parseFloat(d.boiler_thermal_kwh) || parseFloat(d.total_boiler_kwh) || 0);
+        const hpData = dailyResults.map(d => {
+            const thermal = parseFloat(d.hp_thermal_kwh);
+            if (thermal > 0) return thermal;
+            // Fallback: estimate from electricity × average COP
+            const elec = parseFloat(d.total_hp_kwh) || 0;
+            return elec * 3.5;  // Estimated thermal output
+        });
+        const boilerData = dailyResults.map(d => {
+            const thermal = parseFloat(d.boiler_thermal_kwh);
+            if (thermal > 0) return thermal;
+            // Fallback: estimate from fuel × efficiency (assume 92%)
+            const fuel = parseFloat(d.total_boiler_kwh) || 0;
+            return fuel * 0.92;  // Estimated thermal output
+        });
         const lossData = dailyResults.map(d => parseFloat(d.total_loss_kwh) || 0);
 
         this.yearlyChart = new Chart(canvas, {
