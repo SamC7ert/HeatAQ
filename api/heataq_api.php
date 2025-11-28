@@ -18,11 +18,14 @@ if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
     require_once __DIR__ . '/../auth.php';
     $auth = HeatAQAuth::check(Config::requiresAuth());
     if ($auth) {
+        // Support both string site_id (legacy) and integer pool_site_id (new)
         $currentSiteId = $auth['project']['site_id'];
+        $currentPoolSiteId = $auth['project']['pool_site_id'] ?? null;
     }
 } else {
     // If auth not required, use default site
     $currentSiteId = 'arendal_aquatic';
+    $currentPoolSiteId = null;
 }
 
 // ====================================
@@ -153,7 +156,16 @@ class HeatAQAPI {
                 case 'test_resolution':
                     $this->testResolution();
                     break;
-                    
+                case 'diagnose_site_ids':
+                    $this->diagnoseSiteIds();
+                    break;
+                case 'fix_site_ids':
+                    if (!$this->canEdit()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->fixSiteIds();
+                    break;
+
                 // WRITE operations
                 case 'save_template':
                     if (!$this->canEdit()) {
@@ -615,14 +627,147 @@ class HeatAQAPI {
     private function testResolution() {
         $date = $_GET['date'] ?? date('Y-m-d');
         $templateId = $_GET['template_id'] ?? 1;
-        
+
+        // Get template info
+        $stmt = $this->db->prepare("
+            SELECT st.*, ws.name as base_week_name
+            FROM schedule_templates st
+            LEFT JOIN week_schedules ws ON st.base_week_schedule_id = ws.week_schedule_id
+            WHERE st.template_id = ?
+        ");
+        $stmt->execute([$templateId]);
+        $template = $stmt->fetch();
+
+        // Check if date matches any exception day
+        $dateObj = new DateTime($date);
+        $month = (int)$dateObj->format('n');
+        $day = (int)$dateObj->format('j');
+
+        $stmt = $this->db->prepare("
+            SELECT ce.*, ds.name as day_schedule_name
+            FROM calendar_exceptions ce
+            LEFT JOIN day_schedules ds ON ce.day_schedule_id = ds.day_schedule_id
+            WHERE ce.schedule_template_id = ?
+            AND ((ce.fixed_month = ? AND ce.fixed_day = ?) OR ce.is_moving = 1)
+        ");
+        $stmt->execute([$templateId, $month, $day]);
+        $exceptions = $stmt->fetchAll();
+
+        // Check if date matches any date range
+        $stmt = $this->db->prepare("
+            SELECT cr.*, ws.name as week_schedule_name
+            FROM calendar_date_ranges cr
+            LEFT JOIN week_schedules ws ON cr.week_schedule_id = ws.week_schedule_id
+            WHERE cr.schedule_template_id = ? AND cr.is_active = 1
+        ");
+        $stmt->execute([$templateId]);
+        $dateRanges = $stmt->fetchAll();
+
+        // Determine which rules apply
+        $matchingRanges = [];
+        foreach ($dateRanges as $range) {
+            $fromMD = [$range['start_month'], $range['start_day']];
+            $toMD = [$range['end_month'], $range['end_day']];
+            $currentMD = [$month, $day];
+
+            $matches = ($fromMD <= $toMD)
+                ? ($currentMD >= $fromMD && $currentMD <= $toMD)
+                : ($currentMD >= $fromMD || $currentMD <= $toMD);
+
+            if ($matches) {
+                $matchingRanges[] = $range;
+            }
+        }
+
         $this->sendResponse([
             'date' => $date,
-            'rule_name' => 'Default',
-            'day_schedule' => 'Normal'
+            'day_of_week' => $dateObj->format('l'),
+            'template' => [
+                'id' => $template['template_id'] ?? null,
+                'name' => $template['name'] ?? null,
+                'base_week_schedule_id' => $template['base_week_schedule_id'] ?? null,
+                'base_week_name' => $template['base_week_name'] ?? 'NOT SET - THIS IS THE PROBLEM!'
+            ],
+            'matching_exceptions' => $exceptions,
+            'matching_date_ranges' => $matchingRanges,
+            'all_date_ranges' => $dateRanges
         ]);
     }
-    
+
+    /**
+     * Diagnose site_id mismatches between auth and schedule tables
+     */
+    private function diagnoseSiteIds() {
+        $currentSiteId = $this->siteId;
+
+        // Get all unique site_ids from schedule tables
+        $tables = [
+            'schedule_templates' => 'site_id',
+            'day_schedules' => 'site_id',
+            'week_schedules' => 'site_id',
+        ];
+
+        $results = [
+            'current_site_id' => $currentSiteId,
+            'tables' => []
+        ];
+
+        foreach ($tables as $table => $column) {
+            $stmt = $this->db->query("SELECT DISTINCT $column as site_id, COUNT(*) as count FROM $table GROUP BY $column");
+            $rows = $stmt->fetchAll();
+            $results['tables'][$table] = $rows;
+        }
+
+        // Check for mismatches
+        $mismatches = [];
+        foreach ($results['tables'] as $table => $siteIds) {
+            foreach ($siteIds as $row) {
+                if ($row['site_id'] !== $currentSiteId) {
+                    $mismatches[] = [
+                        'table' => $table,
+                        'has_site_id' => $row['site_id'],
+                        'expected_site_id' => $currentSiteId,
+                        'record_count' => $row['count']
+                    ];
+                }
+            }
+        }
+
+        $results['mismatches'] = $mismatches;
+        $results['has_mismatches'] = !empty($mismatches);
+
+        $this->sendResponse($results);
+    }
+
+    /**
+     * Fix site_id mismatches - update old site_id to current
+     */
+    private function fixSiteIds() {
+        $input = $this->getPostInput();
+        $oldSiteId = $input['old_site_id'] ?? null;
+        $newSiteId = $input['new_site_id'] ?? $this->siteId;
+
+        if (!$oldSiteId) {
+            $this->sendError('old_site_id is required');
+        }
+
+        $tables = ['schedule_templates', 'day_schedules', 'week_schedules'];
+        $results = [];
+
+        foreach ($tables as $table) {
+            $stmt = $this->db->prepare("UPDATE $table SET site_id = ? WHERE site_id = ?");
+            $stmt->execute([$newSiteId, $oldSiteId]);
+            $results[$table] = $stmt->rowCount();
+        }
+
+        $this->sendResponse([
+            'success' => true,
+            'old_site_id' => $oldSiteId,
+            'new_site_id' => $newSiteId,
+            'updated_rows' => $results
+        ]);
+    }
+
     private function saveTemplate() {
         $input = $this->getPostInput();
 
