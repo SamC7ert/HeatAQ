@@ -1253,6 +1253,20 @@
                     </div>
 
                     <div class="card">
+                        <h3>Database Migrations</h3>
+                        <p class="text-muted">Run pending database migrations</p>
+                        <div id="migrations-list" style="margin: 1rem 0;">
+                            <p class="text-muted">Click "Check Migrations" to scan for pending migrations</p>
+                        </div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button class="btn btn-secondary" onclick="AdminModule.checkMigrations()">Check Migrations</button>
+                            <button class="btn btn-primary" id="run-migrations-btn" onclick="AdminModule.runMigrations()" disabled>Run Pending</button>
+                            <button class="btn btn-secondary" onclick="AdminModule.exportSchema()">Export Schema</button>
+                        </div>
+                        <div id="migration-result" style="margin-top: 1rem;"></div>
+                    </div>
+
+                    <div class="card">
                         <h3>Deployment</h3>
                         <p class="text-muted">Manage code deployment from GitHub</p>
                         <button class="btn btn-secondary" onclick="AdminModule.loadDeployStatus()">Check Status</button>
