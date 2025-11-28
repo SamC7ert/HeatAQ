@@ -936,42 +936,42 @@ const SimulationsModule = {
                     // Extract summary data
                     const summary = result.summary || result.run?.summary || {};
 
-                    // HP Use (MWh)
+                    // HP Use (MWh) - thermal output
                     const hpCell = document.getElementById(`result-hp-${caseNum}`);
                     if (hpCell) {
-                        const hpMwh = (summary.total_hp_heat_kwh || 0) / 1000;
+                        const hpMwh = (summary.hp_thermal_kwh || 0) / 1000;
                         hpCell.textContent = hpMwh.toFixed(1);
                         hpCell.className = 'result-cell';
                     }
 
-                    // Boiler Use (MWh)
+                    // Boiler Use (MWh) - thermal output
                     const boilerCell = document.getElementById(`result-boiler-${caseNum}`);
                     if (boilerCell) {
-                        const boilerMwh = (summary.total_boiler_heat_kwh || 0) / 1000;
+                        const boilerMwh = (summary.boiler_thermal_kwh || 0) / 1000;
                         boilerCell.textContent = boilerMwh.toFixed(1);
                         boilerCell.className = boilerMwh > 50 ? 'result-cell warning' : 'result-cell';
                     }
 
-                    // Electricity (MWh)
+                    // Electricity (MWh) - HP electricity consumption
                     const elecCell = document.getElementById(`result-elec-${caseNum}`);
                     if (elecCell) {
-                        const elecMwh = (summary.total_hp_electricity_kwh || 0) / 1000;
+                        const elecMwh = (summary.total_hp_energy_kwh || 0) / 1000;
                         elecCell.textContent = elecMwh.toFixed(1);
                         elecCell.className = 'result-cell';
                     }
 
-                    // Days below target (1°C)
+                    // Days below target (1°C = below 27°C when target is 28°C)
                     const days1Cell = document.getElementById(`result-days1-${caseNum}`);
                     if (days1Cell) {
-                        const days1 = summary.days_below_target_1c || 0;
+                        const days1 = summary.days_below_27 || 0;
                         days1Cell.textContent = days1;
                         days1Cell.className = days1 > 10 ? 'result-cell bad' : days1 > 0 ? 'result-cell warning' : 'result-cell good';
                     }
 
-                    // Days below target (2°C)
+                    // Days below target (2°C = below 26°C when target is 28°C)
                     const days2Cell = document.getElementById(`result-days2-${caseNum}`);
                     if (days2Cell) {
-                        const days2 = summary.days_below_target_2c || 0;
+                        const days2 = summary.days_below_26 || 0;
                         days2Cell.textContent = days2;
                         days2Cell.className = days2 > 5 ? 'result-cell bad' : days2 > 0 ? 'result-cell warning' : 'result-cell good';
                     }
