@@ -1062,22 +1062,37 @@ const AdminModule = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ filename: filename })
             });
+
+            if (!response.ok) {
+                if (resultEl) resultEl.innerHTML = `<p class="error">API error: ${response.status}</p>`;
+                return;
+            }
+
             const data = await response.json();
+            console.log('Migration result:', data);
 
             let html = '';
             if (data.success) {
-                html += `<p style="color: green;"><strong>✓ Success:</strong> ${filename} (${data.statements} statements)</p>`;
-                html += '<p><strong>Next:</strong> Use "Export & Push to Git" above, then delete the migration file.</p>';
+                html += `<p style="color: green; font-weight: bold;">✓ SUCCESS: ${filename}</p>`;
+                html += `<p>${data.statements} statements executed</p>`;
+                if (data.tables_created && data.tables_created.length > 0) {
+                    html += `<p>Tables: ${data.tables_created.join(', ')}</p>`;
+                }
             } else {
-                html += `<p style="color: red;"><strong>✗ Failed:</strong> ${filename}</p>`;
+                html += `<p style="color: red; font-weight: bold;">✗ FAILED: ${filename}</p>`;
                 html += `<p class="error">${data.error || 'Unknown error'}</p>`;
             }
 
-            html += '<details><summary>Log</summary><pre class="deploy-log" style="max-height: 200px; overflow: auto;">';
-            (data.log || []).forEach(line => {
-                html += line + '\n';
-            });
-            html += '</pre></details>';
+            // Log file link
+            const logFile = filename.replace('.sql', data.success ? '_log.txt' : '_error.txt');
+            html += `<p><a href="db/migrations/${logFile}" target="_blank">View log file</a></p>`;
+
+            // Expandable log
+            if (data.log && data.log.length > 0) {
+                html += '<details><summary>Show log output</summary><pre class="deploy-log" style="max-height: 200px; overflow: auto; font-size: 11px;">';
+                data.log.forEach(line => { html += line + '\n'; });
+                html += '</pre></details>';
+            }
 
             if (resultEl) resultEl.innerHTML = html;
 
