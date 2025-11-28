@@ -613,6 +613,22 @@
                             <h3>Run Settings</h3>
                             <table class="data-table form-table">
                                 <tr>
+                                    <td><label for="sim-site-select">Site</label></td>
+                                    <td>
+                                        <select id="sim-site-select" onchange="SimControlModule.onSiteChange()">
+                                            <option value="">Loading sites...</option>
+                                        </select>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><label for="sim-pool-select">Pool</label></td>
+                                    <td>
+                                        <select id="sim-pool-select" onchange="SimControlModule.onPoolChange()">
+                                            <option value="">Select a site first</option>
+                                        </select>
+                                    </td>
+                                </tr>
+                                <tr>
                                     <td><label for="sim-config-select">Configuration</label></td>
                                     <td>
                                         <select id="sim-config-select">
@@ -1461,15 +1477,15 @@
     <!-- Core configuration -->
     <script src="./assets/js/config.js"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=88"></script>
-    <script src="./assets/js/modules/navigation.js?v=88"></script>
-    <script src="./assets/js/modules/schedules.js?v=88"></script>
-    <script src="./assets/js/modules/calendar.js?v=88"></script>
-    <script src="./assets/js/modules/simulations.js?v=88"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=88"></script>
-    <script src="./assets/js/modules/configuration.js?v=88"></script>
-    <script src="./assets/js/modules/admin.js?v=88"></script>
-    <script src="./assets/js/modules/project.js?v=88"></script>
-    <script src="./assets/js/app.js?v=88"></script>
+    <script src="./assets/js/modules/api.js?v=89"></script>
+    <script src="./assets/js/modules/navigation.js?v=89"></script>
+    <script src="./assets/js/modules/schedules.js?v=89"></script>
+    <script src="./assets/js/modules/calendar.js?v=89"></script>
+    <script src="./assets/js/modules/simulations.js?v=89"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=89"></script>
+    <script src="./assets/js/modules/configuration.js?v=89"></script>
+    <script src="./assets/js/modules/admin.js?v=89"></script>
+    <script src="./assets/js/modules/project.js?v=89"></script>
+    <script src="./assets/js/app.js?v=89"></script>
 </body>
 </html>
