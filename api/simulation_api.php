@@ -582,8 +582,9 @@ try {
             $runConfig = $configStmt->fetch();
             $configSnapshot = $runConfig ? json_decode($runConfig['config_snapshot'], true) : [];
 
-            // Initialize scheduler and simulator for detailed recalculation
-            $scheduler = new PoolScheduler($pdo, $currentSiteId);
+            // Initialize scheduler with the stored schedule template
+            $scheduleTemplateId = $configSnapshot['schedule_template_id'] ?? null;
+            $scheduler = new PoolScheduler($pdo, $currentSiteId, $scheduleTemplateId);
             $simulator = new EnergySimulator($pdo, $currentSiteId, $scheduler);
 
             // Apply the stored config from the run (equipment settings, pool config, etc.)
