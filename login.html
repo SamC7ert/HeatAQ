@@ -299,15 +299,29 @@
                         const select = document.getElementById('project');
                         select.innerHTML = '<option value="">-- Select a Project --</option>';
 
+                        // Check for last used project
+                        const lastProjectId = localStorage.getItem('heataq_project');
+                        let foundLastProject = false;
+
                         data.projects.forEach(project => {
                             const option = document.createElement('option');
                             option.value = project.project_id;
-                            option.textContent = `${project.project_name} (${project.role})`;
+                            const isLastUsed = lastProjectId && project.project_id.toString() === lastProjectId;
+                            option.textContent = `${project.project_name} (${project.role})${isLastUsed ? ' - Last used' : ''}`;
+                            if (isLastUsed) {
+                                option.selected = true;
+                                foundLastProject = true;
+                            }
                             select.appendChild(option);
                         });
 
+                        // If only one project, auto-select it
+                        if (data.projects.length === 1) {
+                            select.selectedIndex = 1;
+                        }
+
                         document.getElementById('success-message').textContent =
-                            'Login successful! Please select a project.';
+                            foundLastProject ? 'Login successful! Your last project is pre-selected.' : 'Login successful! Please select a project.';
                         document.getElementById('success-message').style.display = 'block';
 
                         document.getElementById('login-btn').textContent = 'Continue';

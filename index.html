@@ -113,24 +113,26 @@
                     <span>Schedules</span>
                 </a>
 
-                <!-- ADMIN Section -->
-                <div class="nav-section-header">ADMIN</div>
-                <a href="#" class="nav-item" onclick="app.navigation.switchSection('admin-holidays')">
-                    <span class="nav-icon">🎄</span>
-                    <span>Exception Days</span>
-                </a>
-                <a href="#" class="nav-item" onclick="app.navigation.switchSection('admin-weather')">
-                    <span class="nav-icon">🌤️</span>
-                    <span>Weather Stations</span>
-                </a>
-                <a href="#" class="nav-item" onclick="app.navigation.switchSection('admin-users')">
-                    <span class="nav-icon">👥</span>
-                    <span>User Management</span>
-                </a>
-                <a href="#" class="nav-item" onclick="app.navigation.switchSection('admin-system')">
-                    <span class="nav-icon">🔧</span>
-                    <span>System</span>
-                </a>
+                <!-- ADMIN Section (shown only for admin/owner users) -->
+                <div id="admin-section-nav" style="display: none;">
+                    <div class="nav-section-header">ADMIN</div>
+                    <a href="#" class="nav-item" onclick="app.navigation.switchSection('admin-holidays')">
+                        <span class="nav-icon">🎄</span>
+                        <span>Exception Days</span>
+                    </a>
+                    <a href="#" class="nav-item" onclick="app.navigation.switchSection('admin-weather')">
+                        <span class="nav-icon">🌤️</span>
+                        <span>Weather Stations</span>
+                    </a>
+                    <a href="#" class="nav-item" onclick="app.navigation.switchSection('admin-users')">
+                        <span class="nav-icon">👥</span>
+                        <span>User Management</span>
+                    </a>
+                    <a href="#" class="nav-item" onclick="app.navigation.switchSection('admin-system')">
+                        <span class="nav-icon">🔧</span>
+                        <span>System</span>
+                    </a>
+                </div>
             </nav>
 
             <!-- Aquarious Logo -->

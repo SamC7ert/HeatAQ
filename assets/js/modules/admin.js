@@ -593,12 +593,13 @@ const AdminModule = {
         const title = isEdit ? 'Edit User' : 'Add User';
         const userProjectIds = existingUser?.project_ids || [];
 
-        // Build project checkboxes
+        // Build project checkboxes with aligned layout
         const projectCheckboxes = this.projects.map(p => `
-            <label style="display: block; margin: 5px 0;">
+            <label style="display: flex; align-items: center; gap: 8px; margin: 6px 0; cursor: pointer;">
                 <input type="checkbox" name="user-projects" value="${p.project_id}"
+                    style="width: 16px; height: 16px; margin: 0; flex-shrink: 0;"
                     ${userProjectIds.includes(p.project_id) ? 'checked' : ''}>
-                ${p.project_name}
+                <span>${p.project_name}</span>
             </label>
         `).join('');
 
@@ -621,22 +622,6 @@ const AdminModule = {
                                 value="${existingUser?.name || ''}">
                         </div>
 
-                        <div class="form-group">
-                            <label>Role</label>
-                            <select id="user-role" class="form-control" onchange="app.admin.toggleProjectsField()">
-                                <option value="operator" ${existingUser?.role !== 'admin' ? 'selected' : ''}>Operator</option>
-                                <option value="admin" ${existingUser?.role === 'admin' ? 'selected' : ''}>Admin</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group" id="projects-field" style="${existingUser?.role === 'admin' ? 'display:none' : ''}">
-                            <label>Assigned Projects</label>
-                            <div style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px;">
-                                ${projectCheckboxes || '<p class="text-muted">No projects available</p>'}
-                            </div>
-                            <small>Operators can only access assigned projects</small>
-                        </div>
-
                         ${!isEdit ? `
                         <div class="form-group">
                             <label>Password</label>
@@ -645,10 +630,27 @@ const AdminModule = {
                         ` : ''}
 
                         <div class="form-group">
-                            <label>
-                                <input type="checkbox" id="user-active" ${existingUser?.is_active !== false ? 'checked' : ''}>
-                                Active
-                            </label>
+                            <label>Role</label>
+                            <select id="user-role" class="form-control" onchange="app.admin.toggleProjectsField()">
+                                <option value="operator" ${existingUser?.role !== 'admin' ? 'selected' : ''}>Operator</option>
+                                <option value="admin" ${existingUser?.role === 'admin' ? 'selected' : ''}>Admin</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Status</label>
+                            <select id="user-active" class="form-control">
+                                <option value="1" ${existingUser?.is_active !== false ? 'selected' : ''}>Active</option>
+                                <option value="0" ${existingUser?.is_active === false ? 'selected' : ''}>Inactive</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group" id="projects-field" style="${existingUser?.role === 'admin' ? 'display:none' : ''}">
+                            <label>Assigned Projects</label>
+                            <div style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px; background: #fafafa;">
+                                ${projectCheckboxes || '<p class="text-muted">No projects available</p>'}
+                            </div>
+                            <small class="text-muted">Operators can only access assigned projects</small>
                         </div>
 
                         <div class="form-actions">
@@ -703,7 +705,7 @@ const AdminModule = {
             name: document.getElementById('user-name').value,
             role: role,
             project_ids: projectIds,
-            is_active: document.getElementById('user-active').checked ? 1 : 0
+            is_active: parseInt(document.getElementById('user-active').value)
         };
 
         const passwordField = document.getElementById('user-password');

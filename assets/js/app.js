@@ -1,12 +1,18 @@
 // Main Application Controller
 
 const app = {
+    // Current user info
+    currentUser: null,
+
     // Initialize the application
     async init() {
         console.log('Initializing HeatAQ Schedule Management...');
 
         // Set version displays from config
         this.setVersion();
+
+        // Check user role and show/hide admin section
+        await this.checkUserRole();
 
         // Initialize navigation (await to ensure ProjectModule loads first for SimControl)
         await this.navigation.init();
@@ -18,6 +24,35 @@ const app = {
         await this.schedules.init();
 
         console.log('Application initialized successfully');
+    },
+
+    // Check current user role and update UI visibility
+    async checkUserRole() {
+        try {
+            const response = await fetch('./api/heataq_api.php?action=get_current_user');
+            const data = await response.json();
+
+            if (data.user) {
+                this.currentUser = data.user;
+
+                // Show admin section only for admin/owner roles
+                if (data.user.is_admin) {
+                    const adminNav = document.getElementById('admin-section-nav');
+                    if (adminNav) {
+                        adminNav.style.display = 'block';
+                    }
+                }
+
+                console.log('User role:', data.user.role, '- Admin access:', data.user.is_admin);
+            }
+        } catch (err) {
+            console.warn('Could not check user role:', err);
+        }
+    },
+
+    // Check if current user is admin
+    isAdmin() {
+        return this.currentUser?.is_admin || false;
     },
 
     // Set version displays from config
