@@ -47,10 +47,29 @@ const SimControlModule = {
                     `<option value="${site.site_id}">${site.name}</option>`
                 ).join('');
 
-                // Auto-select first site (or saved preference)
-                const savedSite = this.getPreference('sim_site_id');
-                if (savedSite && data.sites.find(s => s.site_id === savedSite)) {
-                    select.value = savedSite;
+                // Priority: 1) Project's site, 2) Saved preference, 3) First site
+                let selectedSite = null;
+
+                // Try to get from ProjectModule
+                if (typeof ProjectModule !== 'undefined' && ProjectModule.currentSite) {
+                    // Match by name since Project uses name, API returns site_id
+                    const projectSite = data.sites.find(s => s.name === ProjectModule.currentSite.name);
+                    if (projectSite) {
+                        selectedSite = projectSite.site_id;
+                    }
+                }
+
+                // Fall back to saved preference
+                if (!selectedSite) {
+                    const savedSite = this.getPreference('sim_site_id');
+                    if (savedSite && data.sites.find(s => s.site_id === savedSite)) {
+                        selectedSite = savedSite;
+                    }
+                }
+
+                // Set selection
+                if (selectedSite) {
+                    select.value = selectedSite;
                 }
 
                 this.currentSiteId = select.value;
@@ -92,10 +111,27 @@ const SimControlModule = {
                     `<option value="${pool.pool_id}">${pool.name} (${pool.area_m2}m², ${pool.volume_m3}m³)</option>`
                 ).join('');
 
-                // Auto-select first pool (or saved preference)
-                const savedPool = this.getPreference('sim_pool_id');
-                if (savedPool && data.pools.find(p => p.pool_id == savedPool)) {
-                    select.value = savedPool;
+                // Priority: 1) Project's pool, 2) Saved preference, 3) First pool
+                let selectedPool = null;
+
+                // Try to get from ProjectModule
+                if (typeof ProjectModule !== 'undefined' && ProjectModule.currentPoolId) {
+                    if (data.pools.find(p => p.pool_id == ProjectModule.currentPoolId)) {
+                        selectedPool = ProjectModule.currentPoolId;
+                    }
+                }
+
+                // Fall back to saved preference
+                if (!selectedPool) {
+                    const savedPool = this.getPreference('sim_pool_id');
+                    if (savedPool && data.pools.find(p => p.pool_id == savedPool)) {
+                        selectedPool = savedPool;
+                    }
+                }
+
+                // Set selection
+                if (selectedPool) {
+                    select.value = selectedPool;
                 }
 
                 this.currentPoolId = select.value;

@@ -231,6 +231,9 @@ const SimulationsModule = {
             // Build config override from override fields
             const configOverride = this.buildConfigOverride();
 
+            // Get pool_id from SimControl selection
+            const poolId = typeof SimControlModule !== 'undefined' ? SimControlModule.currentPoolId : null;
+
             const response = await fetch('/api/simulation_api.php?action=run_simulation', {
                 method: 'POST',
                 headers: {
@@ -243,6 +246,7 @@ const SimulationsModule = {
                     description: description,
                     config_id: configId,
                     template_id: ohcId,
+                    pool_id: poolId,
                     config_override: configOverride
                 })
             });
@@ -1004,35 +1008,6 @@ const SimulationsModule = {
 
         // Return null if no overrides set
         return Object.keys(override).length > 0 ? override : null;
-    },
-
-    /**
-     * Clear all override fields
-     */
-    clearAllOverrides: function() {
-        const ids = [
-            'sim-hp-override', 'sim-boiler-override', 'sim-target-override',
-            'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
-            'sim-activity-override', 'sim-wind-override', 'sim-solar-override'
-        ];
-        ids.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.value = '';
-        });
-        // Clear saved overrides
-        const key = this.getUserKey('sim_overrides');
-        localStorage.removeItem(key);
-    },
-
-    /**
-     * Clear a single override field
-     */
-    clearOverride: function(fieldId) {
-        const el = document.getElementById(fieldId);
-        if (el) {
-            el.value = '';
-            this.saveOverrides();
-        }
     },
 
     /**

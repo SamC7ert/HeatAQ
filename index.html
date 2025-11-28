@@ -389,72 +389,7 @@
                     </div>
 
                     <div class="config-grid">
-                        <!-- Pool Physical -->
-                        <div class="card">
-                            <h3>Pool Physical</h3>
-                            <table class="data-table form-table">
-                                <tr>
-                                    <td><label for="cfg-pool-volume">Volume (m³)</label></td>
-                                    <td><input type="number" id="cfg-pool-volume" step="1" value="625"></td>
-                                </tr>
-                                <tr>
-                                    <td><label for="cfg-pool-area">Surface Area (m²)</label></td>
-                                    <td><input type="number" id="cfg-pool-area" step="0.1" value="312.5"></td>
-                                </tr>
-                                <tr>
-                                    <td><label for="cfg-pool-depth">Avg Depth (m)</label></td>
-                                    <td><input type="number" id="cfg-pool-depth" step="0.1" value="2.0"></td>
-                                </tr>
-                                <tr>
-                                    <td><label for="cfg-wind-factor">Wind Exposure</label></td>
-                                    <td><input type="number" id="cfg-wind-factor" step="0.01" value="0.535" min="0" max="1"></td>
-                                </tr>
-                                <tr>
-                                    <td><label for="cfg-years-operating">Years Operating</label></td>
-                                    <td>
-                                        <select id="cfg-years-operating">
-                                            <option value="1">1 - New pool (cold ground)</option>
-                                            <option value="2">2 - Warming ground</option>
-                                            <option value="3" selected>3+ - Steady state</option>
-                                        </select>
-                                    </td>
-                                </tr>
-                            </table>
-                        </div>
-
-                        <!-- Cover & Environment -->
-                        <div class="card">
-                            <h3>Cover & Environment</h3>
-                            <table class="data-table form-table">
-                                <tr>
-                                    <td><label for="cfg-has-cover">Pool Cover</label></td>
-                                    <td>
-                                        <select id="cfg-has-cover" onchange="app.configuration.toggleCover()">
-                                            <option value="1" selected>Yes - Cover when closed</option>
-                                            <option value="0">No cover</option>
-                                        </select>
-                                    </td>
-                                </tr>
-                                <tr id="cover-u-row">
-                                    <td><label for="cfg-cover-u">Cover U-value (W/m²K)</label></td>
-                                    <td><input type="number" id="cfg-cover-u" step="0.1" value="5.0" min="0"></td>
-                                </tr>
-                                <tr id="cover-solar-row">
-                                    <td><label for="cfg-cover-solar">Cover Solar Trans. (%)</label></td>
-                                    <td><input type="number" id="cfg-cover-solar" step="1" value="10" min="0" max="100"></td>
-                                </tr>
-                                <tr>
-                                    <td><label for="cfg-solar-absorb">Solar Absorption (%)</label></td>
-                                    <td><input type="number" id="cfg-solar-absorb" step="1" value="60" min="0" max="100"></td>
-                                </tr>
-                                <tr>
-                                    <td><label for="cfg-weather-station">Weather Station</label></td>
-                                    <td><select id="cfg-weather-station">
-                                        <option value="">Loading stations...</option>
-                                    </select></td>
-                                </tr>
-                            </table>
-                        </div>
+                        <!-- Pool Physical & Cover are now in Project → Pool (pools table) -->
 
                         <!-- Equipment -->
                         <div class="card">
@@ -673,7 +608,7 @@
                         <div class="card">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                 <h3 style="margin: 0;">Configuration Overrides</h3>
-                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="SimulationModule.clearAllOverrides()" title="Clear all overrides">Clear All</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="SimulationsModule.clearAllOverrides()" title="Clear all overrides">Clear All</button>
                             </div>
                             <p class="text-muted" style="font-size: 11px; margin-bottom: 8px;">Leave override blank to use config value</p>
                             <table class="data-table form-table compact" id="sim-override-table">
@@ -690,55 +625,55 @@
                                         <td>HP Capacity (kW)</td>
                                         <td id="cfg-val-hp-capacity" class="config-value">-</td>
                                         <td><input type="number" id="sim-hp-override" step="1" placeholder="-"></td>
-                                        <td><button type="button" class="btn-clear-override" onclick="SimulationModule.clearOverride('sim-hp-override')" title="Clear">&times;</button></td>
+                                        <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-hp-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
                                         <td>Boiler Capacity (kW)</td>
                                         <td id="cfg-val-boiler-capacity" class="config-value">-</td>
                                         <td><input type="number" id="sim-boiler-override" step="1" placeholder="-"></td>
-                                        <td><button type="button" class="btn-clear-override" onclick="SimulationModule.clearOverride('sim-boiler-override')" title="Clear">&times;</button></td>
+                                        <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-boiler-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
                                         <td>Target Temp (°C)</td>
                                         <td id="cfg-val-target-temp" class="config-value">-</td>
                                         <td><input type="number" id="sim-target-override" step="0.1" placeholder="-"></td>
-                                        <td><button type="button" class="btn-clear-override" onclick="SimulationModule.clearOverride('sim-target-override')" title="Clear">&times;</button></td>
+                                        <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-target-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
                                         <td>Upper Tolerance (°C)</td>
                                         <td id="cfg-val-upper-tol" class="config-value">-</td>
                                         <td><input type="number" id="sim-upper-tol-override" step="0.1" placeholder="-"></td>
-                                        <td><button type="button" class="btn-clear-override" onclick="SimulationModule.clearOverride('sim-upper-tol-override')" title="Clear">&times;</button></td>
+                                        <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-upper-tol-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
                                         <td>Lower Tolerance (°C)</td>
                                         <td id="cfg-val-lower-tol" class="config-value">-</td>
                                         <td><input type="number" id="sim-lower-tol-override" step="0.1" placeholder="-"></td>
-                                        <td><button type="button" class="btn-clear-override" onclick="SimulationModule.clearOverride('sim-lower-tol-override')" title="Clear">&times;</button></td>
+                                        <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-lower-tol-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
                                         <td>Bathers/Day</td>
                                         <td id="cfg-val-bathers" class="config-value">-</td>
                                         <td><input type="number" id="sim-bathers-override" step="1" placeholder="-"></td>
-                                        <td><button type="button" class="btn-clear-override" onclick="SimulationModule.clearOverride('sim-bathers-override')" title="Clear">&times;</button></td>
+                                        <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-bathers-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
                                         <td>Activity Factor</td>
                                         <td id="cfg-val-activity" class="config-value">-</td>
                                         <td><input type="number" id="sim-activity-override" step="0.1" placeholder="-"></td>
-                                        <td><button type="button" class="btn-clear-override" onclick="SimulationModule.clearOverride('sim-activity-override')" title="Clear">&times;</button></td>
+                                        <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-activity-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
                                         <td>Wind Exposure</td>
                                         <td id="cfg-val-wind" class="config-value">-</td>
                                         <td><input type="number" id="sim-wind-override" step="0.01" placeholder="-"></td>
-                                        <td><button type="button" class="btn-clear-override" onclick="SimulationModule.clearOverride('sim-wind-override')" title="Clear">&times;</button></td>
+                                        <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-wind-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
                                         <td>Solar Absorption</td>
                                         <td id="cfg-val-solar" class="config-value">-</td>
                                         <td><input type="number" id="sim-solar-override" step="0.01" placeholder="-"></td>
-                                        <td><button type="button" class="btn-clear-override" onclick="SimulationModule.clearOverride('sim-solar-override')" title="Clear">&times;</button></td>
+                                        <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-solar-override')" title="Clear">&times;</button></td>
                                     </tr>
                                 </tbody>
                             </table>

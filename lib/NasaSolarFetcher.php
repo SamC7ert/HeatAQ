@@ -135,6 +135,16 @@ class NasaSolarFetcher {
      * Fetch and store solar data for a site (both daily and hourly)
      */
     public function fetchAndStore(float $latitude, float $longitude, string $startYear, string $endYear): array {
+        // Check if required tables exist
+        $tablesCheck = $this->db->query("SHOW TABLES LIKE 'site_solar_daily'");
+        if ($tablesCheck->rowCount() === 0) {
+            throw new Exception('site_solar_daily table does not exist. Run the solar tables migration first.');
+        }
+        $tablesCheck = $this->db->query("SHOW TABLES LIKE 'site_solar_hourly'");
+        if ($tablesCheck->rowCount() === 0) {
+            throw new Exception('site_solar_hourly table does not exist. Run the solar tables migration first.');
+        }
+
         // Fetch from NASA
         $nasaData = $this->fetchFromNasa($latitude, $longitude, $startYear, $endYear);
 
