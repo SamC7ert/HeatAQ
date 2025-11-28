@@ -381,6 +381,26 @@ class HeatAQAPI {
                     $this->deployPush();
                     break;
 
+                // SITE AND POOL MANAGEMENT
+                case 'get_sites':
+                    $this->getSites();
+                    break;
+
+                case 'get_pools':
+                    $this->getPools();
+                    break;
+
+                case 'get_pool':
+                    $this->getPool($_GET['pool_id'] ?? 0);
+                    break;
+
+                case 'save_pool':
+                    if (!$this->canEdit()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->savePool();
+                    break;
+
                 default:
                     $this->sendError('Invalid action');
             }
@@ -2263,6 +2283,205 @@ class HeatAQAPI {
             'log' => $log,
             'note' => $success ? 'Pushed successfully' : 'Push may have failed - check log'
         ]);
+    }
+
+    // ====================================
+    // SITE AND POOL MANAGEMENT
+    // ====================================
+
+    /**
+     * Get all sites (pool_sites) accessible to user
+     */
+    private function getSites() {
+        $stmt = $this->db->prepare("
+            SELECT
+                ps.id,
+                ps.site_id,
+                ps.name,
+                ps.latitude,
+                ps.longitude,
+                ps.description,
+                (SELECT COUNT(*) FROM pools p WHERE p.site_id = ps.site_id AND p.is_active = 1) as pool_count
+            FROM pool_sites ps
+            ORDER BY ps.name
+        ");
+        $stmt->execute();
+        $sites = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->sendResponse(['sites' => $sites]);
+    }
+
+    /**
+     * Get pools for a site (or all pools for current user's site)
+     */
+    private function getPools() {
+        $siteId = $_GET['site_id'] ?? $this->siteId;
+
+        // Check if pools table exists
+        $tableCheck = $this->db->query("SHOW TABLES LIKE 'pools'");
+        if ($tableCheck->rowCount() === 0) {
+            // Pools table doesn't exist yet - return empty with migration notice
+            $this->sendResponse([
+                'pools' => [],
+                'notice' => 'Pools table not found. Run migration 007_pools_table.sql'
+            ]);
+            return;
+        }
+
+        $stmt = $this->db->prepare("
+            SELECT
+                p.pool_id,
+                p.site_id,
+                p.name,
+                p.description,
+                p.length_m,
+                p.width_m,
+                p.depth_m,
+                p.area_m2,
+                p.volume_m3,
+                p.wind_exposure,
+                p.solar_absorption,
+                p.years_operating,
+                p.has_cover,
+                p.cover_r_value,
+                p.cover_solar_transmittance,
+                p.has_tunnel,
+                p.floor_insulated,
+                p.pool_type,
+                p.is_active,
+                ps.name as site_name
+            FROM pools p
+            JOIN pool_sites ps ON p.site_id = ps.site_id
+            WHERE p.site_id = ? AND p.is_active = 1
+            ORDER BY p.name
+        ");
+        $stmt->execute([$siteId]);
+        $pools = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $this->sendResponse(['pools' => $pools, 'site_id' => $siteId]);
+    }
+
+    /**
+     * Get a single pool by ID
+     */
+    private function getPool($poolId) {
+        if (!$poolId) {
+            $this->sendError('pool_id is required');
+        }
+
+        $stmt = $this->db->prepare("
+            SELECT
+                p.*,
+                ps.name as site_name
+            FROM pools p
+            JOIN pool_sites ps ON p.site_id = ps.site_id
+            WHERE p.pool_id = ?
+        ");
+        $stmt->execute([$poolId]);
+        $pool = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$pool) {
+            $this->sendError('Pool not found', 404);
+        }
+
+        $this->sendResponse(['pool' => $pool]);
+    }
+
+    /**
+     * Save pool (create or update)
+     */
+    private function savePool() {
+        $input = $this->getPostInput();
+
+        $poolId = $input['pool_id'] ?? null;
+        $siteId = $input['site_id'] ?? $this->siteId;
+        $name = $input['name'] ?? 'Main Pool';
+
+        // Physical dimensions
+        $length = floatval($input['length_m'] ?? 25);
+        $width = floatval($input['width_m'] ?? 12.5);
+        $depth = floatval($input['depth_m'] ?? 2.0);
+        $area = $length * $width;
+        $volume = $area * $depth;
+
+        // Environmental factors
+        $windExposure = floatval($input['wind_exposure'] ?? 0.535);
+        $solarAbsorption = floatval($input['solar_absorption'] ?? 60);
+        $yearsOperating = intval($input['years_operating'] ?? 3);
+
+        // Cover properties
+        $hasCover = ($input['has_cover'] ?? true) ? 1 : 0;
+        $coverRValue = floatval($input['cover_r_value'] ?? 5.0);
+        $coverSolarTrans = floatval($input['cover_solar_transmittance'] ?? 10);
+
+        // Structure
+        $hasTunnel = ($input['has_tunnel'] ?? true) ? 1 : 0;
+        $floorInsulated = ($input['floor_insulated'] ?? true) ? 1 : 0;
+        $poolType = $input['pool_type'] ?? 'outdoor';
+
+        $description = $input['description'] ?? '';
+
+        try {
+            if ($poolId) {
+                // Update existing pool
+                $stmt = $this->db->prepare("
+                    UPDATE pools SET
+                        name = ?,
+                        description = ?,
+                        length_m = ?,
+                        width_m = ?,
+                        depth_m = ?,
+                        area_m2 = ?,
+                        volume_m3 = ?,
+                        wind_exposure = ?,
+                        solar_absorption = ?,
+                        years_operating = ?,
+                        has_cover = ?,
+                        cover_r_value = ?,
+                        cover_solar_transmittance = ?,
+                        has_tunnel = ?,
+                        floor_insulated = ?,
+                        pool_type = ?
+                    WHERE pool_id = ?
+                ");
+                $stmt->execute([
+                    $name, $description,
+                    $length, $width, $depth, $area, $volume,
+                    $windExposure, $solarAbsorption, $yearsOperating,
+                    $hasCover, $coverRValue, $coverSolarTrans,
+                    $hasTunnel, $floorInsulated, $poolType,
+                    $poolId
+                ]);
+            } else {
+                // Create new pool
+                $stmt = $this->db->prepare("
+                    INSERT INTO pools (
+                        site_id, name, description,
+                        length_m, width_m, depth_m, area_m2, volume_m3,
+                        wind_exposure, solar_absorption, years_operating,
+                        has_cover, cover_r_value, cover_solar_transmittance,
+                        has_tunnel, floor_insulated, pool_type
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ");
+                $stmt->execute([
+                    $siteId, $name, $description,
+                    $length, $width, $depth, $area, $volume,
+                    $windExposure, $solarAbsorption, $yearsOperating,
+                    $hasCover, $coverRValue, $coverSolarTrans,
+                    $hasTunnel, $floorInsulated, $poolType
+                ]);
+                $poolId = $this->db->lastInsertId();
+            }
+
+            $this->sendResponse([
+                'success' => true,
+                'pool_id' => $poolId,
+                'message' => 'Pool saved successfully'
+            ]);
+
+        } catch (PDOException $e) {
+            $this->sendError('Failed to save pool: ' . $e->getMessage());
+        }
     }
 }
 
