@@ -1,6 +1,6 @@
 # Database Schema
 
-Generated: 2025-11-28 11:55:03
+Generated: 2025-11-28 12:08:43
 
 Database: heataq_pool-353130302dd2
 
