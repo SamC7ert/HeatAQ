@@ -689,9 +689,9 @@ const SimulationsModule = {
         const windValue = config.pool?.wind_exposure;
         const windDisplay = windValue !== undefined ? (windValue * 100).toFixed(1) + '%' : undefined;
 
-        // Format solar absorption as percentage (0.6 -> "60.0%")
+        // Solar absorption is already stored as percentage (60 = 60%)
         const solarValue = config.solar?.absorption;
-        const solarDisplay = solarValue !== undefined ? (solarValue * 100).toFixed(1) + '%' : undefined;
+        const solarDisplay = solarValue !== undefined ? solarValue.toFixed(1) + '%' : undefined;
 
         // Map config values to display elements
         const mappings = {
