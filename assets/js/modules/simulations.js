@@ -121,12 +121,13 @@ const SimulationsModule = {
                     ${this.runs.map(run => {
                         const s = run.summary || {};
                         const config = run.config || {};
-                        const hpCap = config.equipment?.hp_capacity_kw || '-';
-                        const boilerCap = config.equipment?.boiler_capacity_kw || '-';
+                        const equip = config.equipment || {};
+                        const hpCap = equip.heat_pump?.capacity_kw || equip.hp_capacity_kw || '-';
+                        const boilerCap = equip.boiler?.capacity_kw || equip.boiler_capacity_kw || '-';
                         const scheduleName = config.schedule_template_name || '-';
-                        const elecMwh = s.total_hp_electricity_kwh ? (s.total_hp_electricity_kwh / 1000).toFixed(1) : '-';
-                        const days1 = s.days_below_target_1c ?? '-';
-                        const days2 = s.days_below_target_2c ?? '-';
+                        const elecMwh = s.total_hp_energy_kwh ? (s.total_hp_energy_kwh / 1000).toFixed(1) : '-';
+                        const days1 = s.days_below_27 ?? '-';
+                        const days2 = s.days_below_26 ?? '-';
                         const isSelected = this.selectedRunId === run.run_id;
 
                         return `
