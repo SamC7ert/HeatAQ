@@ -1744,9 +1744,22 @@ const SimulationsModule = {
                     const barWidth = xAxis.width / data.length;
                     const x = xAxis.left + (debugIndex * barWidth);
 
-                    // Draw yellow highlight rectangle
+                    // Draw highlight with left/right borders (more visible than fill)
                     ctx.save();
-                    ctx.fillStyle = 'rgba(255, 235, 59, 0.3)';  // Light yellow
+                    ctx.strokeStyle = 'rgba(255, 152, 0, 0.9)';  // Orange border
+                    ctx.lineWidth = 3;
+                    // Left border
+                    ctx.beginPath();
+                    ctx.moveTo(x, yAxis.top);
+                    ctx.lineTo(x, yAxis.bottom);
+                    ctx.stroke();
+                    // Right border
+                    ctx.beginPath();
+                    ctx.moveTo(x + barWidth, yAxis.top);
+                    ctx.lineTo(x + barWidth, yAxis.bottom);
+                    ctx.stroke();
+                    // Light fill between borders
+                    ctx.fillStyle = 'rgba(255, 235, 59, 0.15)';
                     ctx.fillRect(x, yAxis.top, barWidth, yAxis.bottom - yAxis.top);
                     ctx.restore();
                 }
@@ -1895,9 +1908,22 @@ const SimulationsModule = {
                     const barWidth = xAxis.width / data.length;
                     const x = xAxis.left + (debugIndex * barWidth);
 
-                    // Draw yellow highlight rectangle
+                    // Draw highlight with left/right borders (more visible than fill)
                     ctx.save();
-                    ctx.fillStyle = 'rgba(255, 235, 59, 0.3)';  // Light yellow
+                    ctx.strokeStyle = 'rgba(255, 152, 0, 0.9)';  // Orange border
+                    ctx.lineWidth = 3;
+                    // Left border
+                    ctx.beginPath();
+                    ctx.moveTo(x, yAxis.top);
+                    ctx.lineTo(x, yAxis.bottom);
+                    ctx.stroke();
+                    // Right border
+                    ctx.beginPath();
+                    ctx.moveTo(x + barWidth, yAxis.top);
+                    ctx.lineTo(x + barWidth, yAxis.bottom);
+                    ctx.stroke();
+                    // Light fill between borders
+                    ctx.fillStyle = 'rgba(255, 235, 59, 0.15)';
                     ctx.fillRect(x, yAxis.top, barWidth, yAxis.bottom - yAxis.top);
                     ctx.restore();
                 }
@@ -2212,6 +2238,9 @@ const SimulationsModule = {
 
         const date = dateInput.value;
         const hour = hourSelect ? hourSelect.value : '12';
+
+        // Set debugTimestamp so chart highlight appears on initial load
+        this.debugTimestamp = `${date} ${hour.padStart(2, '0')}:00`;
 
         this.setDebugButtonState('loading');
 
