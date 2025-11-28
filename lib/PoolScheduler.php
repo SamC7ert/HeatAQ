@@ -15,6 +15,7 @@
 class PoolScheduler {
     private $db;
     private $siteId;
+    private $poolSiteId;  // Integer ID (preferred)
     private $templateId;
     private $template;
     private $schedules = [];
@@ -27,12 +28,14 @@ class PoolScheduler {
      * Initialize scheduler from database
      *
      * @param PDO $db Database connection
-     * @param string $siteId Site identifier
+     * @param string $siteId Site identifier (string)
      * @param int|null $templateId Optional specific template ID
+     * @param int|null $poolSiteId Optional integer site ID (preferred over string)
      */
-    public function __construct($db, $siteId = 'arendal_aquatic', $templateId = null) {
+    public function __construct($db, $siteId = 'arendal_aquatic', $templateId = null, $poolSiteId = null) {
         $this->db = $db;
         $this->siteId = $siteId;
+        $this->poolSiteId = $poolSiteId;
 
         // Load configuration from database
         $this->template = $this->loadTemplate($templateId);
@@ -56,7 +59,16 @@ class PoolScheduler {
                 WHERE template_id = ?
             ");
             $stmt->execute([$templateId]);
+        } elseif ($this->poolSiteId) {
+            // Prefer integer pool_site_id if available
+            $stmt = $this->db->prepare("
+                SELECT * FROM schedule_templates
+                WHERE pool_site_id = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$this->poolSiteId]);
         } else {
+            // Fallback to string site_id
             $stmt = $this->db->prepare("
                 SELECT * FROM schedule_templates
                 WHERE site_id = ?
@@ -75,19 +87,33 @@ class PoolScheduler {
     }
 
     /**
+     * Get site filter condition and value for queries
+     * Uses pool_site_id (integer) if available, falls back to site_id (string)
+     */
+    private function getSiteFilter($tableAlias = null) {
+        $col = $tableAlias ? "{$tableAlias}." : "";
+        if ($this->poolSiteId) {
+            return ["condition" => "{$col}pool_site_id = ?", "value" => $this->poolSiteId];
+        }
+        return ["condition" => "{$col}site_id = ?", "value" => $this->siteId];
+    }
+
+    /**
      * Load all day schedules with their periods
      *
      * @return array Schedule data indexed by name
      */
     private function loadDaySchedules() {
+        $filter = $this->getSiteFilter();
+
         // Load base schedules
         $stmt = $this->db->prepare("
             SELECT day_schedule_id, name, description
             FROM day_schedules
-            WHERE site_id = ?
+            WHERE {$filter['condition']}
             ORDER BY name
         ");
-        $stmt->execute([$this->siteId]);
+        $stmt->execute([$filter['value']]);
         $rows = $stmt->fetchAll();
 
         $schedules = [];
@@ -100,6 +126,7 @@ class PoolScheduler {
         }
 
         // Load periods for each schedule
+        $filter = $this->getSiteFilter('ds');
         $stmt = $this->db->prepare("
             SELECT
                 ds.name as schedule_name,
@@ -111,10 +138,10 @@ class PoolScheduler {
                 dsp.period_order
             FROM day_schedule_periods dsp
             JOIN day_schedules ds ON dsp.day_schedule_id = ds.day_schedule_id
-            WHERE ds.site_id = ?
+            WHERE {$filter['condition']}
             ORDER BY ds.name, dsp.period_order, dsp.start_time
         ");
-        $stmt->execute([$this->siteId]);
+        $stmt->execute([$filter['value']]);
         $periods = $stmt->fetchAll();
 
         foreach ($periods as $period) {
@@ -154,6 +181,7 @@ class PoolScheduler {
      * @return array Week schedules indexed by ID
      */
     private function loadWeekSchedules() {
+        $filter = $this->getSiteFilter('ws');
         $stmt = $this->db->prepare("
             SELECT
                 ws.week_schedule_id,
@@ -173,9 +201,9 @@ class PoolScheduler {
             LEFT JOIN day_schedules d5 ON ws.friday_schedule_id = d5.day_schedule_id
             LEFT JOIN day_schedules d6 ON ws.saturday_schedule_id = d6.day_schedule_id
             LEFT JOIN day_schedules d7 ON ws.sunday_schedule_id = d7.day_schedule_id
-            WHERE ws.site_id = ?
+            WHERE {$filter['condition']}
         ");
-        $stmt->execute([$this->siteId]);
+        $stmt->execute([$filter['value']]);
         $rows = $stmt->fetchAll();
 
         $weekSchedules = [];

@@ -18,11 +18,13 @@
 require_once __DIR__ . '/../config.php';
 
 // Include authentication if required
+$currentPoolSiteId = null;
 if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
     require_once __DIR__ . '/../auth.php';
     $auth = HeatAQAuth::check(Config::requiresAuth());
     if ($auth) {
         $currentSiteId = $auth['project']['site_id'];
+        $currentPoolSiteId = $auth['project']['pool_site_id'] ?? null;
     }
 } else {
     $currentSiteId = 'arendal_aquatic';
@@ -70,8 +72,8 @@ try {
     // Get database connection
     $pdo = Config::getDatabase();
 
-    // Initialize scheduler
-    $scheduler = new PoolScheduler($pdo, $currentSiteId);
+    // Initialize scheduler (with optional pool_site_id for integer FK support)
+    $scheduler = new PoolScheduler($pdo, $currentSiteId, null, $currentPoolSiteId);
 
     $action = getParam('action', '');
 

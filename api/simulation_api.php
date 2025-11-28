@@ -42,12 +42,29 @@ if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
     require_once __DIR__ . '/../auth.php';
     $auth = HeatAQAuth::check(Config::requiresAuth());
     if ($auth) {
+        // Support both string site_id (legacy) and integer pool_site_id (new)
         $currentSiteId = $auth['project']['site_id'];
+        $currentPoolSiteId = $auth['project']['pool_site_id'] ?? null;
         $currentUserId = $auth['user']['user_id'] ?? null;
     }
 } else {
     $currentSiteId = 'arendal_aquatic';
+    $currentPoolSiteId = null; // Will be looked up if needed
     $currentUserId = null;
+}
+
+/**
+ * Get the integer pool_site_id, looking it up from site_id if needed
+ */
+function getPoolSiteId($pdo, $siteId, $poolSiteId = null) {
+    if ($poolSiteId !== null) {
+        return $poolSiteId;
+    }
+    // Look up pool_site_id from site_id string
+    $stmt = $pdo->prepare("SELECT id FROM pool_sites WHERE site_id = ?");
+    $stmt->execute([$siteId]);
+    $result = $stmt->fetch();
+    return $result ? $result['id'] : null;
 }
 
 // Include required classes

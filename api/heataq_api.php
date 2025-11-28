@@ -18,11 +18,14 @@ if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
     require_once __DIR__ . '/../auth.php';
     $auth = HeatAQAuth::check(Config::requiresAuth());
     if ($auth) {
+        // Support both string site_id (legacy) and integer pool_site_id (new)
         $currentSiteId = $auth['project']['site_id'];
+        $currentPoolSiteId = $auth['project']['pool_site_id'] ?? null;
     }
 } else {
     // If auth not required, use default site
     $currentSiteId = 'arendal_aquatic';
+    $currentPoolSiteId = null;
 }
 
 // ====================================
