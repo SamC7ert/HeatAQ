@@ -1202,14 +1202,20 @@ const SimulationsModule = {
                 const config = data.run.config || {};
                 const equipment = config.equipment || {};
 
-                // Display config info (from equipment settings)
+                // Display config template name
                 if (configDisplay) {
-                    const hpCap = equipment.hp_capacity_kw;
-                    const boilerCap = equipment.boiler_capacity_kw;
-                    if (hpCap && boilerCap) {
-                        configDisplay.textContent = `HP: ${hpCap}kW, Boiler: ${boilerCap}kW`;
+                    const configName = config.config_template_name;
+                    if (configName) {
+                        configDisplay.textContent = configName;
                     } else {
-                        configDisplay.textContent = data.run.scenario_name || `Run #${runId}`;
+                        // Fallback: show equipment summary or scenario name
+                        const hpCap = equipment.hp_capacity_kw;
+                        const boilerCap = equipment.boiler_capacity_kw;
+                        if (hpCap && boilerCap) {
+                            configDisplay.textContent = `HP: ${hpCap}kW, Boiler: ${boilerCap}kW`;
+                        } else {
+                            configDisplay.textContent = data.run.scenario_name || `Run #${runId}`;
+                        }
                     }
                 }
 

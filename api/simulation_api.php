@@ -155,10 +155,10 @@ try {
                 $config = null;
                 $configRow = null;
 
-                // Try with all columns first (json_config + legacy columns)
+                // Try with all columns first (json_config + legacy columns + template_name)
                 try {
                     $configStmt = $pdo->prepare("
-                        SELECT json_config, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy
+                        SELECT template_name, json_config, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy
                         FROM config_templates WHERE template_id = ?
                     ");
                     $configStmt->execute([$configId]);
@@ -172,7 +172,7 @@ try {
                 if (!$configRow) {
                     try {
                         $configStmt = $pdo->prepare("
-                            SELECT config_json as json_config
+                            SELECT template_name, config_json as json_config
                             FROM config_templates WHERE template_id = ?
                         ");
                         $configStmt->execute([$configId]);
@@ -215,6 +215,7 @@ try {
 
             // Create simulation run record
             $scheduleTemplate = $scheduler->getTemplate();
+            $configTemplateName = $configRow['template_name'] ?? null;
             $runId = createSimulationRun($pdo, [
                 'site_id' => $currentSiteId,
                 'user_id' => $currentUserId,
@@ -226,6 +227,8 @@ try {
                     'simulator_version' => EnergySimulator::getVersion(),
                     'pool_config' => $simulator->getPoolConfig(),
                     'equipment' => $simulator->getEquipment(),
+                    'config_template_id' => $configId,
+                    'config_template_name' => $configTemplateName,
                     'schedule_template_id' => $scheduleTemplate['template_id'] ?? null,
                     'schedule_template_name' => $scheduleTemplate['name'] ?? null,
                 ]),
@@ -573,9 +576,23 @@ try {
             // Use stored water temp unless overridden
             $waterTemp = $waterTempOverride ? (float)$waterTempOverride : (float)$stored['water_temp'];
 
+            // Load config_snapshot from the simulation run to use the same settings
+            $configStmt = $pdo->prepare("SELECT config_snapshot FROM simulation_runs WHERE run_id = ?");
+            $configStmt->execute([$runId]);
+            $runConfig = $configStmt->fetch();
+            $configSnapshot = $runConfig ? json_decode($runConfig['config_snapshot'], true) : [];
+
             // Initialize scheduler and simulator for detailed recalculation
             $scheduler = new PoolScheduler($pdo, $currentSiteId);
             $simulator = new EnergySimulator($pdo, $currentSiteId, $scheduler);
+
+            // Apply the stored config from the run (equipment settings, pool config, etc.)
+            if (!empty($configSnapshot['equipment'])) {
+                $simulator->setEquipment($configSnapshot['equipment']);
+            }
+            if (!empty($configSnapshot['pool_config'])) {
+                $simulator->setPoolConfig($configSnapshot['pool_config']);
+            }
 
             // Run detailed debug calculation using stored/specified water temp
             $debug = $simulator->debugSingleHour($date, $hour, $waterTemp);
@@ -590,6 +607,14 @@ try {
                 'hp_heat_kw' => (float)$stored['hp_heat_kw'],
                 'boiler_heat_kw' => (float)$stored['boiler_heat_kw'],
                 'hp_cop' => (float)$stored['hp_cop'],
+            ];
+
+            // Add config info from the run
+            $debug['config_info'] = [
+                'config_template_name' => $configSnapshot['config_template_name'] ?? null,
+                'schedule_template_name' => $configSnapshot['schedule_template_name'] ?? null,
+                'hp_capacity_kw' => $configSnapshot['equipment']['hp_capacity_kw'] ?? null,
+                'boiler_capacity_kw' => $configSnapshot['equipment']['boiler_capacity_kw'] ?? null,
             ];
 
             // Validation: check if recalc matches stored (warn if different)
