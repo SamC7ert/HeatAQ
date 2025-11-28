@@ -168,14 +168,41 @@ const SimControlModule = {
             const savedConfig = this.getPreference('selected_config');
             if (simSelect) simSelect.value = savedConfig;
 
-            // Save to server on change
+            // Load config values on change
             if (simSelect) {
                 simSelect.addEventListener('change', () => {
                     this.savePreference('selected_config', simSelect.value);
+                    this.loadSelectedConfig(simSelect.value);
                 });
+
+                // Load initial config if one is selected
+                if (savedConfig) {
+                    this.loadSelectedConfig(savedConfig);
+                }
             }
         } catch (err) {
             console.error('Failed to load config options:', err);
+        }
+    },
+
+    // Load and display selected config values
+    loadSelectedConfig: async function(configId) {
+        if (!configId) {
+            // Clear config values if no config selected
+            document.querySelectorAll('[id^="cfg-val-"]').forEach(el => el.textContent = '-');
+            return;
+        }
+
+        try {
+            const response = await fetch(`./api/heataq_api.php?action=get_project_config&config_id=${configId}`);
+            const data = await response.json();
+
+            if (data.config && typeof SimulationsModule !== 'undefined') {
+                // The config object is nested: data.config.config contains the actual values
+                SimulationsModule.populateConfigValues(data.config.config || data.config);
+            }
+        } catch (err) {
+            console.error('Failed to load config:', err);
         }
     },
 
