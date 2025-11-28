@@ -1,12 +1,12 @@
 # Database Schema
 
-Generated: 2025-11-28 14:56:32
+Generated: 2025-11-28 16:21:10
 
 Database: heataq_pool-353130302dd2
 
 ## audit_log
 
-Rows: 2729
+Rows: 2842
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -117,6 +117,7 @@ Rows: 3
 | template_name | varchar(100) | NO | MUL | NULL |  |
 | template_version | varchar(20) | YES |  | v1.0 |  |
 | project_id | int(11) | YES |  | NULL |  |
+| pool_id | int(11) | YES | MUL | NULL |  |
 | hp_capacity_kw | decimal(6,2) | YES |  | NULL |  |
 | boiler_capacity_kw | decimal(6,2) | YES |  | NULL |  |
 | target_temp | decimal(3,1) | YES |  | NULL |  |
@@ -131,6 +132,7 @@ Rows: 3
 **Indexes:**
 - UNIQUE `PRIMARY` (template_id)
 - UNIQUE `unique_name_version` (template_name, template_version)
+- `idx_config_pool` (pool_id)
 
 ## day_schedule_periods
 
@@ -278,6 +280,39 @@ Rows: 1
 - UNIQUE `PRIMARY` (id)
 - UNIQUE `idx_site_code` (site_id)
 
+## pools
+
+Rows: 1
+
+| Column | Type | Null | Key | Default | Extra |
+|--------|------|------|-----|---------|-------|
+| pool_id | int(11) | NO | PRI | NULL | auto_increment |
+| site_id | varchar(50) | NO | MUL | NULL |  |
+| name | varchar(100) | NO |  | Main Pool |  |
+| description | text | YES |  | NULL |  |
+| length_m | decimal(6,2) | YES |  | 25.00 |  |
+| width_m | decimal(6,2) | YES |  | 12.50 |  |
+| depth_m | decimal(4,2) | YES |  | 2.00 |  |
+| area_m2 | decimal(8,2) | YES |  | 312.50 |  |
+| volume_m3 | decimal(10,2) | YES |  | 625.00 |  |
+| wind_exposure | decimal(4,3) | YES |  | 0.535 |  |
+| solar_absorption | decimal(4,1) | YES |  | 60.0 |  |
+| years_operating | int(11) | YES |  | 3 |  |
+| has_cover | tinyint(1) | YES |  | 1 |  |
+| cover_r_value | decimal(4,2) | YES |  | 5.00 |  |
+| cover_solar_transmittance | decimal(4,2) | YES |  | 10.00 |  |
+| has_tunnel | tinyint(1) | YES |  | 1 |  |
+| floor_insulated | tinyint(1) | YES |  | 1 |  |
+| pool_type | enum('outdoor','indoor','semi-enclosed') | YES |  | outdoor |  |
+| is_active | tinyint(1) | YES | MUL | 1 |  |
+| created_at | timestamp | YES |  | current_timestamp() |  |
+| updated_at | timestamp | YES |  | current_timestamp() | on update current_timestamp() |
+
+**Indexes:**
+- UNIQUE `PRIMARY` (pool_id)
+- `idx_site` (site_id)
+- `idx_active` (is_active)
+
 ## projects
 
 Rows: 1
@@ -385,6 +420,7 @@ Rows: 82
 |--------|------|------|-----|---------|-------|
 | run_id | int(11) | NO | PRI | NULL | auto_increment |
 | site_id | varchar(50) | NO | MUL | NULL |  |
+| pool_id | int(11) | YES | MUL | NULL |  |
 | pool_site_id | int(11) | YES |  | NULL |  |
 | user_id | int(11) | YES |  | NULL |  |
 | scenario_name | varchar(255) | NO |  | Unnamed Scenario |  |
@@ -402,6 +438,7 @@ Rows: 82
 - `idx_site_id` (site_id)
 - `idx_status` (status)
 - `idx_created` (created_at)
+- `idx_pool_id` (pool_id)
 
 ## solar_daily_data
 
