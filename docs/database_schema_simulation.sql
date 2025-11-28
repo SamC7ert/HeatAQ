@@ -1,7 +1,12 @@
 -- HeatAQ Simulation Database Schema
 -- Run this SQL to add simulation tables to your existing database
--- Version: 1.0.0
--- Date: 2024
+-- Version: 1.1.0
+-- Date: 2024-11-27
+--
+-- Related files:
+-- - db/migrations/003_consolidate_config_json.sql - JSON column cleanup
+-- - db/migrations/004_schedule_tables.sql - Schedule/OHC tables
+-- - db/migrations/002_user_preferences.sql - User preferences table
 
 -- ============================================
 -- SIMULATION RUNS TABLE
@@ -26,7 +31,16 @@ CREATE TABLE IF NOT EXISTS simulation_runs (
     completed_at DATETIME NULL,
 
     -- Configuration snapshot (JSON)
-    -- Stores pool_config, equipment settings at time of simulation
+    -- Stores complete config at time of simulation for reproducibility:
+    -- {
+    --   "simulator_version": "1.0.0",
+    --   "pool_config": { area_m2, volume_m3, depth_m, ... },
+    --   "equipment": { hp_capacity_kw, boiler_capacity_kw, hp_cop, ... },
+    --   "config_template_id": 1,
+    --   "config_template_name": "Benchmark 10-20",
+    --   "schedule_template_id": 1,
+    --   "schedule_template_name": "Standard Hours"
+    -- }
     config_snapshot JSON,
 
     -- Summary results (JSON)

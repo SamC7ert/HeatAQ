@@ -281,6 +281,13 @@ class HeatAQAPI {
                     $this->getProjects();
                     break;
 
+                case 'update_project':
+                    if (!$this->canEdit()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->updateProject();
+                    break;
+
                 // PROJECT CONFIGURATION
                 case 'get_project_configs':
                     $this->getProjectConfigs();
@@ -1231,6 +1238,52 @@ class HeatAQAPI {
         $projects = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $this->sendResponse(['projects' => $projects]);
+    }
+
+    private function updateProject() {
+        $input = $this->getPostInput();
+        $projectId = $input['project_id'] ?? null;
+        $name = $input['name'] ?? null;
+        $description = $input['description'] ?? null;
+
+        // If no project ID provided, use the current project from auth
+        if (!$projectId && $this->projectId) {
+            $projectId = $this->projectId;
+        }
+
+        if (!$projectId) {
+            $this->sendError('Project ID is required');
+        }
+
+        // Build update query dynamically based on what's provided
+        $updates = [];
+        $params = [];
+
+        if ($name !== null) {
+            $updates[] = "project_name = ?";
+            $params[] = $name;
+        }
+
+        if ($description !== null) {
+            $updates[] = "description = ?";
+            $params[] = $description;
+        }
+
+        if (empty($updates)) {
+            $this->sendError('No fields to update');
+        }
+
+        $params[] = $projectId;
+        $sql = "UPDATE projects SET " . implode(', ', $updates) . " WHERE project_id = ?";
+
+        try {
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+
+            $this->sendResponse(['success' => true, 'project_id' => $projectId]);
+        } catch (PDOException $e) {
+            $this->sendError('Failed to update project: ' . $e->getMessage());
+        }
     }
 
     private function saveUser() {

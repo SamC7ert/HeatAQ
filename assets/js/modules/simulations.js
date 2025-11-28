@@ -170,12 +170,13 @@ const SimulationsModule = {
 
         // Disable button and show progress
         const btn = document.getElementById('run-simulation-btn');
+        const statusEl = document.getElementById('simulation-status');
         btn.disabled = true;
         btn.textContent = 'Running...';
-
-        const progressDiv = document.getElementById('simulation-progress');
-        progressDiv.innerHTML = '<div class="progress-message">Starting simulation...</div>';
-        progressDiv.style.display = 'block';
+        if (statusEl) {
+            statusEl.textContent = 'Starting simulation...';
+            statusEl.style.color = '#666';
+        }
 
         try {
             const response = await fetch('/api/simulation_api.php?action=run_simulation', {
@@ -199,12 +200,14 @@ const SimulationsModule = {
                 throw new Error(data.error);
             }
 
-            // Show success
-            progressDiv.innerHTML = `
-                <div class="progress-success">
-                    Simulation completed! (${data.hourly_count?.toLocaleString() || 0} hours)
-                </div>
-            `;
+            // Show success with date/time
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
+            const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            if (statusEl) {
+                statusEl.textContent = `Simulation completed ${dateStr} - ${timeStr}`;
+                statusEl.style.color = '#28a745';
+            }
 
             // Show benchmark report
             if (typeof SimControlModule !== 'undefined' && data.summary) {
@@ -223,7 +226,10 @@ const SimulationsModule = {
             }
 
         } catch (error) {
-            progressDiv.innerHTML = `<div class="progress-error">Error: ${error.message}</div>`;
+            if (statusEl) {
+                statusEl.textContent = `Error: ${error.message}`;
+                statusEl.style.color = '#dc3545';
+            }
         } finally {
             btn.disabled = false;
             btn.textContent = 'Run Simulation';
@@ -1196,14 +1202,20 @@ const SimulationsModule = {
                 const config = data.run.config || {};
                 const equipment = config.equipment || {};
 
-                // Display config info (from equipment settings)
+                // Display config template name
                 if (configDisplay) {
-                    const hpCap = equipment.hp_capacity_kw;
-                    const boilerCap = equipment.boiler_capacity_kw;
-                    if (hpCap && boilerCap) {
-                        configDisplay.textContent = `HP: ${hpCap}kW, Boiler: ${boilerCap}kW`;
+                    const configName = config.config_template_name;
+                    if (configName) {
+                        configDisplay.textContent = configName;
                     } else {
-                        configDisplay.textContent = data.run.scenario_name || `Run #${runId}`;
+                        // Fallback: show equipment summary or scenario name
+                        const hpCap = equipment.hp_capacity_kw;
+                        const boilerCap = equipment.boiler_capacity_kw;
+                        if (hpCap && boilerCap) {
+                            configDisplay.textContent = `HP: ${hpCap}kW, Boiler: ${boilerCap}kW`;
+                        } else {
+                            configDisplay.textContent = data.run.scenario_name || `Run #${runId}`;
+                        }
                     }
                 }
 
@@ -1995,11 +2007,29 @@ const SimulationsModule = {
                 infoEl.textContent = `${lastRun.scenario_name} (${dateStr})`;
             }
 
+            // Show benchmark report (same as after running simulation)
+            if (typeof SimControlModule !== 'undefined' && lastRun.summary) {
+                SimControlModule.showBenchmarkReport({
+                    summary: lastRun.summary,
+                    meta: lastRun.config_snapshot || {}
+                });
+            }
+
             // Render summary cards
             this.renderSimSummaryCards(lastRun.summary || {});
 
             // Load and render yearly chart
             await this.loadYearlyChart(lastRun.run_id);
+
+            // Show last run completion time in status
+            const statusEl = document.getElementById('simulation-status');
+            if (statusEl && lastRun.completed_at) {
+                const completed = new Date(lastRun.completed_at);
+                const dateStr = completed.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
+                const timeStr = completed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                statusEl.textContent = `Last run: ${dateStr} - ${timeStr}`;
+                statusEl.style.color = '#28a745';
+            }
 
         } catch (error) {
             console.error('[Simulate] Failed to auto-load last run:', error);

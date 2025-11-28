@@ -253,6 +253,15 @@ class EnergySimulator {
     }
 
     /**
+     * Set pool configuration (used when restoring from stored config_snapshot)
+     */
+    public function setPoolConfig($poolConfig) {
+        if (is_array($poolConfig)) {
+            $this->poolConfig = array_merge($this->poolConfig, $poolConfig);
+        }
+    }
+
+    /**
      * Get equipment configuration
      */
     public function getEquipment() {

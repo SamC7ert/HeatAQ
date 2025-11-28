@@ -147,6 +147,9 @@ const SimControlModule = {
                 return;
             }
 
+            console.log('[SimControl] Populating dropdown with', data.configs.length, 'configs:',
+                data.configs.map(c => ({ id: c.template_id, name: c.name })));
+
             const optionsHtml = '<option value="">-- Use Project Config --</option>' +
                 data.configs.map(c =>
                     `<option value="${c.template_id}">${c.name}</option>`
@@ -154,8 +157,12 @@ const SimControlModule = {
 
             // Populate config dropdown (simulation only - debug uses run info)
             const simSelect = document.getElementById('sim-config-select');
+            console.log('[SimControl] sim-config-select element:', simSelect ? 'found' : 'NOT FOUND');
 
-            if (simSelect) simSelect.innerHTML = optionsHtml;
+            if (simSelect) {
+                simSelect.innerHTML = optionsHtml;
+                console.log('[SimControl] Dropdown populated, options count:', simSelect.options.length);
+            }
 
             // Restore saved selection (from server or localStorage)
             const savedConfig = this.getPreference('selected_config');
