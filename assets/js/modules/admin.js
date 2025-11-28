@@ -819,6 +819,105 @@ const AdminModule = {
             console.error('Download failed:', err);
             alert('Failed to download schema: ' + err.message);
         }
+    },
+
+    // ========================================
+    // DEPLOYMENT
+    // ========================================
+
+    loadDeployStatus: async function() {
+        const container = document.getElementById('deploy-status');
+        if (!container) return;
+
+        container.innerHTML = '<p>Loading deployment status...</p>';
+
+        try {
+            const response = await fetch('./api/heataq_api.php?action=deploy_status');
+            const data = await response.json();
+
+            if (data.error) {
+                container.innerHTML = `<p class="error">${data.error}</p>`;
+                return;
+            }
+
+            let html = '<table class="data-table compact">';
+            html += `<tr><td><strong>Branch</strong></td><td>${data.branch}</td></tr>`;
+            html += `<tr><td><strong>App Version</strong></td><td>${data.app_version || 'Unknown'}</td></tr>`;
+            html += `<tr><td><strong>Commit</strong></td><td><code>${data.head_short}</code></td></tr>`;
+            html += `<tr><td><strong>Behind Origin</strong></td><td>${data.behind_origin > 0 ? `<span style="color:orange">${data.behind_origin} commits</span>` : '<span style="color:green">Up to date</span>'}</td></tr>`;
+            html += `<tr><td><strong>Ahead of Origin</strong></td><td>${data.ahead_origin > 0 ? `<span style="color:blue">${data.ahead_origin} commits</span>` : '0'}</td></tr>`;
+            html += '</table>';
+
+            // Recent commits
+            if (data.last_commits && data.last_commits.length > 0) {
+                html += '<h4>Recent Commits</h4><ul class="commit-list">';
+                data.last_commits.forEach(c => {
+                    html += `<li><code>${c}</code></li>`;
+                });
+                html += '</ul>';
+            }
+
+            // Untracked/modified files
+            if ((data.untracked_files && data.untracked_files.length > 0) ||
+                (data.modified_files && data.modified_files.length > 0)) {
+                html += '<h4>Local Changes</h4>';
+                if (data.untracked_files && data.untracked_files.length > 0) {
+                    html += '<p><strong>Untracked:</strong> ' + data.untracked_files.join(', ') + '</p>';
+                }
+                if (data.modified_files && data.modified_files.length > 0) {
+                    html += '<p><strong>Modified:</strong> ' + data.modified_files.join(', ') + '</p>';
+                }
+            }
+
+            // Actions
+            html += '<div class="button-group" style="margin-top: 1rem;">';
+            if (data.behind_origin > 0) {
+                html += '<button class="btn btn-primary" onclick="AdminModule.deployPull()">Pull Updates</button>';
+            }
+            html += '<button class="btn" onclick="AdminModule.loadDeployStatus()">Refresh</button>';
+            html += '</div>';
+
+            html += '<div id="deploy-log" style="margin-top: 1rem;"></div>';
+
+            container.innerHTML = html;
+        } catch (err) {
+            console.error('Failed to load deploy status:', err);
+            container.innerHTML = `<p class="error">Failed to load: ${err.message}</p>`;
+        }
+    },
+
+    deployPull: async function() {
+        const logContainer = document.getElementById('deploy-log');
+        if (logContainer) {
+            logContainer.innerHTML = '<p>Pulling updates...</p>';
+        }
+
+        try {
+            const response = await fetch('./api/heataq_api.php?action=deploy_pull');
+            const data = await response.json();
+
+            if (data.error) {
+                if (logContainer) logContainer.innerHTML = `<p class="error">${data.error}</p>`;
+                return;
+            }
+
+            let html = '<div class="deploy-result">';
+            html += `<p><strong>Result:</strong> ${data.success ? '<span style="color:green">Success</span>' : '<span style="color:red">Failed</span>'}</p>`;
+            html += `<p><strong>Version:</strong> ${data.app_version}</p>`;
+            html += `<p><strong>Commit:</strong> <code>${data.head}</code></p>`;
+            html += '<h4>Log</h4><pre class="deploy-log">';
+            data.log.forEach(line => {
+                html += line + '\n';
+            });
+            html += '</pre>';
+            html += '<p><strong>Refresh the page to see changes.</strong></p>';
+            html += '</div>';
+
+            if (logContainer) logContainer.innerHTML = html;
+        } catch (err) {
+            console.error('Deploy pull failed:', err);
+            if (logContainer) logContainer.innerHTML = `<p class="error">Failed: ${err.message}</p>`;
+        }
     }
 };
 

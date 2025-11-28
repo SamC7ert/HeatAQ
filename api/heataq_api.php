@@ -361,6 +361,26 @@ class HeatAQAPI {
                     $this->saveUserPreference();
                     break;
 
+                // DEPLOYMENT (admin only)
+                case 'deploy_status':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied - admin only', 403);
+                    }
+                    $this->deployStatus();
+                    break;
+                case 'deploy_pull':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied - admin only', 403);
+                    }
+                    $this->deployPull();
+                    break;
+                case 'deploy_push':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied - admin only', 403);
+                    }
+                    $this->deployPush();
+                    break;
+
                 default:
                     $this->sendError('Invalid action');
             }
@@ -2057,6 +2077,192 @@ class HeatAQAPI {
         } catch (PDOException $e) {
             return false;
         }
+    }
+
+    // ====================================
+    // DEPLOYMENT METHODS
+    // ====================================
+
+    private function deployStatus() {
+        $repoRoot = realpath(__DIR__ . '/..');
+        $oldDir = getcwd();
+        chdir($repoRoot);
+
+        $result = [
+            'repo_root' => $repoRoot,
+            'branch' => trim(shell_exec('git branch --show-current 2>&1')),
+            'head' => trim(shell_exec('git rev-parse HEAD 2>&1')),
+            'head_short' => trim(shell_exec('git rev-parse --short HEAD 2>&1')),
+            'status' => shell_exec('git status --porcelain 2>&1'),
+            'last_commits' => array_filter(explode("\n", shell_exec('git log --oneline -5 2>&1'))),
+            'remote_url' => trim(shell_exec('git remote get-url origin 2>&1')),
+        ];
+
+        // Check for updates
+        shell_exec('git fetch origin master 2>&1');
+        $behind = trim(shell_exec('git rev-list HEAD..origin/master --count 2>&1'));
+        $ahead = trim(shell_exec('git rev-list origin/master..HEAD --count 2>&1'));
+        $result['behind_origin'] = is_numeric($behind) ? (int)$behind : 0;
+        $result['ahead_origin'] = is_numeric($ahead) ? (int)$ahead : 0;
+
+        // Get app version from index.html
+        $indexPath = $repoRoot . '/index.html';
+        if (file_exists($indexPath)) {
+            $index = file_get_contents($indexPath);
+            if (preg_match('/App Version<\/strong><\/td><td>(V\d+)/', $index, $m)) {
+                $result['app_version'] = $m[1];
+            }
+        }
+
+        // Untracked files (potential push candidates)
+        $untracked = array_filter(explode("\n", shell_exec('git ls-files --others --exclude-standard 2>&1')));
+        $result['untracked_files'] = $untracked;
+
+        // Modified files
+        $modified = array_filter(explode("\n", shell_exec('git diff --name-only 2>&1')));
+        $result['modified_files'] = $modified;
+
+        chdir($oldDir);
+        $this->sendResponse($result);
+    }
+
+    private function deployPull() {
+        $repoRoot = realpath(__DIR__ . '/..');
+        $oldDir = getcwd();
+        chdir($repoRoot);
+
+        $log = [];
+        $log[] = "Working dir: $repoRoot";
+
+        // Stash any local changes
+        $log[] = "Stashing local changes...";
+        $log[] = shell_exec('git stash 2>&1');
+
+        // Fetch from origin
+        $log[] = "Fetching from origin...";
+        $log[] = shell_exec('git fetch origin master 2>&1');
+
+        // Checkout master if not on it
+        $branch = trim(shell_exec('git branch --show-current 2>&1'));
+        if ($branch !== 'master') {
+            $log[] = "Switching to master (was on $branch)...";
+            $log[] = shell_exec('git checkout master 2>&1');
+        }
+
+        // Reset to origin/master
+        $log[] = "Resetting to origin/master...";
+        $log[] = shell_exec('git reset --hard origin/master 2>&1');
+
+        // Get new version
+        $newHead = trim(shell_exec('git rev-parse --short HEAD 2>&1'));
+        $log[] = "Now at: $newHead";
+
+        // Get app version
+        $appVersion = 'unknown';
+        $indexPath = $repoRoot . '/index.html';
+        if (file_exists($indexPath)) {
+            $index = file_get_contents($indexPath);
+            if (preg_match('/App Version<\/strong><\/td><td>(V\d+)/', $index, $m)) {
+                $appVersion = $m[1];
+            }
+        }
+        $log[] = "App version: $appVersion";
+
+        chdir($oldDir);
+        $this->sendResponse([
+            'success' => true,
+            'app_version' => $appVersion,
+            'head' => $newHead,
+            'log' => $log
+        ]);
+    }
+
+    private function deployPush() {
+        $input = $this->getPostInput();
+        $files = $input['files'] ?? [];
+        $message = $input['message'] ?? 'Update from HeatAQ admin';
+
+        if (empty($files)) {
+            $this->sendError('No files specified for push');
+            return;
+        }
+
+        $repoRoot = realpath(__DIR__ . '/..');
+        $oldDir = getcwd();
+        chdir($repoRoot);
+
+        $log = [];
+        $log[] = "Working dir: $repoRoot";
+
+        // Load GitHub credentials from secure config (outside public_html)
+        $gitToken = null;
+        $gitUser = null;
+        $configPaths = [
+            __DIR__ . '/../../config_heataq/git_credentials.php',  // Standard location
+            __DIR__ . '/../git_credentials.php',                    // Repo root (gitignored)
+        ];
+
+        foreach ($configPaths as $path) {
+            if (file_exists($path)) {
+                $gitConfig = include($path);
+                $gitToken = $gitConfig['github_token'] ?? null;
+                $gitUser = $gitConfig['github_user'] ?? null;
+                $log[] = "Loaded credentials from: " . basename(dirname($path)) . "/" . basename($path);
+                break;
+            }
+        }
+
+        if (!$gitToken) {
+            $log[] = "No GitHub credentials found. Create config_heataq/git_credentials.php with:";
+            $log[] = "<?php return ['github_user' => 'username', 'github_token' => 'ghp_xxx'];";
+            chdir($oldDir);
+            $this->sendResponse([
+                'success' => false,
+                'log' => $log,
+                'note' => 'GitHub credentials not configured'
+            ]);
+            return;
+        }
+
+        // Add specified files
+        foreach ($files as $file) {
+            // Security: only allow files in docs/ or db/ directories
+            if (!preg_match('/^(docs|db)\//', $file)) {
+                $log[] = "Skipped (not in allowed path): $file";
+                continue;
+            }
+            $log[] = "Adding: $file";
+            $log[] = shell_exec("git add " . escapeshellarg($file) . " 2>&1");
+        }
+
+        // Commit
+        $log[] = "Committing...";
+        $log[] = shell_exec("git commit -m " . escapeshellarg($message) . " 2>&1");
+
+        // Get current remote URL and convert to authenticated URL
+        $remoteUrl = trim(shell_exec('git remote get-url origin 2>&1'));
+        $log[] = "Remote: $remoteUrl";
+
+        // Build authenticated URL: https://user:token@github.com/...
+        if (preg_match('#https://github\.com/(.+)#', $remoteUrl, $m)) {
+            $authUrl = "https://{$gitUser}:{$gitToken}@github.com/{$m[1]}";
+            $log[] = "Pushing with authentication...";
+            $pushResult = shell_exec("git push " . escapeshellarg($authUrl) . " master 2>&1");
+            // Don't log the URL (contains token)
+            $log[] = preg_replace('/https:\/\/[^@]+@/', 'https://***@', $pushResult);
+        } else {
+            $log[] = "Could not parse remote URL for authentication";
+            $pushResult = "error: invalid remote URL";
+        }
+
+        $success = strpos($pushResult, 'error') === false && strpos($pushResult, 'fatal') === false;
+
+        chdir($oldDir);
+        $this->sendResponse([
+            'success' => $success,
+            'log' => $log,
+            'note' => $success ? 'Pushed successfully' : 'Push may have failed - check log'
+        ]);
     }
 }
 
