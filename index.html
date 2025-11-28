@@ -74,7 +74,7 @@
         <div class="user-info">
             <span class="project-name" id="current-project"></span>
             <span class="user-name" id="current-user"></span>
-            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">V72</span>
+            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">V73</span>
             <button onclick="logout()" class="btn-logout">Logout</button>
         </div>
         
@@ -892,15 +892,15 @@
                         <div style="display: grid; grid-template-columns: 280px 1fr; gap: 15px; margin-bottom: 15px;">
                             <!-- Compact Inputs -->
                             <div class="card" style="padding: 12px;">
-                                <h4 style="margin: 0 0 10px 0; font-size: 14px;">Debug Parameters</h4>
+                                <h4 style="margin: 0 0 10px 0; font-size: 15px; font-weight: 600;">Debug Parameters</h4>
                                 <div style="display: grid; gap: 8px; font-size: 13px;">
                                     <div style="display: flex; align-items: center; gap: 8px;">
-                                        <label style="width: 70px;">Date</label>
-                                        <input type="date" id="debug-date" value="2024-07-27" style="flex: 1; padding: 4px;">
+                                        <label style="width: 55px;">Date</label>
+                                        <input type="date" id="debug-date" value="2024-07-27" style="width: 130px; padding: 4px;">
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 8px;">
-                                        <label style="width: 70px;">Hour</label>
-                                        <select id="debug-hour" style="flex: 1; padding: 4px;">
+                                        <label style="width: 55px;">Hour</label>
+                                        <select id="debug-hour" style="width: 130px; padding: 4px;">
                                             <option value="0">00:00</option><option value="1">01:00</option>
                                             <option value="2">02:00</option><option value="3">03:00</option>
                                             <option value="4">04:00</option><option value="5">05:00</option>
@@ -915,17 +915,17 @@
                                             <option value="22">22:00</option><option value="23">23:00</option>
                                         </select>
                                     </div>
-                                    <div style="display: flex; align-items: center; gap: 8px;">
-                                        <button class="btn btn-secondary btn-sm" onclick="SimulationsModule.debugPrevHour()" style="padding: 4px 12px;">◀</button>
-                                        <button id="debug-calculate-btn" class="btn btn-success btn-sm" onclick="SimulationsModule.debugHour()" style="flex: 1;">Calculate</button>
-                                        <button class="btn btn-secondary btn-sm" onclick="SimulationsModule.debugNextHour()" style="padding: 4px 12px;">▶</button>
+                                    <div style="display: flex; align-items: center; gap: 6px; margin-left: 55px;">
+                                        <button class="btn btn-secondary btn-sm" onclick="SimulationsModule.debugPrevHour()" style="padding: 3px 10px; font-size: 12px;">◀</button>
+                                        <button id="debug-calculate-btn" class="btn btn-success btn-sm" onclick="SimulationsModule.debugHour()" style="padding: 3px 12px; font-size: 12px;">Calculate</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="SimulationsModule.debugNextHour()" style="padding: 3px 10px; font-size: 12px;">▶</button>
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 11px; color: #666;">
-                                        <label style="width: 70px;">Config</label>
+                                        <label style="width: 55px;">Config</label>
                                         <span id="debug-config-display" style="flex: 1;">-</span>
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; color: #666;">
-                                        <label style="width: 70px;">Schedule</label>
+                                        <label style="width: 55px;">Schedule</label>
                                         <span id="debug-ohc-display" style="flex: 1;">-</span>
                                     </div>
                                 </div>
@@ -1215,7 +1215,7 @@
                     <div class="card">
                         <h3>System Info</h3>
                         <table class="data-table compact">
-                            <tr><td><strong>App Version</strong></td><td>V72</td></tr>
+                            <tr><td><strong>App Version</strong></td><td>V73</td></tr>
                             <tr><td><strong>Simulator</strong></td><td id="sys-simulator-ver">-</td></tr>
                             <tr><td><strong>PHP</strong></td><td id="sys-php-ver">-</td></tr>
                         </table>
@@ -1443,15 +1443,15 @@
     <!-- Core configuration -->
     <script src="./assets/js/config.js"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=72"></script>
-    <script src="./assets/js/modules/navigation.js?v=72"></script>
-    <script src="./assets/js/modules/schedules.js?v=72"></script>
-    <script src="./assets/js/modules/calendar.js?v=72"></script>
-    <script src="./assets/js/modules/simulations.js?v=72"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=72"></script>
-    <script src="./assets/js/modules/configuration.js?v=72"></script>
-    <script src="./assets/js/modules/admin.js?v=72"></script>
-    <script src="./assets/js/modules/project.js?v=72"></script>
-    <script src="./assets/js/app.js?v=72"></script>
+    <script src="./assets/js/modules/api.js?v=73"></script>
+    <script src="./assets/js/modules/navigation.js?v=73"></script>
+    <script src="./assets/js/modules/schedules.js?v=73"></script>
+    <script src="./assets/js/modules/calendar.js?v=73"></script>
+    <script src="./assets/js/modules/simulations.js?v=73"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=73"></script>
+    <script src="./assets/js/modules/configuration.js?v=73"></script>
+    <script src="./assets/js/modules/admin.js?v=73"></script>
+    <script src="./assets/js/modules/project.js?v=73"></script>
+    <script src="./assets/js/app.js?v=73"></script>
 </body>
 </html>

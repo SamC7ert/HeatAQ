@@ -1403,7 +1403,7 @@ const SimulationsModule = {
         if (placeholder) placeholder.innerHTML = '<span style="color: #666;">Loading weekly data...</span>';
 
         try {
-            const url = `/api/simulation_api.php?action=debug_week&date=${date}&config_id=${configId}`;
+            const url = `/api/simulation_api.php?action=debug_week&date=${date}`;
             const response = await fetch(url);
             const result = await response.json();
 
