@@ -925,18 +925,33 @@ const AdminModule = {
     // ====================================
 
     checkMigrations: async function() {
+        console.log('checkMigrations: starting');
         const listEl = document.getElementById('migrations-list');
         const resultEl = document.getElementById('migration-result');
 
-        if (listEl) listEl.innerHTML = '<p class="text-muted">Checking...</p>';
+        if (!listEl) {
+            console.error('checkMigrations: migrations-list element not found');
+            return;
+        }
+
+        listEl.innerHTML = '<p class="text-muted">Checking...</p>';
         if (resultEl) resultEl.innerHTML = '';
 
         try {
+            console.log('checkMigrations: fetching...');
             const response = await fetch('./api/heataq_api.php?action=check_migrations');
+            console.log('checkMigrations: response status', response.status);
+
+            if (!response.ok) {
+                listEl.innerHTML = `<p class="error">API error: ${response.status}</p>`;
+                return;
+            }
+
             const data = await response.json();
+            console.log('checkMigrations: data', data);
 
             if (data.error) {
-                if (listEl) listEl.innerHTML = `<p class="error">${data.error}</p>`;
+                listEl.innerHTML = `<p class="error">${data.error}</p>`;
                 return;
             }
 
