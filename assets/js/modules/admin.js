@@ -924,14 +924,11 @@ const AdminModule = {
     // DATABASE MIGRATIONS
     // ====================================
 
-    pendingMigrations: [],
-
     checkMigrations: async function() {
         const listEl = document.getElementById('migrations-list');
         const resultEl = document.getElementById('migration-result');
-        const runBtn = document.getElementById('run-migrations-btn');
 
-        if (listEl) listEl.innerHTML = '<p>Checking for migrations...</p>';
+        if (listEl) listEl.innerHTML = '<p class="text-muted">Checking...</p>';
         if (resultEl) resultEl.innerHTML = '';
 
         try {
@@ -943,37 +940,35 @@ const AdminModule = {
                 return;
             }
 
-            this.pendingMigrations = data.pending || [];
+            const pending = data.pending || [];
 
-            if (this.pendingMigrations.length === 0) {
-                if (listEl) listEl.innerHTML = '<p style="color: green;">No pending migrations</p>';
-                if (runBtn) runBtn.disabled = true;
+            if (pending.length === 0) {
+                if (listEl) listEl.innerHTML = '<p style="color: green;">✓ No pending migrations</p>';
                 return;
             }
 
             let html = '<table class="data-table compact"><thead><tr>';
-            html += '<th>File</th><th>Description</th><th>Action</th>';
+            html += '<th>File</th><th>Description</th><th></th>';
             html += '</tr></thead><tbody>';
 
-            this.pendingMigrations.forEach(m => {
+            pending.forEach(m => {
                 html += '<tr>';
                 html += `<td><code>${m.filename}</code></td>`;
                 html += `<td>${m.description || '-'}</td>`;
-                html += `<td><button class="btn btn-sm btn-primary" onclick="AdminModule.runSingleMigration('${m.filename}')">Run</button></td>`;
+                html += `<td><button class="btn btn-sm btn-primary" onclick="AdminModule.runMigration('${m.filename}')">Run</button></td>`;
                 html += '</tr>';
             });
 
             html += '</tbody></table>';
             if (listEl) listEl.innerHTML = html;
-            if (runBtn) runBtn.disabled = false;
 
         } catch (err) {
             console.error('Check migrations failed:', err);
-            if (listEl) listEl.innerHTML = `<p class="error">Failed: ${err.message}</p>`;
+            if (listEl) listEl.innerHTML = `<p class="error">Failed to check: ${err.message}</p>`;
         }
     },
 
-    runSingleMigration: async function(filename) {
+    runMigration: async function(filename) {
         const resultEl = document.getElementById('migration-result');
         if (resultEl) resultEl.innerHTML = `<p>Running ${filename}...</p>`;
 
@@ -985,26 +980,21 @@ const AdminModule = {
             });
             const data = await response.json();
 
-            let html = '<div class="migration-result">';
+            let html = '';
             if (data.success) {
-                html += `<p style="color: green;"><strong>Success:</strong> ${filename}</p>`;
-                html += `<p>Executed ${data.statements} statements</p>`;
+                html += `<p style="color: green;"><strong>✓ Success:</strong> ${filename} (${data.statements} statements)</p>`;
+                html += '<p><strong>Next:</strong> Use "Export & Push to Git" above, then delete the migration file.</p>';
             } else {
-                html += `<p style="color: red;"><strong>Failed:</strong> ${filename}</p>`;
+                html += `<p style="color: red;"><strong>✗ Failed:</strong> ${filename}</p>`;
                 html += `<p class="error">${data.error || 'Unknown error'}</p>`;
             }
 
-            html += '<h4>Log</h4><pre class="deploy-log" style="max-height: 200px; overflow: auto;">';
+            html += '<details><summary>Log</summary><pre class="deploy-log" style="max-height: 200px; overflow: auto;">';
             (data.log || []).forEach(line => {
                 html += line + '\n';
             });
-            html += '</pre>';
+            html += '</pre></details>';
 
-            if (data.success) {
-                html += '<p><strong>Next:</strong> Click "Export Schema" to update schema.md, then delete the migration file.</p>';
-            }
-
-            html += '</div>';
             if (resultEl) resultEl.innerHTML = html;
 
             // Refresh the list
@@ -1014,49 +1004,6 @@ const AdminModule = {
 
         } catch (err) {
             console.error('Run migration failed:', err);
-            if (resultEl) resultEl.innerHTML = `<p class="error">Failed: ${err.message}</p>`;
-        }
-    },
-
-    runMigrations: async function() {
-        // Run all pending migrations in order
-        for (const m of this.pendingMigrations) {
-            await this.runSingleMigration(m.filename);
-        }
-    },
-
-    exportSchema: async function() {
-        const resultEl = document.getElementById('migration-result');
-        if (resultEl) resultEl.innerHTML = '<p>Exporting schema...</p>';
-
-        try {
-            const response = await fetch('./api/heataq_api.php?action=export_schema');
-            const data = await response.json();
-
-            let html = '<div class="migration-result">';
-            if (data.success) {
-                html += '<p style="color: green;"><strong>Schema exported successfully</strong></p>';
-                html += '<p>Files updated:</p><ul>';
-                html += `<li>schema.json: ${data.files?.['schema.json'] ? '✓' : '✗'}</li>`;
-                html += `<li>schema.md: ${data.files?.['schema.md'] ? '✓' : '✗'}</li>`;
-                html += '</ul>';
-                html += '<p><a href="db/schema.md" target="_blank">View schema.md</a></p>';
-            } else {
-                html += `<p style="color: red;"><strong>Export failed</strong></p>`;
-                html += `<p class="error">${data.error || 'Unknown error'}</p>`;
-            }
-
-            html += '<h4>Log</h4><pre class="deploy-log" style="max-height: 150px; overflow: auto;">';
-            (data.log || []).forEach(line => {
-                html += line + '\n';
-            });
-            html += '</pre>';
-            html += '</div>';
-
-            if (resultEl) resultEl.innerHTML = html;
-
-        } catch (err) {
-            console.error('Export schema failed:', err);
             if (resultEl) resultEl.innerHTML = `<p class="error">Failed: ${err.message}</p>`;
         }
     }

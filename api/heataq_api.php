@@ -2390,7 +2390,9 @@ class HeatAQAPI {
             return;
         }
 
-        $migrationsDir = realpath(__DIR__ . '/../db/migrations');
+        $dbDir = realpath(__DIR__ . '/../db');
+        $migrationsDir = $dbDir . '/migrations';
+        $oldMigrationsDir = $dbDir . '/old_migrations';
         $filepath = $migrationsDir . '/' . $filename;
 
         if (!file_exists($filepath)) {
@@ -2400,11 +2402,16 @@ class HeatAQAPI {
 
         $sql = file_get_contents($filepath);
         $log = [];
-        $log[] = "Running migration: $filename";
+        $log[] = date('Y-m-d H:i:s') . " - Running migration: $filename";
+
+        // Extract expected tables from CREATE TABLE statements
+        $expectedTables = [];
+        if (preg_match_all('/CREATE TABLE\s+(?:IF NOT EXISTS\s+)?`?(\w+)`?/i', $sql, $matches)) {
+            $expectedTables = $matches[1];
+        }
 
         try {
-            // Split SQL by semicolons (simple approach - doesn't handle all edge cases)
-            // Remove comments for execution
+            // Split SQL by semicolons
             $statements = array_filter(
                 array_map('trim', preg_split('/;\s*$/m', $sql)),
                 fn($s) => !empty($s) && !preg_match('/^--/', trim($s))
@@ -2412,7 +2419,6 @@ class HeatAQAPI {
 
             $executed = 0;
             foreach ($statements as $stmt) {
-                // Skip pure comments
                 $cleanStmt = trim(preg_replace('/--.*$/m', '', $stmt));
                 if (empty($cleanStmt)) continue;
 
@@ -2421,17 +2427,52 @@ class HeatAQAPI {
                 $executed++;
             }
 
-            $log[] = "Migration complete: $executed statements executed";
+            $log[] = "Executed $executed statements";
+
+            // Verify migration: check that expected tables exist
+            $verified = true;
+            $verifyLog = [];
+            foreach ($expectedTables as $table) {
+                $exists = $this->tableExists($table);
+                $status = $exists ? '✓' : '✗';
+                $verifyLog[] = "$status Table '$table' " . ($exists ? 'exists' : 'MISSING');
+                if (!$exists) $verified = false;
+            }
+
+            if (!empty($verifyLog)) {
+                $log[] = "Verification:";
+                $log = array_merge($log, $verifyLog);
+            }
+
+            // Save log file
+            $logFilename = preg_replace('/\.sql$/', '_log.txt', $filename);
+            $logPath = $migrationsDir . '/' . $logFilename;
+            file_put_contents($logPath, implode("\n", $log));
+
+            if ($verified) {
+                $log[] = "✓ Migration verified - tables exist";
+            } else {
+                $log[] = "✗ Verification failed";
+            }
+            $log[] = "Log: db/migrations/$logFilename";
 
             $this->sendResponse([
-                'success' => true,
+                'success' => $verified,
                 'filename' => $filename,
                 'statements' => $executed,
+                'verified' => $verified,
+                'tables_created' => $expectedTables,
                 'log' => $log
             ]);
 
         } catch (PDOException $e) {
             $log[] = "ERROR: " . $e->getMessage();
+
+            // Save error log
+            $logFilename = preg_replace('/\.sql$/', '_error.txt', $filename);
+            $logPath = $migrationsDir . '/' . $logFilename;
+            file_put_contents($logPath, implode("\n", $log));
+
             $this->sendResponse([
                 'success' => false,
                 'filename' => $filename,
