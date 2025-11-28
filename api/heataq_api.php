@@ -413,6 +413,10 @@ class HeatAQAPI {
                     break;
 
                 // SITE AND POOL MANAGEMENT
+                case 'get_project_site':
+                    $this->getProjectSite();
+                    break;
+
                 case 'get_sites':
                     $this->getSites();
                     break;
@@ -2651,6 +2655,24 @@ class HeatAQAPI {
     /**
      * Get all sites (pool_sites) accessible to user
      */
+    /**
+     * Get the current project's site_id for SimControl to use
+     */
+    private function getProjectSite() {
+        // Return the site_id associated with the current project
+        if ($this->siteId) {
+            $this->sendResponse([
+                'site_id' => $this->siteId,
+                'project_id' => $this->projectId
+            ]);
+        } else {
+            $this->sendResponse([
+                'site_id' => null,
+                'error' => 'No site associated with current session'
+            ]);
+        }
+    }
+
     private function getSites() {
         // Check if pools table exists to avoid error on subquery
         $tableCheck = $this->db->query("SHOW TABLES LIKE 'pools'");

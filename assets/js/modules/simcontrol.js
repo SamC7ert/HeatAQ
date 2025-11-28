@@ -33,12 +33,30 @@ const SimControlModule = {
 
     // Load sites from API
     loadSites: async function() {
+        console.log('[SimControl] loadSites starting...');
         const select = document.getElementById('sim-site-select');
-        if (!select) return;
+        if (!select) {
+            console.warn('[SimControl] sim-site-select element not found');
+            return;
+        }
 
         try {
+            // Get project's site_id from API if available
+            let projectSiteId = null;
+            try {
+                const projResponse = await fetch('./api/heataq_api.php?action=get_project_site');
+                const projData = await projResponse.json();
+                if (projData.site_id) {
+                    projectSiteId = projData.site_id;
+                    console.log('[SimControl] Project site_id from API:', projectSiteId);
+                }
+            } catch (e) {
+                console.log('[SimControl] Could not get project site_id:', e);
+            }
+
             const response = await fetch('./api/heataq_api.php?action=get_sites');
             const data = await response.json();
+            console.log('[SimControl] Sites from API:', data.sites?.length || 0, 'sites');
 
             if (data.sites && data.sites.length > 0) {
                 this.sites = data.sites;
@@ -47,33 +65,46 @@ const SimControlModule = {
                     `<option value="${site.site_id}">${site.name}</option>`
                 ).join('');
 
-                // Priority: 1) Project's site, 2) Saved preference, 3) First site
+                // Priority: 1) Project's site_id from API, 2) ProjectModule match, 3) Saved preference, 4) First site
                 let selectedSite = null;
 
-                // Try to get from ProjectModule
-                if (typeof ProjectModule !== 'undefined' && ProjectModule.currentSite) {
+                // Try project's site_id from API first
+                if (projectSiteId) {
+                    const matchedSite = data.sites.find(s => s.site_id === projectSiteId);
+                    if (matchedSite) {
+                        selectedSite = matchedSite.site_id;
+                        console.log('[SimControl] Using project API site:', matchedSite.name);
+                    }
+                }
+
+                // Fall back to ProjectModule name matching
+                if (!selectedSite && typeof ProjectModule !== 'undefined' && ProjectModule.currentSite) {
                     console.log('[SimControl] ProjectModule.currentSite:', ProjectModule.currentSite.name);
-                    // Match by name since Project uses name, API returns site_id
                     const projectSite = data.sites.find(s => s.name === ProjectModule.currentSite.name);
                     if (projectSite) {
                         selectedSite = projectSite.site_id;
                         console.log('[SimControl] Using project site:', projectSite.name, 'id:', selectedSite);
                     }
-                } else {
+                } else if (!selectedSite) {
                     console.log('[SimControl] ProjectModule.currentSite not available');
                 }
 
                 // Fall back to saved preference
                 if (!selectedSite) {
                     const savedSite = this.getPreference('sim_site_id');
+                    console.log('[SimControl] Saved site preference:', savedSite);
                     if (savedSite && data.sites.find(s => s.site_id === savedSite)) {
                         selectedSite = savedSite;
+                        console.log('[SimControl] Using saved preference site');
                     }
                 }
 
                 // Set selection
                 if (selectedSite) {
                     select.value = selectedSite;
+                    console.log('[SimControl] Selected site:', selectedSite);
+                } else {
+                    console.log('[SimControl] Using first site as default');
                 }
 
                 this.currentSiteId = select.value;
@@ -82,7 +113,7 @@ const SimControlModule = {
                 select.innerHTML = '<option value="">No sites available</option>';
             }
         } catch (err) {
-            console.error('Failed to load sites:', err);
+            console.error('[SimControl] Failed to load sites:', err);
             select.innerHTML = '<option value="">Error loading sites</option>';
         }
     },
