@@ -1,5 +1,5 @@
 {
-    "generated_at": "2025-11-28 16:55:10",
+    "generated_at": "2025-11-28 16:59:56",
     "database": "heataq_pool-353130302dd2",
     "tables": {
         "audit_log": {
@@ -124,7 +124,7 @@
                     ]
                 }
             ],
-            "row_count": 2958
+            "row_count": 2977
         },
         "calendar_date_ranges": {
             "name": "calendar_date_ranges",
