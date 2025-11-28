@@ -1,5 +1,5 @@
 {
-    "generated_at": "2025-11-28 12:08:43",
+    "generated_at": "2025-11-28 14:49:36",
     "database": "heataq_pool-353130302dd2",
     "tables": {
         "audit_log": {
@@ -124,7 +124,7 @@
                     ]
                 }
             ],
-            "row_count": 2566
+            "row_count": 2726
         },
         "calendar_date_ranges": {
             "name": "calendar_date_ranges",
@@ -1673,7 +1673,7 @@
                     ]
                 }
             ],
-            "row_count": 18347
+            "row_count": 27837
         },
         "simulation_hourly_results": {
             "name": "simulation_hourly_results",
@@ -1854,7 +1854,7 @@
                     ]
                 }
             ],
-            "row_count": 439676
+            "row_count": 667098
         },
         "simulation_runs": {
             "name": "simulation_runs",
@@ -1994,7 +1994,7 @@
                     ]
                 }
             ],
-            "row_count": 56
+            "row_count": 82
         },
         "solar_daily_data": {
             "name": "solar_daily_data",
