@@ -263,9 +263,9 @@ const SimControlModule = {
             <div><strong>Heat Pump:</strong> ${hpKw} kW, COP ${hpCop}</div>
             <div><strong>Boiler:</strong> ${boilerKw} kW, ${boilerEff} efficiency</div>
             <div><strong>Strategy:</strong> ${strategy}, target ${targetTemp}°C</div>
-            <div><strong>Wind:</strong> ${((config.wind_exposure_factor || 1) * 100).toFixed(0)}% exposure</div>
-            <div><strong>Cover:</strong> R=${config.cover_r_value || 5} m²K/W, ${((config.cover_solar_transmittance || 0.1) * 100).toFixed(0)}% transmit</div>
-            <div><strong>Solar abs:</strong> ${((config.solar_absorption || 0.6) * 100).toFixed(0)}%, Years: ${config.years_operating || 3}</div>
+            <div><strong>Wind:</strong> ${((config.wind_exposure_factor || 1) * 100).toFixed(1)}% exposure</div>
+            <div><strong>Cover:</strong> R=${config.cover_r_value || 5} m²K/W, ${((config.cover_solar_transmittance || 0.1) * 100).toFixed(1)}% transmit</div>
+            <div><strong>Solar abs:</strong> ${((config.solar_absorption || 0.6) * 100).toFixed(1)}%, Years: ${config.years_operating || 3}</div>
         `;
         document.getElementById('bench-config-summary').innerHTML = configHtml;
 
