@@ -342,16 +342,12 @@ class EnergySimulator {
             $date = substr($timestamp, 0, 10);
             $hourOfDay = (int) substr($timestamp, 11, 2);
 
-            // Get temperature settings from scheduler (target, min, max)
+            // Get target temperature from scheduler
             $targetTemp = null;
-            $minTemp = null;
-            $maxTemp = null;
             if ($this->scheduler) {
                 $period = $this->scheduler->getCurrentPeriod(new DateTime($timestamp));
                 if ($period) {
                     $targetTemp = $period['target_temp'];
-                    $minTemp = $period['min_temp'] ?? ($targetTemp - 2);  // Default: target - 2°C
-                    $maxTemp = $period['max_temp'] ?? ($targetTemp + 2);  // Default: target + 2°C
                 }
             }
 
@@ -378,14 +374,12 @@ class EnergySimulator {
             // Calculate net heat requirement
             $netRequirement = $losses['total'] - $solarGain;
 
-            // Determine heating strategy with temperature limits
+            // Determine heating (simplified algorithm - no deadband)
             $heating = $this->calculateHeating(
                 $netRequirement,
                 (float) $hour['air_temperature'],
                 $targetTemp,
-                $currentWaterTemp,
-                $minTemp,
-                $maxTemp
+                $currentWaterTemp
             );
 
             // Update water temperature
@@ -927,19 +921,19 @@ class EnergySimulator {
     /**
      * Calculate heating from equipment
      *
-     * Uses deadband control with min/max temperature limits:
-     * - Below minTemp: Heat up to target
-     * - Above maxTemp: Don't heat (allow to cool)
-     * - Between min and max: Only compensate for losses
+     * Simplified algorithm (V103):
+     * - Two strategies only: 'reactive' (maintain temp always) and 'predictive' (use schedule)
+     * - No deadband: direct comparison to target
+     * - If below target: add extra heat to raise to target in 1 hour
+     * - If above target: reduce heat demand by the thermal value of excess temp
+     * - Always prioritize heat pump, boiler for overflow only
      *
      * @param float $netRequirement Net heat loss (losses - solar gain) in kW
      * @param float $airTemp Current air temperature
      * @param float|null $targetTemp Target water temperature (null = closed)
      * @param float $currentWaterTemp Current water temperature
-     * @param float|null $minTemp Minimum allowed temperature
-     * @param float|null $maxTemp Maximum allowed temperature
      */
-    private function calculateHeating($netRequirement, $airTemp, $targetTemp, $currentWaterTemp, $minTemp = null, $maxTemp = null) {
+    private function calculateHeating($netRequirement, $airTemp, $targetTemp, $currentWaterTemp) {
         $result = [
             'hp_heat' => 0,
             'hp_electricity' => 0,
@@ -950,97 +944,64 @@ class EnergySimulator {
             'cost' => 0,
         ];
 
-        // Handle target temp based on control strategy
-        $controlStrategy = $this->equipment['control_strategy'] ?? 'hp_priority';
+        // Determine control strategy: only 'reactive' or 'predictive'
+        $controlStrategy = $this->equipment['control_strategy'] ?? 'reactive';
 
-        // Only 'predictive' mode uses setback temp during closed hours
-        // All other modes (hp_priority, boiler_priority, cost_optimal, reactive) maintain target temp
+        // Normalize old strategies to reactive (they all behave the same now)
+        if (!in_array($controlStrategy, ['reactive', 'predictive'])) {
+            $controlStrategy = 'reactive';
+        }
+
+        // Determine effective target temperature
         if ($controlStrategy === 'predictive' && $targetTemp === null) {
-            // Predictive mode with closed period: Maintain setback temperature
-            // This prevents massive reheat costs when pool reopens
-            $setbackTemp = $this->poolConfig['setback_temp'] ?? 26.0;
-            $targetTemp = $setbackTemp;
-            $minTemp = $setbackTemp - 1;  // Start heating if drops 1° below setback
-            $maxTemp = $setbackTemp + 1;  // Stop heating 1° above setback
+            // Predictive mode during closed hours: use setback temperature
+            $targetTemp = $this->poolConfig['setback_temp'] ?? 26.0;
         } elseif ($targetTemp === null) {
-            // Reactive modes: Always maintain pool config target_temp (ignores schedule)
+            // Reactive mode: always maintain configured target (ignores schedule)
             $targetTemp = $this->poolConfig['target_temp'] ?? 28.0;
-            // No min/max override - use default deadband around target
         }
-        // When targetTemp is set from schedule, use it as-is
+        // When targetTemp is provided from schedule, use it directly
 
-        // Default min/max if not provided
-        if ($minTemp === null) {
-            $minTemp = $targetTemp - 2;
-        }
-        if ($maxTemp === null) {
-            $maxTemp = $targetTemp + 2;
-        }
+        // Calculate temperature difference
+        $tempDiff = $targetTemp - $currentWaterTemp;
 
-        // Deadband control logic:
-        // 1. If water temp > maxTemp: No heating (allow to cool naturally)
-        if ($currentWaterTemp >= $maxTemp) {
-            return $result;
-        }
-
-        // 2. Calculate required heating based on current state
+        // Calculate required heating
         $requiredHeat = 0;
-        $tempDeficit = max(0, $targetTemp - $currentWaterTemp);
 
-        if ($currentWaterTemp < $minTemp) {
-            // Below minimum: Emergency - heat at maximum capacity
-            // Calculate heat needed to reach target this hour
-            $heatToRaiseTemp = $this->calculateHeatForTempRise($tempDeficit, 1.0);
-            $requiredHeat = $netRequirement + max(0, $heatToRaiseTemp);
-        } elseif ($tempDeficit > 0) {
-            // Below target: Actively recover - calculate heat needed to catch up
-            // Use available capacity to close the gap as fast as possible
-            // Heat = losses + recovery (full deficit worth of heat)
-            $heatToRaiseTemp = $this->calculateHeatForTempRise($tempDeficit, 1.0);
-            $requiredHeat = $netRequirement + max(0, $heatToRaiseTemp);
+        if ($tempDiff > 0) {
+            // BELOW TARGET: Need extra heat to raise temperature
+            // Required = losses + heat to raise temp to target in 1 hour
+            $heatToRaise = $this->calculateHeatForTempRise($tempDiff, 1.0);
+            $requiredHeat = $netRequirement + $heatToRaise;
         } else {
-            // At or above target: Just compensate for losses
-            $requiredHeat = max(0, $netRequirement);
+            // AT OR ABOVE TARGET: Excess temp reduces heat demand
+            // The thermal energy stored in excess temp offsets some losses
+            $excessTemp = abs($tempDiff);
+            $heatCredit = $this->calculateHeatForTempRise($excessTemp, 1.0);
+            $requiredHeat = max(0, $netRequirement - $heatCredit);
         }
 
-        // If negative (solar gain exceeds losses), no heating needed
+        // If no heating needed (solar exceeds losses + we have excess temp)
         if ($requiredHeat <= 0) {
             return $result;
         }
 
-        // Apply heating strategy
-        $strategy = $this->equipment['control_strategy'] ?? 'hp_priority';
-
         $remainingHeat = $requiredHeat;
 
-        // Heat pump first (unless boiler_priority)
-        // Default behavior: use HP first as it's more efficient
-        if ($strategy !== 'boiler_priority') {
-            $hpResult = $this->applyHeatPump($remainingHeat, $airTemp);
-            $result['hp_heat'] = $hpResult['heat'];
-            $result['hp_electricity'] = $hpResult['electricity'];
-            $result['hp_cop'] = $hpResult['cop'];
-            $result['cost'] += $hpResult['cost'];
-            $remainingHeat -= $hpResult['heat'];
-        }
+        // ALWAYS prioritize heat pump (more efficient)
+        $hpResult = $this->applyHeatPump($remainingHeat, $airTemp);
+        $result['hp_heat'] = $hpResult['heat'];
+        $result['hp_electricity'] = $hpResult['electricity'];
+        $result['hp_cop'] = $hpResult['cop'];
+        $result['cost'] += $hpResult['cost'];
+        $remainingHeat -= $hpResult['heat'];
 
-        // Boiler for remaining (or first if boiler_priority)
+        // Boiler handles overflow (when HP capacity exceeded)
         if ($remainingHeat > 0 && $this->equipment['boiler']['enabled']) {
             $boilerResult = $this->applyBoiler($remainingHeat);
             $result['boiler_heat'] = $boilerResult['heat'];
             $result['boiler_fuel'] = $boilerResult['fuel'];
             $result['cost'] += $boilerResult['cost'];
-            $remainingHeat -= $boilerResult['heat'];
-        }
-
-        // If boiler_priority and still need heat, try HP as backup
-        if ($strategy === 'boiler_priority' && $remainingHeat > 0) {
-            $hpResult = $this->applyHeatPump($remainingHeat, $airTemp);
-            $result['hp_heat'] = $hpResult['heat'];
-            $result['hp_electricity'] = $hpResult['electricity'];
-            $result['hp_cop'] = $hpResult['cop'];
-            $result['cost'] += $hpResult['cost'];
-            $remainingHeat -= $hpResult['heat'];
         }
 
         $result['total_heat'] = $result['hp_heat'] + $result['boiler_heat'];
