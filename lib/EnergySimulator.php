@@ -987,12 +987,17 @@ class EnergySimulator {
         $requiredHeat = 0;
 
         if ($currentWaterTemp < $minTemp) {
-            // Below minimum: Heat aggressively to reach target
+            // Below minimum: Heat at maximum capacity to reach target quickly
             $tempDeficit = $targetTemp - $currentWaterTemp;
             $heatToRaiseTemp = $this->calculateHeatForTempRise($tempDeficit, 1.0);
             $requiredHeat = $netRequirement + max(0, $heatToRaiseTemp);
+        } elseif ($currentWaterTemp < $targetTemp) {
+            // Below target but within deadband: Still try to raise temp, but less urgently
+            // Heat enough to cover losses plus gradually raise temp (0.5°C/hour)
+            $heatToRaiseTemp = $this->calculateHeatForTempRise(0.5, 1.0);
+            $requiredHeat = $netRequirement + max(0, $heatToRaiseTemp);
         } else {
-            // Within deadband (minTemp to maxTemp): Just compensate for losses
+            // At or above target: Just compensate for losses
             $requiredHeat = max(0, $netRequirement);
         }
 

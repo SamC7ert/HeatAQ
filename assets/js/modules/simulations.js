@@ -2261,6 +2261,9 @@ const SimulationsModule = {
         const hourSelect = document.getElementById('debug-hour');
         if (!dateInput || !dateInput.value) return;
 
+        // Update formatted date display
+        if (typeof updateDateDisplay === 'function') updateDateDisplay();
+
         const date = dateInput.value;
         const hour = hourSelect ? hourSelect.value : '12';
 
@@ -2294,6 +2297,20 @@ const SimulationsModule = {
             console.error('[Debug] Auto-load failed:', err);
             this.setDebugButtonState('changed');
         }
+    }
+};
+
+// Global function to update date display
+window.updateDateDisplay = function() {
+    const dateInput = document.getElementById('debug-date');
+    const display = document.getElementById('debug-date-display');
+    if (dateInput && display && dateInput.value) {
+        const date = new Date(dateInput.value + 'T12:00:00');
+        display.textContent = date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+        });
     }
 };
 
