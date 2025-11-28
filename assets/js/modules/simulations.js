@@ -1011,35 +1011,6 @@ const SimulationsModule = {
     },
 
     /**
-     * Clear all override fields
-     */
-    clearAllOverrides: function() {
-        const ids = [
-            'sim-hp-override', 'sim-boiler-override', 'sim-target-override',
-            'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
-            'sim-activity-override', 'sim-wind-override', 'sim-solar-override'
-        ];
-        ids.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.value = '';
-        });
-        // Clear saved overrides
-        const key = this.getUserKey('sim_overrides');
-        localStorage.removeItem(key);
-    },
-
-    /**
-     * Clear a single override field
-     */
-    clearOverride: function(fieldId) {
-        const el = document.getElementById(fieldId);
-        if (el) {
-            el.value = '';
-            this.saveOverrides();
-        }
-    },
-
-    /**
      * Get effective config with overrides applied
      */
     getEffectiveConfig: function(baseConfig) {
