@@ -86,6 +86,9 @@ const SimulationsModule = {
         }
     },
 
+    // Currently selected run in history table
+    selectedRunId: null,
+
     /**
      * Render runs list as metrics table
      */
@@ -124,9 +127,13 @@ const SimulationsModule = {
                         const elecMwh = s.total_hp_electricity_kwh ? (s.total_hp_electricity_kwh / 1000).toFixed(1) : '-';
                         const days1 = s.days_below_target_1c ?? '-';
                         const days2 = s.days_below_target_2c ?? '-';
+                        const isSelected = this.selectedRunId === run.run_id;
 
                         return `
-                            <tr class="run-row ${run.status}" onclick="SimulationsModule.viewRun(${run.run_id})" style="cursor: pointer;">
+                            <tr class="run-row ${run.status}${isSelected ? ' selected' : ''}"
+                                data-run-id="${run.run_id}"
+                                onclick="SimulationsModule.selectRun(${run.run_id})"
+                                style="cursor: pointer;">
                                 <td class="run-name">${this.escapeHtml(run.scenario_name)}</td>
                                 <td class="run-dates">${run.start_date.substring(5)} - ${run.end_date.substring(5)}</td>
                                 <td class="run-schedule" title="${this.escapeHtml(scheduleName)}">${this.escapeHtml(scheduleName.substring(0, 15))}</td>
@@ -144,6 +151,47 @@ const SimulationsModule = {
         `;
 
         container.innerHTML = html;
+
+        // Auto-select first run if none selected
+        if (!this.selectedRunId && this.runs.length > 0) {
+            this.selectRun(this.runs[0].run_id);
+        }
+    },
+
+    /**
+     * Select a run in history table and show its benchmark report
+     */
+    selectRun: async function(runId) {
+        // Update selection state
+        this.selectedRunId = runId;
+
+        // Update row highlighting
+        document.querySelectorAll('.history-table .run-row').forEach(row => {
+            row.classList.toggle('selected', parseInt(row.dataset.runId) === runId);
+        });
+
+        // Fetch full run data and show benchmark report
+        try {
+            const response = await fetch(`/api/simulation_api.php?action=get_run&run_id=${runId}`);
+            const data = await response.json();
+
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            const run = data.run;
+
+            // Show benchmark report
+            if (typeof SimControlModule !== 'undefined' && run.summary) {
+                SimControlModule.showBenchmarkReport({
+                    summary: run.summary,
+                    meta: run.config || {}
+                });
+            }
+
+        } catch (error) {
+            console.error('Failed to load run:', error);
+        }
     },
 
     /**
@@ -689,9 +737,9 @@ const SimulationsModule = {
         const windValue = config.pool?.wind_exposure;
         const windDisplay = windValue !== undefined ? (windValue * 100).toFixed(1) + '%' : undefined;
 
-        // Format solar absorption as percentage (0.6 -> "60.0%")
+        // Solar absorption is already stored as percentage (60 = 60%)
         const solarValue = config.solar?.absorption;
-        const solarDisplay = solarValue !== undefined ? (solarValue * 100).toFixed(1) + '%' : undefined;
+        const solarDisplay = solarValue !== undefined ? solarValue.toFixed(1) + '%' : undefined;
 
         // Map config values to display elements
         const mappings = {
@@ -888,42 +936,42 @@ const SimulationsModule = {
                     // Extract summary data
                     const summary = result.summary || result.run?.summary || {};
 
-                    // HP Use (MWh)
+                    // HP Use (MWh) - thermal output
                     const hpCell = document.getElementById(`result-hp-${caseNum}`);
                     if (hpCell) {
-                        const hpMwh = (summary.total_hp_heat_kwh || 0) / 1000;
+                        const hpMwh = (summary.hp_thermal_kwh || 0) / 1000;
                         hpCell.textContent = hpMwh.toFixed(1);
                         hpCell.className = 'result-cell';
                     }
 
-                    // Boiler Use (MWh)
+                    // Boiler Use (MWh) - thermal output
                     const boilerCell = document.getElementById(`result-boiler-${caseNum}`);
                     if (boilerCell) {
-                        const boilerMwh = (summary.total_boiler_heat_kwh || 0) / 1000;
+                        const boilerMwh = (summary.boiler_thermal_kwh || 0) / 1000;
                         boilerCell.textContent = boilerMwh.toFixed(1);
                         boilerCell.className = boilerMwh > 50 ? 'result-cell warning' : 'result-cell';
                     }
 
-                    // Electricity (MWh)
+                    // Electricity (MWh) - HP electricity consumption
                     const elecCell = document.getElementById(`result-elec-${caseNum}`);
                     if (elecCell) {
-                        const elecMwh = (summary.total_hp_electricity_kwh || 0) / 1000;
+                        const elecMwh = (summary.total_hp_energy_kwh || 0) / 1000;
                         elecCell.textContent = elecMwh.toFixed(1);
                         elecCell.className = 'result-cell';
                     }
 
-                    // Days below target (1°C)
+                    // Days below target (1°C = below 27°C when target is 28°C)
                     const days1Cell = document.getElementById(`result-days1-${caseNum}`);
                     if (days1Cell) {
-                        const days1 = summary.days_below_target_1c || 0;
+                        const days1 = summary.days_below_27 || 0;
                         days1Cell.textContent = days1;
                         days1Cell.className = days1 > 10 ? 'result-cell bad' : days1 > 0 ? 'result-cell warning' : 'result-cell good';
                     }
 
-                    // Days below target (2°C)
+                    // Days below target (2°C = below 26°C when target is 28°C)
                     const days2Cell = document.getElementById(`result-days2-${caseNum}`);
                     if (days2Cell) {
-                        const days2 = summary.days_below_target_2c || 0;
+                        const days2 = summary.days_below_26 || 0;
                         days2Cell.textContent = days2;
                         days2Cell.className = days2 > 5 ? 'result-cell bad' : days2 > 0 ? 'result-cell warning' : 'result-cell good';
                     }

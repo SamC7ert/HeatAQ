@@ -621,6 +621,15 @@ p.loading {
     background: #f8f9fa;
 }
 
+.history-table .run-row.selected {
+    background: #e3f2fd;
+    border-left: 3px solid #2196F3;
+}
+
+.history-table .run-row.selected:hover {
+    background: #bbdefb;
+}
+
 .history-table .run-name {
     font-weight: 500;
     max-width: 200px;
