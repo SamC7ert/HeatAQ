@@ -985,16 +985,18 @@ class EnergySimulator {
 
         // 2. Calculate required heating based on current state
         $requiredHeat = 0;
+        $tempDeficit = max(0, $targetTemp - $currentWaterTemp);
 
         if ($currentWaterTemp < $minTemp) {
-            // Below minimum: Heat at maximum capacity to reach target quickly
-            $tempDeficit = $targetTemp - $currentWaterTemp;
+            // Below minimum: Emergency - heat at maximum capacity
+            // Calculate heat needed to reach target this hour
             $heatToRaiseTemp = $this->calculateHeatForTempRise($tempDeficit, 1.0);
             $requiredHeat = $netRequirement + max(0, $heatToRaiseTemp);
-        } elseif ($currentWaterTemp < $targetTemp) {
-            // Below target but within deadband: Still try to raise temp, but less urgently
-            // Heat enough to cover losses plus gradually raise temp (0.5°C/hour)
-            $heatToRaiseTemp = $this->calculateHeatForTempRise(0.5, 1.0);
+        } elseif ($tempDeficit > 0) {
+            // Below target: Actively recover - calculate heat needed to catch up
+            // Use available capacity to close the gap as fast as possible
+            // Heat = losses + recovery (full deficit worth of heat)
+            $heatToRaiseTemp = $this->calculateHeatForTempRise($tempDeficit, 1.0);
             $requiredHeat = $netRequirement + max(0, $heatToRaiseTemp);
         } else {
             // At or above target: Just compensate for losses
