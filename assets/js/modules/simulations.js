@@ -685,6 +685,14 @@ const SimulationsModule = {
     populateConfigValues: function(config) {
         if (!config) return;
 
+        // Format wind exposure as percentage (0.535 -> "53.5%")
+        const windValue = config.pool?.wind_exposure;
+        const windDisplay = windValue !== undefined ? (windValue * 100).toFixed(1) + '%' : undefined;
+
+        // Format solar absorption as percentage (0.6 -> "60.0%")
+        const solarValue = config.solar?.absorption;
+        const solarDisplay = solarValue !== undefined ? (solarValue * 100).toFixed(1) + '%' : undefined;
+
         // Map config values to display elements
         const mappings = {
             'cfg-val-hp-capacity': config.equipment?.hp_capacity_kw,
@@ -694,8 +702,8 @@ const SimulationsModule = {
             'cfg-val-lower-tol': config.control?.lower_tolerance ?? config.control?.temp_tolerance,
             'cfg-val-bathers': config.bathers?.per_day,
             'cfg-val-activity': config.bathers?.activity_factor,
-            'cfg-val-wind': config.pool?.wind_exposure,
-            'cfg-val-solar': config.solar?.absorption
+            'cfg-val-wind': windDisplay,
+            'cfg-val-solar': solarDisplay
         };
 
         for (const [id, value] of Object.entries(mappings)) {
@@ -1351,10 +1359,11 @@ const SimulationsModule = {
         }
 
         // ===== Populate Detail Cards =====
+        const windPct = inp.config?.wind_factor ? (inp.config.wind_factor * 100).toFixed(1) + '%' : '-';
         setHtml('debug-input', `
             <strong>Weather:</strong> ${inp.weather?.air_temp_c}°C, Wind: ${inp.weather?.wind_speed_ms} m/s, RH: ${inp.weather?.humidity_pct}%<br>
             <strong>Pool:</strong> ${inp.pool?.water_temp_c}°C, ${inp.pool?.area_m2} m²<br>
-            <strong>Config:</strong> Wind×${inp.config?.wind_factor}, Cover: ${inp.config?.has_cover ? 'Yes' : 'No'}
+            <strong>Config:</strong> Wind: ${windPct} exposure, Cover: ${inp.config?.has_cover ? 'Yes' : 'No'}
         `);
         setHtml('debug-evaporation', renderTable(data.evaporation));
         setHtml('debug-convection', renderTable(data.convection));
@@ -2059,10 +2068,11 @@ const SimulationsModule = {
             }
 
             // Show benchmark report (same as after running simulation)
+            // Note: API returns decoded config in lastRun.config (not config_snapshot)
             if (typeof SimControlModule !== 'undefined' && lastRun.summary) {
                 SimControlModule.showBenchmarkReport({
                     summary: lastRun.summary,
-                    meta: lastRun.config_snapshot || {}
+                    meta: lastRun.config || {}
                 });
             }
 
