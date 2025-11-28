@@ -154,8 +154,11 @@ try {
                 sendError("Date range too large. Maximum {$maxDays} days allowed.");
             }
 
-            // Get optional equipment overrides
+            // Get optional equipment overrides (legacy)
             $equipmentOverrides = getParam('equipment', null);
+
+            // Get optional config overrides (new - can override equipment, control, pool, etc.)
+            $configOverride = getParam('config_override', null);
 
             // Get optional config and template IDs
             $configId = getParam('config_id', null);
@@ -225,9 +228,42 @@ try {
                 }
             }
 
-            // Apply equipment overrides if provided (takes precedence)
+            // Apply equipment overrides if provided (legacy method)
             if ($equipmentOverrides) {
                 $simulator->setEquipment($equipmentOverrides);
+            }
+
+            // Apply config overrides if provided (new method - takes precedence)
+            if ($configOverride && is_array($configOverride)) {
+                // Apply equipment overrides
+                if (isset($configOverride['equipment']) && is_array($configOverride['equipment'])) {
+                    $currentEquip = $simulator->getEquipment();
+                    if (isset($configOverride['equipment']['hp_capacity_kw'])) {
+                        $currentEquip['heat_pump']['capacity_kw'] = (float)$configOverride['equipment']['hp_capacity_kw'];
+                    }
+                    if (isset($configOverride['equipment']['boiler_capacity_kw'])) {
+                        $currentEquip['boiler']['capacity_kw'] = (float)$configOverride['equipment']['boiler_capacity_kw'];
+                    }
+                    $simulator->setEquipment($currentEquip);
+                }
+
+                // Apply control overrides via setConfigFromUI
+                $uiConfig = [];
+                if (isset($configOverride['control'])) {
+                    $uiConfig['control'] = $configOverride['control'];
+                }
+                if (isset($configOverride['pool'])) {
+                    $uiConfig['pool'] = $configOverride['pool'];
+                }
+                if (isset($configOverride['bathers'])) {
+                    $uiConfig['bathers'] = $configOverride['bathers'];
+                }
+                if (isset($configOverride['solar'])) {
+                    $uiConfig['solar'] = $configOverride['solar'];
+                }
+                if (!empty($uiConfig)) {
+                    $simulator->setConfigFromUI($uiConfig);
+                }
             }
 
             // Create simulation run record
