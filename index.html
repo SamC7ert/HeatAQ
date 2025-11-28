@@ -1255,9 +1255,8 @@
                     <div class="card">
                         <h3>Database Migrations</h3>
                         <p class="text-muted">Pending migrations in db/migrations/</p>
-                        <div id="migrations-list" style="margin: 1rem 0;">
-                            <p class="text-muted">Loading...</p>
-                        </div>
+                        <button class="btn btn-secondary" onclick="AdminModule.checkMigrations()">Check Migrations</button>
+                        <div id="migrations-list" style="margin: 1rem 0;"></div>
                         <div id="migration-result"></div>
                     </div>
 
