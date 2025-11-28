@@ -3,12 +3,12 @@
 const navigation = {
     currentSection: 'simcontrol',
 
-    init() {
+    async init() {
         // Set initial active state
-        this.switchSection('simcontrol', false);
+        await this.switchSection('simcontrol', false);
     },
     
-    switchSection(sectionName, updateUI = true) {
+    async switchSection(sectionName, updateUI = true) {
         // Hide all sections
         document.querySelectorAll('.content-section').forEach(section => {
             section.classList.remove('active');
@@ -49,10 +49,10 @@ const navigation = {
         }
         
         // Load section-specific data if needed
-        this.loadSectionData(sectionName);
+        await this.loadSectionData(sectionName);
     },
 
-    loadSectionData(sectionName) {
+    async loadSectionData(sectionName) {
         switch (sectionName) {
             // PROJECT sections
             case 'project':
@@ -62,6 +62,10 @@ const navigation = {
                 break;
 
             case 'simcontrol':
+                // Ensure ProjectModule is loaded first so SimControl can get site/pool
+                if (typeof ProjectModule !== 'undefined' && !ProjectModule.currentSite) {
+                    await ProjectModule.load();
+                }
                 if (typeof app.simcontrol !== 'undefined') {
                     app.simcontrol.init();
                 }

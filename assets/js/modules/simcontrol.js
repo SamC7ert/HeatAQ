@@ -52,11 +52,15 @@ const SimControlModule = {
 
                 // Try to get from ProjectModule
                 if (typeof ProjectModule !== 'undefined' && ProjectModule.currentSite) {
+                    console.log('[SimControl] ProjectModule.currentSite:', ProjectModule.currentSite.name);
                     // Match by name since Project uses name, API returns site_id
                     const projectSite = data.sites.find(s => s.name === ProjectModule.currentSite.name);
                     if (projectSite) {
                         selectedSite = projectSite.site_id;
+                        console.log('[SimControl] Using project site:', projectSite.name, 'id:', selectedSite);
                     }
+                } else {
+                    console.log('[SimControl] ProjectModule.currentSite not available');
                 }
 
                 // Fall back to saved preference
@@ -116,9 +120,13 @@ const SimControlModule = {
 
                 // Try to get from ProjectModule
                 if (typeof ProjectModule !== 'undefined' && ProjectModule.currentPoolId) {
+                    console.log('[SimControl] ProjectModule.currentPoolId:', ProjectModule.currentPoolId);
                     if (data.pools.find(p => p.pool_id == ProjectModule.currentPoolId)) {
                         selectedPool = ProjectModule.currentPoolId;
+                        console.log('[SimControl] Using project pool id:', selectedPool);
                     }
+                } else {
+                    console.log('[SimControl] ProjectModule.currentPoolId not available');
                 }
 
                 // Fall back to saved preference
