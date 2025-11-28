@@ -53,6 +53,14 @@
         .btn-logout:hover {
             background: #c82333;
         }
+
+        .version-badge {
+            font-size: 10px;
+            color: #999;
+            padding: 2px 6px;
+            background: #f0f0f0;
+            border-radius: 3px;
+        }
     </style>
 </head>
 <body>
@@ -74,7 +82,7 @@
         <div class="user-info">
             <span class="project-name" id="current-project"></span>
             <span class="user-name" id="current-user"></span>
-            <span style="font-size: 10px; color: #999; padding: 2px 6px; background: #f0f0f0; border-radius: 3px;">V82</span>
+            <span class="version-badge" id="header-version">V85</span>
             <button onclick="logout()" class="btn-logout">Logout</button>
         </div>
         
@@ -896,7 +904,8 @@
                                 <div style="display: grid; gap: 8px; font-size: 13px;">
                                     <div style="display: flex; align-items: center; gap: 8px;">
                                         <label style="width: 55px;">Date</label>
-                                        <input type="date" id="debug-date" value="2024-07-27" style="width: 130px; padding: 4px;">
+                                        <input type="date" id="debug-date" value="2024-07-27" style="width: 130px; padding: 4px;" onchange="updateDateDisplay()">
+                                        <span id="debug-date-display" style="font-size: 12px; color: #666;"></span>
                                     </div>
                                     <div style="display: flex; align-items: center; gap: 8px;">
                                         <label style="width: 55px;">Hour</label>
@@ -1205,12 +1214,11 @@
                             <button class="btn btn-primary" onclick="app.admin.dumpSchemaAndPush()">Export & Push to Git</button>
                             <span id="schema-status"></span>
                         </div>
-                        <div id="schema-result" style="margin-top: 15px; display: none;">
-                            <p><strong>Files generated:</strong></p>
-                            <ul>
-                                <li><a href="db/schema.json" target="_blank">schema.json</a> - Machine readable</li>
-                                <li><a href="db/schema.md" target="_blank">schema.md</a> - Documentation</li>
-                            </ul>
+                        <div style="margin-top: 15px;">
+                            <p><strong>Schema files:</strong>
+                                <a href="db/schema.json" target="_blank">schema.json</a> |
+                                <a href="db/schema.md" target="_blank">schema.md</a>
+                            </p>
                             <p id="git-result"></p>
                         </div>
                     </div>
@@ -1225,7 +1233,7 @@
                     <div class="card">
                         <h3>System Info</h3>
                         <table class="data-table compact">
-                            <tr><td><strong>App Version</strong></td><td>V85</td></tr>
+                            <tr><td><strong>App Version</strong></td><td id="sys-app-version">V85</td></tr>
                             <tr><td><strong>Simulator</strong></td><td id="sys-simulator-ver">-</td></tr>
                             <tr><td><strong>PHP</strong></td><td id="sys-php-ver">-</td></tr>
                         </table>
@@ -1453,15 +1461,15 @@
     <!-- Core configuration -->
     <script src="./assets/js/config.js"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=85"></script>
-    <script src="./assets/js/modules/navigation.js?v=85"></script>
-    <script src="./assets/js/modules/schedules.js?v=85"></script>
-    <script src="./assets/js/modules/calendar.js?v=85"></script>
-    <script src="./assets/js/modules/simulations.js?v=85"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=85"></script>
-    <script src="./assets/js/modules/configuration.js?v=85"></script>
-    <script src="./assets/js/modules/admin.js?v=85"></script>
-    <script src="./assets/js/modules/project.js?v=85"></script>
-    <script src="./assets/js/app.js?v=85"></script>
+    <script src="./assets/js/modules/api.js?v=86"></script>
+    <script src="./assets/js/modules/navigation.js?v=86"></script>
+    <script src="./assets/js/modules/schedules.js?v=86"></script>
+    <script src="./assets/js/modules/calendar.js?v=86"></script>
+    <script src="./assets/js/modules/simulations.js?v=86"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=86"></script>
+    <script src="./assets/js/modules/configuration.js?v=86"></script>
+    <script src="./assets/js/modules/admin.js?v=86"></script>
+    <script src="./assets/js/modules/project.js?v=86"></script>
+    <script src="./assets/js/app.js?v=86"></script>
 </body>
 </html>
