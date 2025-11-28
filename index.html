@@ -1254,16 +1254,11 @@
 
                     <div class="card">
                         <h3>Database Migrations</h3>
-                        <p class="text-muted">Run pending database migrations</p>
+                        <p class="text-muted">Pending migrations in db/migrations/</p>
                         <div id="migrations-list" style="margin: 1rem 0;">
-                            <p class="text-muted">Click "Check Migrations" to scan for pending migrations</p>
+                            <p class="text-muted">Loading...</p>
                         </div>
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                            <button class="btn btn-secondary" onclick="AdminModule.checkMigrations()">Check Migrations</button>
-                            <button class="btn btn-primary" id="run-migrations-btn" onclick="AdminModule.runMigrations()" disabled>Run Pending</button>
-                            <button class="btn btn-secondary" onclick="AdminModule.exportSchema()">Export Schema</button>
-                        </div>
-                        <div id="migration-result" style="margin-top: 1rem;"></div>
+                        <div id="migration-result"></div>
                     </div>
 
                     <div class="card">

@@ -105,6 +105,9 @@ const navigation = {
                 if (typeof app.admin !== 'undefined') {
                     app.admin.loadSystemInfo();
                 }
+                if (typeof AdminModule !== 'undefined') {
+                    AdminModule.checkMigrations();
+                }
                 break;
 
             case 'reports':
