@@ -153,7 +153,16 @@ class HeatAQAPI {
                 case 'test_resolution':
                     $this->testResolution();
                     break;
-                    
+                case 'diagnose_site_ids':
+                    $this->diagnoseSiteIds();
+                    break;
+                case 'fix_site_ids':
+                    if (!$this->canEdit()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->fixSiteIds();
+                    break;
+
                 // WRITE operations
                 case 'save_template':
                     if (!$this->canEdit()) {
@@ -681,7 +690,81 @@ class HeatAQAPI {
             'all_date_ranges' => $dateRanges
         ]);
     }
-    
+
+    /**
+     * Diagnose site_id mismatches between auth and schedule tables
+     */
+    private function diagnoseSiteIds() {
+        $currentSiteId = $this->siteId;
+
+        // Get all unique site_ids from schedule tables
+        $tables = [
+            'schedule_templates' => 'site_id',
+            'day_schedules' => 'site_id',
+            'week_schedules' => 'site_id',
+        ];
+
+        $results = [
+            'current_site_id' => $currentSiteId,
+            'tables' => []
+        ];
+
+        foreach ($tables as $table => $column) {
+            $stmt = $this->db->query("SELECT DISTINCT $column as site_id, COUNT(*) as count FROM $table GROUP BY $column");
+            $rows = $stmt->fetchAll();
+            $results['tables'][$table] = $rows;
+        }
+
+        // Check for mismatches
+        $mismatches = [];
+        foreach ($results['tables'] as $table => $siteIds) {
+            foreach ($siteIds as $row) {
+                if ($row['site_id'] !== $currentSiteId) {
+                    $mismatches[] = [
+                        'table' => $table,
+                        'has_site_id' => $row['site_id'],
+                        'expected_site_id' => $currentSiteId,
+                        'record_count' => $row['count']
+                    ];
+                }
+            }
+        }
+
+        $results['mismatches'] = $mismatches;
+        $results['has_mismatches'] = !empty($mismatches);
+
+        $this->sendResponse($results);
+    }
+
+    /**
+     * Fix site_id mismatches - update old site_id to current
+     */
+    private function fixSiteIds() {
+        $input = $this->getPostInput();
+        $oldSiteId = $input['old_site_id'] ?? null;
+        $newSiteId = $input['new_site_id'] ?? $this->siteId;
+
+        if (!$oldSiteId) {
+            $this->sendError('old_site_id is required');
+        }
+
+        $tables = ['schedule_templates', 'day_schedules', 'week_schedules'];
+        $results = [];
+
+        foreach ($tables as $table) {
+            $stmt = $this->db->prepare("UPDATE $table SET site_id = ? WHERE site_id = ?");
+            $stmt->execute([$newSiteId, $oldSiteId]);
+            $results[$table] = $stmt->rowCount();
+        }
+
+        $this->sendResponse([
+            'success' => true,
+            'old_site_id' => $oldSiteId,
+            'new_site_id' => $newSiteId,
+            'updated_rows' => $results
+        ]);
+    }
+
     private function saveTemplate() {
         $input = $this->getPostInput();
 
