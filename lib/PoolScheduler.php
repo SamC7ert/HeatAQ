@@ -746,4 +746,42 @@ class PoolScheduler {
 
         return $results;
     }
+
+    /**
+     * Get schedule debug info for a date
+     * Returns detailed info about which schedule is being used and why
+     *
+     * @param string $date Date string (YYYY-MM-DD)
+     * @return array Debug information
+     */
+    public function getScheduleDebugInfo($date) {
+        $dateObj = new DateTime($date);
+        $scheduleName = $this->getScheduleForDate($dateObj);
+        $periods = $this->getPeriods($dateObj);
+
+        // Calculate open hours from periods
+        $openHours = 0;
+        foreach ($periods as $period) {
+            $openHours += ($period['to'] - $period['from']);
+        }
+
+        // Get template info
+        $baseWeekId = $this->template['base_week_schedule_id'] ?? null;
+        $baseWeekSchedule = $baseWeekId && isset($this->weekSchedules[$baseWeekId])
+            ? $this->weekSchedules[$baseWeekId]
+            : null;
+
+        return [
+            'date' => $date,
+            'day_of_week' => $dateObj->format('l'),
+            'schedule_name' => $scheduleName,
+            'periods' => $periods,
+            'open_hours' => $openHours,
+            'template_id' => $this->templateId,
+            'template_name' => $this->template['name'] ?? null,
+            'base_week_schedule_id' => $baseWeekId,
+            'base_week_schedule_name' => $baseWeekSchedule ? $baseWeekSchedule['name'] : null,
+            'available_schedules' => array_keys($this->schedules),
+        ];
+    }
 }

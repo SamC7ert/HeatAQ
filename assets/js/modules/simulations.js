@@ -1235,7 +1235,21 @@ const SimulationsModule = {
      * Render debug calculation results - populates new UI structure
      */
     renderDebugResults: function(data) {
-        console.log('V69 renderDebugResults called', data);
+        console.log('[V79 renderDebugResults]', data);
+
+        // Log schedule debug info prominently
+        if (data.schedule_debug) {
+            console.log('[Schedule Debug]', data.schedule_debug);
+            console.log(`  Template: ${data.schedule_debug.template_name} (ID: ${data.schedule_debug.template_id})`);
+            console.log(`  Day: ${data.schedule_debug.day_of_week}, Schedule: ${data.schedule_debug.schedule_name}`);
+            console.log(`  Periods:`, data.schedule_debug.periods);
+            console.log(`  Open Hours: ${data.schedule_debug.open_hours}`);
+        }
+        if (data.config_info) {
+            console.log('[Config Info]', data.config_info);
+            console.log(`  Schedule Template Stored: ${data.config_info.schedule_template_id_stored}`);
+            console.log(`  Schedule Template Used: ${data.config_info.schedule_template_id_used}`);
+        }
 
         // Helper to render a table from object
         const renderTable = (obj) => {
@@ -1314,6 +1328,17 @@ const SimulationsModule = {
         // Config and Schedule display (from run info)
         if (stored.run_id) {
             this.loadRunInfoForDebug(stored.run_id);
+        }
+
+        // Show schedule debug info (actual periods being used)
+        const schedDebug = data.schedule_debug;
+        if (schedDebug) {
+            const ohcDisplay = document.getElementById('debug-ohc-display');
+            if (ohcDisplay) {
+                const periods = schedDebug.periods || [];
+                const periodsStr = periods.map(p => `${p.from}:00-${p.to}:00`).join(', ') || 'Closed';
+                ohcDisplay.innerHTML = `${schedDebug.template_name || 'Default'} <span style="font-size:11px;color:#666;">(${periodsStr}, ${schedDebug.open_hours}h)</span>`;
+            }
         }
 
         // Update chart comparison display with stored run info
