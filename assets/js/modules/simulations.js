@@ -1235,7 +1235,21 @@ const SimulationsModule = {
      * Render debug calculation results - populates new UI structure
      */
     renderDebugResults: function(data) {
-        console.log('V69 renderDebugResults called', data);
+        console.log('[V79 renderDebugResults]', data);
+
+        // Log schedule debug info prominently
+        if (data.schedule_debug) {
+            console.log('[Schedule Debug]', data.schedule_debug);
+            console.log(`  Template: ${data.schedule_debug.template_name} (ID: ${data.schedule_debug.template_id})`);
+            console.log(`  Day: ${data.schedule_debug.day_of_week}, Schedule: ${data.schedule_debug.schedule_name}`);
+            console.log(`  Periods:`, data.schedule_debug.periods);
+            console.log(`  Open Hours: ${data.schedule_debug.open_hours}`);
+        }
+        if (data.config_info) {
+            console.log('[Config Info]', data.config_info);
+            console.log(`  Schedule Template Stored: ${data.config_info.schedule_template_id_stored}`);
+            console.log(`  Schedule Template Used: ${data.config_info.schedule_template_id_used}`);
+        }
 
         // Helper to render a table from object
         const renderTable = (obj) => {
@@ -1308,12 +1322,23 @@ const SimulationsModule = {
         const waterTemp = stored.water_temp || inp.pool?.water_temp_c;
         const waterTempDisplay = document.getElementById('debug-water-temp-display');
         if (waterTempDisplay && waterTemp) {
-            waterTempDisplay.textContent = `Water: ${parseFloat(waterTemp).toFixed(1)}°C`;
+            waterTempDisplay.textContent = `${parseFloat(waterTemp).toFixed(1)}°C`;
         }
 
         // Config and Schedule display (from run info)
         if (stored.run_id) {
             this.loadRunInfoForDebug(stored.run_id);
+        }
+
+        // Show schedule debug info (actual periods being used)
+        const schedDebug = data.schedule_debug;
+        if (schedDebug) {
+            const ohcDisplay = document.getElementById('debug-ohc-display');
+            if (ohcDisplay) {
+                const periods = schedDebug.periods || [];
+                const periodsStr = periods.map(p => `${p.from}:00-${p.to}:00`).join(', ') || 'Closed';
+                ohcDisplay.innerHTML = `${schedDebug.template_name || 'Default'} <span style="font-size:11px;color:#666;">(${periodsStr}, ${schedDebug.open_hours}h)</span>`;
+            }
         }
 
         // Update chart comparison display with stored run info
@@ -1744,9 +1769,22 @@ const SimulationsModule = {
                     const barWidth = xAxis.width / data.length;
                     const x = xAxis.left + (debugIndex * barWidth);
 
-                    // Draw yellow highlight rectangle
+                    // Draw highlight with left/right borders (more visible than fill)
                     ctx.save();
-                    ctx.fillStyle = 'rgba(255, 235, 59, 0.3)';  // Light yellow
+                    ctx.strokeStyle = 'rgba(255, 152, 0, 0.9)';  // Orange border
+                    ctx.lineWidth = 3;
+                    // Left border
+                    ctx.beginPath();
+                    ctx.moveTo(x, yAxis.top);
+                    ctx.lineTo(x, yAxis.bottom);
+                    ctx.stroke();
+                    // Right border
+                    ctx.beginPath();
+                    ctx.moveTo(x + barWidth, yAxis.top);
+                    ctx.lineTo(x + barWidth, yAxis.bottom);
+                    ctx.stroke();
+                    // Light fill between borders
+                    ctx.fillStyle = 'rgba(255, 235, 59, 0.15)';
                     ctx.fillRect(x, yAxis.top, barWidth, yAxis.bottom - yAxis.top);
                     ctx.restore();
                 }
@@ -1895,9 +1933,22 @@ const SimulationsModule = {
                     const barWidth = xAxis.width / data.length;
                     const x = xAxis.left + (debugIndex * barWidth);
 
-                    // Draw yellow highlight rectangle
+                    // Draw highlight with left/right borders (more visible than fill)
                     ctx.save();
-                    ctx.fillStyle = 'rgba(255, 235, 59, 0.3)';  // Light yellow
+                    ctx.strokeStyle = 'rgba(255, 152, 0, 0.9)';  // Orange border
+                    ctx.lineWidth = 3;
+                    // Left border
+                    ctx.beginPath();
+                    ctx.moveTo(x, yAxis.top);
+                    ctx.lineTo(x, yAxis.bottom);
+                    ctx.stroke();
+                    // Right border
+                    ctx.beginPath();
+                    ctx.moveTo(x + barWidth, yAxis.top);
+                    ctx.lineTo(x + barWidth, yAxis.bottom);
+                    ctx.stroke();
+                    // Light fill between borders
+                    ctx.fillStyle = 'rgba(255, 235, 59, 0.15)';
                     ctx.fillRect(x, yAxis.top, barWidth, yAxis.bottom - yAxis.top);
                     ctx.restore();
                 }
@@ -2212,6 +2263,9 @@ const SimulationsModule = {
 
         const date = dateInput.value;
         const hour = hourSelect ? hourSelect.value : '12';
+
+        // Set debugTimestamp so chart highlight appears on initial load
+        this.debugTimestamp = `${date} ${hour.padStart(2, '0')}:00`;
 
         this.setDebugButtonState('loading');
 

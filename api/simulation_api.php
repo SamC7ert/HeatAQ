@@ -611,12 +611,16 @@ try {
             ];
 
             // Add config info from the run
+            $scheduleDebug = $scheduler->getScheduleDebugInfo($date);
             $debug['config_info'] = [
                 'config_template_name' => $configSnapshot['config_template_name'] ?? null,
                 'schedule_template_name' => $configSnapshot['schedule_template_name'] ?? null,
+                'schedule_template_id_stored' => $configSnapshot['schedule_template_id'] ?? 'not stored',
+                'schedule_template_id_used' => $scheduler->getTemplate()['template_id'] ?? null,
                 'hp_capacity_kw' => $configSnapshot['equipment']['hp_capacity_kw'] ?? null,
                 'boiler_capacity_kw' => $configSnapshot['equipment']['boiler_capacity_kw'] ?? null,
             ];
+            $debug['schedule_debug'] = $scheduleDebug;
 
             // Validation: check if recalc matches stored (warn if different)
             $storedNetDemand = (float)$stored['total_loss_kw'] - (float)$stored['solar_gain_kw'];
