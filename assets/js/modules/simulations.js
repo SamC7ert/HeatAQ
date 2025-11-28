@@ -771,19 +771,42 @@ const SimulationsModule = {
     },
 
     /**
-     * Load saved override values from localStorage
+     * Load saved override values from server (with localStorage fallback)
      */
-    loadSavedOverrides: function() {
+    loadSavedOverrides: async function() {
+        const fields = [
+            'sim-hp-override', 'sim-boiler-override', 'sim-target-override',
+            'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
+            'sim-activity-override', 'sim-wind-override', 'sim-solar-override'
+        ];
+
+        // Try loading from server first
+        try {
+            const response = await fetch('/api/heataq_api.php?action=get_preferences');
+            const data = await response.json();
+            if (data.preferences?.sim_overrides) {
+                const overrides = JSON.parse(data.preferences.sim_overrides);
+                fields.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el && overrides[id]) {
+                        el.value = overrides[id];
+                    }
+                });
+                // Update localStorage cache
+                const key = this.getUserKey('sim_overrides');
+                localStorage.setItem(key, data.preferences.sim_overrides);
+                return;
+            }
+        } catch (e) {
+            console.log('Server preferences not available, using localStorage');
+        }
+
+        // Fallback to localStorage
         const key = this.getUserKey('sim_overrides');
         const saved = localStorage.getItem(key);
         if (saved) {
             try {
                 const overrides = JSON.parse(saved);
-                const fields = [
-                    'sim-hp-override', 'sim-boiler-override', 'sim-target-override',
-                    'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
-                    'sim-activity-override', 'sim-wind-override', 'sim-solar-override'
-                ];
                 fields.forEach(id => {
                     const el = document.getElementById(id);
                     if (el && overrides[id]) {
@@ -797,7 +820,7 @@ const SimulationsModule = {
     },
 
     /**
-     * Save override values to localStorage
+     * Save override values to server and localStorage
      */
     saveOverrides: function() {
         const fields = [
@@ -812,8 +835,19 @@ const SimulationsModule = {
                 overrides[id] = el.value;
             }
         });
+
+        const overridesJson = JSON.stringify(overrides);
+
+        // Save to localStorage (cache)
         const key = this.getUserKey('sim_overrides');
-        localStorage.setItem(key, JSON.stringify(overrides));
+        localStorage.setItem(key, overridesJson);
+
+        // Save to server (async, don't wait)
+        fetch('/api/heataq_api.php?action=save_preference', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: 'sim_overrides', value: overridesJson })
+        }).catch(e => console.log('Failed to save overrides to server:', e));
     },
 
     /**
@@ -889,9 +923,16 @@ const SimulationsModule = {
             const el = document.getElementById(id);
             if (el) el.value = '';
         });
-        // Clear saved overrides
+        // Clear saved overrides from localStorage
         const key = this.getUserKey('sim_overrides');
         localStorage.removeItem(key);
+
+        // Clear from server too
+        fetch('/api/heataq_api.php?action=save_preference', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: 'sim_overrides', value: '{}' })
+        }).catch(e => console.log('Failed to clear overrides on server:', e));
     },
 
     /**
