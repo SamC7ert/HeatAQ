@@ -381,6 +381,26 @@ class HeatAQAPI {
                     $this->deployPush();
                     break;
 
+                // DATABASE MIGRATIONS (admin only)
+                case 'check_migrations':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied - admin only', 403);
+                    }
+                    $this->checkMigrations();
+                    break;
+                case 'run_migration':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied - admin only', 403);
+                    }
+                    $this->runMigration();
+                    break;
+                case 'export_schema':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied - admin only', 403);
+                    }
+                    $this->exportSchema();
+                    break;
+
                 // SITE AND POOL MANAGEMENT
                 case 'get_sites':
                     $this->getSites();
@@ -2301,6 +2321,175 @@ class HeatAQAPI {
             'log' => $log,
             'note' => $success ? 'Pushed successfully' : 'Push may have failed - check log'
         ]);
+    }
+
+    // ====================================
+    // DATABASE MIGRATIONS
+    // ====================================
+
+    /**
+     * Check for pending migrations in db/migrations/
+     */
+    private function checkMigrations() {
+        $migrationsDir = realpath(__DIR__ . '/../db/migrations');
+
+        if (!$migrationsDir || !is_dir($migrationsDir)) {
+            $this->sendResponse([
+                'pending' => [],
+                'note' => 'Migrations directory not found'
+            ]);
+            return;
+        }
+
+        $files = glob($migrationsDir . '/*.sql');
+        $pending = [];
+
+        foreach ($files as $file) {
+            $filename = basename($file);
+            $content = file_get_contents($file);
+
+            // Extract description from comment header
+            $description = '';
+            if (preg_match('/--\s*Description:\s*(.+)/i', $content, $m)) {
+                $description = trim($m[1]);
+            }
+
+            $pending[] = [
+                'filename' => $filename,
+                'path' => $file,
+                'description' => $description,
+                'size' => filesize($file),
+                'modified' => date('Y-m-d H:i:s', filemtime($file))
+            ];
+        }
+
+        // Sort by filename (which should be numbered)
+        usort($pending, fn($a, $b) => strcmp($a['filename'], $b['filename']));
+
+        $this->sendResponse([
+            'pending' => $pending,
+            'count' => count($pending)
+        ]);
+    }
+
+    /**
+     * Run a specific migration file
+     */
+    private function runMigration() {
+        $input = $this->getPostInput();
+        $filename = $input['filename'] ?? null;
+
+        if (!$filename) {
+            $this->sendError('Migration filename required');
+            return;
+        }
+
+        // Security: only allow .sql files in migrations directory
+        if (!preg_match('/^\d{3}_[a-z0-9_]+\.sql$/', $filename)) {
+            $this->sendError('Invalid migration filename format');
+            return;
+        }
+
+        $migrationsDir = realpath(__DIR__ . '/../db/migrations');
+        $filepath = $migrationsDir . '/' . $filename;
+
+        if (!file_exists($filepath)) {
+            $this->sendError('Migration file not found: ' . $filename);
+            return;
+        }
+
+        $sql = file_get_contents($filepath);
+        $log = [];
+        $log[] = "Running migration: $filename";
+
+        try {
+            // Split SQL by semicolons (simple approach - doesn't handle all edge cases)
+            // Remove comments for execution
+            $statements = array_filter(
+                array_map('trim', preg_split('/;\s*$/m', $sql)),
+                fn($s) => !empty($s) && !preg_match('/^--/', trim($s))
+            );
+
+            $executed = 0;
+            foreach ($statements as $stmt) {
+                // Skip pure comments
+                $cleanStmt = trim(preg_replace('/--.*$/m', '', $stmt));
+                if (empty($cleanStmt)) continue;
+
+                $log[] = "Executing: " . substr($cleanStmt, 0, 80) . (strlen($cleanStmt) > 80 ? '...' : '');
+                $this->db->exec($cleanStmt);
+                $executed++;
+            }
+
+            $log[] = "Migration complete: $executed statements executed";
+
+            $this->sendResponse([
+                'success' => true,
+                'filename' => $filename,
+                'statements' => $executed,
+                'log' => $log
+            ]);
+
+        } catch (PDOException $e) {
+            $log[] = "ERROR: " . $e->getMessage();
+            $this->sendResponse([
+                'success' => false,
+                'filename' => $filename,
+                'error' => $e->getMessage(),
+                'log' => $log
+            ]);
+        }
+    }
+
+    /**
+     * Export current database schema
+     */
+    private function exportSchema() {
+        $dbDir = realpath(__DIR__ . '/../db');
+        $dumpScript = $dbDir . '/dump_schema.php';
+
+        if (!file_exists($dumpScript)) {
+            $this->sendError('Schema dump script not found');
+            return;
+        }
+
+        $log = [];
+        $oldDir = getcwd();
+        chdir($dbDir);
+
+        try {
+            // Run the dump script
+            $log[] = "Running schema export...";
+            ob_start();
+            include $dumpScript;
+            $output = ob_get_clean();
+            $log[] = $output ?: "Export completed";
+
+            // Check if files were created
+            $schemaJson = file_exists($dbDir . '/schema.json');
+            $schemaMd = file_exists($dbDir . '/schema.md');
+
+            $log[] = "schema.json: " . ($schemaJson ? 'created' : 'missing');
+            $log[] = "schema.md: " . ($schemaMd ? 'created' : 'missing');
+
+            chdir($oldDir);
+            $this->sendResponse([
+                'success' => $schemaJson && $schemaMd,
+                'files' => [
+                    'schema.json' => $schemaJson,
+                    'schema.md' => $schemaMd
+                ],
+                'log' => $log
+            ]);
+
+        } catch (Exception $e) {
+            chdir($oldDir);
+            $this->sendResponse([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'log' => $log
+            ]);
+        }
     }
 
     // ====================================
