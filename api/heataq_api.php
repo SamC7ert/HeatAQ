@@ -2458,26 +2458,28 @@ class HeatAQAPI {
         chdir($dbDir);
 
         try {
-            // Run the dump script
+            // Run the dump script as separate PHP process
             $log[] = "Running schema export...";
-            ob_start();
-            include $dumpScript;
-            $output = ob_get_clean();
-            $log[] = $output ?: "Export completed";
+            $output = shell_exec('php dump_schema.php 2>&1');
+            $log[] = $output ?: "Export completed (no output)";
 
-            // Check if files were created
-            $schemaJson = file_exists($dbDir . '/schema.json');
-            $schemaMd = file_exists($dbDir . '/schema.md');
+            // Check if files were updated recently (within last 30 seconds)
+            $schemaJsonTime = file_exists($dbDir . '/schema.json') ? filemtime($dbDir . '/schema.json') : 0;
+            $schemaMdTime = file_exists($dbDir . '/schema.md') ? filemtime($dbDir . '/schema.md') : 0;
+            $now = time();
 
-            $log[] = "schema.json: " . ($schemaJson ? 'created' : 'missing');
-            $log[] = "schema.md: " . ($schemaMd ? 'created' : 'missing');
+            $jsonUpdated = ($now - $schemaJsonTime) < 30;
+            $mdUpdated = ($now - $schemaMdTime) < 30;
+
+            $log[] = "schema.json: " . ($jsonUpdated ? 'updated' : 'not updated');
+            $log[] = "schema.md: " . ($mdUpdated ? 'updated' : 'not updated');
 
             chdir($oldDir);
             $this->sendResponse([
-                'success' => $schemaJson && $schemaMd,
+                'success' => $jsonUpdated && $mdUpdated,
                 'files' => [
-                    'schema.json' => $schemaJson,
-                    'schema.md' => $schemaMd
+                    'schema.json' => $jsonUpdated,
+                    'schema.md' => $mdUpdated
                 ],
                 'log' => $log
             ]);
