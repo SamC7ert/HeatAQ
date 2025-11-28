@@ -739,12 +739,13 @@ const ProjectModule = {
     // Load recent simulation runs
     async loadRecentSimulations() {
         try {
-            const response = await fetch(`${config.API_BASE_URL}?action=get_simulation_runs`);
+            const response = await fetch(`./api/simulation_api.php?action=get_runs&limit=3`);
             if (response.ok) {
-                const runs = await response.json();
+                const data = await response.json();
+                const runs = data.runs || [];
                 const container = document.getElementById('dash-recent-runs');
 
-                if (container && Array.isArray(runs) && runs.length > 0) {
+                if (container && runs.length > 0) {
                     // Show last 3 runs
                     const recentRuns = runs.slice(0, 3);
                     container.innerHTML = recentRuns.map(run => {

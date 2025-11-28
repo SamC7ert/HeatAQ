@@ -288,6 +288,13 @@ class HeatAQAPI {
                     $this->updateProject();
                     break;
 
+                case 'create_project':
+                    if (!$this->canEdit()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->createProject();
+                    break;
+
                 // PROJECT CONFIGURATION
                 case 'get_project_configs':
                     $this->getProjectConfigs();
@@ -1283,6 +1290,32 @@ class HeatAQAPI {
             $this->sendResponse(['success' => true, 'project_id' => $projectId]);
         } catch (PDOException $e) {
             $this->sendError('Failed to update project: ' . $e->getMessage());
+        }
+    }
+
+    private function createProject() {
+        $input = $this->getPostInput();
+        $name = $input['name'] ?? null;
+        $description = $input['description'] ?? '';
+
+        if (!$name) {
+            $this->sendError('Project name is required');
+        }
+
+        // Generate a project code from name
+        $code = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', substr($name, 0, 10)));
+
+        try {
+            $stmt = $this->db->prepare("
+                INSERT INTO projects (project_name, project_code, description, is_active, created_at)
+                VALUES (?, ?, ?, 1, NOW())
+            ");
+            $stmt->execute([$name, $code, $description]);
+            $projectId = $this->db->lastInsertId();
+
+            $this->sendResponse(['success' => true, 'id' => $projectId, 'name' => $name]);
+        } catch (PDOException $e) {
+            $this->sendError('Failed to create project: ' . $e->getMessage());
         }
     }
 
