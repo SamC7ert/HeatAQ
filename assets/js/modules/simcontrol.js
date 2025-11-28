@@ -196,10 +196,13 @@ const SimControlModule = {
         try {
             const response = await fetch(`./api/heataq_api.php?action=get_project_config&config_id=${configId}`);
             const data = await response.json();
+            console.log('[SimControl] Config data received:', data);
 
             if (data.config && typeof SimulationsModule !== 'undefined') {
                 // The config object is nested: data.config.config contains the actual values
-                SimulationsModule.populateConfigValues(data.config.config || data.config);
+                const configValues = data.config.config || data.config;
+                console.log('[SimControl] Populating with:', configValues);
+                SimulationsModule.populateConfigValues(configValues);
             }
         } catch (err) {
             console.error('Failed to load config:', err);
