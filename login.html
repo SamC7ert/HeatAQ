@@ -11,167 +11,240 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-end;  /* Form on right side */
+            padding-right: 8%;
+            position: relative;
+            overflow: hidden;
         }
-        
+
+        /* Background with blurred illustration */
+        body::before {
+            content: '';
+            position: absolute;
+            top: -20px;
+            left: -20px;
+            right: -20px;
+            bottom: -20px;
+            background-image: url('./docs/branding/pool_illustration.png');
+            background-size: cover;
+            background-position: center left;
+            filter: blur(3px);
+            z-index: -2;
+        }
+
+        /* Subtle overlay for better contrast */
+        body::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(46, 178, 164, 0.15) 0%, rgba(0, 0, 0, 0.25) 100%);
+            z-index: -1;
+        }
+
         .login-container {
-            background: white;
+            background: rgba(255, 255, 255, 0.95);
             padding: 40px;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            border-radius: 16px;
+            box-shadow: 0 25px 80px rgba(0, 0, 0, 0.35);
             width: 100%;
             max-width: 400px;
+            backdrop-filter: blur(10px);
         }
-        
+
         .login-header {
             text-align: center;
             margin-bottom: 30px;
         }
-        
-        .login-header h1 {
-            color: #003554;
-            margin-bottom: 10px;
+
+        .login-header img {
+            max-width: 200px;
+            height: auto;
+            margin-bottom: 15px;
         }
-        
+
+        .login-header h1 {
+            color: #2EB2A4;
+            margin-bottom: 8px;
+            font-size: 1.8rem;
+        }
+
         .login-header p {
             color: #666;
             font-size: 14px;
         }
-        
+
         .form-group {
             margin-bottom: 20px;
         }
-        
+
         .form-group label {
             display: block;
             margin-bottom: 5px;
             color: #333;
             font-weight: 500;
         }
-        
+
         .form-group input {
             width: 100%;
-            padding: 10px;
+            padding: 12px;
             border: 1px solid #ddd;
-            border-radius: 4px;
+            border-radius: 6px;
             font-size: 14px;
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
-        
+
         .form-group input:focus {
             outline: none;
-            border-color: #006494;
-            box-shadow: 0 0 0 3px rgba(0,100,148,0.1);
+            border-color: #2EB2A4;
+            box-shadow: 0 0 0 3px rgba(46, 178, 164, 0.15);
         }
-        
+
         .project-selector {
             margin-bottom: 20px;
             padding: 15px;
             background: #f8f9fa;
-            border-radius: 4px;
+            border-radius: 6px;
             display: none;
         }
-        
+
         .project-selector label {
             display: block;
             margin-bottom: 5px;
             font-weight: 500;
             color: #333;
         }
-        
+
         .project-selector select {
             width: 100%;
-            padding: 8px;
+            padding: 10px;
             border: 1px solid #ddd;
-            border-radius: 4px;
+            border-radius: 6px;
             background: white;
+            font-size: 14px;
         }
-        
+
         .btn-login {
             width: 100%;
-            padding: 12px;
-            background: #006494;
+            padding: 14px;
+            background: linear-gradient(135deg, #2EB2A4 0%, #238B80 100%);
             color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 6px;
             font-size: 16px;
-            font-weight: 500;
+            font-weight: 600;
             cursor: pointer;
-            transition: background 0.3s;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
-        
+
         .btn-login:hover {
-            background: #003554;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(46, 178, 164, 0.4);
         }
-        
+
         .btn-login:disabled {
             background: #ccc;
             cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
-        
+
         .error-message {
             background: #f8d7da;
             color: #721c24;
-            padding: 10px;
-            border-radius: 4px;
+            padding: 12px;
+            border-radius: 6px;
             margin-bottom: 20px;
             font-size: 14px;
             display: none;
         }
-        
+
         .success-message {
             background: #d4edda;
             color: #155724;
-            padding: 10px;
-            border-radius: 4px;
+            padding: 12px;
+            border-radius: 6px;
             margin-bottom: 20px;
             font-size: 14px;
             display: none;
         }
-        
+
         .loading {
             display: none;
             text-align: center;
             color: #666;
+            margin-top: 10px;
+        }
+
+        .forgot-link {
+            text-align: center;
+            margin-top: 15px;
+        }
+
+        .forgot-link a {
+            color: #2EB2A4;
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+
+        .forgot-link a:hover {
+            color: #238B80;
+            text-decoration: underline;
+        }
+
+        /* Responsive - center on smaller screens */
+        @media (max-width: 768px) {
+            body {
+                justify-content: center;
+                padding: 20px;
+            }
+
+            body::before {
+                background-position: center center;
+            }
         }
     </style>
 </head>
 <body>
     <div class="login-container">
         <div class="login-header">
-            <h1>🏊 HeatAQ</h1>
-            <p>Pool Energy Management System</p>
+            <img src="./docs/branding/Hovedlogo_liggende_grønn.png" alt="Aquarious - The Pool Tailor">
+            <h1>HeatAQ</h1>
+            <p>Pool Energy Design System</p>
         </div>
-        
+
         <div class="error-message" id="error-message"></div>
         <div class="success-message" id="success-message"></div>
-        
+
         <form id="login-form" onsubmit="return handleLogin(event)">
             <div class="form-group">
                 <label for="email">Email Address</label>
-                <input type="email" id="email" name="email" required 
+                <input type="email" id="email" name="email" required
                        placeholder="Enter your email" autofocus>
             </div>
-            
+
             <div class="form-group">
                 <label for="password">Password</label>
                 <input type="password" id="password" name="password" required
                        placeholder="Enter your password">
             </div>
-            
+
             <div class="project-selector" id="project-selector">
                 <label for="project">Select Project</label>
                 <select id="project" name="project">
                     <option value="">-- Select a Project --</option>
                 </select>
             </div>
-            
+
             <button type="submit" class="btn-login" id="login-btn">
                 Sign In
             </button>
@@ -180,23 +253,21 @@
                 Signing in...
             </div>
 
-            <div style="text-align: center; margin-top: 15px;">
-                <a href="./reset_password.html" style="color: #006494; text-decoration: none; font-size: 14px;">
-                    Forgot your password?
-                </a>
+            <div class="forgot-link">
+                <a href="./reset_password.html">Forgot your password?</a>
             </div>
         </form>
     </div>
-    
+
     <script>
         // Handle login
         async function handleLogin(event) {
             event.preventDefault();
-            
+
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const projectId = document.getElementById('project').value;
-            
+
             // Create FormData object
             const formData = new FormData();
             formData.append('email', email);
@@ -204,41 +275,41 @@
             if (projectId) {
                 formData.append('project', projectId);
             }
-            
+
             // Hide messages
             document.getElementById('error-message').style.display = 'none';
             document.getElementById('success-message').style.display = 'none';
-            
+
             // Show loading
             document.getElementById('login-btn').disabled = true;
             document.getElementById('loading').style.display = 'block';
-            
+
             try {
                 const response = await fetch('./login_api.php', {
                     method: 'POST',
                     body: formData
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     if (data.projects && data.projects.length > 0 && !projectId) {
                         // First step - show project selector
                         document.getElementById('project-selector').style.display = 'block';
                         const select = document.getElementById('project');
                         select.innerHTML = '<option value="">-- Select a Project --</option>';
-                        
+
                         data.projects.forEach(project => {
                             const option = document.createElement('option');
                             option.value = project.project_id;
                             option.textContent = `${project.project_name} (${project.role})`;
                             select.appendChild(option);
                         });
-                        
-                        document.getElementById('success-message').textContent = 
+
+                        document.getElementById('success-message').textContent =
                             'Login successful! Please select a project.';
                         document.getElementById('success-message').style.display = 'block';
-                        
+
                         document.getElementById('login-btn').textContent = 'Continue';
                     } else if (projectId) {
                         // Project selected - complete login
@@ -248,11 +319,11 @@
                             localStorage.setItem('heataq_project_name', data.project_name);
                             localStorage.setItem('heataq_user', data.user_name);
                         }
-                        
-                        document.getElementById('success-message').textContent = 
+
+                        document.getElementById('success-message').textContent =
                             'Login successful! Redirecting...';
                         document.getElementById('success-message').style.display = 'block';
-                        
+
                         // Redirect to main app
                         setTimeout(() => {
                             window.location.href = './index.html';
@@ -264,14 +335,14 @@
                     throw new Error(data.message || 'Invalid email or password');
                 }
             } catch (error) {
-                document.getElementById('error-message').textContent = 
+                document.getElementById('error-message').textContent =
                     error.message || 'Login failed. Please check your credentials.';
                 document.getElementById('error-message').style.display = 'block';
             } finally {
                 document.getElementById('login-btn').disabled = false;
                 document.getElementById('loading').style.display = 'none';
             }
-            
+
             return false;
         }
     </script>

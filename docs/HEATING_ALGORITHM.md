@@ -1,95 +1,89 @@
 # HeatAQ Heating Control Algorithm
 
-**Version:** V102
+**Version:** V103
 **Last Updated:** November 2024
 
 ---
 
 ## Overview
 
-HeatAQ simulates pool heating using a reactive control strategy that maintains target water temperature while minimizing energy costs. The system supports multiple heating sources (heat pump primary, boiler backup) and operates with deadband temperature control.
+HeatAQ uses a simplified reactive heating algorithm with 100% schedule foresight. The system maintains target water temperature by calculating hourly heat requirements and prioritizing the heat pump for efficiency.
 
 ---
 
 ## Control Strategies
 
-### 1. HP Priority (Default: `hp_priority`)
+Only two strategies are supported:
 
-Heat pump is always used first due to higher efficiency (COP ~4.6 for ground source).
-Boiler is only used when:
-- Heat pump capacity is exceeded
-- Air source HP is outside operating range (air_source type only)
+### 1. Reactive (Default)
 
-### 2. Boiler Priority (`boiler_priority`)
+- Maintains target temperature **always**, regardless of schedule
+- Ignores "closed" periods - keeps heating to target 24/7
+- Use when pool must always be ready
 
-Boiler is used first (faster response, useful for emergencies).
-Heat pump is backup when boiler capacity exceeded.
+### 2. Predictive
 
-### 3. Reactive (`reactive`)
-
-Same as HP Priority but maintains target temperature 24/7 (ignores schedule closed hours).
-Does NOT use setback temperature during closed periods.
-
-### 4. Predictive (`predictive`)
-
-During closed hours, maintains a lower "setback" temperature (default 26°C) instead of full target.
-This prevents massive reheat costs when pool reopens.
+- Follows schedule: uses target temp when open, setback temp when closed
+- During closed hours, maintains a lower "setback" temperature (default 26°C)
+- Reduces energy costs by allowing temp to drop when not in use
+- Automatically reheats before scheduled opening
 
 ---
 
-## Temperature Control Logic
+## Algorithm Logic
 
-### Deadband Control
-
-The system uses deadband control to avoid hunting:
+The algorithm runs hourly and is straightforward:
 
 ```
-Target Temperature: 28°C
-├── Max Temp (target + 2): 30°C → Stop heating (allow natural cooling)
-├── Target Temp: 28°C → Compensate for losses only
-├── Min Temp (target - 2): 26°C → Start active heating
-└── Below Min: Emergency heating at max capacity
+FOR each hour:
+    1. Calculate heat losses (evaporation, convection, radiation, conduction)
+    2. Calculate solar gains
+    3. Net requirement = losses - solar gains
+
+    4. Compare current temp to target:
+
+       IF currentTemp < targetTemp:
+           # Below target - need extra heat to recover
+           tempDeficit = targetTemp - currentTemp
+           heatToRaise = energy to raise pool by tempDeficit in 1 hour
+           requiredHeat = netRequirement + heatToRaise
+
+       ELSE (currentTemp >= targetTemp):
+           # At or above target - excess temp offsets losses
+           tempExcess = currentTemp - targetTemp
+           heatCredit = energy value of excess temp
+           requiredHeat = max(0, netRequirement - heatCredit)
+
+    5. Apply heating (always HP first):
+       - Heat pump provides up to its capacity
+       - Boiler handles overflow if HP capacity exceeded
+
+    6. Update water temperature based on heat balance
 ```
 
-### Decision Flow (Each Hour)
+---
 
-```
-1. Calculate Heat Losses
-   ├── Evaporation (dominant for outdoor pools)
-   ├── Convection (wind-dependent)
-   ├── Radiation (to sky)
-   └── Conduction (to ground/walls)
+## Key Principles
 
-2. Calculate Heat Gains
-   └── Solar radiation (through cover if present)
+### No Deadband
+Unlike traditional systems with min/max bounds around target, HeatAQ uses direct comparison:
+- Below target → Heat to recover
+- At/above target → Let excess offset losses
 
-3. Net Requirement = Losses - Solar Gain
+### Temperature Convergence
+The algorithm may have small errors because heat loss depends on temperature, which changes as you heat. However, the hourly iteration naturally converges to the correct temperature.
 
-4. Temperature Check:
-   if (waterTemp >= maxTemp):
-       → No heating (allow natural cooling)
-
-   elif (waterTemp < minTemp):
-       → Emergency: Heat to recover full deficit in 1 hour
-       → Required = NetLoss + HeatToRaiseTemp(deficit)
-
-   elif (waterTemp < targetTemp):
-       → Active Recovery: Heat to close gap quickly
-       → Required = NetLoss + HeatToRaiseTemp(deficit)
-
-   else:
-       → Maintain: Just compensate for losses
-       → Required = max(0, NetLoss)
-
-5. Apply Equipment:
-   HP first → Boiler for remainder
-```
+### HP Priority
+Heat pump is always used first because:
+- Higher efficiency (COP 4.6 vs boiler 0.92)
+- Lower operating cost
+- Boiler only activates when HP capacity is exceeded
 
 ---
 
 ## Heat Calculation Formulas
 
-### Heat Required to Raise Temperature
+### Energy to Raise Pool Temperature
 
 ```
 Energy (kJ) = mass × specific_heat × temp_diff
@@ -99,170 +93,77 @@ Where:
   mass = volume × density = 625 m³ × 1000 kg/m³ = 625,000 kg
   specific_heat = 4186 J/(kg·K)
   temp_diff = target - current (°C)
-  hours = 1 (one hour recovery time)
+  hours = 1 (recover in one hour)
 ```
 
-Example: Raise 625 m³ pool by 1°C in 1 hour:
+**Example:** Raise 625 m³ pool by 1°C in 1 hour:
 ```
-Energy = 625,000 × 4186 × 1 = 2,616,250,000 J = 2,616,250 kJ
-Power  = 2,616,250 / 3600 = 727 kW
+Energy = 625,000 × 4186 × 1 = 2,616 MJ
+Power  = 2,616,000 / 3600 = 727 kW
 ```
 
 ### Heat Losses
 
-#### Evaporation (Carrier Equation)
+**Evaporation** (dominant):
 ```
 Q_evap = (25 + 19×v) × A × (P_water - φ×P_air) / 3600
-
-Where:
-  v = wind speed (m/s)
-  A = surface area (m²)
-  P_water = saturation pressure at water temp
-  P_air = saturation pressure at air temp
-  φ = relative humidity (decimal)
 ```
 
-#### Convection
+**Convection**:
 ```
 Q_conv = h × A × (T_water - T_air)
-
-Where:
-  h = convection coefficient (wind-dependent)
-  A = surface area (m²)
 ```
 
-#### Radiation
+**Radiation**:
 ```
 Q_rad = ε × σ × A × (T_water⁴ - T_sky⁴)
-
-Where:
-  ε = emissivity (0.95 for water)
-  σ = Stefan-Boltzmann constant
-  T = temperatures in Kelvin
 ```
 
 ---
 
-## Equipment Models
+## Equipment
 
-### Heat Pump
+### Heat Pump (Primary)
 
-```php
-// Ground Source (Borehole)
-- Constant COP regardless of air temperature
-- Typical COP: 4.6
-- No temperature limits
+| Parameter | Typical Value |
+|-----------|---------------|
+| Type | Ground source (borehole) |
+| Capacity | 125 kW |
+| COP | 4.6 (constant for ground source) |
 
-// Air Source
-- COP varies with air temperature
-- Reference temp: 15°C
-- Below 15°C: COP degrades 2.5% per degree
-- Above 15°C: COP improves up to 20%
-- Minimum COP floor: 2.0
-- Operating range: -20°C to 35°C
-```
+Ground source HP has constant COP regardless of air temperature.
+Air source HP has variable COP (degrades in cold weather).
 
-### Boiler
+### Boiler (Backup)
 
-```php
-- Constant efficiency (typically 92%)
-- Fuel consumption = heat_output / efficiency
-- Always available (no temperature limits)
-- Higher operating cost than heat pump
-```
+| Parameter | Typical Value |
+|-----------|---------------|
+| Capacity | 200 kW |
+| Efficiency | 92% |
+| Fuel | Natural gas |
+
+Boiler only runs when HP capacity exceeded.
 
 ---
 
-## Cover Effects
+## Configuration
 
-When pool is closed, cover is applied (if configured):
+### Pool Properties (from `pools` table)
 
-### Heat Loss Reduction
-- Evaporation: Reduced to ~5% of open rate
-- Convection: Reduced based on cover R-value
-- Radiation: Reduced through cover
+| Parameter | Description |
+|-----------|-------------|
+| area_m2 | Pool surface area |
+| volume_m3 | Water volume |
+| wind_exposure | 0-1 factor for wind protection |
+| solar_absorption | Water solar absorption (typically 0.6) |
 
-### Solar Transmission
-- Cover transmittance (default 10%)
-- Reduced solar gain when covered
+### Control Settings
 
----
-
-## Configuration Parameters
-
-### Pool Physical Properties (from `pools` table)
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| area_m2 | 312.5 | Pool surface area |
-| volume_m3 | 625 | Water volume |
-| depth_m | 2.0 | Average depth |
-| wind_exposure | 0.535 | Wind exposure factor (0-1) |
-| solar_absorption | 0.60 | Water solar absorption (60%) |
-
-### Cover Properties (from `pools` table)
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| has_cover | true | Whether cover is used |
-| cover_r_value | 5.0 | Thermal resistance (m²K/W) |
-| cover_solar_transmittance | 0.10 | Solar transmission (10%) |
-
-### Equipment (from `project_configs` table)
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| hp_capacity_kw | 125 | Heat pump capacity |
-| hp_cop | 4.6 | Heat pump COP |
-| boiler_capacity_kw | 200 | Boiler capacity |
-| boiler_efficiency | 0.92 | Boiler efficiency (92%) |
-
-### Control (from `project_configs` table)
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| target_temp | 28.0 | Target water temperature |
-| temp_tolerance | 2.0 | Deadband range (±2°C) |
-| strategy | hp_priority | Control strategy |
-
----
-
-## Simulation Output
-
-Each hour produces:
-```json
-{
-  "timestamp": "2024-06-15 14:00:00",
-  "air_temp": 18.5,
-  "wind_speed": 3.2,
-  "solar_wh_m2": 450,
-  "is_open": true,
-  "target_temp": 28.0,
-  "water_temp_start": 27.2,
-  "water_temp_end": 27.8,
-  "heat_loss_kw": 85.3,
-  "solar_gain_kw": 45.2,
-  "hp_heat_kw": 95.0,
-  "hp_electricity_kw": 20.7,
-  "boiler_heat_kw": 0,
-  "unmet_kw": 0
-}
-```
-
----
-
-## Best Practices
-
-### Temperature Targets
-- Public pool: 26-28°C
-- Competition pool: 25-26°C
-- Therapy pool: 32-35°C
-
-### Cover Usage
-- Always use cover during closed hours
-- Reduces evaporation by 95%
-- Reduces overnight losses by 60-70%
-
-### Heat Pump Sizing
-- Size for 60-70% of peak load
-- Boiler handles peaks and emergencies
-- Oversized HP = lower efficiency at partial load
+| Parameter | Description |
+|-----------|-------------|
+| control_strategy | 'reactive' or 'predictive' |
+| target_temp | Target water temperature (°C) |
+| setback_temp | Temperature during closed hours (predictive mode) |
 
 ---
 
@@ -270,5 +171,6 @@ Each hour produces:
 
 | Version | Changes |
 |---------|---------|
-| 3.8.0 | Aggressive recovery: recover full deficit in 1 hour |
-| 3.7.0 | Initial PHP port from Python v3.6.0.3 |
+| V103 | Simplified: removed deadband, only reactive/predictive, always HP first |
+| V102 | Aggressive recovery: full deficit in 1 hour |
+| V101 | Initial documentation |
