@@ -374,6 +374,13 @@ class HeatAQAPI {
                     }
                     $this->deployPull();
                     break;
+
+                case 'merge_branch':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied - admin only', 403);
+                    }
+                    $this->mergeBranch();
+                    break;
                 case 'deploy_push':
                     if (!$this->canDelete()) {
                         $this->sendError('Permission denied - admin only', 403);
@@ -2157,11 +2164,23 @@ class HeatAQAPI {
         ];
 
         // Check for updates
-        shell_exec('git fetch origin master 2>&1');
+        shell_exec('git fetch --all 2>&1');
         $behind = trim(shell_exec('git rev-list HEAD..origin/master --count 2>&1'));
         $ahead = trim(shell_exec('git rev-list origin/master..HEAD --count 2>&1'));
         $result['behind_origin'] = is_numeric($behind) ? (int)$behind : 0;
         $result['ahead_origin'] = is_numeric($ahead) ? (int)$ahead : 0;
+
+        // Get remote branches (for merge dropdown)
+        $branchesRaw = shell_exec('git branch -r 2>&1');
+        $branches = [];
+        foreach (explode("\n", $branchesRaw) as $b) {
+            $b = trim($b);
+            // Filter to only claude/ branches, skip HEAD pointer
+            if (strpos($b, 'origin/claude/') === 0) {
+                $branches[] = str_replace('origin/', '', $b);
+            }
+        }
+        $result['remote_branches'] = $branches;
 
         // Get app version from index.html
         $indexPath = $repoRoot . '/index.html';
@@ -2231,6 +2250,73 @@ class HeatAQAPI {
             'success' => true,
             'app_version' => $appVersion,
             'head' => $newHead,
+            'log' => $log
+        ]);
+    }
+
+    /**
+     * Merge a remote branch into master and deploy
+     */
+    private function mergeBranch() {
+        $input = $this->getPostInput();
+        $branch = $input['branch'] ?? null;
+
+        if (!$branch) {
+            $this->sendError('Branch name required');
+            return;
+        }
+
+        // Security: only allow claude/ branches
+        if (strpos($branch, 'claude/') !== 0) {
+            $this->sendError('Only claude/* branches can be merged');
+            return;
+        }
+
+        $repoRoot = realpath(__DIR__ . '/..');
+        $oldDir = getcwd();
+        chdir($repoRoot);
+
+        $log = [];
+        $log[] = "Merging branch: $branch";
+
+        // Fetch all branches
+        $log[] = "Fetching...";
+        $log[] = trim(shell_exec('git fetch --all 2>&1'));
+
+        // Ensure we're on master
+        $currentBranch = trim(shell_exec('git branch --show-current 2>&1'));
+        if ($currentBranch !== 'master') {
+            $log[] = "Switching to master (was on $currentBranch)...";
+            $log[] = trim(shell_exec('git checkout master 2>&1'));
+        }
+
+        // Pull latest master first
+        $log[] = "Pulling latest master...";
+        $log[] = trim(shell_exec('git pull origin master 2>&1'));
+
+        // Merge the branch
+        $log[] = "Merging origin/$branch...";
+        $mergeOutput = shell_exec("git merge origin/$branch -m 'Merge $branch' 2>&1");
+        $log[] = trim($mergeOutput);
+
+        // Check if merge was successful
+        $mergeSuccess = (strpos($mergeOutput, 'CONFLICT') === false && strpos($mergeOutput, 'fatal') === false);
+
+        if ($mergeSuccess) {
+            // Push to origin
+            $log[] = "Pushing to origin...";
+            $log[] = trim(shell_exec('git push origin master 2>&1'));
+            $log[] = "✓ Merge complete!";
+        } else {
+            // Abort the merge
+            $log[] = "Merge failed, aborting...";
+            shell_exec('git merge --abort 2>&1');
+        }
+
+        chdir($oldDir);
+        $this->sendResponse([
+            'success' => $mergeSuccess,
+            'branch' => $branch,
             'log' => $log
         ]);
     }
@@ -2411,19 +2497,19 @@ class HeatAQAPI {
         }
 
         try {
-            // Split SQL by semicolons
+            // Remove SQL comments first, then split by semicolons
+            $sqlNoComments = preg_replace('/--.*$/m', '', $sql);
             $statements = array_filter(
-                array_map('trim', preg_split('/;\s*$/m', $sql)),
-                fn($s) => !empty($s) && !preg_match('/^--/', trim($s))
+                array_map('trim', explode(';', $sqlNoComments)),
+                fn($s) => !empty($s)
             );
 
             $executed = 0;
             foreach ($statements as $stmt) {
-                $cleanStmt = trim(preg_replace('/--.*$/m', '', $stmt));
-                if (empty($cleanStmt)) continue;
+                if (empty(trim($stmt))) continue;
 
-                $log[] = "Executing: " . substr($cleanStmt, 0, 80) . (strlen($cleanStmt) > 80 ? '...' : '');
-                $this->db->exec($cleanStmt);
+                $log[] = "Executing: " . substr($stmt, 0, 80) . (strlen($stmt) > 80 ? '...' : '');
+                $this->db->exec($stmt);
                 $executed++;
             }
 
