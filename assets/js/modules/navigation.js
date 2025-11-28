@@ -102,11 +102,15 @@ const navigation = {
                 break;
 
             case 'admin-system':
+                console.log('navigation: admin-system tab opened');
                 if (typeof app.admin !== 'undefined') {
                     app.admin.loadSystemInfo();
                 }
                 if (typeof AdminModule !== 'undefined') {
+                    console.log('navigation: calling AdminModule.checkMigrations');
                     AdminModule.checkMigrations();
+                } else {
+                    console.error('navigation: AdminModule not defined!');
                 }
                 break;
 
