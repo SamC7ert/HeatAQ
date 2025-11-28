@@ -1,12 +1,12 @@
 # Database Schema
 
-Generated: 2025-11-28 16:55:10
+Generated: 2025-11-28 16:59:56
 
 Database: heataq_pool-353130302dd2
 
 ## audit_log
 
-Rows: 2958
+Rows: 2977
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
