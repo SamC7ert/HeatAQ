@@ -1,12 +1,12 @@
 # Database Schema
 
-Generated: 2025-11-28 12:08:43
+Generated: 2025-11-28 14:49:36
 
 Database: heataq_pool-353130302dd2
 
 ## audit_log
 
-Rows: 2566
+Rows: 2726
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -323,7 +323,7 @@ Rows: 3
 
 ## simulation_daily_results
 
-Rows: 18347
+Rows: 27837
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -348,7 +348,7 @@ Rows: 18347
 
 ## simulation_hourly_results
 
-Rows: 439676
+Rows: 667098
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -379,7 +379,7 @@ Rows: 439676
 
 ## simulation_runs
 
-Rows: 56
+Rows: 82
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
