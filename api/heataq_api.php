@@ -615,11 +615,70 @@ class HeatAQAPI {
     private function testResolution() {
         $date = $_GET['date'] ?? date('Y-m-d');
         $templateId = $_GET['template_id'] ?? 1;
-        
+
+        // Get template info
+        $stmt = $this->db->prepare("
+            SELECT st.*, ws.name as base_week_name
+            FROM schedule_templates st
+            LEFT JOIN week_schedules ws ON st.base_week_schedule_id = ws.week_schedule_id
+            WHERE st.template_id = ?
+        ");
+        $stmt->execute([$templateId]);
+        $template = $stmt->fetch();
+
+        // Check if date matches any exception day
+        $dateObj = new DateTime($date);
+        $month = (int)$dateObj->format('n');
+        $day = (int)$dateObj->format('j');
+
+        $stmt = $this->db->prepare("
+            SELECT ce.*, ds.name as day_schedule_name
+            FROM calendar_exceptions ce
+            LEFT JOIN day_schedules ds ON ce.day_schedule_id = ds.day_schedule_id
+            WHERE ce.schedule_template_id = ?
+            AND ((ce.fixed_month = ? AND ce.fixed_day = ?) OR ce.is_moving = 1)
+        ");
+        $stmt->execute([$templateId, $month, $day]);
+        $exceptions = $stmt->fetchAll();
+
+        // Check if date matches any date range
+        $stmt = $this->db->prepare("
+            SELECT cr.*, ws.name as week_schedule_name
+            FROM calendar_date_ranges cr
+            LEFT JOIN week_schedules ws ON cr.week_schedule_id = ws.week_schedule_id
+            WHERE cr.schedule_template_id = ? AND cr.is_active = 1
+        ");
+        $stmt->execute([$templateId]);
+        $dateRanges = $stmt->fetchAll();
+
+        // Determine which rules apply
+        $matchingRanges = [];
+        foreach ($dateRanges as $range) {
+            $fromMD = [$range['start_month'], $range['start_day']];
+            $toMD = [$range['end_month'], $range['end_day']];
+            $currentMD = [$month, $day];
+
+            $matches = ($fromMD <= $toMD)
+                ? ($currentMD >= $fromMD && $currentMD <= $toMD)
+                : ($currentMD >= $fromMD || $currentMD <= $toMD);
+
+            if ($matches) {
+                $matchingRanges[] = $range;
+            }
+        }
+
         $this->sendResponse([
             'date' => $date,
-            'rule_name' => 'Default',
-            'day_schedule' => 'Normal'
+            'day_of_week' => $dateObj->format('l'),
+            'template' => [
+                'id' => $template['template_id'] ?? null,
+                'name' => $template['name'] ?? null,
+                'base_week_schedule_id' => $template['base_week_schedule_id'] ?? null,
+                'base_week_name' => $template['base_week_name'] ?? 'NOT SET - THIS IS THE PROBLEM!'
+            ],
+            'matching_exceptions' => $exceptions,
+            'matching_date_ranges' => $matchingRanges,
+            'all_date_ranges' => $dateRanges
         ]);
     }
     
