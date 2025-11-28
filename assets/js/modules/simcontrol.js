@@ -31,90 +31,63 @@ const SimControlModule = {
     sites: [],
     pools: [],
 
-    // Load sites from API
+    // Load sites from API - NO FALLBACKS, must match project's site
     loadSites: async function() {
         console.log('[SimControl] loadSites starting...');
         const select = document.getElementById('sim-site-select');
         if (!select) {
-            console.warn('[SimControl] sim-site-select element not found');
+            console.error('[SimControl] sim-site-select element not found');
             return;
         }
 
         try {
-            // Get project's site_id from API if available
-            let projectSiteId = null;
-            try {
-                const projResponse = await fetch('./api/heataq_api.php?action=get_project_site');
-                const projData = await projResponse.json();
-                if (projData.site_id) {
-                    projectSiteId = projData.site_id;
-                    console.log('[SimControl] Project site_id from API:', projectSiteId);
-                }
-            } catch (e) {
-                console.log('[SimControl] Could not get project site_id:', e);
+            // Get project's site_id from API - this is required
+            const projResponse = await fetch('./api/heataq_api.php?action=get_project_site');
+            const projData = await projResponse.json();
+
+            if (!projData.site_id) {
+                console.error('[SimControl] No site_id configured for project');
+                select.innerHTML = '<option value="">ERROR: No site configured for project</option>';
+                return;
             }
 
+            const projectSiteId = projData.site_id;
+            console.log('[SimControl] Project site_id:', projectSiteId);
+
+            // Get all sites
             const response = await fetch('./api/heataq_api.php?action=get_sites');
             const data = await response.json();
-            console.log('[SimControl] Sites from API:', data.sites?.length || 0, 'sites');
 
-            if (data.sites && data.sites.length > 0) {
-                this.sites = data.sites;
-
-                select.innerHTML = data.sites.map(site =>
-                    `<option value="${site.site_id}">${site.name}</option>`
-                ).join('');
-
-                // Priority: 1) Project's site_id from API, 2) ProjectModule match, 3) Saved preference, 4) First site
-                let selectedSite = null;
-
-                // Try project's site_id from API first
-                if (projectSiteId) {
-                    const matchedSite = data.sites.find(s => s.site_id === projectSiteId);
-                    if (matchedSite) {
-                        selectedSite = matchedSite.site_id;
-                        console.log('[SimControl] Using project API site:', matchedSite.name);
-                    }
-                }
-
-                // Fall back to ProjectModule name matching
-                if (!selectedSite && typeof ProjectModule !== 'undefined' && ProjectModule.currentSite) {
-                    console.log('[SimControl] ProjectModule.currentSite:', ProjectModule.currentSite.name);
-                    const projectSite = data.sites.find(s => s.name === ProjectModule.currentSite.name);
-                    if (projectSite) {
-                        selectedSite = projectSite.site_id;
-                        console.log('[SimControl] Using project site:', projectSite.name, 'id:', selectedSite);
-                    }
-                } else if (!selectedSite) {
-                    console.log('[SimControl] ProjectModule.currentSite not available');
-                }
-
-                // Fall back to saved preference
-                if (!selectedSite) {
-                    const savedSite = this.getPreference('sim_site_id');
-                    console.log('[SimControl] Saved site preference:', savedSite);
-                    if (savedSite && data.sites.find(s => s.site_id === savedSite)) {
-                        selectedSite = savedSite;
-                        console.log('[SimControl] Using saved preference site');
-                    }
-                }
-
-                // Set selection
-                if (selectedSite) {
-                    select.value = selectedSite;
-                    console.log('[SimControl] Selected site:', selectedSite);
-                } else {
-                    console.log('[SimControl] Using first site as default');
-                }
-
-                this.currentSiteId = select.value;
-                await this.loadPools(this.currentSiteId);
-            } else {
-                select.innerHTML = '<option value="">No sites available</option>';
+            if (!data.sites || data.sites.length === 0) {
+                console.error('[SimControl] No sites returned from API');
+                select.innerHTML = '<option value="">ERROR: No sites defined in database</option>';
+                return;
             }
+
+            console.log('[SimControl] Sites from API:', data.sites.length);
+            this.sites = data.sites;
+
+            // Find the project's site - must exist
+            const projectSite = data.sites.find(s => s.site_id === projectSiteId);
+            if (!projectSite) {
+                console.error('[SimControl] Project site not found:', projectSiteId);
+                select.innerHTML = `<option value="">ERROR: Site "${projectSiteId}" not in database</option>`;
+                return;
+            }
+
+            // Populate dropdown with all sites, select project's site
+            select.innerHTML = data.sites.map(site =>
+                `<option value="${site.site_id}" ${site.site_id === projectSiteId ? 'selected' : ''}>${site.name}</option>`
+            ).join('');
+
+            this.currentSiteId = projectSiteId;
+            console.log('[SimControl] Selected site:', projectSite.name);
+
+            await this.loadPools(this.currentSiteId);
+
         } catch (err) {
             console.error('[SimControl] Failed to load sites:', err);
-            select.innerHTML = '<option value="">Error loading sites</option>';
+            select.innerHTML = '<option value="">ERROR: ' + err.message + '</option>';
         }
     },
 
