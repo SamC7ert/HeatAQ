@@ -8,8 +8,8 @@ const app = {
         // Set version displays from config
         this.setVersion();
 
-        // Initialize navigation
-        this.navigation.init();
+        // Initialize navigation (await to ensure ProjectModule loads first for SimControl)
+        await this.navigation.init();
 
         // Set up global event handlers
         this.setupEventHandlers();
