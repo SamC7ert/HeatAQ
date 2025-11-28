@@ -2051,10 +2051,28 @@ class HeatAQAPI {
         }
 
         // Validate key (only allow known preference keys)
-        $allowedKeys = ['selected_config', 'selected_ohc', 'selected_tab'];
+        $allowedKeys = [
+            'selected_config',
+            'selected_ohc',
+            'selected_tab',
+            'selected_site',
+            'selected_pool',
+            'sim_overrides',      // JSON: override values for simulation
+            'sim_sub_tab',        // Current sub-tab in Simulate
+            'last_scenario_name'  // Last used scenario name
+        ];
         if (!in_array($key, $allowedKeys)) {
-            $this->sendError('Invalid preference key');
+            $this->sendError('Invalid preference key: ' . $key);
             return;
+        }
+
+        // For sim_overrides, ensure value is valid JSON if provided
+        if ($key === 'sim_overrides' && $value !== null && $value !== '') {
+            $decoded = json_decode($value, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                $this->sendError('sim_overrides must be valid JSON');
+                return;
+            }
         }
 
         try {
@@ -2064,7 +2082,7 @@ class HeatAQAPI {
                     CREATE TABLE IF NOT EXISTS user_preferences (
                         user_id INT NOT NULL,
                         pref_key VARCHAR(50) NOT NULL,
-                        pref_value VARCHAR(255),
+                        pref_value TEXT,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                         PRIMARY KEY (user_id, pref_key)
                     )
