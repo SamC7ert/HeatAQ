@@ -260,6 +260,26 @@
     </div>
 
     <script>
+        // Save last project preference to server (syncs across devices)
+        async function saveLastProjectToServer(sessionId, projectId) {
+            try {
+                await fetch('./api/heataq_api.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Session-ID': sessionId
+                    },
+                    body: JSON.stringify({
+                        action: 'save_preference',
+                        key: 'last_project_id',
+                        value: projectId
+                    })
+                });
+            } catch (err) {
+                console.warn('Could not save last project preference:', err);
+            }
+        }
+
         // Handle login
         async function handleLogin(event) {
             event.preventDefault();
@@ -299,15 +319,29 @@
                         const select = document.getElementById('project');
                         select.innerHTML = '<option value="">-- Select a Project --</option>';
 
+                        // Check for last used project (server-side first, then localStorage fallback)
+                        const lastProjectId = data.last_project_id || localStorage.getItem('heataq_project');
+                        let foundLastProject = false;
+
                         data.projects.forEach(project => {
                             const option = document.createElement('option');
                             option.value = project.project_id;
-                            option.textContent = `${project.project_name} (${project.role})`;
+                            const isLastUsed = lastProjectId && project.project_id.toString() === lastProjectId.toString();
+                            option.textContent = `${project.project_name} (${project.role})${isLastUsed ? ' - Last used' : ''}`;
+                            if (isLastUsed) {
+                                option.selected = true;
+                                foundLastProject = true;
+                            }
                             select.appendChild(option);
                         });
 
+                        // If only one project, auto-select it
+                        if (data.projects.length === 1) {
+                            select.selectedIndex = 1;
+                        }
+
                         document.getElementById('success-message').textContent =
-                            'Login successful! Please select a project.';
+                            foundLastProject ? 'Login successful! Your last project is pre-selected.' : 'Login successful! Please select a project.';
                         document.getElementById('success-message').style.display = 'block';
 
                         document.getElementById('login-btn').textContent = 'Continue';
@@ -318,6 +352,9 @@
                             localStorage.setItem('heataq_project', projectId);
                             localStorage.setItem('heataq_project_name', data.project_name);
                             localStorage.setItem('heataq_user', data.user_name);
+
+                            // Save last project to server (syncs across devices)
+                            saveLastProjectToServer(data.session_id, projectId);
                         }
 
                         document.getElementById('success-message').textContent =

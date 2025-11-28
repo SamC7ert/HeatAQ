@@ -274,19 +274,23 @@ class HeatAQAPI {
                     $this->getWeatherMonthlyAverages();
                     break;
 
-                // ADMIN: Users
+                // ADMIN: Users (admin-only operations)
                 case 'get_users':
-                    if (!$this->canEdit()) {
-                        $this->sendError('Permission denied', 403);
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied - admin only', 403);
                     }
                     $this->getUsers();
                     break;
 
                 case 'save_user':
-                    if (!$this->canEdit()) {
-                        $this->sendError('Permission denied', 403);
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied - admin only', 403);
                     }
                     $this->saveUser();
+                    break;
+
+                case 'get_current_user':
+                    $this->getCurrentUser();
                     break;
 
                 case 'get_projects':
@@ -409,6 +413,10 @@ class HeatAQAPI {
                     break;
 
                 // SITE AND POOL MANAGEMENT
+                case 'get_project_site':
+                    $this->getProjectSite();
+                    break;
+
                 case 'get_sites':
                     $this->getSites();
                     break;
@@ -1404,6 +1412,25 @@ class HeatAQAPI {
     // ====================================
     // ADMIN: USERS
     // ====================================
+
+    /**
+     * Get current user info including role (for frontend role-based UI)
+     */
+    private function getCurrentUser() {
+        if (!$this->userId) {
+            $this->sendResponse(['user' => null]);
+            return;
+        }
+
+        $this->sendResponse([
+            'user' => [
+                'user_id' => $this->userId,
+                'project_id' => $this->projectId,
+                'role' => $this->userRole,
+                'is_admin' => in_array($this->userRole, ['admin', 'owner'])
+            ]
+        ]);
+    }
 
     private function getUsers() {
         // Simple query first to check what columns exist
@@ -2628,6 +2655,24 @@ class HeatAQAPI {
     /**
      * Get all sites (pool_sites) accessible to user
      */
+    /**
+     * Get the current project's site_id for SimControl to use
+     */
+    private function getProjectSite() {
+        // Return the site_id associated with the current project
+        if ($this->siteId) {
+            $this->sendResponse([
+                'site_id' => $this->siteId,
+                'project_id' => $this->projectId
+            ]);
+        } else {
+            $this->sendResponse([
+                'site_id' => null,
+                'error' => 'No site associated with current session'
+            ]);
+        }
+    }
+
     private function getSites() {
         // Check if pools table exists to avoid error on subquery
         $tableCheck = $this->db->query("SHOW TABLES LIKE 'pools'");

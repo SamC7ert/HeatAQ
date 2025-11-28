@@ -1,6 +1,6 @@
 # HeatAQ Roadmap
 
-**Last Updated:** November 2024 (V102)
+**Last Updated:** November 2024 (V104)
 
 Long-term architectural improvements and technical debt items.
 
@@ -12,12 +12,21 @@ Long-term architectural improvements and technical debt items.
 **Priority:** High
 **Status:** In Progress
 
-- [ ] Apply brand colors from example.ppt to login/sidebar
-- [ ] Evaluate collapsible sidebar (icons-only when not hovered)
+- [x] Apply brand colors from example.ppt to login/sidebar (V103)
+- [x] Collapsible sidebar - icons only when not hovered (V103)
+- [x] Sidebar logo (V103)
 - [ ] Migration result display improvements
 - [ ] Better error feedback for users
 
-### 2. Documentation
+### 2. Security & Permissions
+**Priority:** High
+**Status:** Completed (V104)
+
+- [x] Admin section hidden from non-admin users
+- [x] User management API endpoints require admin role
+- [x] Role-based UI visibility
+
+### 3. Documentation
 **Priority:** High
 **Status:** In Progress (V102)
 
@@ -25,6 +34,25 @@ Long-term architectural improvements and technical debt items.
 - [ ] Update DESIGN_GUIDE.md to V102
 - [ ] Update SESSION_SUMMARY.md (outdated at Nov 2024)
 - [ ] Create user guide for operators
+
+### 4. Login Improvements (V104)
+**Priority:** Medium
+**Status:** Partially Complete
+
+- [x] Pre-select last used project on login
+- [x] Save last project preference to server (user_preferences table)
+- [ ] **TODO:** Update login_api.php to return `last_project_id` from user_preferences
+
+**Note:** login_api.php needs this code added after validating credentials:
+```php
+// Look up user's last project preference
+$stmt = $pdo->prepare("SELECT pref_value FROM user_preferences WHERE user_id = ? AND pref_key = 'last_project_id'");
+$stmt->execute([$user['user_id']]);
+$lastProject = $stmt->fetchColumn();
+
+// Include in response
+$response['last_project_id'] = $lastProject ?: null;
+```
 
 ---
 
