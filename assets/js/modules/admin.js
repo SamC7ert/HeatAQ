@@ -874,8 +874,21 @@ const AdminModule = {
             if (data.behind_origin > 0) {
                 html += '<button class="btn btn-primary" onclick="AdminModule.deployPull()">Pull Updates</button>';
             }
-            html += '<button class="btn" onclick="AdminModule.loadDeployStatus()">Refresh</button>';
+            html += '<button class="btn" onclick="AdminModule.hardRefresh()">Refresh Page</button>';
             html += '</div>';
+
+            // Show available branches to merge
+            if (data.remote_branches && data.remote_branches.length > 0) {
+                html += '<div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #ddd;">';
+                html += '<strong>Merge Branch:</strong> ';
+                html += '<select id="merge-branch-select" style="margin: 0 0.5rem;">';
+                data.remote_branches.forEach(b => {
+                    html += `<option value="${b}">${b}</option>`;
+                });
+                html += '</select>';
+                html += '<button class="btn btn-primary" onclick="AdminModule.mergeBranch()">Merge & Deploy</button>';
+                html += '</div>';
+            }
 
             html += '<div id="deploy-log" style="margin-top: 1rem;"></div>';
 
@@ -883,6 +896,62 @@ const AdminModule = {
         } catch (err) {
             console.error('Failed to load deploy status:', err);
             container.innerHTML = `<p class="error">Failed to load: ${err.message}</p>`;
+        }
+    },
+
+    hardRefresh: function() {
+        // Force reload bypassing cache
+        window.location.reload(true);
+    },
+
+    mergeBranch: async function() {
+        const select = document.getElementById('merge-branch-select');
+        if (!select || !select.value) {
+            alert('Select a branch to merge');
+            return;
+        }
+
+        const branch = select.value;
+        if (!confirm(`Merge "${branch}" into main and deploy?`)) {
+            return;
+        }
+
+        const logContainer = document.getElementById('deploy-log');
+        if (logContainer) {
+            logContainer.innerHTML = `<p>Merging ${branch}...</p>`;
+        }
+
+        try {
+            const response = await fetch('./api/heataq_api.php?action=merge_branch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ branch: branch })
+            });
+            const data = await response.json();
+
+            if (data.error) {
+                if (logContainer) logContainer.innerHTML = `<p class="error">${data.error}</p>`;
+                return;
+            }
+
+            let html = '<div class="deploy-result">';
+            html += `<p><strong>Result:</strong> ${data.success ? '<span style="color:green">Success</span>' : '<span style="color:red">Failed</span>'}</p>`;
+            if (data.log) {
+                html += '<pre class="deploy-log">';
+                data.log.forEach(line => { html += line + '\n'; });
+                html += '</pre>';
+            }
+            html += '</div>';
+
+            if (logContainer) logContainer.innerHTML = html;
+
+            // Auto reload on success
+            if (data.success) {
+                setTimeout(() => window.location.reload(true), 1500);
+            }
+        } catch (err) {
+            console.error('Merge failed:', err);
+            if (logContainer) logContainer.innerHTML = `<p class="error">Failed: ${err.message}</p>`;
         }
     },
 
