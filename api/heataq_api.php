@@ -2543,18 +2543,37 @@ class HeatAQAPI {
      * Get all sites (pool_sites) accessible to user
      */
     private function getSites() {
-        $stmt = $this->db->prepare("
-            SELECT
-                ps.id,
-                ps.site_id,
-                ps.name,
-                ps.latitude,
-                ps.longitude,
-                ps.description,
-                (SELECT COUNT(*) FROM pools p WHERE p.site_id = ps.site_id AND p.is_active = 1) as pool_count
-            FROM pool_sites ps
-            ORDER BY ps.name
-        ");
+        // Check if pools table exists to avoid error on subquery
+        $tableCheck = $this->db->query("SHOW TABLES LIKE 'pools'");
+        $poolsTableExists = $tableCheck->rowCount() > 0;
+
+        if ($poolsTableExists) {
+            $stmt = $this->db->prepare("
+                SELECT
+                    ps.id,
+                    ps.site_id,
+                    ps.name,
+                    ps.latitude,
+                    ps.longitude,
+                    ps.description,
+                    (SELECT COUNT(*) FROM pools p WHERE p.site_id = ps.site_id AND p.is_active = 1) as pool_count
+                FROM pool_sites ps
+                ORDER BY ps.name
+            ");
+        } else {
+            $stmt = $this->db->prepare("
+                SELECT
+                    ps.id,
+                    ps.site_id,
+                    ps.name,
+                    ps.latitude,
+                    ps.longitude,
+                    ps.description,
+                    0 as pool_count
+                FROM pool_sites ps
+                ORDER BY ps.name
+            ");
+        }
         $stmt->execute();
         $sites = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
