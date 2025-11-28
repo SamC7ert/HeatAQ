@@ -11,6 +11,8 @@ const SimControlModule = {
             this.initialized = true;
             // Load user preferences from server first (syncs across devices)
             await this.loadUserPreferences();
+            // Load sites and pools for selection
+            await this.loadSites();
             // Load OHC options for the dropdown
             this.loadOHCOptions();
             // Load configuration options
@@ -21,6 +23,123 @@ const SimControlModule = {
 
         // Initialize current tab
         this.switchTab(this.currentTab);
+    },
+
+    // Currently selected site and pool
+    currentSiteId: null,
+    currentPoolId: null,
+    sites: [],
+    pools: [],
+
+    // Load sites from API
+    loadSites: async function() {
+        const select = document.getElementById('sim-site-select');
+        if (!select) return;
+
+        try {
+            const response = await fetch('./api/heataq_api.php?action=get_sites');
+            const data = await response.json();
+
+            if (data.sites && data.sites.length > 0) {
+                this.sites = data.sites;
+
+                select.innerHTML = data.sites.map(site =>
+                    `<option value="${site.site_id}">${site.name}</option>`
+                ).join('');
+
+                // Auto-select first site (or saved preference)
+                const savedSite = this.getPreference('sim_site_id');
+                if (savedSite && data.sites.find(s => s.site_id === savedSite)) {
+                    select.value = savedSite;
+                }
+
+                this.currentSiteId = select.value;
+                await this.loadPools(this.currentSiteId);
+            } else {
+                select.innerHTML = '<option value="">No sites available</option>';
+            }
+        } catch (err) {
+            console.error('Failed to load sites:', err);
+            select.innerHTML = '<option value="">Error loading sites</option>';
+        }
+    },
+
+    // Load pools for selected site
+    loadPools: async function(siteId) {
+        const select = document.getElementById('sim-pool-select');
+        if (!select) return;
+
+        if (!siteId) {
+            select.innerHTML = '<option value="">Select a site first</option>';
+            return;
+        }
+
+        try {
+            const response = await fetch(`./api/heataq_api.php?action=get_pools&site_id=${encodeURIComponent(siteId)}`);
+            const data = await response.json();
+
+            if (data.notice) {
+                // Pools table doesn't exist yet
+                select.innerHTML = '<option value="">Run migration first</option>';
+                console.warn(data.notice);
+                return;
+            }
+
+            if (data.pools && data.pools.length > 0) {
+                this.pools = data.pools;
+
+                select.innerHTML = data.pools.map(pool =>
+                    `<option value="${pool.pool_id}">${pool.name} (${pool.area_m2}m², ${pool.volume_m3}m³)</option>`
+                ).join('');
+
+                // Auto-select first pool (or saved preference)
+                const savedPool = this.getPreference('sim_pool_id');
+                if (savedPool && data.pools.find(p => p.pool_id == savedPool)) {
+                    select.value = savedPool;
+                }
+
+                this.currentPoolId = select.value;
+            } else {
+                select.innerHTML = '<option value="">No pools at this site</option>';
+                this.pools = [];
+            }
+        } catch (err) {
+            console.error('Failed to load pools:', err);
+            select.innerHTML = '<option value="">Error loading pools</option>';
+        }
+    },
+
+    // Handle site selection change
+    onSiteChange: async function() {
+        const select = document.getElementById('sim-site-select');
+        if (!select) return;
+
+        this.currentSiteId = select.value;
+        this.savePreference('sim_site_id', this.currentSiteId);
+
+        await this.loadPools(this.currentSiteId);
+    },
+
+    // Handle pool selection change
+    onPoolChange: function() {
+        const select = document.getElementById('sim-pool-select');
+        if (!select) return;
+
+        this.currentPoolId = select.value;
+        this.savePreference('sim_pool_id', this.currentPoolId);
+
+        // Update config values display with pool's physical data
+        const pool = this.pools.find(p => p.pool_id == this.currentPoolId);
+        if (pool) {
+            this.updatePoolConfigDisplay(pool);
+        }
+    },
+
+    // Update config display with pool's physical properties
+    updatePoolConfigDisplay: function(pool) {
+        // These could be shown in the config overrides section
+        // For now, just log - can expand later
+        console.log('[SimControl] Selected pool:', pool.name, pool);
     },
 
     // Load user preferences from server (syncs across iPad, desktop, etc.)
