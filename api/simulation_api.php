@@ -163,12 +163,45 @@ try {
             // Get optional config and template IDs
             $configId = getParam('config_id', null);
             $templateId = getParam('template_id', null);
+            $poolId = getParam('pool_id', null);
 
             // Initialize scheduler (with optional template selection)
             $scheduler = new PoolScheduler($pdo, $currentSiteId, $templateId);
 
             // Initialize simulator
             $simulator = new EnergySimulator($pdo, $currentSiteId, $scheduler);
+
+            // Load pool data from pools table if pool_id provided
+            if ($poolId) {
+                $poolStmt = $pdo->prepare("
+                    SELECT * FROM pools WHERE pool_id = ? AND is_active = 1
+                ");
+                $poolStmt->execute([$poolId]);
+                $poolRow = $poolStmt->fetch();
+
+                if ($poolRow) {
+                    // Build pool config from database row
+                    $poolConfig = [
+                        'pool' => [
+                            'area_m2' => (float)$poolRow['area_m2'],
+                            'volume_m3' => (float)$poolRow['volume_m3'],
+                            'depth_m' => (float)$poolRow['depth_m'],
+                            'wind_exposure' => (float)$poolRow['wind_exposure'],
+                            'solar_absorption' => (float)$poolRow['solar_absorption'],
+                            'years_operating' => (int)$poolRow['years_operating'],
+                        ],
+                        'cover' => [
+                            'has_cover' => (bool)$poolRow['has_cover'],
+                            'r_value' => (float)$poolRow['cover_r_value'],
+                            'solar_transmittance' => (float)$poolRow['cover_solar_transmittance'],
+                        ],
+                        'solar' => [
+                            'has_tunnel' => (bool)$poolRow['has_tunnel'],
+                        ]
+                    ];
+                    $simulator->setConfigFromUI($poolConfig);
+                }
+            }
 
             // Load and apply configuration if specified
             if ($configId) {
@@ -271,6 +304,7 @@ try {
             $configTemplateName = $configRow['template_name'] ?? null;
             $runId = createSimulationRun($pdo, [
                 'site_id' => $currentSiteId,
+                'pool_id' => $poolId,
                 'user_id' => $currentUserId,
                 'scenario_name' => $scenarioName,
                 'description' => $description,
@@ -280,6 +314,7 @@ try {
                     'simulator_version' => EnergySimulator::getVersion(),
                     'pool_config' => $simulator->getPoolConfig(),
                     'equipment' => $simulator->getEquipment(),
+                    'pool_id' => $poolId,
                     'config_template_id' => $configId,
                     'config_template_name' => $configTemplateName,
                     'schedule_template_id' => $scheduleTemplate['template_id'] ?? null,
@@ -821,11 +856,12 @@ try {
 function createSimulationRun($pdo, $data) {
     $stmt = $pdo->prepare("
         INSERT INTO simulation_runs
-        (site_id, user_id, scenario_name, description, start_date, end_date, status, config_snapshot, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, NOW())
+        (site_id, pool_id, user_id, scenario_name, description, start_date, end_date, status, config_snapshot, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, NOW())
     ");
     $stmt->execute([
         $data['site_id'],
+        $data['pool_id'] ?? null,
         $data['user_id'],
         $data['scenario_name'],
         $data['description'],

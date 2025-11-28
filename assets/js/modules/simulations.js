@@ -231,6 +231,9 @@ const SimulationsModule = {
             // Build config override from override fields
             const configOverride = this.buildConfigOverride();
 
+            // Get pool_id from SimControl selection
+            const poolId = typeof SimControlModule !== 'undefined' ? SimControlModule.currentPoolId : null;
+
             const response = await fetch('/api/simulation_api.php?action=run_simulation', {
                 method: 'POST',
                 headers: {
@@ -243,6 +246,7 @@ const SimulationsModule = {
                     description: description,
                     config_id: configId,
                     template_id: ohcId,
+                    pool_id: poolId,
                     config_override: configOverride
                 })
             });
