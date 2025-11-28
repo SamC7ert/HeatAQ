@@ -31,7 +31,16 @@ CREATE TABLE IF NOT EXISTS simulation_runs (
     completed_at DATETIME NULL,
 
     -- Configuration snapshot (JSON)
-    -- Stores pool_config, equipment settings at time of simulation
+    -- Stores complete config at time of simulation for reproducibility:
+    -- {
+    --   "simulator_version": "1.0.0",
+    --   "pool_config": { area_m2, volume_m3, depth_m, ... },
+    --   "equipment": { hp_capacity_kw, boiler_capacity_kw, hp_cop, ... },
+    --   "config_template_id": 1,
+    --   "config_template_name": "Benchmark 10-20",
+    --   "schedule_template_id": 1,
+    --   "schedule_template_name": "Standard Hours"
+    -- }
     config_snapshot JSON,
 
     -- Summary results (JSON)
