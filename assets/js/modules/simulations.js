@@ -1308,7 +1308,7 @@ const SimulationsModule = {
         const waterTemp = stored.water_temp || inp.pool?.water_temp_c;
         const waterTempDisplay = document.getElementById('debug-water-temp-display');
         if (waterTempDisplay && waterTemp) {
-            waterTempDisplay.textContent = `Water: ${parseFloat(waterTemp).toFixed(1)}°C`;
+            waterTempDisplay.textContent = `${parseFloat(waterTemp).toFixed(1)}°C`;
         }
 
         // Config and Schedule display (from run info)
