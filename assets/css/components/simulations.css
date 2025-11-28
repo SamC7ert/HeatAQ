@@ -480,6 +480,32 @@ p.loading {
     border-color: #4caf50;
 }
 
+/* Clear override button - 4th column */
+#sim-override-table th:nth-child(4),
+#sim-override-table td:nth-child(4) {
+    width: 24px;
+    padding: 4px;
+    text-align: center;
+}
+
+.btn-clear-override {
+    background: transparent;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    color: #999;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 2px 6px;
+    transition: all 0.2s;
+}
+
+.btn-clear-override:hover {
+    background: #fee;
+    border-color: #dc3545;
+    color: #dc3545;
+}
+
 .config-value {
     font-family: 'Courier New', monospace;
 }

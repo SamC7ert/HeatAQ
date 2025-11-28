@@ -228,6 +228,9 @@ const SimulationsModule = {
         }
 
         try {
+            // Build config override from override fields
+            const configOverride = this.buildConfigOverride();
+
             const response = await fetch('/api/simulation_api.php?action=run_simulation', {
                 method: 'POST',
                 headers: {
@@ -239,7 +242,8 @@ const SimulationsModule = {
                     end_date: endDate,
                     description: description,
                     config_id: configId,
-                    template_id: ohcId
+                    template_id: ohcId,
+                    config_override: configOverride
                 })
             });
 
@@ -810,6 +814,95 @@ const SimulationsModule = {
         });
         const key = this.getUserKey('sim_overrides');
         localStorage.setItem(key, JSON.stringify(overrides));
+    },
+
+    /**
+     * Build config override object from override fields
+     * Returns an object with only the overridden values for API
+     */
+    buildConfigOverride: function() {
+        const getOverride = (id) => {
+            const el = document.getElementById(id);
+            return el && el.value !== '' ? parseFloat(el.value) : null;
+        };
+
+        const override = {};
+
+        // Equipment overrides
+        const hpOverride = getOverride('sim-hp-override');
+        const boilerOverride = getOverride('sim-boiler-override');
+        if (hpOverride !== null || boilerOverride !== null) {
+            override.equipment = {};
+            if (hpOverride !== null) override.equipment.hp_capacity_kw = hpOverride;
+            if (boilerOverride !== null) override.equipment.boiler_capacity_kw = boilerOverride;
+        }
+
+        // Control overrides
+        const targetOverride = getOverride('sim-target-override');
+        const upperTolOverride = getOverride('sim-upper-tol-override');
+        const lowerTolOverride = getOverride('sim-lower-tol-override');
+        if (targetOverride !== null || upperTolOverride !== null || lowerTolOverride !== null) {
+            override.control = {};
+            if (targetOverride !== null) override.control.target_temp = targetOverride;
+            if (upperTolOverride !== null) override.control.upper_tolerance = upperTolOverride;
+            if (lowerTolOverride !== null) override.control.lower_tolerance = lowerTolOverride;
+        }
+
+        // Bathers overrides
+        const bathersOverride = getOverride('sim-bathers-override');
+        const activityOverride = getOverride('sim-activity-override');
+        if (bathersOverride !== null || activityOverride !== null) {
+            override.bathers = {};
+            if (bathersOverride !== null) override.bathers.per_day = Math.round(bathersOverride);
+            if (activityOverride !== null) override.bathers.activity_factor = activityOverride;
+        }
+
+        // Pool overrides
+        const windOverride = getOverride('sim-wind-override');
+        if (windOverride !== null) {
+            override.pool = { wind_exposure: windOverride };
+        }
+
+        // Solar overrides
+        const solarOverride = getOverride('sim-solar-override');
+        if (solarOverride !== null) {
+            override.solar = { absorption: solarOverride };
+        }
+
+        // Save overrides for next time
+        this.saveOverrides();
+
+        // Return null if no overrides set
+        return Object.keys(override).length > 0 ? override : null;
+    },
+
+    /**
+     * Clear all override fields
+     */
+    clearAllOverrides: function() {
+        const ids = [
+            'sim-hp-override', 'sim-boiler-override', 'sim-target-override',
+            'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
+            'sim-activity-override', 'sim-wind-override', 'sim-solar-override'
+        ];
+        ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        // Clear saved overrides
+        const key = this.getUserKey('sim_overrides');
+        localStorage.removeItem(key);
+    },
+
+    /**
+     * Clear a single override field
+     */
+    clearOverride: function(fieldId) {
+        const el = document.getElementById(fieldId);
+        if (el) {
+            el.value = '';
+            this.saveOverrides();
+        }
     },
 
     /**
