@@ -1,12 +1,12 @@
 # Database Schema
 
-Generated: 2025-11-28 16:23:36
+Generated: 2025-11-28 16:55:02
 
 Database: heataq_pool-353130302dd2
 
 ## audit_log
 
-Rows: 2863
+Rows: 2958
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -358,7 +358,7 @@ Rows: 3
 
 ## simulation_daily_results
 
-Rows: 27837
+Rows: 29662
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -383,7 +383,7 @@ Rows: 27837
 
 ## simulation_hourly_results
 
-Rows: 667098
+Rows: 710833
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -414,7 +414,7 @@ Rows: 667098
 
 ## simulation_runs
 
-Rows: 82
+Rows: 87
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -439,6 +439,40 @@ Rows: 82
 - `idx_status` (status)
 - `idx_created` (created_at)
 - `idx_pool_id` (pool_id)
+
+## site_solar_daily
+
+Rows: 0
+
+| Column | Type | Null | Key | Default | Extra |
+|--------|------|------|-----|---------|-------|
+| site_id | varchar(50) | NO | PRI | NULL |  |
+| date | date | NO | PRI | NULL |  |
+| daily_kwh_m2 | decimal(6,4) | YES |  | NULL |  |
+| clear_sky_kwh_m2 | decimal(6,4) | YES |  | NULL |  |
+| cloud_factor | decimal(4,3) | YES |  | NULL |  |
+| created_at | timestamp | YES |  | current_timestamp() |  |
+
+**Indexes:**
+- UNIQUE `PRIMARY` (site_id, date)
+- `idx_date` (date)
+- `idx_site` (site_id)
+
+## site_solar_hourly
+
+Rows: 0
+
+| Column | Type | Null | Key | Default | Extra |
+|--------|------|------|-----|---------|-------|
+| site_id | varchar(50) | NO | PRI | NULL |  |
+| timestamp | datetime | NO | PRI | NULL |  |
+| solar_wh_m2 | decimal(8,2) | YES |  | NULL |  |
+| clear_sky_wh_m2 | decimal(8,2) | YES |  | NULL |  |
+
+**Indexes:**
+- UNIQUE `PRIMARY` (site_id, timestamp)
+- `idx_timestamp` (timestamp)
+- `idx_site` (site_id)
 
 ## solar_daily_data
 
@@ -469,7 +503,7 @@ Rows: 50
 
 ## user_preferences
 
-Rows: 1
+Rows: 2
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
