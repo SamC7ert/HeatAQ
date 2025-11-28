@@ -1,5 +1,5 @@
 {
-    "generated_at": "2025-11-28 14:56:32",
+    "generated_at": "2025-11-28 16:21:10",
     "database": "heataq_pool-353130302dd2",
     "tables": {
         "audit_log": {
@@ -124,7 +124,7 @@
                     ]
                 }
             ],
-            "row_count": 2729
+            "row_count": 2842
         },
         "calendar_date_ranges": {
             "name": "calendar_date_ranges",
@@ -590,6 +590,14 @@
                     "extra": ""
                 },
                 {
+                    "name": "pool_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
                     "name": "hp_capacity_kw",
                     "type": "decimal(6,2)",
                     "null": "YES",
@@ -684,6 +692,13 @@
                     "columns": [
                         "template_name",
                         "template_version"
+                    ]
+                },
+                {
+                    "name": "idx_config_pool",
+                    "unique": false,
+                    "columns": [
+                        "pool_id"
                     ]
                 }
             ],
@@ -1333,6 +1348,203 @@
             ],
             "row_count": 1
         },
+        "pools": {
+            "name": "pools",
+            "columns": [
+                {
+                    "name": "pool_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "site_id",
+                    "type": "varchar(50)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "name",
+                    "type": "varchar(100)",
+                    "null": "NO",
+                    "key": "",
+                    "default": "Main Pool",
+                    "extra": ""
+                },
+                {
+                    "name": "description",
+                    "type": "text",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "length_m",
+                    "type": "decimal(6,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "25.00",
+                    "extra": ""
+                },
+                {
+                    "name": "width_m",
+                    "type": "decimal(6,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "12.50",
+                    "extra": ""
+                },
+                {
+                    "name": "depth_m",
+                    "type": "decimal(4,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "2.00",
+                    "extra": ""
+                },
+                {
+                    "name": "area_m2",
+                    "type": "decimal(8,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "312.50",
+                    "extra": ""
+                },
+                {
+                    "name": "volume_m3",
+                    "type": "decimal(10,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "625.00",
+                    "extra": ""
+                },
+                {
+                    "name": "wind_exposure",
+                    "type": "decimal(4,3)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "0.535",
+                    "extra": ""
+                },
+                {
+                    "name": "solar_absorption",
+                    "type": "decimal(4,1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "60.0",
+                    "extra": ""
+                },
+                {
+                    "name": "years_operating",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "3",
+                    "extra": ""
+                },
+                {
+                    "name": "has_cover",
+                    "type": "tinyint(1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "1",
+                    "extra": ""
+                },
+                {
+                    "name": "cover_r_value",
+                    "type": "decimal(4,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "5.00",
+                    "extra": ""
+                },
+                {
+                    "name": "cover_solar_transmittance",
+                    "type": "decimal(4,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "10.00",
+                    "extra": ""
+                },
+                {
+                    "name": "has_tunnel",
+                    "type": "tinyint(1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "1",
+                    "extra": ""
+                },
+                {
+                    "name": "floor_insulated",
+                    "type": "tinyint(1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "1",
+                    "extra": ""
+                },
+                {
+                    "name": "pool_type",
+                    "type": "enum('outdoor','indoor','semi-enclosed')",
+                    "null": "YES",
+                    "key": "",
+                    "default": "outdoor",
+                    "extra": ""
+                },
+                {
+                    "name": "is_active",
+                    "type": "tinyint(1)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": "1",
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": "on update current_timestamp()"
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "pool_id"
+                    ]
+                },
+                {
+                    "name": "idx_site",
+                    "unique": false,
+                    "columns": [
+                        "site_id"
+                    ]
+                },
+                {
+                    "name": "idx_active",
+                    "unique": false,
+                    "columns": [
+                        "is_active"
+                    ]
+                }
+            ],
+            "row_count": 1
+        },
         "projects": {
             "name": "projects",
             "columns": [
@@ -1876,6 +2088,14 @@
                     "extra": ""
                 },
                 {
+                    "name": "pool_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
                     "name": "pool_site_id",
                     "type": "int(11)",
                     "null": "YES",
@@ -1991,6 +2211,13 @@
                     "unique": false,
                     "columns": [
                         "created_at"
+                    ]
+                },
+                {
+                    "name": "idx_pool_id",
+                    "unique": false,
+                    "columns": [
+                        "pool_id"
                     ]
                 }
             ],
