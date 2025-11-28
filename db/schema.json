@@ -1,184 +1,2794 @@
 {
-    "generated_at": "2025-11-26 13:03:25",
+    "generated_at": "2025-11-28 12:08:43",
     "database": "heataq_pool-353130302dd2",
     "tables": {
         "audit_log": {
             "name": "audit_log",
             "columns": [
-                {"name": "log_id", "type": "int(11)", "null": "NO", "key": "PRI", "default": null, "extra": "auto_increment"},
-                {"name": "user_id", "type": "int(11)", "null": "YES", "key": "MUL", "default": null, "extra": ""},
-                {"name": "project_id", "type": "int(11)", "null": "YES", "key": "MUL", "default": null, "extra": ""},
-                {"name": "action", "type": "varchar(50)", "null": "NO", "key": "", "default": null, "extra": ""},
-                {"name": "entity_type", "type": "varchar(50)", "null": "YES", "key": "MUL", "default": null, "extra": ""},
-                {"name": "entity_id", "type": "int(11)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "old_values", "type": "longtext", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "new_values", "type": "longtext", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "ip_address", "type": "varchar(45)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "created_at", "type": "timestamp", "null": "YES", "key": "MUL", "default": "current_timestamp()", "extra": ""}
+                {
+                    "name": "log_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "user_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "project_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "action",
+                    "type": "varchar(50)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "entity_type",
+                    "type": "varchar(50)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "entity_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "old_values",
+                    "type": "longtext",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "new_values",
+                    "type": "longtext",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "ip_address",
+                    "type": "varchar(45)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                }
             ],
             "indexes": [
-                {"name": "PRIMARY", "unique": true, "columns": ["log_id"]},
-                {"name": "idx_user", "unique": false, "columns": ["user_id"]},
-                {"name": "idx_project", "unique": false, "columns": ["project_id"]},
-                {"name": "idx_created", "unique": false, "columns": ["created_at"]},
-                {"name": "idx_entity", "unique": false, "columns": ["entity_type", "entity_id"]}
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "log_id"
+                    ]
+                },
+                {
+                    "name": "idx_user",
+                    "unique": false,
+                    "columns": [
+                        "user_id"
+                    ]
+                },
+                {
+                    "name": "idx_project",
+                    "unique": false,
+                    "columns": [
+                        "project_id"
+                    ]
+                },
+                {
+                    "name": "idx_created",
+                    "unique": false,
+                    "columns": [
+                        "created_at"
+                    ]
+                },
+                {
+                    "name": "idx_entity",
+                    "unique": false,
+                    "columns": [
+                        "entity_type",
+                        "entity_id"
+                    ]
+                }
             ],
-            "row_count": 1828
+            "row_count": 2566
+        },
+        "calendar_date_ranges": {
+            "name": "calendar_date_ranges",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "schedule_template_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "priority",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": "10",
+                    "extra": ""
+                },
+                {
+                    "name": "name",
+                    "type": "varchar(100)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "description",
+                    "type": "text",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "start_date",
+                    "type": "date",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "end_date",
+                    "type": "date",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "week_schedule_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "is_active",
+                    "type": "tinyint(1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "1",
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": "on update current_timestamp()"
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "id"
+                    ]
+                },
+                {
+                    "name": "idx_priority",
+                    "unique": false,
+                    "columns": [
+                        "priority"
+                    ]
+                },
+                {
+                    "name": "idx_dates",
+                    "unique": false,
+                    "columns": [
+                        "start_date",
+                        "end_date"
+                    ]
+                },
+                {
+                    "name": "schedule_template_id",
+                    "unique": false,
+                    "columns": [
+                        "schedule_template_id"
+                    ]
+                },
+                {
+                    "name": "week_schedule_id",
+                    "unique": false,
+                    "columns": [
+                        "week_schedule_id"
+                    ]
+                }
+            ],
+            "row_count": 2
+        },
+        "calendar_exception_days": {
+            "name": "calendar_exception_days",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "schedule_template_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "priority",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": "80",
+                    "extra": ""
+                },
+                {
+                    "name": "name",
+                    "type": "varchar(100)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "description",
+                    "type": "text",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "fixed_date",
+                    "type": "date",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "fixed_month",
+                    "type": "tinyint(4)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "fixed_day",
+                    "type": "tinyint(4)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "is_moving",
+                    "type": "tinyint(1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "0",
+                    "extra": ""
+                },
+                {
+                    "name": "easter_offset_days",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "day_schedule_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "is_active",
+                    "type": "tinyint(1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "1",
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": "on update current_timestamp()"
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "id"
+                    ]
+                },
+                {
+                    "name": "idx_priority",
+                    "unique": false,
+                    "columns": [
+                        "priority"
+                    ]
+                },
+                {
+                    "name": "idx_fixed_date",
+                    "unique": false,
+                    "columns": [
+                        "fixed_date"
+                    ]
+                },
+                {
+                    "name": "idx_fixed_monthday",
+                    "unique": false,
+                    "columns": [
+                        "fixed_month",
+                        "fixed_day"
+                    ]
+                },
+                {
+                    "name": "schedule_template_id",
+                    "unique": false,
+                    "columns": [
+                        "schedule_template_id"
+                    ]
+                },
+                {
+                    "name": "day_schedule_id",
+                    "unique": false,
+                    "columns": [
+                        "day_schedule_id"
+                    ]
+                }
+            ],
+            "row_count": 18
+        },
+        "calendar_rules": {
+            "name": "calendar_rules",
+            "columns": [
+                {
+                    "name": "rule_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "template_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "priority",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "rule_name",
+                    "type": "varchar(100)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "rule_type",
+                    "type": "enum('base','date_range','holiday','specific_date')",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "start_date",
+                    "type": "varchar(5)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "end_date",
+                    "type": "varchar(5)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "specific_date",
+                    "type": "date",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "holiday_code",
+                    "type": "varchar(50)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "week_schedule_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "enabled",
+                    "type": "tinyint(1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "1",
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "rule_id"
+                    ]
+                },
+                {
+                    "name": "unique_priority",
+                    "unique": true,
+                    "columns": [
+                        "template_id",
+                        "priority"
+                    ]
+                },
+                {
+                    "name": "week_schedule_id",
+                    "unique": false,
+                    "columns": [
+                        "week_schedule_id"
+                    ]
+                },
+                {
+                    "name": "holiday_code",
+                    "unique": false,
+                    "columns": [
+                        "holiday_code"
+                    ]
+                }
+            ],
+            "row_count": 11
         },
         "config_templates": {
             "name": "config_templates",
             "columns": [
-                {"name": "template_id", "type": "int(11)", "null": "NO", "key": "PRI", "default": null, "extra": "auto_increment"},
-                {"name": "template_name", "type": "varchar(100)", "null": "NO", "key": "MUL", "default": null, "extra": ""},
-                {"name": "template_version", "type": "varchar(20)", "null": "YES", "key": "", "default": "v1.0", "extra": ""},
-                {"name": "project_id", "type": "int(11)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "hp_capacity_kw", "type": "decimal(6,2)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "boiler_capacity_kw", "type": "decimal(6,2)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "target_temp", "type": "decimal(3,1)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "control_strategy", "type": "varchar(50)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "json_config", "type": "longtext", "null": "NO", "key": "", "default": null, "extra": ""},
-                {"name": "created_at", "type": "timestamp", "null": "YES", "key": "", "default": "current_timestamp()", "extra": ""},
-                {"name": "created_by", "type": "varchar(100)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "config_json", "type": "longtext", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "updated_at", "type": "timestamp", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "updated_by", "type": "varchar(100)", "null": "YES", "key": "", "default": null, "extra": ""}
+                {
+                    "name": "template_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "pool_site_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "template_name",
+                    "type": "varchar(100)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "template_version",
+                    "type": "varchar(20)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "v1.0",
+                    "extra": ""
+                },
+                {
+                    "name": "project_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "hp_capacity_kw",
+                    "type": "decimal(6,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "boiler_capacity_kw",
+                    "type": "decimal(6,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "target_temp",
+                    "type": "decimal(3,1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "control_strategy",
+                    "type": "varchar(50)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "json_config",
+                    "type": "longtext",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                },
+                {
+                    "name": "created_by",
+                    "type": "varchar(100)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "config_json",
+                    "type": "longtext",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "updated_by",
+                    "type": "varchar(100)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                }
             ],
             "indexes": [
-                {"name": "PRIMARY", "unique": true, "columns": ["template_id"]},
-                {"name": "unique_name_version", "unique": true, "columns": ["template_name", "template_version"]}
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "template_id"
+                    ]
+                },
+                {
+                    "name": "unique_name_version",
+                    "unique": true,
+                    "columns": [
+                        "template_name",
+                        "template_version"
+                    ]
+                }
             ],
             "row_count": 3
+        },
+        "day_schedule_periods": {
+            "name": "day_schedule_periods",
+            "columns": [
+                {
+                    "name": "period_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "day_schedule_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "period_order",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "start_time",
+                    "type": "time",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "end_time",
+                    "type": "time",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "target_temp",
+                    "type": "decimal(3,1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "min_temp",
+                    "type": "decimal(3,1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "max_temp",
+                    "type": "decimal(3,1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "notes",
+                    "type": "varchar(255)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "period_id"
+                    ]
+                },
+                {
+                    "name": "unique_schedule_order",
+                    "unique": true,
+                    "columns": [
+                        "day_schedule_id",
+                        "period_order"
+                    ]
+                }
+            ],
+            "row_count": 6
+        },
+        "day_schedules": {
+            "name": "day_schedules",
+            "columns": [
+                {
+                    "name": "day_schedule_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "pool_site_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "name",
+                    "type": "varchar(100)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "site_id",
+                    "type": "varchar(50)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "description",
+                    "type": "text",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "is_operating",
+                    "type": "tinyint(1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "1",
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                },
+                {
+                    "name": "is_closed",
+                    "type": "tinyint(1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "0",
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "day_schedule_id"
+                    ]
+                },
+                {
+                    "name": "unique_name_site",
+                    "unique": true,
+                    "columns": [
+                        "name",
+                        "site_id"
+                    ]
+                },
+                {
+                    "name": "site_id",
+                    "unique": false,
+                    "columns": [
+                        "site_id"
+                    ]
+                }
+            ],
+            "row_count": 11
+        },
+        "ground_thermal_lookup": {
+            "name": "ground_thermal_lookup",
+            "columns": [
+                {
+                    "name": "year",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "Q_total_kW",
+                    "type": "decimal(8,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "year"
+                    ]
+                }
+            ],
+            "row_count": 4
+        },
+        "holiday_dates": {
+            "name": "holiday_dates",
+            "columns": [
+                {
+                    "name": "year",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "holiday_code",
+                    "type": "varchar(50)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "actual_date",
+                    "type": "date",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "year",
+                        "holiday_code"
+                    ]
+                },
+                {
+                    "name": "holiday_code",
+                    "unique": false,
+                    "columns": [
+                        "holiday_code"
+                    ]
+                }
+            ],
+            "row_count": 0
+        },
+        "holiday_definitions": {
+            "name": "holiday_definitions",
+            "columns": [
+                {
+                    "name": "holiday_code",
+                    "type": "varchar(50)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "holiday_name_no",
+                    "type": "varchar(100)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "holiday_name_en",
+                    "type": "varchar(100)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "calculation_type",
+                    "type": "enum('fixed','easter_relative')",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "fixed_date",
+                    "type": "varchar(5)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "easter_offset",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "holiday_code"
+                    ]
+                }
+            ],
+            "row_count": 21
+        },
+        "holiday_reference_days": {
+            "name": "holiday_reference_days",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "name",
+                    "type": "varchar(100)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "country",
+                    "type": "varchar(2)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": "NO",
+                    "extra": ""
+                },
+                {
+                    "name": "year",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "reference_date",
+                    "type": "date",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "calculation_method",
+                    "type": "varchar(50)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "id"
+                    ]
+                },
+                {
+                    "name": "unique_reference",
+                    "unique": true,
+                    "columns": [
+                        "name",
+                        "year",
+                        "country"
+                    ]
+                },
+                {
+                    "name": "idx_year",
+                    "unique": false,
+                    "columns": [
+                        "year"
+                    ]
+                },
+                {
+                    "name": "idx_country",
+                    "unique": false,
+                    "columns": [
+                        "country"
+                    ]
+                }
+            ],
+            "row_count": 101
         },
         "pool_configurations": {
             "name": "pool_configurations",
             "columns": [
-                {"name": "config_id", "type": "varchar(50)", "null": "NO", "key": "PRI", "default": null, "extra": ""},
-                {"name": "site_id", "type": "varchar(50)", "null": "YES", "key": "MUL", "default": null, "extra": ""},
-                {"name": "name", "type": "varchar(100)", "null": "NO", "key": "", "default": null, "extra": ""},
-                {"name": "pool_area_m2", "type": "decimal(8,2)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "pool_volume_m3", "type": "decimal(8,2)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "pool_depth_m", "type": "decimal(4,2)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "has_cover", "type": "tinyint(1)", "null": "YES", "key": "", "default": "0", "extra": ""},
-                {"name": "has_tunnel", "type": "tinyint(1)", "null": "YES", "key": "", "default": "0", "extra": ""},
-                {"name": "surface_type", "type": "varchar(50)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "notes", "type": "text", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "created_at", "type": "timestamp", "null": "YES", "key": "", "default": "current_timestamp()", "extra": ""},
-                {"name": "years_operating", "type": "tinyint(4)", "null": "NO", "key": "", "default": "3", "extra": ""}
+                {
+                    "name": "config_id",
+                    "type": "varchar(50)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "pool_site_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "site_id",
+                    "type": "varchar(50)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "name",
+                    "type": "varchar(100)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "pool_area_m2",
+                    "type": "decimal(8,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "pool_volume_m3",
+                    "type": "decimal(8,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "pool_depth_m",
+                    "type": "decimal(4,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "has_cover",
+                    "type": "tinyint(1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "0",
+                    "extra": ""
+                },
+                {
+                    "name": "has_tunnel",
+                    "type": "tinyint(1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "0",
+                    "extra": ""
+                },
+                {
+                    "name": "surface_type",
+                    "type": "varchar(50)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "notes",
+                    "type": "text",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                },
+                {
+                    "name": "years_operating",
+                    "type": "tinyint(4)",
+                    "null": "NO",
+                    "key": "",
+                    "default": "3",
+                    "extra": ""
+                }
             ],
             "indexes": [
-                {"name": "PRIMARY", "unique": true, "columns": ["config_id"]},
-                {"name": "site_id", "unique": false, "columns": ["site_id"]}
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "config_id"
+                    ]
+                },
+                {
+                    "name": "site_id",
+                    "unique": false,
+                    "columns": [
+                        "site_id"
+                    ]
+                }
             ],
             "row_count": 1
         },
         "pool_sites": {
             "name": "pool_sites",
             "columns": [
-                {"name": "site_id", "type": "varchar(50)", "null": "NO", "key": "PRI", "default": null, "extra": ""},
-                {"name": "name", "type": "varchar(100)", "null": "NO", "key": "", "default": null, "extra": ""},
-                {"name": "latitude", "type": "decimal(10,6)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "longitude", "type": "decimal(10,6)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "elevation_m", "type": "int(11)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "default_weather_station", "type": "varchar(50)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "description", "type": "text", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "created_at", "type": "timestamp", "null": "YES", "key": "", "default": "current_timestamp()", "extra": ""}
+                {
+                    "name": "id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "site_id",
+                    "type": "varchar(50)",
+                    "null": "NO",
+                    "key": "UNI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "name",
+                    "type": "varchar(100)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "latitude",
+                    "type": "decimal(10,6)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "longitude",
+                    "type": "decimal(10,6)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "elevation_m",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "default_weather_station",
+                    "type": "varchar(50)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "description",
+                    "type": "text",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                }
             ],
-            "indexes": [{"name": "PRIMARY", "unique": true, "columns": ["site_id"]}],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "id"
+                    ]
+                },
+                {
+                    "name": "idx_site_code",
+                    "unique": true,
+                    "columns": [
+                        "site_id"
+                    ]
+                }
+            ],
             "row_count": 1
         },
         "projects": {
             "name": "projects",
             "columns": [
-                {"name": "project_id", "type": "int(11)", "null": "NO", "key": "PRI", "default": null, "extra": "auto_increment"},
-                {"name": "project_name", "type": "varchar(100)", "null": "NO", "key": "", "default": null, "extra": ""},
-                {"name": "project_code", "type": "varchar(50)", "null": "NO", "key": "UNI", "default": null, "extra": ""},
-                {"name": "site_id", "type": "varchar(50)", "null": "YES", "key": "MUL", "default": null, "extra": ""},
-                {"name": "description", "type": "text", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "is_active", "type": "tinyint(1)", "null": "YES", "key": "", "default": "1", "extra": ""},
-                {"name": "settings", "type": "longtext", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "created_at", "type": "timestamp", "null": "YES", "key": "", "default": "current_timestamp()", "extra": ""}
+                {
+                    "name": "project_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "project_name",
+                    "type": "varchar(100)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "project_code",
+                    "type": "varchar(50)",
+                    "null": "NO",
+                    "key": "UNI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "site_id",
+                    "type": "varchar(50)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "description",
+                    "type": "text",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "is_active",
+                    "type": "tinyint(1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "1",
+                    "extra": ""
+                },
+                {
+                    "name": "settings",
+                    "type": "longtext",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                }
             ],
             "indexes": [
-                {"name": "PRIMARY", "unique": true, "columns": ["project_id"]},
-                {"name": "project_code", "unique": true, "columns": ["project_code"]},
-                {"name": "idx_site", "unique": false, "columns": ["site_id"]},
-                {"name": "idx_code", "unique": false, "columns": ["project_code"]}
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "project_id"
+                    ]
+                },
+                {
+                    "name": "project_code",
+                    "unique": true,
+                    "columns": [
+                        "project_code"
+                    ]
+                },
+                {
+                    "name": "idx_site",
+                    "unique": false,
+                    "columns": [
+                        "site_id"
+                    ]
+                },
+                {
+                    "name": "idx_code",
+                    "unique": false,
+                    "columns": [
+                        "project_code"
+                    ]
+                }
             ],
             "row_count": 1
+        },
+        "schedule_templates": {
+            "name": "schedule_templates",
+            "columns": [
+                {
+                    "name": "template_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "pool_site_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "name",
+                    "type": "varchar(100)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "version",
+                    "type": "varchar(20)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "v1.0",
+                    "extra": ""
+                },
+                {
+                    "name": "site_id",
+                    "type": "varchar(50)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "base_week_schedule_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "description",
+                    "type": "text",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                },
+                {
+                    "name": "created_by",
+                    "type": "varchar(100)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "template_id"
+                    ]
+                },
+                {
+                    "name": "unique_name_version",
+                    "unique": true,
+                    "columns": [
+                        "name",
+                        "version"
+                    ]
+                },
+                {
+                    "name": "site_id",
+                    "unique": false,
+                    "columns": [
+                        "site_id"
+                    ]
+                },
+                {
+                    "name": "base_week_schedule_id",
+                    "unique": false,
+                    "columns": [
+                        "base_week_schedule_id"
+                    ]
+                }
+            ],
+            "row_count": 3
+        },
+        "simulation_daily_results": {
+            "name": "simulation_daily_results",
+            "columns": [
+                {
+                    "name": "result_id",
+                    "type": "bigint(20)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "run_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "date",
+                    "type": "date",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "hours_count",
+                    "type": "tinyint(4)",
+                    "null": "NO",
+                    "key": "",
+                    "default": "24",
+                    "extra": ""
+                },
+                {
+                    "name": "open_hours",
+                    "type": "tinyint(4)",
+                    "null": "NO",
+                    "key": "",
+                    "default": "0",
+                    "extra": ""
+                },
+                {
+                    "name": "avg_air_temp",
+                    "type": "decimal(5,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "avg_water_temp",
+                    "type": "decimal(5,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "total_loss_kwh",
+                    "type": "decimal(10,3)",
+                    "null": "NO",
+                    "key": "",
+                    "default": "0.000",
+                    "extra": ""
+                },
+                {
+                    "name": "total_solar_kwh",
+                    "type": "decimal(10,3)",
+                    "null": "NO",
+                    "key": "",
+                    "default": "0.000",
+                    "extra": ""
+                },
+                {
+                    "name": "total_hp_kwh",
+                    "type": "decimal(10,3)",
+                    "null": "NO",
+                    "key": "",
+                    "default": "0.000",
+                    "extra": ""
+                },
+                {
+                    "name": "total_boiler_kwh",
+                    "type": "decimal(10,3)",
+                    "null": "NO",
+                    "key": "",
+                    "default": "0.000",
+                    "extra": ""
+                },
+                {
+                    "name": "total_cost",
+                    "type": "decimal(10,2)",
+                    "null": "NO",
+                    "key": "",
+                    "default": "0.00",
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "result_id"
+                    ]
+                },
+                {
+                    "name": "idx_run_date",
+                    "unique": true,
+                    "columns": [
+                        "run_id",
+                        "date"
+                    ]
+                },
+                {
+                    "name": "idx_run_id",
+                    "unique": false,
+                    "columns": [
+                        "run_id"
+                    ]
+                },
+                {
+                    "name": "idx_date",
+                    "unique": false,
+                    "columns": [
+                        "date"
+                    ]
+                }
+            ],
+            "row_count": 18347
+        },
+        "simulation_hourly_results": {
+            "name": "simulation_hourly_results",
+            "columns": [
+                {
+                    "name": "result_id",
+                    "type": "bigint(20)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "run_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "timestamp",
+                    "type": "datetime",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "air_temp",
+                    "type": "decimal(5,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "wind_speed",
+                    "type": "decimal(5,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "humidity",
+                    "type": "decimal(5,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "solar_kwh_m2",
+                    "type": "decimal(8,5)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "target_temp",
+                    "type": "decimal(4,1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "water_temp",
+                    "type": "decimal(5,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "is_open",
+                    "type": "tinyint(1)",
+                    "null": "NO",
+                    "key": "",
+                    "default": "0",
+                    "extra": ""
+                },
+                {
+                    "name": "total_loss_kw",
+                    "type": "decimal(8,3)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "solar_gain_kw",
+                    "type": "decimal(8,3)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "hp_heat_kw",
+                    "type": "decimal(8,3)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "boiler_heat_kw",
+                    "type": "decimal(8,3)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "hp_electricity_kwh",
+                    "type": "decimal(8,3)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "boiler_fuel_kwh",
+                    "type": "decimal(8,3)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "hp_cop",
+                    "type": "decimal(4,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "cost",
+                    "type": "decimal(8,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "result_id"
+                    ]
+                },
+                {
+                    "name": "idx_run_id",
+                    "unique": false,
+                    "columns": [
+                        "run_id"
+                    ]
+                },
+                {
+                    "name": "idx_timestamp",
+                    "unique": false,
+                    "columns": [
+                        "timestamp"
+                    ]
+                },
+                {
+                    "name": "idx_run_timestamp",
+                    "unique": false,
+                    "columns": [
+                        "run_id",
+                        "timestamp"
+                    ]
+                }
+            ],
+            "row_count": 439676
         },
         "simulation_runs": {
             "name": "simulation_runs",
             "columns": [
-                {"name": "run_id", "type": "int(11)", "null": "NO", "key": "PRI", "default": null, "extra": "auto_increment"},
-                {"name": "site_id", "type": "varchar(50)", "null": "NO", "key": "MUL", "default": null, "extra": ""},
-                {"name": "user_id", "type": "int(11)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "scenario_name", "type": "varchar(255)", "null": "NO", "key": "", "default": "Unnamed Scenario", "extra": ""},
-                {"name": "description", "type": "text", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "start_date", "type": "date", "null": "NO", "key": "", "default": null, "extra": ""},
-                {"name": "end_date", "type": "date", "null": "NO", "key": "", "default": null, "extra": ""},
-                {"name": "status", "type": "enum('pending','running','completed','failed')", "null": "NO", "key": "MUL", "default": "pending", "extra": ""},
-                {"name": "created_at", "type": "datetime", "null": "NO", "key": "MUL", "default": "current_timestamp()", "extra": ""},
-                {"name": "completed_at", "type": "datetime", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "config_snapshot", "type": "longtext", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "summary_json", "type": "longtext", "null": "YES", "key": "", "default": null, "extra": ""}
+                {
+                    "name": "run_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "site_id",
+                    "type": "varchar(50)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "pool_site_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "user_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "scenario_name",
+                    "type": "varchar(255)",
+                    "null": "NO",
+                    "key": "",
+                    "default": "Unnamed Scenario",
+                    "extra": ""
+                },
+                {
+                    "name": "description",
+                    "type": "text",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "start_date",
+                    "type": "date",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "end_date",
+                    "type": "date",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "status",
+                    "type": "enum('pending','running','completed','failed')",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": "pending",
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "datetime",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                },
+                {
+                    "name": "completed_at",
+                    "type": "datetime",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "config_snapshot",
+                    "type": "longtext",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "summary_json",
+                    "type": "longtext",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                }
             ],
             "indexes": [
-                {"name": "PRIMARY", "unique": true, "columns": ["run_id"]},
-                {"name": "idx_site_id", "unique": false, "columns": ["site_id"]},
-                {"name": "idx_status", "unique": false, "columns": ["status"]},
-                {"name": "idx_created", "unique": false, "columns": ["created_at"]}
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "run_id"
+                    ]
+                },
+                {
+                    "name": "idx_site_id",
+                    "unique": false,
+                    "columns": [
+                        "site_id"
+                    ]
+                },
+                {
+                    "name": "idx_status",
+                    "unique": false,
+                    "columns": [
+                        "status"
+                    ]
+                },
+                {
+                    "name": "idx_created",
+                    "unique": false,
+                    "columns": [
+                        "created_at"
+                    ]
+                }
             ],
-            "row_count": 18
-        },
-        "weather_data": {
-            "name": "weather_data",
-            "columns": [
-                {"name": "station_id", "type": "varchar(50)", "null": "NO", "key": "PRI", "default": null, "extra": ""},
-                {"name": "timestamp", "type": "datetime", "null": "NO", "key": "PRI", "default": null, "extra": ""},
-                {"name": "temperature", "type": "decimal(5,2)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "wind_speed", "type": "decimal(5,2)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "wind_direction", "type": "int(11)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "humidity", "type": "int(11)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "tunnel_temp", "type": "decimal(5,2)", "null": "YES", "key": "", "default": null, "extra": ""}
-            ],
-            "indexes": [
-                {"name": "PRIMARY", "unique": true, "columns": ["station_id", "timestamp"]},
-                {"name": "idx_timestamp", "unique": false, "columns": ["timestamp"]}
-            ],
-            "row_count": 87545
+            "row_count": 56
         },
         "solar_daily_data": {
             "name": "solar_daily_data",
             "columns": [
-                {"name": "station_id", "type": "varchar(50)", "null": "NO", "key": "PRI", "default": null, "extra": ""},
-                {"name": "date", "type": "date", "null": "NO", "key": "PRI", "default": null, "extra": ""},
-                {"name": "daily_total_kwh_m2", "type": "decimal(6,4)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "daily_clear_sky_kwh_m2", "type": "decimal(6,4)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "cloud_reduction_factor", "type": "decimal(6,4)", "null": "YES", "key": "", "default": null, "extra": ""}
+                {
+                    "name": "station_id",
+                    "type": "varchar(50)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "date",
+                    "type": "date",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "daily_total_kwh_m2",
+                    "type": "decimal(6,4)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "daily_clear_sky_kwh_m2",
+                    "type": "decimal(6,4)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "cloud_reduction_factor",
+                    "type": "decimal(6,4)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                }
             ],
-            "indexes": [{"name": "PRIMARY", "unique": true, "columns": ["station_id", "date"]}],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "station_id",
+                        "date"
+                    ]
+                }
+            ],
             "row_count": 3653
+        },
+        "tunnel_heat_transfer_lookup": {
+            "name": "tunnel_heat_transfer_lookup",
+            "columns": [
+                {
+                    "name": "T_outdoor_C",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "Q_from_pool_with_kW",
+                    "type": "decimal(8,3)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "T_outdoor_C"
+                    ]
+                }
+            ],
+            "row_count": 50
+        },
+        "user_preferences": {
+            "name": "user_preferences",
+            "columns": [
+                {
+                    "name": "user_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "pref_key",
+                    "type": "varchar(50)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "pref_value",
+                    "type": "varchar(255)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": "on update current_timestamp()"
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "user_id",
+                        "pref_key"
+                    ]
+                }
+            ],
+            "row_count": 1
+        },
+        "user_projects": {
+            "name": "user_projects",
+            "columns": [
+                {
+                    "name": "user_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "project_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "role",
+                    "type": "enum('viewer','operator','admin','owner')",
+                    "null": "YES",
+                    "key": "",
+                    "default": "viewer",
+                    "extra": ""
+                },
+                {
+                    "name": "granted_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                },
+                {
+                    "name": "granted_by",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "user_id",
+                        "project_id"
+                    ]
+                },
+                {
+                    "name": "granted_by",
+                    "unique": false,
+                    "columns": [
+                        "granted_by"
+                    ]
+                },
+                {
+                    "name": "idx_user",
+                    "unique": false,
+                    "columns": [
+                        "user_id"
+                    ]
+                },
+                {
+                    "name": "idx_project",
+                    "unique": false,
+                    "columns": [
+                        "project_id"
+                    ]
+                }
+            ],
+            "row_count": 3
+        },
+        "user_sessions": {
+            "name": "user_sessions",
+            "columns": [
+                {
+                    "name": "session_id",
+                    "type": "varchar(64)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "user_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "project_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "ip_address",
+                    "type": "varchar(45)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "user_agent",
+                    "type": "varchar(255)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                },
+                {
+                    "name": "last_activity",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": "on update current_timestamp()"
+                },
+                {
+                    "name": "expires_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "session_id"
+                    ]
+                },
+                {
+                    "name": "project_id",
+                    "unique": false,
+                    "columns": [
+                        "project_id"
+                    ]
+                },
+                {
+                    "name": "idx_user",
+                    "unique": false,
+                    "columns": [
+                        "user_id"
+                    ]
+                },
+                {
+                    "name": "idx_expires",
+                    "unique": false,
+                    "columns": [
+                        "expires_at"
+                    ]
+                }
+            ],
+            "row_count": 1
         },
         "users": {
             "name": "users",
             "columns": [
-                {"name": "user_id", "type": "int(11)", "null": "NO", "key": "PRI", "default": null, "extra": "auto_increment"},
-                {"name": "email", "type": "varchar(255)", "null": "NO", "key": "UNI", "default": null, "extra": ""},
-                {"name": "password_hash", "type": "varchar(255)", "null": "NO", "key": "", "default": null, "extra": ""},
-                {"name": "name", "type": "varchar(100)", "null": "NO", "key": "", "default": null, "extra": ""},
-                {"name": "is_active", "type": "tinyint(1)", "null": "YES", "key": "", "default": "1", "extra": ""},
-                {"name": "is_super_admin", "type": "tinyint(1)", "null": "YES", "key": "", "default": "0", "extra": ""},
-                {"name": "created_at", "type": "timestamp", "null": "YES", "key": "", "default": "current_timestamp()", "extra": ""},
-                {"name": "last_login", "type": "timestamp", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "password_reset_token", "type": "varchar(64)", "null": "YES", "key": "", "default": null, "extra": ""},
-                {"name": "password_reset_expires", "type": "timestamp", "null": "YES", "key": "", "default": null, "extra": ""}
+                {
+                    "name": "user_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "email",
+                    "type": "varchar(255)",
+                    "null": "NO",
+                    "key": "UNI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "password_hash",
+                    "type": "varchar(255)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "name",
+                    "type": "varchar(100)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "is_active",
+                    "type": "tinyint(1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "1",
+                    "extra": ""
+                },
+                {
+                    "name": "is_super_admin",
+                    "type": "tinyint(1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "0",
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                },
+                {
+                    "name": "last_login",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "password_reset_token",
+                    "type": "varchar(64)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "password_reset_expires",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                }
             ],
             "indexes": [
-                {"name": "PRIMARY", "unique": true, "columns": ["user_id"]},
-                {"name": "email", "unique": true, "columns": ["email"]},
-                {"name": "idx_email", "unique": false, "columns": ["email"]}
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "user_id"
+                    ]
+                },
+                {
+                    "name": "email",
+                    "unique": true,
+                    "columns": [
+                        "email"
+                    ]
+                },
+                {
+                    "name": "idx_email",
+                    "unique": false,
+                    "columns": [
+                        "email"
+                    ]
+                }
             ],
             "row_count": 3
+        },
+        "weather_data": {
+            "name": "weather_data",
+            "columns": [
+                {
+                    "name": "station_id",
+                    "type": "varchar(50)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "timestamp",
+                    "type": "datetime",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "temperature",
+                    "type": "decimal(5,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "wind_speed",
+                    "type": "decimal(5,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "wind_direction",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "humidity",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "tunnel_temp",
+                    "type": "decimal(5,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "station_id",
+                        "timestamp"
+                    ]
+                },
+                {
+                    "name": "idx_timestamp",
+                    "unique": false,
+                    "columns": [
+                        "timestamp"
+                    ]
+                }
+            ],
+            "row_count": 87545
+        },
+        "weather_stations": {
+            "name": "weather_stations",
+            "columns": [
+                {
+                    "name": "station_id",
+                    "type": "varchar(50)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "station_name",
+                    "type": "varchar(100)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "source",
+                    "type": "varchar(50)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "latitude",
+                    "type": "decimal(10,6)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "longitude",
+                    "type": "decimal(10,6)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "elevation_m",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "wind_height_m",
+                    "type": "decimal(4,1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "temperature_height_m",
+                    "type": "decimal(4,1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "active_from",
+                    "type": "date",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "active_to",
+                    "type": "date",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "notes",
+                    "type": "text",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "station_id"
+                    ]
+                }
+            ],
+            "row_count": 1
+        },
+        "week_schedules": {
+            "name": "week_schedules",
+            "columns": [
+                {
+                    "name": "week_schedule_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "pool_site_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "name",
+                    "type": "varchar(100)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "site_id",
+                    "type": "varchar(50)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "description",
+                    "type": "text",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "monday_schedule_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "tuesday_schedule_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "wednesday_schedule_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "thursday_schedule_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "friday_schedule_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "saturday_schedule_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "sunday_schedule_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "week_schedule_id"
+                    ]
+                },
+                {
+                    "name": "unique_name_site",
+                    "unique": true,
+                    "columns": [
+                        "name",
+                        "site_id"
+                    ]
+                },
+                {
+                    "name": "site_id",
+                    "unique": false,
+                    "columns": [
+                        "site_id"
+                    ]
+                },
+                {
+                    "name": "monday_schedule_id",
+                    "unique": false,
+                    "columns": [
+                        "monday_schedule_id"
+                    ]
+                },
+                {
+                    "name": "tuesday_schedule_id",
+                    "unique": false,
+                    "columns": [
+                        "tuesday_schedule_id"
+                    ]
+                },
+                {
+                    "name": "wednesday_schedule_id",
+                    "unique": false,
+                    "columns": [
+                        "wednesday_schedule_id"
+                    ]
+                },
+                {
+                    "name": "thursday_schedule_id",
+                    "unique": false,
+                    "columns": [
+                        "thursday_schedule_id"
+                    ]
+                },
+                {
+                    "name": "friday_schedule_id",
+                    "unique": false,
+                    "columns": [
+                        "friday_schedule_id"
+                    ]
+                },
+                {
+                    "name": "saturday_schedule_id",
+                    "unique": false,
+                    "columns": [
+                        "saturday_schedule_id"
+                    ]
+                },
+                {
+                    "name": "sunday_schedule_id",
+                    "unique": false,
+                    "columns": [
+                        "sunday_schedule_id"
+                    ]
+                }
+            ],
+            "row_count": 5
         }
     }
 }
