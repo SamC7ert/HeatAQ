@@ -86,6 +86,9 @@ const SimulationsModule = {
         }
     },
 
+    // Currently selected run in history table
+    selectedRunId: null,
+
     /**
      * Render runs list as metrics table
      */
@@ -124,9 +127,13 @@ const SimulationsModule = {
                         const elecMwh = s.total_hp_electricity_kwh ? (s.total_hp_electricity_kwh / 1000).toFixed(1) : '-';
                         const days1 = s.days_below_target_1c ?? '-';
                         const days2 = s.days_below_target_2c ?? '-';
+                        const isSelected = this.selectedRunId === run.run_id;
 
                         return `
-                            <tr class="run-row ${run.status}" onclick="SimulationsModule.viewRun(${run.run_id})" style="cursor: pointer;">
+                            <tr class="run-row ${run.status}${isSelected ? ' selected' : ''}"
+                                data-run-id="${run.run_id}"
+                                onclick="SimulationsModule.selectRun(${run.run_id})"
+                                style="cursor: pointer;">
                                 <td class="run-name">${this.escapeHtml(run.scenario_name)}</td>
                                 <td class="run-dates">${run.start_date.substring(5)} - ${run.end_date.substring(5)}</td>
                                 <td class="run-schedule" title="${this.escapeHtml(scheduleName)}">${this.escapeHtml(scheduleName.substring(0, 15))}</td>
@@ -144,6 +151,47 @@ const SimulationsModule = {
         `;
 
         container.innerHTML = html;
+
+        // Auto-select first run if none selected
+        if (!this.selectedRunId && this.runs.length > 0) {
+            this.selectRun(this.runs[0].run_id);
+        }
+    },
+
+    /**
+     * Select a run in history table and show its benchmark report
+     */
+    selectRun: async function(runId) {
+        // Update selection state
+        this.selectedRunId = runId;
+
+        // Update row highlighting
+        document.querySelectorAll('.history-table .run-row').forEach(row => {
+            row.classList.toggle('selected', parseInt(row.dataset.runId) === runId);
+        });
+
+        // Fetch full run data and show benchmark report
+        try {
+            const response = await fetch(`/api/simulation_api.php?action=get_run&run_id=${runId}`);
+            const data = await response.json();
+
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            const run = data.run;
+
+            // Show benchmark report
+            if (typeof SimControlModule !== 'undefined' && run.summary) {
+                SimControlModule.showBenchmarkReport({
+                    summary: run.summary,
+                    meta: run.config || {}
+                });
+            }
+
+        } catch (error) {
+            console.error('Failed to load run:', error);
+        }
     },
 
     /**
