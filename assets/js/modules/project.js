@@ -523,9 +523,43 @@ const ProjectModule = {
 
     // Current pool data
     currentPool: null,
+    currentPoolId: null,
 
-    // Load pool data
-    loadPoolData() {
+    // Load pool data from database (with localStorage fallback)
+    async loadPoolData() {
+        try {
+            // Try to load from database first
+            const response = await fetch('./api/heataq_api.php?action=get_pools');
+            const data = await response.json();
+
+            if (data.pools && data.pools.length > 0) {
+                // Use first pool (or could allow selection)
+                const dbPool = data.pools[0];
+                this.currentPoolId = dbPool.pool_id;
+                this.currentPool = {
+                    pool_id: dbPool.pool_id,
+                    name: dbPool.name,
+                    length: parseFloat(dbPool.length_m) || 25,
+                    width: parseFloat(dbPool.width_m) || 12.5,
+                    depth: parseFloat(dbPool.depth_m) || 2.0,
+                    area: parseFloat(dbPool.area_m2) || 312.5,
+                    volume: parseFloat(dbPool.volume_m3) || 625,
+                    wind_exposure: parseFloat(dbPool.wind_exposure) || 0.535,
+                    solar_absorption: parseFloat(dbPool.solar_absorption) || 60,
+                    has_cover: dbPool.has_cover == 1,
+                    cover_u_value: parseFloat(dbPool.cover_r_value) || 5.0,
+                    cover_solar_trans: parseFloat(dbPool.cover_solar_transmittance) || 10,
+                    has_tunnel: dbPool.has_tunnel == 1,
+                    floor_insulated: dbPool.floor_insulated == 1
+                };
+                console.log('[Project] Pool loaded from database:', this.currentPool.name);
+                return;
+            }
+        } catch (err) {
+            console.warn('[Project] Failed to load pool from database, using localStorage:', err);
+        }
+
+        // Fallback to localStorage
         const poolData = localStorage.getItem('heataq_pool');
         if (poolData) {
             this.currentPool = JSON.parse(poolData);
@@ -550,13 +584,13 @@ const ProjectModule = {
     },
 
     // Edit pool - show modal
-    editPool() {
+    async editPool() {
         const modal = document.getElementById('edit-pool-modal');
         if (!modal) return;
 
         // Load pool data if not loaded
         if (!this.currentPool) {
-            this.loadPoolData();
+            await this.loadPoolData();
         }
 
         const pool = this.currentPool;
@@ -609,30 +643,62 @@ const ProjectModule = {
         }
     },
 
-    // Save pool
-    savePool() {
+    // Save pool to database (with localStorage backup)
+    async savePool() {
         const length = parseFloat(document.getElementById('edit-pool-length')?.value) || 0;
         const width = parseFloat(document.getElementById('edit-pool-width')?.value) || 0;
         const depth = parseFloat(document.getElementById('edit-pool-depth')?.value) || 0;
 
-        this.currentPool = {
+        const poolData = {
+            pool_id: this.currentPoolId || null,
             name: document.getElementById('edit-pool-name')?.value?.trim() || 'Main Pool',
+            length_m: length,
+            width_m: width,
+            depth_m: depth,
+            wind_exposure: parseFloat(document.getElementById('edit-pool-wind')?.value) || 0.535,
+            solar_absorption: parseFloat(document.getElementById('edit-pool-solar')?.value) || 60,
+            has_cover: document.getElementById('edit-pool-has-cover')?.value === '1',
+            cover_r_value: parseFloat(document.getElementById('edit-pool-cover-u')?.value) || 5.0,
+            cover_solar_transmittance: parseFloat(document.getElementById('edit-pool-cover-solar')?.value) || 10,
+            has_tunnel: document.getElementById('edit-pool-has-tunnel')?.value === '1',
+            floor_insulated: document.getElementById('edit-pool-floor-insulated')?.value === '1'
+        };
+
+        // Update local state
+        this.currentPool = {
+            ...poolData,
             length: length,
             width: width,
             depth: depth,
             area: length * width,
             volume: length * width * depth,
-            wind_exposure: parseFloat(document.getElementById('edit-pool-wind')?.value) || 0.535,
-            solar_absorption: parseFloat(document.getElementById('edit-pool-solar')?.value) || 60,
-            has_cover: document.getElementById('edit-pool-has-cover')?.value === '1',
-            cover_u_value: parseFloat(document.getElementById('edit-pool-cover-u')?.value) || 5.0,
-            cover_solar_trans: parseFloat(document.getElementById('edit-pool-cover-solar')?.value) || 10,
-            has_tunnel: document.getElementById('edit-pool-has-tunnel')?.value === '1',
-            floor_insulated: document.getElementById('edit-pool-floor-insulated')?.value === '1'
+            cover_u_value: poolData.cover_r_value,
+            cover_solar_trans: poolData.cover_solar_transmittance
         };
 
-        // Save to localStorage
+        // Always save to localStorage as backup
         localStorage.setItem('heataq_pool', JSON.stringify(this.currentPool));
+
+        // Try to save to database
+        try {
+            const response = await fetch('./api/heataq_api.php?action=save_pool', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(poolData)
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.currentPoolId = result.pool_id;
+                this.currentPool.pool_id = result.pool_id;
+                console.log('[Project] Pool saved to database:', result.pool_id);
+            } else {
+                console.warn('[Project] Failed to save pool to database:', result.error);
+            }
+        } catch (err) {
+            console.warn('[Project] Database save failed, using localStorage only:', err);
+        }
 
         // Update displays
         this.updatePoolCard();
@@ -642,10 +708,10 @@ const ProjectModule = {
     },
 
     // Update pool card display
-    updatePoolCard() {
+    async updatePoolCard() {
         // Load pool data if not loaded
         if (!this.currentPool) {
-            this.loadPoolData();
+            await this.loadPoolData();
         }
 
         const pool = this.currentPool;
