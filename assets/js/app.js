@@ -4,17 +4,29 @@ const app = {
     // Initialize the application
     async init() {
         console.log('Initializing HeatAQ Schedule Management...');
-        
+
+        // Set version displays from config
+        this.setVersion();
+
         // Initialize navigation
         this.navigation.init();
-        
+
         // Set up global event handlers
         this.setupEventHandlers();
-        
+
         // Load initial data
         await this.schedules.init();
-        
+
         console.log('Application initialized successfully');
+    },
+
+    // Set version displays from config
+    setVersion() {
+        const version = config.APP_VERSION || 'V??';
+        const headerEl = document.getElementById('header-version');
+        const sysEl = document.getElementById('sys-app-version');
+        if (headerEl) headerEl.textContent = version;
+        if (sysEl) sysEl.textContent = version;
     },
     
     // Setup global event handlers
