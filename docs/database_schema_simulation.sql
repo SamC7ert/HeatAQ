@@ -1,7 +1,12 @@
 -- HeatAQ Simulation Database Schema
 -- Run this SQL to add simulation tables to your existing database
--- Version: 1.0.0
--- Date: 2024
+-- Version: 1.1.0
+-- Date: 2024-11-27
+--
+-- Related files:
+-- - db/migrations/003_consolidate_config_json.sql - JSON column cleanup
+-- - db/migrations/004_schedule_tables.sql - Schedule/OHC tables
+-- - db/migrations/002_user_preferences.sql - User preferences table
 
 -- ============================================
 -- SIMULATION RUNS TABLE
