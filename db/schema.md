@@ -1,12 +1,12 @@
 # Database Schema
 
-Generated: 2025-11-28 16:59:56
+Generated: 2025-11-29 21:05:43
 
 Database: heataq_pool-353130302dd2
 
 ## audit_log
 
-Rows: 2977
+Rows: 3316
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -358,7 +358,7 @@ Rows: 3
 
 ## simulation_daily_results
 
-Rows: 29662
+Rows: 32582
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -383,7 +383,7 @@ Rows: 29662
 
 ## simulation_hourly_results
 
-Rows: 710833
+Rows: 780809
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -414,7 +414,7 @@ Rows: 710833
 
 ## simulation_runs
 
-Rows: 87
+Rows: 95
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -503,7 +503,7 @@ Rows: 50
 
 ## user_preferences
 
-Rows: 2
+Rows: 3
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -517,7 +517,7 @@ Rows: 2
 
 ## user_projects
 
-Rows: 3
+Rows: 4
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -535,7 +535,7 @@ Rows: 3
 
 ## user_sessions
 
-Rows: 1
+Rows: 4
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -556,13 +556,15 @@ Rows: 1
 
 ## users
 
-Rows: 3
+Rows: 4
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
 | user_id | int(11) | NO | PRI | NULL | auto_increment |
 | email | varchar(255) | NO | UNI | NULL |  |
 | password_hash | varchar(255) | NO |  | NULL |  |
+| force_password_change | tinyint(1) | NO |  | 1 |  |
+| password_history | longtext | YES |  | NULL |  |
 | name | varchar(100) | NO |  | NULL |  |
 | is_active | tinyint(1) | YES |  | 1 |  |
 | is_super_admin | tinyint(1) | YES |  | 0 |  |
