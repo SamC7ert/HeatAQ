@@ -62,7 +62,7 @@ const schedules = {
         let html = `
             <div class="form-group">
                 <label class="form-label">Select Day Schedule:</label>
-                <select id="day-schedule-selector" class="form-control" onchange="app.schedules.selectDaySchedule(this.value)">
+                <select id="day-schedule-selector" class="form-control" style="width: 100%; min-width: 200px;" onchange="app.schedules.selectDaySchedule(this.value)">
                     ${options}
                 </select>
             </div>
@@ -354,7 +354,7 @@ const schedules = {
         let html = `
             <div class="form-group">
                 <label class="form-label">Select Week Schedule:</label>
-                <select id="week-schedule-selector" class="form-control" onchange="app.schedules.selectWeekSchedule(this.value)">
+                <select id="week-schedule-selector" class="form-control" style="width: 100%; min-width: 200px;" onchange="app.schedules.selectWeekSchedule(this.value)">
                     ${options}
                 </select>
             </div>
@@ -388,13 +388,17 @@ const schedules = {
 
         container.innerHTML = html;
 
-        // Re-select if we had one selected
+        // Re-select if we had one selected, otherwise auto-select first
+        const selector = document.getElementById('week-schedule-selector');
         if (this.selectedWeekSchedule) {
-            const selector = document.getElementById('week-schedule-selector');
             if (selector) {
                 selector.value = this.selectedWeekSchedule.week_schedule_id;
                 this.loadWeekScheduleEditor();
             }
+        } else if (this.weekSchedules.length > 0 && selector) {
+            // Auto-select the first week schedule to help user understand the logic
+            selector.value = this.weekSchedules[0].week_schedule_id;
+            this.selectWeekSchedule(this.weekSchedules[0].week_schedule_id);
         }
     },
 
@@ -434,6 +438,27 @@ const schedules = {
 
         this.selectedWeekSchedule = schedule;
         this.loadWeekScheduleEditor();
+
+        // Auto-select the earliest day schedule from this week (Monday first, then others)
+        // This helps users understand which daily schedule is being used
+        if (!this.selectedDaySchedule) {
+            const dayKeys = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+            for (const dayKey of dayKeys) {
+                const dayScheduleId = schedule[dayKey + '_schedule_id'];
+                if (dayScheduleId) {
+                    const daySchedule = this.daySchedules.find(ds => ds.day_schedule_id == dayScheduleId);
+                    if (daySchedule) {
+                        // Select this day schedule in the daily schedules dropdown
+                        const daySelector = document.getElementById('day-schedule-selector');
+                        if (daySelector) {
+                            daySelector.value = dayScheduleId;
+                            this.selectDaySchedule(dayScheduleId);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
     },
 
     loadWeekScheduleEditor() {
