@@ -25,6 +25,9 @@ Long-term architectural improvements and technical debt items.
 - [x] Admin section hidden from non-admin users
 - [x] User management API endpoints require admin role
 - [x] Role-based UI visibility
+- [x] Force password change on first login (admin sets initial password)
+- [x] Password history prevents reuse of last 5 passwords
+- [x] Similar password detection (prevents MyPassword → MyPassword1)
 
 ### 3. Documentation
 **Priority:** High
@@ -37,22 +40,16 @@ Long-term architectural improvements and technical debt items.
 
 ### 4. Login Improvements (V104)
 **Priority:** Medium
-**Status:** Partially Complete
+**Status:** Complete
 
 - [x] Pre-select last used project on login
 - [x] Save last project preference to server (user_preferences table)
-- [ ] **TODO:** Update login_api.php to return `last_project_id` from user_preferences
+- [x] Auto-select single project (skip dropdown if user has only one project)
+- [x] login_api.php.example includes last_project_id lookup
 
-**Note:** login_api.php needs this code added after validating credentials:
-```php
-// Look up user's last project preference
-$stmt = $pdo->prepare("SELECT pref_value FROM user_preferences WHERE user_id = ? AND pref_key = 'last_project_id'");
-$stmt->execute([$user['user_id']]);
-$lastProject = $stmt->fetchColumn();
-
-// Include in response
-$response['last_project_id'] = $lastProject ?: null;
-```
+**Migration required:** Run `db/migrations/001_add_password_security_columns.sql` to add:
+- `force_password_change` column to users table
+- `password_history` column to users table (JSON)
 
 ---
 

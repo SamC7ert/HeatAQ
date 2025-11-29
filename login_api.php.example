@@ -4,8 +4,13 @@
  * Handles user authentication and session management
  *
  * Usage:
- * POST with email + password → Returns projects list + last_project_id
+ * POST with email + password → Returns projects list + last_project_id (+ force_password_change flag)
+ * POST with email + password + new_password → Changes password first if force_password_change
  * POST with email + password + project → Creates session, returns session_id
+ *
+ * Database requirements:
+ * - users table needs: force_password_change TINYINT(1) DEFAULT 1
+ * - users table needs: password_history JSON (stores last 5 hashed passwords)
  */
 
 require_once __DIR__ . '/config.php';
@@ -25,6 +30,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+// Password history settings
+define('PASSWORD_HISTORY_COUNT', 5);  // Remember last 5 passwords
+
 try {
     $pdo = Config::getDatabase();
     $sessionConfig = Config::getSessionConfig();
@@ -33,6 +41,7 @@ try {
     $email = $_POST['email'] ?? '';
     $password = $_POST['password'] ?? '';
     $projectId = $_POST['project'] ?? null;
+    $newPassword = $_POST['new_password'] ?? null;
 
     if (empty($email) || empty($password)) {
         echo json_encode(['success' => false, 'message' => 'Email and password required']);
@@ -41,7 +50,8 @@ try {
 
     // Validate user credentials
     $stmt = $pdo->prepare("
-        SELECT user_id, email, name, password_hash, is_active, is_super_admin
+        SELECT user_id, email, name, password_hash, is_active, is_super_admin,
+               force_password_change, password_history
         FROM users
         WHERE email = ?
     ");
@@ -56,6 +66,68 @@ try {
     if (!$user['is_active']) {
         echo json_encode(['success' => false, 'message' => 'Account is deactivated']);
         exit;
+    }
+
+    // Handle password change if required
+    $forcePasswordChange = (bool)($user['force_password_change'] ?? false);
+
+    if ($forcePasswordChange && $newPassword) {
+        // Validate new password
+        if (strlen($newPassword) < 8) {
+            echo json_encode(['success' => false, 'message' => 'Password must be at least 8 characters']);
+            exit;
+        }
+
+        // Check if new password is same as current
+        if (password_verify($newPassword, $user['password_hash'])) {
+            echo json_encode(['success' => false, 'message' => 'New password must be different from current password']);
+            exit;
+        }
+
+        // Check password history (prevent reuse of last N passwords)
+        $passwordHistory = json_decode($user['password_history'] ?? '[]', true) ?: [];
+        foreach ($passwordHistory as $oldHash) {
+            if (password_verify($newPassword, $oldHash)) {
+                echo json_encode(['success' => false, 'message' => 'Cannot reuse a recent password. Please choose a different password.']);
+                exit;
+            }
+        }
+
+        // Check for similar passwords (new password contains old or vice versa)
+        // Only check if passwords are somewhat similar length
+        if (strlen($newPassword) >= 4 && strlen($password) >= 4) {
+            $newLower = strtolower($newPassword);
+            $oldLower = strtolower($password);
+            if (strpos($newLower, $oldLower) !== false || strpos($oldLower, $newLower) !== false) {
+                echo json_encode(['success' => false, 'message' => 'New password is too similar to the old password']);
+                exit;
+            }
+        }
+
+        // Update password history (keep last N passwords)
+        array_unshift($passwordHistory, $user['password_hash']);
+        $passwordHistory = array_slice($passwordHistory, 0, PASSWORD_HISTORY_COUNT);
+
+        // Hash new password and update
+        $newHash = password_hash($newPassword, PASSWORD_DEFAULT);
+        $stmt = $pdo->prepare("
+            UPDATE users
+            SET password_hash = ?,
+                force_password_change = 0,
+                password_history = ?,
+                updated_at = NOW()
+            WHERE user_id = ?
+        ");
+        $stmt->execute([$newHash, json_encode($passwordHistory), $user['user_id']]);
+
+        // Update password variable for session creation
+        $password = $newPassword;
+        $forcePasswordChange = false;
+
+        // Re-fetch user to get updated data
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
+        $stmt->execute([$user['user_id']]);
+        $user = $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
     // Step 1: Return projects list (no project selected yet)
@@ -95,11 +167,14 @@ try {
             // Table might not exist yet, ignore
         }
 
+        // Return with force_password_change flag if still required
         echo json_encode([
             'success' => true,
             'projects' => $projects,
             'last_project_id' => $lastProjectId,
-            'user_name' => $user['name']
+            'user_name' => $user['name'],
+            'user_id' => $user['user_id'],
+            'force_password_change' => $forcePasswordChange
         ]);
         exit;
     }
