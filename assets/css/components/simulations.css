@@ -724,6 +724,33 @@ p.loading {
     color: #721c24;
 }
 
+/* Log link in history table */
+.log-link {
+    color: #007bff;
+    text-decoration: none;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    transition: all 0.2s;
+}
+
+.log-link:hover {
+    background: #e7f3ff;
+    text-decoration: underline;
+}
+
+/* Success banner animation */
+@keyframes slideIn {
+    from {
+        transform: translateY(-10px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
 /* Large Button */
 .btn-lg {
     padding: 12px 30px;
