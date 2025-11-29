@@ -506,8 +506,30 @@ p.loading {
     color: #dc3545;
 }
 
+/* Config values - read-only display with clear styling */
 .config-value {
     font-family: 'Courier New', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    color: #495057;
+    background-color: #f8f9fa;
+    padding: 4px 8px;
+    border-radius: 3px;
+    text-align: center;
+    min-width: 60px;
+    display: inline-block;
+}
+
+/* When config value has data */
+.config-value:not(:empty):not([data-empty="true"]) {
+    border: 1px solid #dee2e6;
+}
+
+/* Empty or placeholder state */
+.config-value[data-empty="true"],
+.config-value:empty {
+    color: #adb5bd;
+    font-weight: normal;
 }
 
 /* Config Toggle */
