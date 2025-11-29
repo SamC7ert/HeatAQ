@@ -81,9 +81,10 @@ git pull origin main
 
 ## Documentation
 - [System Architecture](docs/SYSTEM_ARCHITECTURE.md)
-- [Database Structure](docs/DATABASE_STRUCTURE.md)
-- [API Documentation](docs/API_ENDPOINTS.md)
-- [Security Review](docs/CODE_REVIEW_UPDATED.md)
+- [Database Structure](docs/DATABASE_STRUCTURE_v2.md)
+- [Design Guide](docs/DESIGN_GUIDE.md)
+- [Heating Algorithm](docs/HEATING_ALGORITHM.md)
+- [Roadmap](docs/ROADMAP.md)
 
 ## Authors
 - Developed for Aquarious AS, Norway
@@ -96,4 +97,4 @@ Proprietary - All rights reserved
 For support, contact Aquarious AS
 
 ---
-*Version 3.0 - November 2024*
+*Version 104 - November 2024*

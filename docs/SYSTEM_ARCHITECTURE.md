@@ -1,5 +1,5 @@
 # HeatAQ System Architecture Documentation
-Version: 3.0
+Version: 104
 Date: November 2024
 
 ## System Overview
@@ -107,8 +107,38 @@ Functions:
 - loadUserContext() - Get user/project
 - setupEventHandlers()
 - saveChanges() - Global save
+- checkUserRole() - Verify admin access
+- isAdmin() - Check admin/owner role
 
 Coordinates all modules
+```
+
+#### admin.js - User & System Administration
+```javascript
+Purpose: User management and system settings (admin/owner only)
+Functions:
+- loadUsers() - List all users
+- saveUser(data) - Create/update user
+- deleteUser(id) - Remove user
+- renderUserForm() - User edit dialog
+
+Security:
+- Restricted to admin/owner roles
+- Uses canDelete() permission check
+```
+
+#### simcontrol.js - Simulation Control
+```javascript
+Purpose: Manage simulation runs
+Functions:
+- loadSites() - Get project's site
+- loadPools() - List pools for site
+- runSimulation() - Execute simulator
+
+Data Flow:
+→ API: get_project_site (session-based)
+→ API: get_pools
+→ Simulator execution
 ```
 
 ### 2. Backend Modules (PHP)
@@ -240,6 +270,12 @@ Level 1: Session Check (auth.php)
 Level 2: Role Verification (viewer/operator/admin/owner)
 Level 3: Project Filtering (site_id based)
 Level 4: Audit Logging (all modifications)
+
+Role Permissions:
+- viewer: Read-only access
+- operator: Edit schedules/calendars (canEdit)
+- admin: User management, system settings (canDelete)
+- owner: Full access including delete
 ```
 
 ### 2. Data Protection
@@ -419,7 +455,7 @@ Planned:
 ## Contact & Support
 
 System: HeatAQ Pool Energy Design
-Version: 3.0
+Version: 104
 Company: Aquarious AS, Norway
 Database: heataq_pool-353130302dd2
 Hosting: StackCP (sdb-86.hosting.stackcp.net)
