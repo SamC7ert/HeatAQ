@@ -1617,9 +1617,10 @@ class HeatAQAPI {
 
             $passwordHash = password_hash($password, PASSWORD_DEFAULT);
 
+            // force_password_change = 1 so user must change password on first login
             $stmt = $this->db->prepare("
-                INSERT INTO users (email, password_hash, name, is_active)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO users (email, password_hash, name, is_active, force_password_change)
+                VALUES (?, ?, ?, ?, 1)
             ");
             $stmt->execute([$email, $passwordHash, $name, $isActive]);
             $userId = $this->db->lastInsertId();

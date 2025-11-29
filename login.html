@@ -217,7 +217,7 @@
 <body>
     <div class="login-container">
         <div class="login-header">
-            <img src="./docs/branding/Hovedlogo_liggende_grønn.png" alt="Aquarious - The Pool Tailor">
+            <img src="./docs/branding/Hovedlogo_liggende_svøm.png" alt="Aquarious - The Pool Tailor" style="max-width: 280px; margin-bottom: 20px;">
             <h1>HeatAQ</h1>
             <p>Pool Energy Design System</p>
         </div>
@@ -245,6 +245,27 @@
                 </select>
             </div>
 
+            <!-- Password Change Form (shown when force_password_change is true) -->
+            <div id="password-change-section" style="display: none;">
+                <div style="background: #fff3cd; color: #856404; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
+                    <strong>Password Change Required</strong><br>
+                    <small>For security, you must change your password on first login.</small>
+                </div>
+                <div class="form-group">
+                    <label for="new-password">New Password</label>
+                    <input type="password" id="new-password" name="new_password"
+                           placeholder="Enter new password" minlength="8">
+                </div>
+                <div class="form-group">
+                    <label for="confirm-password">Confirm New Password</label>
+                    <input type="password" id="confirm-password" name="confirm_password"
+                           placeholder="Confirm new password" minlength="8">
+                </div>
+                <small class="text-muted" style="display: block; margin-bottom: 15px; color: #666;">
+                    Password must be at least 8 characters and different from previous passwords.
+                </small>
+            </div>
+
             <button type="submit" class="btn-login" id="login-btn">
                 Sign In
             </button>
@@ -260,6 +281,14 @@
     </div>
 
     <script>
+        // Track login state
+        let loginState = {
+            userId: null,
+            forcePasswordChange: false,
+            projects: [],
+            tempToken: null  // Temporary token for password change
+        };
+
         // Save last project preference to server (syncs across devices)
         async function saveLastProjectToServer(sessionId, projectId) {
             try {
@@ -287,6 +316,28 @@
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const projectId = document.getElementById('project').value;
+            const newPassword = document.getElementById('new-password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+
+            // Validate password change if required
+            if (loginState.forcePasswordChange && !projectId) {
+                if (!newPassword || !confirmPassword) {
+                    showError('Please enter and confirm your new password');
+                    return false;
+                }
+                if (newPassword !== confirmPassword) {
+                    showError('Passwords do not match');
+                    return false;
+                }
+                if (newPassword.length < 8) {
+                    showError('Password must be at least 8 characters');
+                    return false;
+                }
+                if (newPassword === password) {
+                    showError('New password must be different from current password');
+                    return false;
+                }
+            }
 
             // Create FormData object
             const formData = new FormData();
@@ -295,10 +346,12 @@
             if (projectId) {
                 formData.append('project', projectId);
             }
+            if (loginState.forcePasswordChange && newPassword) {
+                formData.append('new_password', newPassword);
+            }
 
             // Hide messages
-            document.getElementById('error-message').style.display = 'none';
-            document.getElementById('success-message').style.display = 'none';
+            hideMessages();
 
             // Show loading
             document.getElementById('login-btn').disabled = true;
@@ -313,8 +366,42 @@
                 const data = await response.json();
 
                 if (data.success) {
+                    // Check if password change is required
+                    if (data.force_password_change && !loginState.forcePasswordChange) {
+                        loginState.forcePasswordChange = true;
+                        loginState.userId = data.user_id;
+                        loginState.projects = data.projects || [];
+
+                        // Show password change section
+                        document.getElementById('password-change-section').style.display = 'block';
+                        document.getElementById('new-password').required = true;
+                        document.getElementById('confirm-password').required = true;
+                        document.getElementById('login-btn').textContent = 'Change Password & Continue';
+
+                        showSuccess('Please set a new password to continue.');
+                        document.getElementById('new-password').focus();
+                        return false;
+                    }
+
                     if (data.projects && data.projects.length > 0 && !projectId) {
-                        // First step - show project selector
+                        // Store projects for later
+                        loginState.projects = data.projects;
+
+                        // AUTO-SELECT: If only ONE project, skip the dropdown
+                        if (data.projects.length === 1) {
+                            // Automatically submit with the single project
+                            document.getElementById('project').innerHTML =
+                                `<option value="${data.projects[0].project_id}" selected>${data.projects[0].project_name}</option>`;
+                            showSuccess('Logging in to ' + data.projects[0].project_name + '...');
+
+                            // Re-submit the form with project selected
+                            setTimeout(() => {
+                                document.getElementById('login-form').dispatchEvent(new Event('submit'));
+                            }, 500);
+                            return false;
+                        }
+
+                        // Multiple projects - show selector
                         document.getElementById('project-selector').style.display = 'block';
                         const select = document.getElementById('project');
                         select.innerHTML = '<option value="">-- Select a Project --</option>';
@@ -335,14 +422,9 @@
                             select.appendChild(option);
                         });
 
-                        // If only one project, auto-select it
-                        if (data.projects.length === 1) {
-                            select.selectedIndex = 1;
-                        }
-
-                        document.getElementById('success-message').textContent =
-                            foundLastProject ? 'Login successful! Your last project is pre-selected.' : 'Login successful! Please select a project.';
-                        document.getElementById('success-message').style.display = 'block';
+                        showSuccess(foundLastProject ?
+                            'Login successful! Your last project is pre-selected.' :
+                            'Login successful! Please select a project.');
 
                         document.getElementById('login-btn').textContent = 'Continue';
                     } else if (projectId) {
@@ -357,14 +439,12 @@
                             saveLastProjectToServer(data.session_id, projectId);
                         }
 
-                        document.getElementById('success-message').textContent =
-                            'Login successful! Redirecting...';
-                        document.getElementById('success-message').style.display = 'block';
+                        showSuccess('Login successful! Redirecting...');
 
                         // Redirect to main app
                         setTimeout(() => {
                             window.location.href = './index.html';
-                        }, 1500);
+                        }, 1000);
                     } else {
                         throw new Error('No projects available for this user');
                     }
@@ -372,15 +452,30 @@
                     throw new Error(data.message || 'Invalid email or password');
                 }
             } catch (error) {
-                document.getElementById('error-message').textContent =
-                    error.message || 'Login failed. Please check your credentials.';
-                document.getElementById('error-message').style.display = 'block';
+                showError(error.message || 'Login failed. Please check your credentials.');
             } finally {
                 document.getElementById('login-btn').disabled = false;
                 document.getElementById('loading').style.display = 'none';
             }
 
             return false;
+        }
+
+        function showError(message) {
+            document.getElementById('error-message').textContent = message;
+            document.getElementById('error-message').style.display = 'block';
+            document.getElementById('success-message').style.display = 'none';
+        }
+
+        function showSuccess(message) {
+            document.getElementById('success-message').textContent = message;
+            document.getElementById('success-message').style.display = 'block';
+            document.getElementById('error-message').style.display = 'none';
+        }
+
+        function hideMessages() {
+            document.getElementById('error-message').style.display = 'none';
+            document.getElementById('success-message').style.display = 'none';
         }
     </script>
 </body>

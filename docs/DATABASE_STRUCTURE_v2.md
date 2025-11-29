@@ -1,5 +1,5 @@
 # HeatAQ Database Structure Documentation
-Generated: 2025-11-24
+Generated: 2025-11-29 (V104)
 Database: heataq_pool-353130302dd2
 
 ## Overview
@@ -15,6 +15,12 @@ Database: heataq_pool-353130302dd2
 - Primary user management table
 - Contains: admin@heataq.local, operator@hisoy.no, viewer@tvedestrand.no
 - Fields: user_id, email, password_hash, name, is_active, is_super_admin
+- Security fields (V104): force_password_change, password_history (JSON)
+
+#### user_preferences
+- User-specific settings (e.g., last_project_id)
+- Syncs across devices via server-side storage
+- Fields: user_id, pref_key, pref_value
 
 #### projects (1 record)
 - Project management for multi-site support
@@ -23,7 +29,7 @@ Database: heataq_pool-353130302dd2
 
 #### user_projects (1 record)
 - Maps users to projects with roles
-- Roles: viewer, operator, admin, owner
+- Roles (V104): operator, admin (simplified from previous 4 roles)
 
 #### user_sessions (1 record)
 - Active session management
@@ -162,6 +168,7 @@ day_schedules (10)
 users (3)
 ├── user_sessions (1) [via user_id]
 ├── user_projects (1) [via user_id]
+├── user_preferences [via user_id]
 └── audit_log (4) [via user_id]
 ```
 

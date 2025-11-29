@@ -7,8 +7,9 @@ HeatAQ is a comprehensive web-based pool energy simulation and analysis system d
 - **Schedule Management**: Day, week, and calendar-based scheduling with Norwegian holidays
 - **Multi-Project Support**: Manage multiple pool sites with role-based access
 - **Weather Integration**: 10 years of historical weather data
-- **Energy Simulation**: Heat pump and boiler optimization (coming soon)
-- **Secure Authentication**: Project-based access control
+- **Energy Simulation**: Heat pump and boiler optimization
+- **Secure Authentication**: Project-based access control with forced password change
+- **Role-Based Access**: Operator and Admin roles with appropriate permissions
 
 ## Tech Stack
 - **Frontend**: HTML5, JavaScript (ES6+), CSS3
@@ -62,6 +63,18 @@ chmod 644 *.html
 - Use HTTPS in production
 - Enable `REQUIRE_AUTH=true` for production
 
+### Password Security (V104)
+- Users must change password on first login (admin-set passwords)
+- Password history prevents reuse of last 5 passwords
+- Similar password detection blocks trivial modifications
+- Minimum 8 characters required
+
+### User Roles
+| Role | Permissions |
+|------|-------------|
+| **operator** | Edit schedules, calendars, run simulations |
+| **admin** | Full access including user management and system settings |
+
 ## Development Workflow
 
 ### Local Development
@@ -81,9 +94,10 @@ git pull origin main
 
 ## Documentation
 - [System Architecture](docs/SYSTEM_ARCHITECTURE.md)
-- [Database Structure](docs/DATABASE_STRUCTURE.md)
-- [API Documentation](docs/API_ENDPOINTS.md)
-- [Security Review](docs/CODE_REVIEW_UPDATED.md)
+- [Database Structure](docs/DATABASE_STRUCTURE_v2.md)
+- [Design Guide](docs/DESIGN_GUIDE.md)
+- [Heating Algorithm](docs/HEATING_ALGORITHM.md)
+- [Roadmap](docs/ROADMAP.md)
 
 ## Authors
 - Developed for Aquarious AS, Norway
@@ -96,4 +110,4 @@ Proprietary - All rights reserved
 For support, contact Aquarious AS
 
 ---
-*Version 3.0 - November 2024*
+*Version 104 - November 2024*

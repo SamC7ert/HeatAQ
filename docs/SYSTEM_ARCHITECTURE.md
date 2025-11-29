@@ -1,5 +1,5 @@
 # HeatAQ System Architecture Documentation
-Version: 3.0
+Version: 104
 Date: November 2024
 
 ## System Overview
@@ -107,8 +107,38 @@ Functions:
 - loadUserContext() - Get user/project
 - setupEventHandlers()
 - saveChanges() - Global save
+- checkUserRole() - Verify admin access
+- isAdmin() - Check admin/owner role
 
 Coordinates all modules
+```
+
+#### admin.js - User & System Administration
+```javascript
+Purpose: User management and system settings (admin/owner only)
+Functions:
+- loadUsers() - List all users
+- saveUser(data) - Create/update user
+- deleteUser(id) - Remove user
+- renderUserForm() - User edit dialog
+
+Security:
+- Restricted to admin/owner roles
+- Uses canDelete() permission check
+```
+
+#### simcontrol.js - Simulation Control
+```javascript
+Purpose: Manage simulation runs
+Functions:
+- loadSites() - Get project's site
+- loadPools() - List pools for site
+- runSimulation() - Execute simulator
+
+Data Flow:
+→ API: get_project_site (session-based)
+→ API: get_pools
+→ Simulator execution
 ```
 
 ### 2. Backend Modules (PHP)
@@ -157,14 +187,21 @@ Loads from: /config_heataq/database.env
 
 #### login_api.php - Authentication
 ```php
-Purpose: User login and project selection
+Purpose: User login, password management, project selection
 Flow:
 1. Validate credentials
-2. Return available projects
-3. Create session on project selection
-4. Set session cookies
+2. Check force_password_change flag
+3. If password change required:
+   - Validate new password (min 8 chars)
+   - Check against password history (last 5)
+   - Check for similar passwords
+   - Update password and clear flag
+4. Return available projects (+ last_project_id)
+5. Auto-select if only one project
+6. Create session on project selection
 
-Returns: session_id, user_name, project_name
+Returns: session_id, user_name, project_name, role
+Security: force_password_change, password_history (JSON)
 ```
 
 ## Data Flow Patterns
@@ -175,9 +212,19 @@ User → login.html → login_api.php → Database
                          ↓
                   Verify Password
                          ↓
-                  Return Projects
+              Check force_password_change?
+                    ↓ Yes         ↓ No
+              Show password    Return Projects
+              change form            ↓
+                    ↓          Single project?
+              Validate &         ↓ Yes      ↓ No
+              update password   Auto-select  Show selector
+                    ↓               ↓            ↓
+                  Return Projects ←──────────────┘
                          ↓
                   Create Session → user_sessions table
+                         ↓
+                  Save last_project_id → user_preferences
                          ↓
                   localStorage ← session_id
 ```
@@ -230,6 +277,15 @@ schedule_templates
     ↓ [template_id]
     ├── calendar_date_ranges → week_schedules
     └── calendar_exception_days → day_schedules
+
+users (security columns - V104)
+    ├── force_password_change  TINYINT(1) - requires password change on login
+    └── password_history       JSON - array of previous password hashes
+
+user_preferences
+    ├── user_id
+    ├── pref_key (e.g., 'last_project_id')
+    └── pref_value
 ```
 
 ## Security Architecture
@@ -240,6 +296,12 @@ Level 1: Session Check (auth.php)
 Level 2: Role Verification (viewer/operator/admin/owner)
 Level 3: Project Filtering (site_id based)
 Level 4: Audit Logging (all modifications)
+
+Role Permissions:
+- viewer: Read-only access
+- operator: Edit schedules/calendars (canEdit)
+- admin: User management, system settings (canDelete)
+- owner: Full access including delete
 ```
 
 ### 2. Data Protection
@@ -249,6 +311,15 @@ Level 4: Audit Logging (all modifications)
 - Passwords: bcrypt hashed
 - SQL: Prepared statements only
 - API: Input validation
+```
+
+### 3. Password Security (V104)
+```
+- Force password change on first login
+- Password history (last 5 passwords cannot be reused)
+- Similar password detection (blocks trivial modifications)
+- Minimum 8 character requirement
+- Admin sets initial password, user must change
 ```
 
 ## Simulator Integration Points
@@ -419,7 +490,7 @@ Planned:
 ## Contact & Support
 
 System: HeatAQ Pool Energy Design
-Version: 3.0
+Version: 104
 Company: Aquarious AS, Norway
 Database: heataq_pool-353130302dd2
 Hosting: StackCP (sdb-86.hosting.stackcp.net)
