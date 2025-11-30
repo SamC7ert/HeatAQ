@@ -1,12 +1,12 @@
 # Database Schema
 
-Generated: 2025-11-30 20:00:14
+Generated: 2025-11-30 20:23:36
 
 Database: heataq_pool-353130302dd2
 
 ## audit_log
 
-Rows: 3634
+Rows: 3664
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -235,6 +235,42 @@ Rows: 101
 - UNIQUE `unique_reference` (name, year, country)
 - `idx_year` (year)
 - `idx_country` (country)
+
+## password_reset_attempts
+
+Rows: 0
+
+| Column | Type | Null | Key | Default | Extra |
+|--------|------|------|-----|---------|-------|
+| attempt_id | int(11) | NO | PRI | NULL | auto_increment |
+| email | varchar(255) | NO | MUL | NULL |  |
+| ip_address | varchar(45) | NO | MUL | NULL |  |
+| attempted_at | datetime | NO |  | current_timestamp() |  |
+
+**Indexes:**
+- UNIQUE `PRIMARY` (attempt_id)
+- `idx_email_time` (email, attempted_at)
+- `idx_ip_time` (ip_address, attempted_at)
+
+## password_reset_tokens
+
+Rows: 0
+
+| Column | Type | Null | Key | Default | Extra |
+|--------|------|------|-----|---------|-------|
+| token_id | int(11) | NO | PRI | NULL | auto_increment |
+| user_id | int(11) | NO | MUL | NULL |  |
+| token | varchar(64) | NO | UNI | NULL |  |
+| created_at | datetime | NO |  | current_timestamp() |  |
+| expires_at | datetime | NO | MUL | NULL |  |
+| used_at | datetime | YES |  | NULL |  |
+| ip_address | varchar(45) | YES |  | NULL |  |
+
+**Indexes:**
+- UNIQUE `PRIMARY` (token_id)
+- UNIQUE `idx_token` (token)
+- `idx_user_id` (user_id)
+- `idx_expires` (expires_at)
 
 ## pool_configurations
 
@@ -570,8 +606,6 @@ Rows: 5
 | is_super_admin | tinyint(1) | YES |  | 0 |  |
 | created_at | timestamp | YES |  | current_timestamp() |  |
 | last_login | timestamp | YES |  | NULL |  |
-| password_reset_token | varchar(64) | YES |  | NULL |  |
-| password_reset_expires | timestamp | YES |  | NULL |  |
 
 **Indexes:**
 - UNIQUE `PRIMARY` (user_id)
