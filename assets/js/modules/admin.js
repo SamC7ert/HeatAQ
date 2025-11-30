@@ -1077,10 +1077,11 @@ const AdminModule = {
             html += '</tr></thead><tbody>';
 
             pending.forEach(m => {
+                const btnId = 'btn-migrate-' + m.filename.replace(/[^a-z0-9]/gi, '-');
                 html += '<tr>';
                 html += `<td><code>${m.filename}</code></td>`;
                 html += `<td>${m.description || '-'}</td>`;
-                html += `<td><button class="btn btn-sm btn-primary" onclick="AdminModule.runMigration('${m.filename}')">Run</button></td>`;
+                html += `<td><button id="${btnId}" class="btn btn-sm btn-primary" onclick="AdminModule.runMigration('${m.filename}', this)">Run</button></td>`;
                 html += '</tr>';
             });
 
@@ -1093,9 +1094,16 @@ const AdminModule = {
         }
     },
 
-    runMigration: async function(filename) {
+    runMigration: async function(filename, btn) {
         const resultEl = document.getElementById('migration-result');
         if (resultEl) resultEl.innerHTML = `<p>Running ${filename}...</p>`;
+
+        // Disable button and show running state
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Running...';
+            btn.style.backgroundColor = '#6c757d';
+        }
 
         try {
             const response = await fetch('./api/heataq_api.php?action=run_migration', {
@@ -1106,6 +1114,11 @@ const AdminModule = {
 
             if (!response.ok) {
                 if (resultEl) resultEl.innerHTML = `<p class="error">API error: ${response.status}</p>`;
+                if (btn) {
+                    btn.textContent = '✗ Error';
+                    btn.style.backgroundColor = '#dc3545';
+                    btn.disabled = false;
+                }
                 return;
             }
 
@@ -1119,9 +1132,20 @@ const AdminModule = {
                 if (data.tables_created && data.tables_created.length > 0) {
                     html += `<p>Tables: ${data.tables_created.join(', ')}</p>`;
                 }
+                // Green button on success
+                if (btn) {
+                    btn.textContent = '✓ Done';
+                    btn.style.backgroundColor = '#28a745';
+                }
             } else {
                 html += `<p style="color: red; font-weight: bold;">✗ FAILED: ${filename}</p>`;
                 html += `<p class="error">${data.error || 'Unknown error'}</p>`;
+                // Red button on failure
+                if (btn) {
+                    btn.textContent = '✗ Failed';
+                    btn.style.backgroundColor = '#dc3545';
+                    btn.disabled = false; // Allow retry
+                }
             }
 
             // Log file link
@@ -1145,6 +1169,11 @@ const AdminModule = {
         } catch (err) {
             console.error('Run migration failed:', err);
             if (resultEl) resultEl.innerHTML = `<p class="error">Failed: ${err.message}</p>`;
+            if (btn) {
+                btn.textContent = '✗ Error';
+                btn.style.backgroundColor = '#dc3545';
+                btn.disabled = false;
+            }
         }
     }
 };
