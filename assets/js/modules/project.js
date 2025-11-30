@@ -780,8 +780,8 @@ const ProjectModule = {
                 }
             }
 
-            // Get weather data range
-            const weatherResponse = await fetch(`${config.API_BASE_URL}?action=get_weather_range`);
+            // Get weather data range (from simulation API)
+            const weatherResponse = await fetch('./api/simulation_api.php?action=get_weather_range');
             if (weatherResponse.ok) {
                 const weatherData = await weatherResponse.json();
                 const rangeEl = document.getElementById('dash-weather-range');
