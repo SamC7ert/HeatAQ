@@ -625,7 +625,12 @@ const AdminModule = {
                         ${!isEdit ? `
                         <div class="form-group">
                             <label>Password</label>
-                            <input type="password" id="user-password" class="form-control" required>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="user-password" class="form-control" required
+                                    placeholder="Click Generate or enter manually">
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="app.admin.generatePassword()">Generate</button>
+                            </div>
+                            <small class="text-muted">Password will be visible. User must change it on first login.</small>
                         </div>
                         ` : ''}
 
@@ -678,6 +683,40 @@ const AdminModule = {
         const projectsField = document.getElementById('projects-field');
         if (projectsField) {
             projectsField.style.display = role === 'admin' ? 'none' : '';
+        }
+    },
+
+    /**
+     * Generate a secure random password
+     * Requirements: 12 chars, uppercase, lowercase, number, special char
+     */
+    generatePassword: function() {
+        const length = 12;
+        const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // Excluded I, O (look like 1, 0)
+        const lowercase = 'abcdefghjkmnpqrstuvwxyz'; // Excluded i, l, o
+        const numbers = '23456789'; // Excluded 0, 1 (look like O, l)
+        const special = '!@#$%&*';
+
+        // Ensure at least one of each type
+        let password = '';
+        password += uppercase[Math.floor(Math.random() * uppercase.length)];
+        password += lowercase[Math.floor(Math.random() * lowercase.length)];
+        password += numbers[Math.floor(Math.random() * numbers.length)];
+        password += special[Math.floor(Math.random() * special.length)];
+
+        // Fill the rest with mixed characters
+        const allChars = uppercase + lowercase + numbers + special;
+        for (let i = password.length; i < length; i++) {
+            password += allChars[Math.floor(Math.random() * allChars.length)];
+        }
+
+        // Shuffle the password
+        password = password.split('').sort(() => Math.random() - 0.5).join('');
+
+        // Set in the password field
+        const field = document.getElementById('user-password');
+        if (field) {
+            field.value = password;
         }
     },
 
