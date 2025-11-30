@@ -1179,6 +1179,21 @@
                     <p class="text-muted">Database tools and system information</p>
 
                     <div class="card">
+                        <h3>Deployment</h3>
+                        <p class="text-muted">Manage code deployment from GitHub</p>
+                        <button class="btn btn-secondary" onclick="AdminModule.loadDeployStatus()">Check Status</button>
+                        <div id="deploy-status" style="margin-top: 1rem;"></div>
+                    </div>
+
+                    <div class="card">
+                        <h3>Database Migrations</h3>
+                        <p class="text-muted">Pending migrations in db/migrations/</p>
+                        <button class="btn btn-secondary" onclick="AdminModule.checkMigrations()">Check Migrations</button>
+                        <div id="migrations-list" style="margin: 1rem 0;"></div>
+                        <div id="migration-result"></div>
+                    </div>
+
+                    <div class="card">
                         <h3>Database Schema</h3>
                         <p>Export current database structure for version control.</p>
                         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
@@ -1191,21 +1206,6 @@
                             <a href="db/schema.md" target="_blank">schema.md</a>
                             <span id="git-result"></span>
                         </div>
-                    </div>
-
-                    <div class="card">
-                        <h3>Database Migrations</h3>
-                        <p class="text-muted">Pending migrations in db/migrations/</p>
-                        <button class="btn btn-secondary" onclick="AdminModule.checkMigrations()">Check Migrations</button>
-                        <div id="migrations-list" style="margin: 1rem 0;"></div>
-                        <div id="migration-result"></div>
-                    </div>
-
-                    <div class="card">
-                        <h3>Deployment</h3>
-                        <p class="text-muted">Manage code deployment from GitHub</p>
-                        <button class="btn btn-secondary" onclick="AdminModule.loadDeployStatus()">Check Status</button>
-                        <div id="deploy-status" style="margin-top: 1rem;"></div>
                     </div>
 
                     <div class="card">
