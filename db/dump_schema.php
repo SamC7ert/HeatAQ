@@ -109,12 +109,12 @@ try {
 
     if ($pushToGit) {
         $projectRoot = dirname(__DIR__);
-        $branch = 'schema-update-' . date('Ymd-His');
+        $branch = 'db-schema-update';  // Fixed branch name - no more timestamp proliferation
 
-        // Run git commands
+        // Run git commands - checkout existing branch or create if not exists
         $commands = [
             "cd " . escapeshellarg($projectRoot),
-            "git checkout -b " . escapeshellarg($branch),
+            "git checkout " . escapeshellarg($branch) . " 2>/dev/null || git checkout -b " . escapeshellarg($branch),
             "git add db/schema.json db/schema.md",
             "git commit -m 'Update database schema " . date('Y-m-d H:i') . "'",
             "git push -u origin " . escapeshellarg($branch)
