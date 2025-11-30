@@ -405,9 +405,11 @@ const SimControlModule = {
         // Config summary - detailed multi-column layout
         const config = results.meta?.pool_config || {};
         const equip = results.meta?.equipment || {};
+        const control = results.meta?.control || equip.control || {};
+        const bathers = results.meta?.bathers || config.bathers || {};
+        const overrides = results.meta?.config_override || {};
         const startDate = results.meta?.start_date || '';
         const endDate = results.meta?.end_date || '';
-        const year = startDate ? startDate.substring(0, 4) : '';
         const hours = summary.total_hours || 0;
         const days = Math.round(hours / 24);
 
@@ -416,23 +418,87 @@ const SimControlModule = {
         const volume = config.volume_m3 || 625;
         const depth = config.depth_m || 2;
 
-        // Build config HTML - show actual values to verify config is being applied
-        const hpKw = equip.heat_pump?.capacity_kw ?? 'not set';
-        const boilerKw = equip.boiler?.capacity_kw ?? 'not set';
-        const hpCop = equip.heat_pump?.cop_nominal ?? '-';
-        const boilerEff = equip.boiler?.efficiency ? (equip.boiler.efficiency * 100).toFixed(0) + '%' : '-';
-        const strategy = equip.heat_pump?.strategy || config.control_strategy || 'reactive';
-        const targetTemp = config.target_temp || equip.control?.target_temp || 28;
+        // Helper to format values with override highlighting
+        const fmt = (value, unit = '', decimals = 1) => {
+            if (value === undefined || value === null || value === 'not set') return '-';
+            const num = typeof value === 'number' ? value.toFixed(decimals) : value;
+            return `${num}${unit}`;
+        };
 
+        const withOverride = (baseValue, overrideValue, unit = '', decimals = 1) => {
+            if (overrideValue !== undefined && overrideValue !== null) {
+                return `<span style="color:#0d6efd;font-weight:600" title="Override applied">${fmt(overrideValue, unit, decimals)} ✓</span>`;
+            }
+            return fmt(baseValue, unit, decimals);
+        };
+
+        // Equipment values (check for overrides)
+        const hpKw = withOverride(
+            equip.heat_pump?.capacity_kw,
+            overrides.equipment?.hp_capacity_kw,
+            ' kW', 0
+        );
+        const boilerKw = withOverride(
+            equip.boiler?.capacity_kw,
+            overrides.equipment?.boiler_capacity_kw,
+            ' kW', 0
+        );
+        const hpCop = fmt(equip.heat_pump?.cop_nominal, '', 1);
+        const boilerEff = equip.boiler?.efficiency ? fmt(equip.boiler.efficiency * 100, '%', 0) : '-';
+
+        // Control values
+        const targetTemp = withOverride(
+            control.target_temp || config.target_temp,
+            overrides.control?.target_temp,
+            '°C', 1
+        );
+        const upperTol = withOverride(
+            control.upper_tolerance || control.temp_tolerance,
+            overrides.control?.upper_tolerance,
+            '°C', 1
+        );
+        const lowerTol = withOverride(
+            control.lower_tolerance || control.temp_tolerance,
+            overrides.control?.lower_tolerance,
+            '°C', 1
+        );
+
+        // Bathers values
+        const bathersPerDay = withOverride(bathers.per_day, overrides.bathers?.per_day, '', 0);
+        const activityFactor = withOverride(bathers.activity_factor, overrides.bathers?.activity_factor, '', 1);
+
+        // Pool/environment values
+        const windExp = withOverride(
+            config.wind_exposure_factor,
+            overrides.pool?.wind_exposure,
+            '', 2
+        );
+        const solarAbs = withOverride(
+            config.solar_absorption ? config.solar_absorption * 100 : null,
+            overrides.solar?.absorption,
+            '%', 1
+        );
+
+        const strategy = equip.heat_pump?.strategy || config.control_strategy || 'reactive';
+        const hasOverrides = Object.keys(overrides).length > 0;
+
+        // Build config HTML with clear sections
         const configHtml = `
-            <div><strong>Period:</strong> ${year} (${days} days, ${hours.toLocaleString()} hours)</div>
-            <div><strong>Pool:</strong> ${area} m², ${volume} m³, depth ${depth}m</div>
-            <div><strong>Heat Pump:</strong> ${hpKw} kW, COP ${hpCop}</div>
-            <div><strong>Boiler:</strong> ${boilerKw} kW, ${boilerEff} efficiency</div>
-            <div><strong>Strategy:</strong> ${strategy}, target ${targetTemp}°C</div>
-            <div><strong>Wind:</strong> ${((config.wind_exposure_factor || 1) * 100).toFixed(1)}% exposure</div>
-            <div><strong>Cover:</strong> R=${config.cover_r_value || 5} m²K/W, ${((config.cover_solar_transmittance || 0.1) * 100).toFixed(1)}% transmit</div>
-            <div><strong>Solar abs:</strong> ${((config.solar_absorption || 0.6) * 100).toFixed(1)}%, Years: ${config.years_operating || 3}</div>
+            <div style="grid-column:1/-1;border-bottom:1px solid #dee2e6;padding-bottom:8px;margin-bottom:8px;">
+                <strong>Period:</strong> ${startDate} to ${endDate} (${days} days, ${hours.toLocaleString()} hours)
+            </div>
+            <div><strong>Pool:</strong> ${area} m², ${volume} m³, ${depth}m deep</div>
+            <div><strong>Heat Pump:</strong> ${hpKw}, COP ${hpCop}</div>
+            <div><strong>Boiler:</strong> ${boilerKw}, ${boilerEff} eff</div>
+            <div><strong>Target:</strong> ${targetTemp}</div>
+            <div><strong>Tolerance:</strong> +${upperTol} / -${lowerTol}</div>
+            <div><strong>Strategy:</strong> ${strategy}</div>
+            <div><strong>Bathers/day:</strong> ${bathersPerDay}</div>
+            <div><strong>Activity:</strong> ${activityFactor}</div>
+            <div><strong>Wind exp:</strong> ${windExp}</div>
+            <div><strong>Solar abs:</strong> ${solarAbs}</div>
+            <div><strong>Cover R:</strong> ${fmt(config.cover_r_value, ' m²K/W', 1)}</div>
+            ${hasOverrides ? '<div style="grid-column:1/-1;margin-top:8px;padding-top:8px;border-top:1px solid #dee2e6;color:#0d6efd;font-size:12px;">✓ = Override value applied (from config overrides)</div>' : ''}
         `;
         document.getElementById('bench-config-summary').innerHTML = configHtml;
 
