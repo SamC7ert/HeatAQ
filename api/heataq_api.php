@@ -2565,6 +2565,21 @@ class HeatAQAPI {
 
             if ($verified) {
                 $log[] = "✓ Migration verified - tables exist";
+
+                // Move migration file to old_migrations
+                if (!is_dir($oldMigrationsDir)) {
+                    mkdir($oldMigrationsDir, 0755, true);
+                }
+                $newPath = $oldMigrationsDir . '/' . $filename;
+                if (rename($filepath, $newPath)) {
+                    $log[] = "✓ Moved to old_migrations/";
+                    // Also move log file
+                    if (file_exists($logPath)) {
+                        rename($logPath, $oldMigrationsDir . '/' . $logFilename);
+                    }
+                } else {
+                    $log[] = "⚠ Could not move file to old_migrations/";
+                }
             } else {
                 $log[] = "✗ Verification failed";
             }
