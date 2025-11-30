@@ -66,9 +66,11 @@ Run the error check script:
 | Undefined variable | Variable not in scope | Check function parameters |
 
 ## Database
-- Schema docs: `docs/database_schema_simulation.sql`
-- Migrations: `db/migrations/`
-- Review doc: `docs/REVIEW_2024_V70.md`
+- **Full schema reference**: `db/schema.md` (auto-generated, comprehensive)
+- **Schema JSON**: `db/schema.json` (for programmatic access)
+- **Structure overview**: `docs/DATABASE_STRUCTURE.md` (human-readable)
+- **SQL schema**: `db/database_schema_simulation.sql`
+- **Migrations**: `db/migrations/`
 
 ## Testing
 After changes, verify:

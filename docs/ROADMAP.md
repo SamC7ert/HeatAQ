@@ -1,6 +1,6 @@
 # HeatAQ Roadmap
 
-**Last Updated:** November 2024 (V104)
+**Last Updated:** November 2024 (V104+)
 
 Long-term architectural improvements and technical debt items.
 
@@ -55,27 +55,21 @@ Long-term architectural improvements and technical debt items.
 
 ## Architecture Simplification
 
-### Eliminate site_id, use project_id directly
+### Project → Site → Pool Hierarchy
 **Priority:** Medium
-**Status:** Planned
+**Status:** In Progress
 
-Currently the system has both `projects` and `pool_sites` tables with near 1:1 relationship.
+Transitioning to a clean project/site/pool hierarchy with parameters at appropriate levels.
 
-**Current flow:**
+**Target hierarchy:**
 ```
-users → user_projects → projects (project_id) → pool_sites (site_id)
-```
-
-**Proposed simplification:**
-```
-users → user_projects → projects (project_id) → pools
+users → user_projects → projects → sites → pools
 ```
 
-**Changes needed:**
-- Merge pool_sites columns into projects table
-- Update foreign keys from site_id to project_id
-- Update EnergySimulator, PoolScheduler, APIs
-- Migrate existing data
+**In progress:**
+- Moving parameters from config_templates to relevant entity level (pool, site, project)
+- Some parameters will remain in config (equipment settings, control strategies)
+- Updating EnergySimulator, PoolScheduler, APIs to use new structure
 
 ---
 
@@ -117,11 +111,13 @@ Allow multiple weather data sources per project, not just one station.
 
 ### Historical simulation comparison
 **Priority:** Medium
-**Status:** Planned
+**Status:** In Progress
 
 - Compare actual vs simulated performance
 - Import actual energy consumption data
 - Calculate model accuracy
+
+UI tabs implemented in SimControl: History, Compare, Debug
 
 ---
 
@@ -129,18 +125,69 @@ Allow multiple weather data sources per project, not just one station.
 
 ### Configuration management
 **Priority:** Medium
-**Status:** Planned
+**Status:** Completed
 
-- Better visualization of which config template is active
-- Side-by-side config comparison
-- Config versioning/history
+- [x] Configuration selector with create/save/delete
+- [x] Config override system in simulation
+- [x] Better visualization of active config template
 
 ### Dark Mode
 **Priority:** Low
-**Status:** Planned
+**Status:** To Discuss
 
 - Toggle for reduced eye strain
 - Respect system preference
+
+---
+
+## Control Modes & Simulation
+
+### Testing
+**Priority:** High
+**Status:** In Progress
+
+Control mode testing progress:
+
+| Mode | Status | Notes |
+|------|--------|-------|
+| **Reactive** | Testing | Well along, details remain |
+| **Predictive** | Not Started | Next priority |
+| **Optimizing** | Planned | Cost optimization based on spot electricity prices |
+
+See `docs/HEATING_ALGORITHM.md` for mode descriptions.
+
+### Optimizing Mode (New)
+**Priority:** Medium
+**Status:** Planned
+
+New control strategy to minimize cost using spot electricity prices:
+- Shift heating to low-price hours
+- Pre-heat before price spikes
+- Integrate with Nord Pool / electricity price API
+- Balance cost vs comfort (temperature constraints)
+
+---
+
+## Known Issues
+
+### Simulation UI
+- [ ] Site selector does not load correct site (may show non-existent site)
+- [ ] History tab only loads partial data
+- [ ] Analysis tab does not show analysis data
+- [ ] Debug tab sometimes does not follow main simulation for open/close status
+
+### Login
+- [ ] Add option to view password in login form
+
+---
+
+## New Features Planned
+
+### Debug graph interaction
+- [ ] Click on graph in Debug tab to see hourly details
+
+### Project templates
+- [ ] Create new projects from template
 
 ---
 
@@ -151,7 +198,7 @@ Allow multiple weather data sources per project, not just one station.
 - [ ] Consolidate duplicate JavaScript modules
 - [ ] Add TypeScript types for better IDE support
 
-### Testing
+### Testing infrastructure
 - [ ] Unit tests for EnergySimulator
 - [ ] Integration tests for API endpoints
 - [ ] E2E tests for critical workflows

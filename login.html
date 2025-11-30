@@ -394,9 +394,9 @@
                                 `<option value="${data.projects[0].project_id}" selected>${data.projects[0].project_name}</option>`;
                             showSuccess('Logging in to ' + data.projects[0].project_name + '...');
 
-                            // Re-submit the form with project selected
+                            // Re-submit by calling handleLogin directly (not via untrusted event)
                             setTimeout(() => {
-                                document.getElementById('login-form').dispatchEvent(new Event('submit'));
+                                handleLogin({ preventDefault: () => {} });
                             }, 500);
                             return false;
                         }
