@@ -13,7 +13,7 @@ HeatAQ is a comprehensive web-based pool energy simulation and analysis system d
 
 ## Tech Stack
 - **Frontend**: HTML5, JavaScript (ES6+), CSS3
-- **Backend**: PHP 7.4+
+- **Backend**: PHP 8.2+
 - **Database**: MySQL 5.7+
 - **Simulator**: Python 3.8+ (numpy, pandas)
 
