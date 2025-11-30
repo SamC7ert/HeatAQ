@@ -168,6 +168,29 @@ New control strategy to minimize cost using spot electricity prices:
 
 ---
 
+## Known Issues
+
+### Simulation UI
+- [ ] Site selector does not load correct site (may show non-existent site)
+- [ ] History tab only loads partial data
+- [ ] Analysis tab does not show analysis data
+- [ ] Debug tab sometimes does not follow main simulation for open/close status
+
+### Login
+- [ ] Add option to view password in login form
+
+---
+
+## New Features Planned
+
+### Debug graph interaction
+- [ ] Click on graph in Debug tab to see hourly details
+
+### Project templates
+- [ ] Create new projects from template
+
+---
+
 ## Technical Debt
 
 ### Code cleanup
