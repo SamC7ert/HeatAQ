@@ -1,6 +1,6 @@
 # HeatAQ Development Handover Guide
 
-**Current Version:** V105 (November 2024)
+**Current Version:** V106 (November 2024)
 
 ## Before Starting
 
@@ -56,23 +56,40 @@ This checks:
 - [ ] No duplicate braces or missing semicolons
 - [ ] Check element IDs match between HTML and JS
 
-## Database Schema Update Workflow
+## Database Migration Workflow
 
-When database structure changes:
+### Creating a New Migration
 
+1. **Create migration file** in `db/migrations/`
+   - Number must follow highest in `db/old_migrations/` (currently 009 → next is 010)
+   - Name format: `NNN_description.sql`
+
+2. **Merge and deploy** to server
+
+3. **Execute migration** via System tab button in the app
+   - If error: fix and go back to step 1
+   - If success: continue
+
+4. **Update schema documentation** via System tab "Export Schema" button
+   - This runs `db/dump_schema.php`
+   - Updates `db/schema.json` and `db/schema.md`
+   - Commits to git
+
+5. **Merge** the schema update
+
+6. **Verify with Claude/developer** - check new database structure matches expectations
+
+7. **Move migration to old_migrations** after successful deployment
+   ```bash
+   mv db/migrations/010_*.sql db/old_migrations/
+   ```
+
+### Quick Schema Update (no migrations)
+
+For documentation-only updates:
 ```bash
 ./scripts/update_schema.sh
 ```
-
-This will:
-1. Run `php db/dump_schema.php` to regenerate schema
-2. Update `db/schema.json` and `db/schema.md`
-3. Auto-commit and push if changes detected
-
-For manual migrations:
-- Add SQL files to `db/migrations/`
-- Run migrations on server
-- Then run `update_schema.sh` to sync docs
 
 ## Key Architecture Points
 
