@@ -2654,9 +2654,53 @@ class HeatAQAPI {
             $log[] = "✓ Moved $logFilename to old_migrations/";
         }
 
+        // Export schema (without git push - we'll do our own commit)
+        $log[] = "Exporting schema...";
+        $schemaOutput = shell_exec('php ' . escapeshellarg($dbDir . '/dump_schema.php') . ' 2>&1');
+        $log[] = "✓ Schema exported";
+
+        // Commit and push to master
+        $repoRoot = realpath(__DIR__ . '/..');
+        $oldDir = getcwd();
+        chdir($repoRoot);
+
+        $migrationName = preg_replace('/^\d{3}_/', '', $filename);
+        $migrationName = preg_replace('/\.sql$/', '', $migrationName);
+        $commitMsg = "Apply migration: $migrationName";
+
+        $log[] = "Committing to git...";
+
+        // Add all changed files and commit
+        $gitCommands = [
+            'git add db/old_migrations/' . escapeshellarg($filename),
+            'git add db/old_migrations/' . escapeshellarg($logFilename),
+            'git add db/schema.json db/schema.md',
+            'git add -u db/migrations/',  // Stage deleted files
+            "git commit -m " . escapeshellarg($commitMsg)
+        ];
+
+        foreach ($gitCommands as $cmd) {
+            shell_exec($cmd . ' 2>&1');
+        }
+        $log[] = "✓ Committed: $commitMsg";
+
+        // Push to origin
+        $log[] = "Pushing to origin...";
+        $pushOutput = shell_exec('git push origin master 2>&1');
+        $pushSuccess = strpos($pushOutput, 'fatal') === false && strpos($pushOutput, 'error') === false;
+
+        if ($pushSuccess) {
+            $log[] = "✓ Pushed to origin/master";
+        } else {
+            $log[] = "⚠ Push may have failed: " . trim($pushOutput);
+        }
+
+        chdir($oldDir);
+
         $this->sendResponse([
             'success' => true,
             'filename' => $filename,
+            'pushed' => $pushSuccess,
             'log' => $log
         ]);
     }
