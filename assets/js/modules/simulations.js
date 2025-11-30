@@ -1852,8 +1852,8 @@ const SimulationsModule = {
         }
 
         const labels = data.map((d, i) => {
-            // Show day label at start of each day (hour 0)
-            if (i % 24 === 0) {
+            // Show day label at hour 3 (centered under day's data, not at midnight boundary)
+            if (i % 24 === 3) {
                 const date = new Date(d.timestamp);
                 const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
                 const dayNum = date.getDate();
@@ -2070,8 +2070,8 @@ const SimulationsModule = {
             data.findIndex(d => d.timestamp === this.debugTimestamp) : -1;
 
         const labels = data.map((d, i) => {
-            // Show day label at start of each day (hour 0)
-            if (i % 24 === 0) {
+            // Show day label at hour 3 (centered under day's data, not at midnight boundary)
+            if (i % 24 === 3) {
                 const date = new Date(d.timestamp);
                 const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
                 const dayNum = date.getDate();
