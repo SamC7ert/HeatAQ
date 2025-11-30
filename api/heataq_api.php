@@ -2197,8 +2197,8 @@ class HeatAQAPI {
             'remote_url' => trim(shell_exec('git remote get-url origin 2>&1')),
         ];
 
-        // Check for updates
-        shell_exec('git fetch --all 2>&1');
+        // Check for updates (prune removes references to deleted remote branches)
+        shell_exec('git fetch --all --prune 2>&1');
         $behind = trim(shell_exec('git rev-list HEAD..origin/master --count 2>&1'));
         $ahead = trim(shell_exec('git rev-list origin/master..HEAD --count 2>&1'));
         $result['behind_origin'] = is_numeric($behind) ? (int)$behind : 0;
@@ -2214,6 +2214,8 @@ class HeatAQAPI {
                 $branches[] = str_replace('origin/', '', $b);
             }
         }
+        // Sort reverse so newest branch is first (default selection)
+        rsort($branches);
         $result['remote_branches'] = $branches;
 
         // Get app version from index.html
