@@ -405,6 +405,12 @@ class HeatAQAPI {
                     }
                     $this->runMigration();
                     break;
+                case 'archive_migration':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied - admin only', 403);
+                    }
+                    $this->archiveMigration();
+                    break;
                 case 'export_schema':
                     if (!$this->canDelete()) {
                         $this->sendError('Permission denied - admin only', 403);
@@ -2565,25 +2571,9 @@ class HeatAQAPI {
 
             if ($verified) {
                 $log[] = "✓ Migration verified - tables exist";
-
-                // Move migration file to old_migrations
-                if (!is_dir($oldMigrationsDir)) {
-                    mkdir($oldMigrationsDir, 0755, true);
-                }
-                $newPath = $oldMigrationsDir . '/' . $filename;
-                if (rename($filepath, $newPath)) {
-                    $log[] = "✓ Moved to old_migrations/";
-                    // Also move log file
-                    if (file_exists($logPath)) {
-                        rename($logPath, $oldMigrationsDir . '/' . $logFilename);
-                    }
-                } else {
-                    $log[] = "⚠ Could not move file to old_migrations/";
-                }
             } else {
                 $log[] = "✗ Verification failed";
             }
-            $log[] = "Log: db/migrations/$logFilename";
 
             $this->sendResponse([
                 'success' => $verified,
@@ -2591,6 +2581,7 @@ class HeatAQAPI {
                 'statements' => $executed,
                 'verified' => $verified,
                 'tables_created' => $expectedTables,
+                'log_file' => $logFilename,
                 'log' => $log
             ]);
 
@@ -2609,6 +2600,65 @@ class HeatAQAPI {
                 'log' => $log
             ]);
         }
+    }
+
+    /**
+     * Archive a completed migration (move to old_migrations)
+     */
+    private function archiveMigration() {
+        $input = $this->getPostInput();
+        $filename = $input['filename'] ?? null;
+
+        if (!$filename) {
+            $this->sendError('Migration filename required');
+            return;
+        }
+
+        // Security: only allow .sql files
+        if (!preg_match('/^\d{3}_[a-z0-9_]+\.sql$/', $filename)) {
+            $this->sendError('Invalid migration filename format');
+            return;
+        }
+
+        $dbDir = realpath(__DIR__ . '/../db');
+        $migrationsDir = $dbDir . '/migrations';
+        $oldMigrationsDir = $dbDir . '/old_migrations';
+        $filepath = $migrationsDir . '/' . $filename;
+
+        if (!file_exists($filepath)) {
+            $this->sendError('Migration file not found: ' . $filename);
+            return;
+        }
+
+        // Ensure old_migrations directory exists
+        if (!is_dir($oldMigrationsDir)) {
+            mkdir($oldMigrationsDir, 0755, true);
+        }
+
+        $log = [];
+        $log[] = date('Y-m-d H:i:s') . " - Archiving: $filename";
+
+        // Move migration file
+        $newPath = $oldMigrationsDir . '/' . $filename;
+        if (!rename($filepath, $newPath)) {
+            $this->sendError('Could not move migration file');
+            return;
+        }
+        $log[] = "✓ Moved $filename to old_migrations/";
+
+        // Also move log file if exists
+        $logFilename = preg_replace('/\.sql$/', '_log.txt', $filename);
+        $logPath = $migrationsDir . '/' . $logFilename;
+        if (file_exists($logPath)) {
+            rename($logPath, $oldMigrationsDir . '/' . $logFilename);
+            $log[] = "✓ Moved $logFilename to old_migrations/";
+        }
+
+        $this->sendResponse([
+            'success' => true,
+            'filename' => $filename,
+            'log' => $log
+        ]);
     }
 
     /**
