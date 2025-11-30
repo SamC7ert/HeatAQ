@@ -1077,11 +1077,13 @@ const AdminModule = {
             html += '</tr></thead><tbody>';
 
             pending.forEach(m => {
-                const btnId = 'btn-migrate-' + m.filename.replace(/[^a-z0-9]/gi, '-');
-                html += '<tr>';
+                const rowId = 'row-migrate-' + m.filename.replace(/[^a-z0-9]/gi, '-');
+                const descId = 'desc-migrate-' + m.filename.replace(/[^a-z0-9]/gi, '-');
+                const actionsId = 'actions-migrate-' + m.filename.replace(/[^a-z0-9]/gi, '-');
+                html += `<tr id="${rowId}">`;
                 html += `<td><code>${m.filename}</code></td>`;
-                html += `<td>${m.description || '-'}</td>`;
-                html += `<td><button id="${btnId}" class="btn btn-sm btn-primary" onclick="AdminModule.runMigration('${m.filename}', this)">Run</button></td>`;
+                html += `<td id="${descId}">${m.description || '-'}</td>`;
+                html += `<td id="${actionsId}"><button class="btn btn-sm btn-primary" onclick="AdminModule.runMigration('${m.filename}', this)">Run</button></td>`;
                 html += '</tr>';
             });
 
@@ -1125,46 +1127,60 @@ const AdminModule = {
             const data = await response.json();
             console.log('Migration result:', data);
 
-            let html = '';
-            if (data.success) {
-                html += `<p style="color: green; font-weight: bold;">✓ SUCCESS: ${filename}</p>`;
-                html += `<p>${data.statements} statements executed</p>`;
-                if (data.tables_created && data.tables_created.length > 0) {
-                    html += `<p>Tables: ${data.tables_created.join(', ')}</p>`;
-                }
-                // Green button on success
-                if (btn) {
-                    btn.textContent = '✓ Done';
-                    btn.style.backgroundColor = '#28a745';
-                }
-            } else {
-                html += `<p style="color: red; font-weight: bold;">✗ FAILED: ${filename}</p>`;
-                html += `<p class="error">${data.error || 'Unknown error'}</p>`;
-                // Red button on failure
-                if (btn) {
-                    btn.textContent = '✗ Failed';
-                    btn.style.backgroundColor = '#dc3545';
-                    btn.disabled = false; // Allow retry
-                }
-            }
+            // Find the row elements
+            const descId = 'desc-migrate-' + filename.replace(/[^a-z0-9]/gi, '-');
+            const actionsId = 'actions-migrate-' + filename.replace(/[^a-z0-9]/gi, '-');
+            const descEl = document.getElementById(descId);
+            const actionsEl = document.getElementById(actionsId);
 
             // Log file link
-            const logFile = filename.replace('.sql', data.success ? '_log.txt' : '_error.txt');
-            html += `<p><a href="db/migrations/${logFile}" target="_blank">View log file</a></p>`;
+            const logFile = data.log_file || filename.replace('.sql', data.success ? '_log.txt' : '_error.txt');
 
-            // Expandable log
-            if (data.log && data.log.length > 0) {
-                html += '<details><summary>Show log output</summary><pre class="deploy-log" style="max-height: 200px; overflow: auto; font-size: 11px;">';
-                data.log.forEach(line => { html += line + '\n'; });
-                html += '</pre></details>';
-            }
-
-            if (resultEl) resultEl.innerHTML = html;
-
-            // Refresh the list
+            let resultHtml = '';
             if (data.success) {
-                this.checkMigrations();
+                resultHtml += `<p style="color: green; font-weight: bold;">✓ SUCCESS: ${filename}</p>`;
+                resultHtml += `<p>${data.statements} statements executed</p>`;
+                if (data.tables_created && data.tables_created.length > 0) {
+                    resultHtml += `<p>Tables: ${data.tables_created.join(', ')}</p>`;
+                }
+
+                // Update description to log link
+                if (descEl) {
+                    descEl.innerHTML = `<a href="db/migrations/${logFile}" target="_blank" style="color: green;">✓ View log</a>`;
+                }
+
+                // Update actions: green Done button + Archive button
+                if (actionsEl) {
+                    actionsEl.innerHTML = `
+                        <button class="btn btn-sm" style="background-color: #28a745; color: white;" disabled>✓ Done</button>
+                        <button class="btn btn-sm btn-secondary" onclick="AdminModule.archiveMigration('${filename}')" style="margin-left: 5px;">Archive</button>
+                    `;
+                }
+            } else {
+                resultHtml += `<p style="color: red; font-weight: bold;">✗ FAILED: ${filename}</p>`;
+                resultHtml += `<p class="error">${data.error || 'Unknown error'}</p>`;
+
+                // Update description to error log link
+                if (descEl) {
+                    descEl.innerHTML = `<a href="db/migrations/${logFile}" target="_blank" style="color: red;">✗ View error log</a>`;
+                }
+
+                // Red button, allow retry
+                if (btn) {
+                    btn.textContent = '✗ Retry';
+                    btn.style.backgroundColor = '#dc3545';
+                    btn.disabled = false;
+                }
             }
+
+            // Expandable log in result area
+            if (data.log && data.log.length > 0) {
+                resultHtml += '<details><summary>Show log output</summary><pre class="deploy-log" style="max-height: 200px; overflow: auto; font-size: 11px;">';
+                data.log.forEach(line => { resultHtml += line + '\n'; });
+                resultHtml += '</pre></details>';
+            }
+
+            if (resultEl) resultEl.innerHTML = resultHtml;
 
         } catch (err) {
             console.error('Run migration failed:', err);
@@ -1174,6 +1190,45 @@ const AdminModule = {
                 btn.style.backgroundColor = '#dc3545';
                 btn.disabled = false;
             }
+        }
+    },
+
+    archiveMigration: async function(filename) {
+        const resultEl = document.getElementById('migration-result');
+        const rowId = 'row-migrate-' + filename.replace(/[^a-z0-9]/gi, '-');
+        const row = document.getElementById(rowId);
+
+        if (resultEl) resultEl.innerHTML = `<p>Archiving ${filename}...</p>`;
+
+        try {
+            const response = await fetch('./api/heataq_api.php?action=archive_migration', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: filename })
+            });
+
+            const data = await response.json();
+            console.log('Archive result:', data);
+
+            if (data.success) {
+                // Remove the row from the table
+                if (row) {
+                    row.style.transition = 'opacity 0.3s';
+                    row.style.opacity = '0';
+                    setTimeout(() => row.remove(), 300);
+                }
+
+                if (resultEl) {
+                    resultEl.innerHTML = `<p style="color: green;">✓ Archived ${filename} to old_migrations/</p>`;
+                }
+            } else {
+                if (resultEl) {
+                    resultEl.innerHTML = `<p class="error">Archive failed: ${data.error || 'Unknown error'}</p>`;
+                }
+            }
+        } catch (err) {
+            console.error('Archive migration failed:', err);
+            if (resultEl) resultEl.innerHTML = `<p class="error">Archive failed: ${err.message}</p>`;
         }
     }
 };
