@@ -1219,7 +1219,13 @@ const AdminModule = {
                 }
 
                 if (resultEl) {
-                    resultEl.innerHTML = `<p style="color: green;">✓ Archived ${filename} to old_migrations/</p>`;
+                    let html = `<p style="color: green; font-weight: bold;">✓ Archived ${filename}</p>`;
+                    html += '<ul style="margin: 0.5rem 0; padding-left: 1.5rem; color: #666;">';
+                    html += '<li>Moved to old_migrations/</li>';
+                    html += '<li>Schema exported</li>';
+                    html += `<li>Pushed to GitHub: ${data.pushed ? '✓' : '⚠ check manually'}</li>`;
+                    html += '</ul>';
+                    resultEl.innerHTML = html;
                 }
             } else {
                 if (resultEl) {
