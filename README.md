@@ -94,7 +94,7 @@ git pull origin main
 
 ## Documentation
 - [System Architecture](docs/SYSTEM_ARCHITECTURE.md)
-- [Database Structure](docs/DATABASE_STRUCTURE_v2.md)
+- [Database Structure](docs/DATABASE_STRUCTURE.md)
 - [Design Guide](docs/DESIGN_GUIDE.md)
 - [Heating Algorithm](docs/HEATING_ALGORITHM.md)
 - [Roadmap](docs/ROADMAP.md)

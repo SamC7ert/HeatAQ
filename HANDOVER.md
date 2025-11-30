@@ -68,7 +68,7 @@ Run the error check script:
 ## Database
 - **Full schema reference**: `db/schema.md` (auto-generated, comprehensive)
 - **Schema JSON**: `db/schema.json` (for programmatic access)
-- **Structure overview**: `docs/DATABASE_STRUCTURE_v2.md` (human-readable)
+- **Structure overview**: `docs/DATABASE_STRUCTURE.md` (human-readable)
 - **SQL schema**: `db/database_schema_simulation.sql`
 - **Migrations**: `db/migrations/`
 
