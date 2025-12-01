@@ -709,33 +709,46 @@ const SimulationsModule = {
     },
 
     /**
-     * Initialize Compare section
+     * Initialize Compare/Analyse section
      */
     initCompare: async function() {
+        // Populate site and pool context from ProjectModule
+        if (typeof ProjectModule !== 'undefined') {
+            const siteNameEl = document.getElementById('analyse-site-name');
+            const poolNameEl = document.getElementById('analyse-pool-name');
+
+            if (siteNameEl && ProjectModule.currentSite) {
+                siteNameEl.textContent = ProjectModule.currentSite.name || ProjectModule.currentSite.site_id || '-';
+            }
+            if (poolNameEl && ProjectModule.currentPool) {
+                poolNameEl.textContent = ProjectModule.currentPool.name || '-';
+            }
+        }
+
+        // Load schedule templates for Analyse tab dropdowns (do this first)
+        await this.loadAnalyseSchedules();
+
+        // Load runs for comparison dropdowns (optional feature)
         const select1 = document.getElementById('compare-run-1');
         const select2 = document.getElementById('compare-run-2');
 
-        if (!select1 || !select2) return;
+        if (select1 && select2) {
+            try {
+                const response = await fetch('/api/simulation_api.php?action=get_runs&limit=50');
+                const data = await response.json();
 
-        // Load runs for dropdowns
-        try {
-            const response = await fetch('/api/simulation_api.php?action=get_runs&limit=50');
-            const data = await response.json();
+                if (data.runs) {
+                    const optionsHtml = data.runs.map(run =>
+                        `<option value="${run.run_id}">${this.escapeHtml(run.scenario_name)} (${run.start_date} - ${run.end_date})</option>`
+                    ).join('');
 
-            if (data.runs) {
-                const optionsHtml = data.runs.map(run =>
-                    `<option value="${run.run_id}">${this.escapeHtml(run.scenario_name)} (${run.start_date} - ${run.end_date})</option>`
-                ).join('');
-
-                select1.innerHTML = '<option value="">Select Run 1...</option>' + optionsHtml;
-                select2.innerHTML = '<option value="">Select Run 2...</option>' + optionsHtml;
+                    select1.innerHTML = '<option value="">Select Run 1...</option>' + optionsHtml;
+                    select2.innerHTML = '<option value="">Select Run 2...</option>' + optionsHtml;
+                }
+            } catch (error) {
+                console.error('Failed to load runs for comparison:', error);
             }
-        } catch (error) {
-            console.error('Failed to load runs for comparison:', error);
         }
-
-        // Load schedule templates for Analyse tab dropdowns
-        await this.loadAnalyseSchedules();
     },
 
     /**
@@ -743,8 +756,10 @@ const SimulationsModule = {
      */
     loadAnalyseSchedules: async function() {
         try {
+            console.log('[Analyse] Loading schedule templates...');
             const response = await fetch('/api/heataq_api.php?action=get_templates');
             const data = await response.json();
+            console.log('[Analyse] Templates response:', data);
 
             if (data.templates && data.templates.length > 0) {
                 const optionsHtml = data.templates.map(t =>
@@ -752,15 +767,20 @@ const SimulationsModule = {
                 ).join('');
 
                 // Populate all 5 analyse schedule dropdowns
+                let populated = 0;
                 for (let i = 1; i <= 5; i++) {
                     const select = document.getElementById(`analyse-schedule-${i}`);
                     if (select) {
                         select.innerHTML = optionsHtml;
+                        populated++;
                     }
                 }
+                console.log(`[Analyse] Populated ${populated} schedule dropdowns with ${data.templates.length} templates`);
+            } else {
+                console.warn('[Analyse] No templates returned from API');
             }
         } catch (error) {
-            console.error('Failed to load schedule templates:', error);
+            console.error('[Analyse] Failed to load schedule templates:', error);
         }
     },
 
