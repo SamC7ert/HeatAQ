@@ -8,24 +8,25 @@
 
 class NasaSolarFetcher {
     private $db;
-    private $siteId;      // VARCHAR site_id (for pool_sites lookup)
-    private $poolSiteId;  // INT pool_site_id (for solar tables)
+    private $poolSiteId;  // INT pool_site_id (references pool_sites.id)
 
     // NASA POWER API endpoint
     const NASA_API_URL = 'https://power.larc.nasa.gov/api/temporal/daily/point';
 
-    public function __construct(PDO $db, string $siteId) {
+    /**
+     * Constructor accepts INT pool_site_id (pool_sites.id)
+     * @param PDO $db Database connection
+     * @param int $poolSiteId INT pool_site_id (pool_sites.id)
+     */
+    public function __construct(PDO $db, int $poolSiteId) {
         $this->db = $db;
-        $this->siteId = $siteId;
+        $this->poolSiteId = $poolSiteId;
 
-        // Get numeric pool_site_id from VARCHAR site_id
-        $stmt = $db->prepare("SELECT id FROM pool_sites WHERE site_id = ?");
-        $stmt->execute([$siteId]);
-        $result = $stmt->fetch();
-        $this->poolSiteId = $result ? (int)$result['id'] : null;
-
-        if (!$this->poolSiteId) {
-            throw new Exception("Site not found: {$siteId}");
+        // Verify pool_site_id exists
+        $stmt = $db->prepare("SELECT id FROM pool_sites WHERE id = ?");
+        $stmt->execute([$poolSiteId]);
+        if (!$stmt->fetch()) {
+            throw new Exception("Site not found: pool_site_id={$poolSiteId}");
         }
     }
 
