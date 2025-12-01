@@ -1110,12 +1110,21 @@ const AdminModule = {
                     html += `<td id="${descId}">${m.description || '-'}</td>`;
                 }
 
-                // Show Done + Archive if log exists and was successful, otherwise Run button
-                if (m.has_log && m.log_success) {
-                    html += `<td id="${actionsId}">
-                        <button class="btn btn-sm btn-success" disabled>✓ Done</button>
-                        <button class="btn btn-sm btn-secondary" onclick="AdminModule.archiveMigration('${m.filename}')" style="margin-left: 5px;">Archive</button>
-                    </td>`;
+                // Show Done + Archive if log exists and was successful
+                // Show Run + Archive if log exists but failed (can re-run or archive)
+                // Show Run only if no log exists
+                if (m.has_log) {
+                    if (m.log_success) {
+                        html += `<td id="${actionsId}">
+                            <button class="btn btn-sm btn-success" disabled>✓ Done</button>
+                            <button class="btn btn-sm btn-secondary" onclick="AdminModule.archiveMigration('${m.filename}')" style="margin-left: 5px;">Archive</button>
+                        </td>`;
+                    } else {
+                        html += `<td id="${actionsId}">
+                            <button class="btn btn-sm btn-primary" onclick="AdminModule.runMigration('${m.filename}', this)">Run</button>
+                            <button class="btn btn-sm btn-secondary" onclick="AdminModule.archiveMigration('${m.filename}')" style="margin-left: 5px;">Archive</button>
+                        </td>`;
+                    }
                 } else {
                     html += `<td id="${actionsId}"><button class="btn btn-sm btn-primary" onclick="AdminModule.runMigration('${m.filename}', this)">Run</button></td>`;
                 }
