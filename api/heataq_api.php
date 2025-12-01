@@ -2032,8 +2032,8 @@ class HeatAQAPI {
 
     private function fetchNasaSolar() {
         $input = $this->getPostInput();
-        $startYear = $input['start_year'] ?? date('Y') - 10;
-        $endYear = $input['end_year'] ?? date('Y') - 1;
+        $startYear = $input['start_year'] ?? 2015;  // Fixed start: Jan 1, 2015
+        $endYear = $input['end_year'] ?? date('Y');  // Up to current year
         $latitude = $input['latitude'] ?? null;
         $longitude = $input['longitude'] ?? null;
 
