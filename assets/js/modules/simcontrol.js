@@ -583,11 +583,10 @@ const SimControlModule = {
         // Thermal losses (convert kWh to MWh)
         const toMWh = (val) => val ? (val / 1000).toFixed(1) : '-';
 
-        // Note: Current simulator stores total_heat_loss_kwh
-        // For detailed breakdown, we need to enhance the simulator
         setEl('bench-evap', toMWh(summary.evaporation_kwh) || '-');
         setEl('bench-conv', toMWh(summary.convection_kwh) || '-');
         setEl('bench-rad', toMWh(summary.radiation_kwh) || '-');
+        setEl('bench-cover', toMWh(summary.cover_loss_kwh) || '-');
         setEl('bench-floor', toMWh(summary.floor_loss_kwh) || '-');
         setEl('bench-wall', toMWh(summary.wall_loss_kwh) || '-');
         setEl('bench-solar', summary.total_solar_gain_kwh ? '-' + toMWh(summary.total_solar_gain_kwh) : '-');

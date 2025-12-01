@@ -1406,7 +1406,7 @@ const SimulationsModule = {
 
         // Clear individual card contents to show loading state
         ['debug-input', 'debug-evaporation', 'debug-convection', 'debug-radiation',
-         'debug-solar', 'debug-conduction', 'debug-heatpump', 'debug-boiler', 'debug-summary'].forEach(id => {
+         'debug-solar', 'debug-conduction', 'debug-cover', 'debug-heatpump', 'debug-boiler', 'debug-summary'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.innerHTML = '<span style="color: #999;">Loading...</span>';
         });
@@ -1669,6 +1669,7 @@ const SimulationsModule = {
         setHtml('debug-radiation', renderTable(data.radiation));
         setHtml('debug-solar', renderTable(data.solar_gain));
         setHtml('debug-conduction', renderTable(data.conduction));
+        setHtml('debug-cover', renderTable(data.cover));
 
         // Heat pump detail
         setHtml('debug-heatpump', `
@@ -1693,11 +1694,13 @@ const SimulationsModule = {
 
         // Summary
         const sum = data.summary || {};
+        const coverLoss = sum.cover_loss_kw || 0;
         setHtml('debug-summary', `
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
                 <div>Evap: <strong>${sum.evaporation_kw}</strong> kW</div>
                 <div>Conv: <strong>${sum.convection_kw}</strong> kW</div>
                 <div>Rad: <strong>${sum.radiation_kw}</strong> kW</div>
+                <div>Cover: <strong>${coverLoss.toFixed ? coverLoss.toFixed(3) : coverLoss}</strong> kW</div>
                 <div>Cond: <strong>${(sum.wall_loss_kw + sum.floor_loss_kw).toFixed(3)}</strong> kW</div>
                 <div>Solar: <strong>-${sum.solar_gain_kw}</strong> kW</div>
                 <div><strong>Net: ${sum.net_requirement_kw} kW</strong></div>
