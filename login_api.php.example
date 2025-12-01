@@ -11,6 +11,8 @@
  * Database requirements:
  * - users table needs: force_password_change TINYINT(1) DEFAULT 1
  * - users table needs: password_history JSON (stores last 5 hashed passwords)
+ *
+ * Note: site_id comes from pool_sites table (linked via project_id), not projects table
  */
 
 require_once __DIR__ . '/config.php';
@@ -132,11 +134,12 @@ try {
 
     // Step 1: Return projects list (no project selected yet)
     if (!$projectId) {
-        // Get user's projects
+        // Get user's projects (site_id from pool_sites via project_id)
         $stmt = $pdo->prepare("
-            SELECT p.project_id, p.project_name, p.site_id, up.role
+            SELECT p.project_id, p.project_name, ps.site_id, up.role
             FROM user_projects up
             JOIN projects p ON up.project_id = p.project_id
+            LEFT JOIN pool_sites ps ON ps.project_id = p.project_id
             WHERE up.user_id = ? AND p.is_active = 1
             ORDER BY p.project_name
         ");
@@ -146,9 +149,11 @@ try {
         // If super admin, show all projects
         if ($user['is_super_admin']) {
             $stmt = $pdo->query("
-                SELECT project_id, project_name, site_id, 'owner' as role
-                FROM projects WHERE is_active = 1
-                ORDER BY project_name
+                SELECT p.project_id, p.project_name, ps.site_id, 'owner' as role
+                FROM projects p
+                LEFT JOIN pool_sites ps ON ps.project_id = p.project_id
+                WHERE p.is_active = 1
+                ORDER BY p.project_name
             ");
             $projects = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
@@ -182,11 +187,12 @@ try {
     // Step 2: Create session for selected project
     $projectId = (int)$projectId;
 
-    // Verify user has access to this project
+    // Verify user has access to this project (site_id from pool_sites)
     $stmt = $pdo->prepare("
-        SELECT up.role, p.project_name, p.site_id
+        SELECT up.role, p.project_name, ps.site_id
         FROM user_projects up
         JOIN projects p ON up.project_id = p.project_id
+        LEFT JOIN pool_sites ps ON ps.project_id = p.project_id
         WHERE up.user_id = ? AND up.project_id = ? AND p.is_active = 1
     ");
     $stmt->execute([$user['user_id'], $projectId]);
@@ -195,8 +201,10 @@ try {
     // Super admin can access any project
     if (!$projectAccess && $user['is_super_admin']) {
         $stmt = $pdo->prepare("
-            SELECT 'owner' as role, project_name, site_id
-            FROM projects WHERE project_id = ? AND is_active = 1
+            SELECT 'owner' as role, p.project_name, ps.site_id
+            FROM projects p
+            LEFT JOIN pool_sites ps ON ps.project_id = p.project_id
+            WHERE p.project_id = ? AND p.is_active = 1
         ");
         $stmt->execute([$projectId]);
         $projectAccess = $stmt->fetch(PDO::FETCH_ASSOC);
