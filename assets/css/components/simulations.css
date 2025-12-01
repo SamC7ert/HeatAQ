@@ -13,6 +13,11 @@
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
+/* Ensure detail card doesn't overlap with table above */
+.simulation-detail.card {
+    margin-top: 15px;
+}
+
 .simulation-form h3,
 .simulation-runs h3,
 .simulation-detail h3 {
