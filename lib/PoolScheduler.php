@@ -285,10 +285,11 @@ class PoolScheduler {
                     ed.name,
                     ste.day_schedule_id,
                     ds.name as day_schedule_name,
+                    ed.is_fixed,
                     ed.fixed_month,
                     ed.fixed_day,
-                    ed.is_moving,
-                    ed.easter_offset_days
+                    ed.reference_day_id,
+                    ed.offset_days
                 FROM schedule_template_exceptions ste
                 JOIN exception_days ed ON ste.exception_day_id = ed.id
                 LEFT JOIN day_schedules ds ON ste.day_schedule_id = ds.day_schedule_id
@@ -306,8 +307,9 @@ class PoolScheduler {
                     'day_schedule_name' => $row['day_schedule_name'],
                     'fixed_month' => $row['fixed_month'] ? (int) $row['fixed_month'] : null,
                     'fixed_day' => $row['fixed_day'] ? (int) $row['fixed_day'] : null,
-                    'is_moving' => (bool) $row['is_moving'],
-                    'easter_offset' => $row['easter_offset_days'] !== null ? (int) $row['easter_offset_days'] : null,
+                    'is_moving' => !((bool) $row['is_fixed']),
+                    'reference_day_id' => $row['reference_day_id'] ? (int) $row['reference_day_id'] : null,
+                    'easter_offset' => $row['offset_days'] !== null ? (int) $row['offset_days'] : null,
                     'priority' => 50
                 ];
             }
@@ -320,32 +322,41 @@ class PoolScheduler {
     }
 
     /**
-     * Load pre-calculated holiday reference dates
+     * Load pre-calculated reference day dates (Easter, etc.)
      *
-     * @return array Easter dates indexed by year
+     * @return array Reference dates indexed by [reference_day_id][year]
      */
     private function loadHolidayDates() {
         try {
-            // Try to get Easter dates from database
-            // Use COALESCE to handle both possible column names (easter_date or easter_sunday)
+            // Get reference day dates from new table
             $stmt = $this->db->prepare("
-                SELECT year,
-                       COALESCE(easter_date, easter_sunday) as easter_date
-                FROM holiday_reference_days
-                WHERE country = 'NO'
-                ORDER BY year
+                SELECT reference_day_id, year, date
+                FROM reference_day_dates
+                ORDER BY reference_day_id, year
             ");
             $stmt->execute();
             $rows = $stmt->fetchAll();
 
             $holidays = [];
             foreach ($rows as $row) {
-                $holidays[$row['year']] = new DateTime($row['easter_date']);
+                $refId = (int)$row['reference_day_id'];
+                $year = (int)$row['year'];
+                if (!isset($holidays[$refId])) {
+                    $holidays[$refId] = [];
+                }
+                $holidays[$refId][$year] = new DateTime($row['date']);
+            }
+
+            // For backward compatibility, also index by year for reference_day_id=1 (Easter)
+            if (isset($holidays[1])) {
+                foreach ($holidays[1] as $year => $date) {
+                    $holidays[$year] = $date;
+                }
             }
 
             return $holidays;
         } catch (Exception $e) {
-            // If table doesn't exist or has different columns, use algorithm fallback
+            // If table doesn't exist, use algorithm fallback
             return [];
         }
     }
