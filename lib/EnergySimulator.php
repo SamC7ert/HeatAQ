@@ -934,12 +934,11 @@ class EnergySimulator {
 
     /**
      * Estimate effective sky temperature for radiation
+     * Sky temperature is lower than air temperature due to atmospheric effects
      */
     private function estimateSkyTemperature($airTemp) {
-        // Clear sky is about 20°C below air temp
-        // Cloudy sky is closer to air temp
-        // Use average assumption
-        return $airTemp - 15;
+        // Python reference: T_sky = T_air - 10
+        return $airTemp - 10;
     }
 
     /**
