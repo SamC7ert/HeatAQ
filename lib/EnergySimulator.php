@@ -554,6 +554,14 @@ class EnergySimulator {
                     'is_open' => $targetTemp !== null,
                     'is_preheat' => $isPreheat,
                     'preheat_case' => $this->closedPlan['case'] ?? null,
+                    'preheat_plan' => $this->closedPlan ? [
+                        'case' => $this->closedPlan['case'],
+                        'target_night' => $this->closedPlan['target_night'],
+                        'avg_demand_kw' => round($this->closedPlan['avg_demand'], 2),
+                        'start_hp_in' => round($this->closedPlan['start_hp_in'], 1),
+                        'hours_to_open' => $this->closedPlan['hours_to_open'],
+                        'day_boiler_kw' => round($this->closedPlan['day_boiler_power'] ?? 0, 2),
+                    ] : null,
                 ],
                 'losses' => [
                     'evaporation_kw' => round($losses['evaporation'], 3),
