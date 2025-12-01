@@ -229,6 +229,16 @@ class EnergySimulator {
             $this->equipment['electricity_cost_per_kwh'] = $uiConfig['costs']['electricity_nok_kwh'] ?? $this->equipment['electricity_cost_per_kwh'];
             $this->equipment['boiler']['fuel_cost_per_kwh'] = $uiConfig['costs']['gas_nok_kwh'] ?? $this->equipment['boiler']['fuel_cost_per_kwh'];
         }
+
+        // Bathers settings - NO DEFAULTS, must be configured
+        if (isset($uiConfig['bathers'])) {
+            $this->equipment['bathers'] = [
+                'per_day' => $uiConfig['bathers']['per_day'] ?? null,
+                'activity_factor' => $uiConfig['bathers']['activity_factor'] ?? null,
+                'kwh_per_visit' => $uiConfig['bathers']['kwh_per_visit'] ?? null,
+                'open_hours' => $uiConfig['bathers']['open_hours'] ?? null,
+            ];
+        }
     }
 
     /**
@@ -747,8 +757,9 @@ class EnergySimulator {
         $pAir = $pSat * ($humidity / 100);
 
         // Evaporation rate coefficient (kg/m²·s·kPa)
-        // Increases with wind and activity
-        $activityFactor = $isOpen ? 1.3 : 1.0; // More evaporation when pool is in use
+        // Increases with wind and activity - activity factor from config
+        $configActivityFactor = $this->equipment['bathers']['activity_factor'] ?? null;
+        $activityFactor = $isOpen ? ($configActivityFactor ?? 1.0) : 1.0;
         $windFactor = 1 + 0.1 * $windSpeed * $this->poolConfig['wind_exposure_factor'];
 
         $evapCoeff = 0.0000375 * $activityFactor * $windFactor;
@@ -1268,8 +1279,9 @@ class EnergySimulator {
         // Effective wind speed (m/s)
         $effectWindSpeed = $windSpeed * $windFactor;
 
-        // Activity factor
-        $activityFactor = $isOpen ? 1.1 : 1.0; // Match Excel's 1.1
+        // Activity factor - from config (required when pool is open)
+        $configActivityFactor = $this->equipment['bathers']['activity_factor'] ?? null;
+        $activityFactor = $isOpen ? ($configActivityFactor ?? 1.0) : 1.0;
 
         // Evaporation using ASHRAE formula variant
         // E = (25 + 19*v) * A * (pw - pa) / L_v  [W]
@@ -1333,11 +1345,16 @@ class EnergySimulator {
         $condLossKW = $wallLossKW + $floorLossKW;
 
         // ========== WATER HEATING (bather makeup) ==========
-        // From Excel: 100 persons * 1.37 kWh/visit / 10 open hours = 13.7 kWh/hour
-        $bathersPerDay = 100;
-        $kwhPerVisit = 1.37;
-        $openHours = 10;
-        $waterHeatingKW = ($bathersPerDay * $kwhPerVisit) / $openHours;
+        // Values from configuration - NO DEFAULTS
+        $bathersPerDay = $this->equipment['bathers']['per_day'] ?? null;
+        $kwhPerVisit = $this->equipment['bathers']['kwh_per_visit'] ?? null;
+        $openHours = $this->equipment['bathers']['open_hours'] ?? null;
+
+        // Calculate water heating only if all bather values are configured
+        $waterHeatingKW = 0;
+        if ($bathersPerDay !== null && $kwhPerVisit !== null && $openHours !== null && $openHours > 0) {
+            $waterHeatingKW = ($bathersPerDay * $kwhPerVisit) / $openHours;
+        }
 
         // ========== APPLY COVER REDUCTION ==========
         if ($hasCover && !$isOpen) {

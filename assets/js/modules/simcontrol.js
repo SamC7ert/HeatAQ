@@ -429,8 +429,8 @@ const SimControlModule = {
         const equip = results.meta?.equipment || {};
         // Control values are stored directly in equipment (target_temp, temp_tolerance)
         const control = results.meta?.control || equip.control || {};
-        // Bathers: EnergySimulator uses 100/day default, activity_factor 1.0
-        const bathers = results.meta?.bathers || config.bathers || { per_day: 100, activity_factor: 1.0 };
+        // Bathers: NO DEFAULTS - must be configured, show '-' if missing
+        const bathers = results.meta?.bathers || equip.bathers || config.bathers || {};
         const overrides = results.meta?.config_override || {};
         const startDate = results.meta?.start_date || '';
         const endDate = results.meta?.end_date || '';
@@ -476,8 +476,8 @@ const SimControlModule = {
             overrides.control?.target_temp,
             '°C', 1
         );
-        // temp_tolerance is stored as single value in equipment (applies to both +/-)
-        const tolerance = equip.temp_tolerance || control.temp_tolerance || control.upper_tolerance || 2;
+        // temp_tolerance is stored as single value in equipment (applies to both +/-) - NO DEFAULT
+        const tolerance = equip.temp_tolerance || control.temp_tolerance || control.upper_tolerance;
         const upperTol = withOverride(
             control.upper_tolerance || tolerance,
             overrides.control?.upper_tolerance,
