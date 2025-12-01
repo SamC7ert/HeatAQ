@@ -135,7 +135,7 @@ const SimControlModule = {
                 this.pools = data.pools;
 
                 select.innerHTML = data.pools.map(pool =>
-                    `<option value="${pool.pool_id}">${pool.name} (${pool.area_m2}m², ${pool.volume_m3}m³)</option>`
+                    `<option value="${pool.pool_id}">${pool.name}</option>`
                 ).join('');
 
                 // Priority: 1) Project's pool, 2) Saved preference, 3) First pool
