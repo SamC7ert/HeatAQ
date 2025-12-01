@@ -592,8 +592,7 @@ class EnergySimulator {
             SELECT
                 timestamp,
                 solar_wh_m2,
-                clear_sky_wh_m2,
-                cloud_factor
+                clear_sky_wh_m2
             FROM site_solar_hourly
             WHERE site_id = ?
               AND DATE(timestamp) BETWEEN ? AND ?
@@ -606,11 +605,16 @@ class EnergySimulator {
         $solarByTimestamp = [];
         foreach ($rows as $row) {
             $ts = $row['timestamp'];
+            $solarWh = $row['solar_wh_m2'] ?? 0;
+            $clearSkyWh = $row['clear_sky_wh_m2'] ?? 0;
+            // Calculate cloud_factor: actual / clear_sky (1.0 = no clouds)
+            $cloudFactor = ($clearSkyWh > 0) ? ($solarWh / $clearSkyWh) : 1.0;
+
             // Convert Wh/m² to kWh/m² for consistency with existing code
             $solarByTimestamp[$ts] = [
-                'hourly_kwh_m2' => $row['solar_wh_m2'] / 1000,
-                'hourly_clear_sky_kwh_m2' => $row['clear_sky_wh_m2'] / 1000,
-                'cloud_factor' => $row['cloud_factor']
+                'hourly_kwh_m2' => $solarWh / 1000,
+                'hourly_clear_sky_kwh_m2' => $clearSkyWh / 1000,
+                'cloud_factor' => $cloudFactor
             ];
         }
         return $solarByTimestamp;
