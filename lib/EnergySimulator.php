@@ -168,12 +168,19 @@ class EnergySimulator {
             $this->poolConfig['wind_exposure_factor'] = $uiConfig['pool']['wind_exposure'] ?? $this->poolConfig['wind_exposure_factor'];
             $this->poolConfig['years_operating'] = $uiConfig['pool']['years_operating'] ?? $this->poolConfig['years_operating'];
             $this->poolConfig['has_tunnel'] = $uiConfig['pool']['has_tunnel'] ?? $this->poolConfig['has_tunnel'];
+
+            // Solar absorption can come from pool section (from pools table)
+            if (isset($uiConfig['pool']['solar_absorption'])) {
+                $absorb = (float) $uiConfig['pool']['solar_absorption'];
+                $this->poolConfig['solar_absorption'] = $absorb > 1 ? $absorb / 100 : $absorb;
+            }
         }
 
         // Cover settings
         if (isset($uiConfig['cover'])) {
             $this->poolConfig['has_cover'] = $uiConfig['cover']['has_cover'] ?? $this->poolConfig['has_cover'];
-            $this->poolConfig['cover_r_value'] = $uiConfig['cover']['u_value'] ?? $this->poolConfig['cover_r_value'];
+            // Check both r_value (from pools table) and u_value (from config template)
+            $this->poolConfig['cover_r_value'] = $uiConfig['cover']['r_value'] ?? $uiConfig['cover']['u_value'] ?? $this->poolConfig['cover_r_value'];
             // UI stores as percentage, convert to decimal
             if (isset($uiConfig['cover']['solar_transmittance'])) {
                 $trans = (float) $uiConfig['cover']['solar_transmittance'];
@@ -181,13 +188,10 @@ class EnergySimulator {
             }
         }
 
-        // Solar settings
-        if (isset($uiConfig['solar'])) {
-            // UI stores as percentage, convert to decimal
-            if (isset($uiConfig['solar']['absorption'])) {
-                $absorb = (float) $uiConfig['solar']['absorption'];
-                $this->poolConfig['solar_absorption'] = $absorb > 1 ? $absorb / 100 : $absorb;
-            }
+        // Solar settings (fallback if not in pool section)
+        if (isset($uiConfig['solar']['absorption']) && !isset($uiConfig['pool']['solar_absorption'])) {
+            $absorb = (float) $uiConfig['solar']['absorption'];
+            $this->poolConfig['solar_absorption'] = $absorb > 1 ? $absorb / 100 : $absorb;
         }
 
         // Equipment - Heat Pump
