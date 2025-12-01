@@ -12,8 +12,22 @@
 --   pool_sites: id, site_id, project_id (FK), name, lat/lng, etc.
 --   pools: pool_id, pool_site_id (FK), name, dimensions, etc.
 
+-- First check and drop any FK constraints on site_id
+-- (The FK constraint name may vary - try common patterns)
+ALTER TABLE projects DROP FOREIGN KEY IF EXISTS fk_projects_site;
+ALTER TABLE projects DROP FOREIGN KEY IF EXISTS fk_project_site;
+ALTER TABLE projects DROP FOREIGN KEY IF EXISTS projects_ibfk_1;
+
+-- Drop the index on site_id
+ALTER TABLE projects DROP INDEX IF EXISTS idx_site;
+ALTER TABLE projects DROP INDEX IF EXISTS idx_site_id;
+
 -- Remove site_id column from projects (relationship now via pool_sites.project_id)
 ALTER TABLE projects DROP COLUMN site_id;
+
+-- Drop index on project_code if exists
+ALTER TABLE projects DROP INDEX IF EXISTS idx_code;
+ALTER TABLE projects DROP INDEX IF EXISTS project_code;
 
 -- Remove project_code (unclear purpose, redundant)
 ALTER TABLE projects DROP COLUMN project_code;
