@@ -1137,7 +1137,7 @@ const SimulationsModule = {
                                 }
                             },
                             template_id: scenario.schedule_id,
-                            save_run: false // Don't save to history
+                            save_run: true // Save to history - timestamp tracks each case
                         })
                     });
                     return await response.json();
