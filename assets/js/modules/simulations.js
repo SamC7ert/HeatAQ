@@ -733,6 +733,35 @@ const SimulationsModule = {
         } catch (error) {
             console.error('Failed to load runs for comparison:', error);
         }
+
+        // Load schedule templates for Analyse tab dropdowns
+        await this.loadAnalyseSchedules();
+    },
+
+    /**
+     * Load schedule templates for Analyse tab dropdowns
+     */
+    loadAnalyseSchedules: async function() {
+        try {
+            const response = await fetch('/api/heataq_api.php?action=get_templates');
+            const data = await response.json();
+
+            if (data.templates && data.templates.length > 0) {
+                const optionsHtml = data.templates.map(t =>
+                    `<option value="${t.template_id}">${this.escapeHtml(t.name)}</option>`
+                ).join('');
+
+                // Populate all 5 analyse schedule dropdowns
+                for (let i = 1; i <= 5; i++) {
+                    const select = document.getElementById(`analyse-schedule-${i}`);
+                    if (select) {
+                        select.innerHTML = optionsHtml;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load schedule templates:', error);
+        }
     },
 
     /**
@@ -1852,9 +1881,10 @@ const SimulationsModule = {
         }
 
         const labels = data.map((d, i) => {
-            // Show day label at hour 3 (centered under day's data, not at midnight boundary)
-            if (i % 24 === 3) {
-                const date = new Date(d.timestamp);
+            // Show day label at hour 3 (centered under day's data)
+            const date = new Date(d.timestamp);
+            const hour = date.getHours();
+            if (hour === 3) {
                 const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
                 const dayNum = date.getDate();
                 return `${dayName} ${dayNum}`;
@@ -2070,9 +2100,10 @@ const SimulationsModule = {
             data.findIndex(d => d.timestamp === this.debugTimestamp) : -1;
 
         const labels = data.map((d, i) => {
-            // Show day label at hour 3 (centered under day's data, not at midnight boundary)
-            if (i % 24 === 3) {
-                const date = new Date(d.timestamp);
+            // Show day label at hour 3 (centered under day's data)
+            const date = new Date(d.timestamp);
+            const hour = date.getHours();
+            if (hour === 3) {
                 const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
                 const dayNum = date.getDate();
                 return `${dayName} ${dayNum}`;

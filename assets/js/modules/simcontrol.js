@@ -83,6 +83,9 @@ const SimControlModule = {
             this.currentSiteId = projectSiteId;
             console.log('[SimControl] Selected site:', projectSite.name);
 
+            // Set cookie for backend API to read (expires in 1 year)
+            document.cookie = `heataq_site_id=${this.currentSiteId}; path=/; max-age=31536000`;
+
             await this.loadPools(this.currentSiteId);
 
         } catch (err) {
@@ -164,6 +167,9 @@ const SimControlModule = {
 
         this.currentSiteId = select.value;
         this.savePreference('sim_site_id', this.currentSiteId);
+
+        // Set cookie for backend API to read (expires in 1 year)
+        document.cookie = `heataq_site_id=${this.currentSiteId}; path=/; max-age=31536000`;
 
         await this.loadPools(this.currentSiteId);
     },

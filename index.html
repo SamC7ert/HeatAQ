@@ -611,75 +611,75 @@
                             </div>
                         </div>
 
-                        <!-- Config Override (Config | Override columns) -->
+                        <!-- Configuration with Override option -->
                         <div class="card">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                <h3 style="margin: 0;">Configuration Overrides</h3>
+                                <h3 style="margin: 0;">Configuration</h3>
                                 <button type="button" class="btn btn-sm btn-outline-secondary" onclick="SimulationsModule.clearAllOverrides()" title="Clear all overrides">Clear All</button>
                             </div>
                             <p class="text-muted" style="font-size: 11px; margin-bottom: 8px;">Leave override blank to use config value</p>
                             <table class="data-table form-table compact" id="sim-override-table">
                                 <thead>
                                     <tr>
-                                        <th>Parameter</th>
-                                        <th>Config</th>
-                                        <th>Override</th>
-                                        <th style="width: 24px;"></th>
+                                        <th style="width: 45%;">Parameter</th>
+                                        <th style="width: 20%; text-align: center;">Config</th>
+                                        <th style="width: 25%; text-align: center;">Override</th>
+                                        <th style="width: 10%;"></th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr>
                                         <td>HP Capacity (kW)</td>
-                                        <td id="cfg-val-hp-capacity" class="config-value">-</td>
-                                        <td><input type="number" id="sim-hp-override" step="1" placeholder="-"></td>
+                                        <td id="cfg-val-hp-capacity" class="config-value" style="font-weight: bold; font-size: 14px; text-align: center;">-</td>
+                                        <td><input type="text" id="sim-hp-override" placeholder="-" style="text-align: center;"></td>
                                         <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-hp-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
                                         <td>Boiler Capacity (kW)</td>
-                                        <td id="cfg-val-boiler-capacity" class="config-value">-</td>
-                                        <td><input type="number" id="sim-boiler-override" step="1" placeholder="-"></td>
+                                        <td id="cfg-val-boiler-capacity" class="config-value" style="font-weight: bold; font-size: 14px; text-align: center;">-</td>
+                                        <td><input type="text" id="sim-boiler-override" placeholder="-" style="text-align: center;"></td>
                                         <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-boiler-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
                                         <td>Target Temp (°C)</td>
-                                        <td id="cfg-val-target-temp" class="config-value">-</td>
-                                        <td><input type="number" id="sim-target-override" step="0.1" placeholder="-"></td>
+                                        <td id="cfg-val-target-temp" class="config-value" style="font-weight: bold; font-size: 14px; text-align: center;">-</td>
+                                        <td><input type="text" id="sim-target-override" placeholder="-" style="text-align: center;"></td>
                                         <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-target-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
                                         <td>Upper Tolerance (°C)</td>
-                                        <td id="cfg-val-upper-tol" class="config-value">-</td>
-                                        <td><input type="number" id="sim-upper-tol-override" step="0.1" placeholder="-"></td>
+                                        <td id="cfg-val-upper-tol" class="config-value" style="font-weight: bold; font-size: 14px; text-align: center;">-</td>
+                                        <td><input type="text" id="sim-upper-tol-override" placeholder="-" style="text-align: center;"></td>
                                         <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-upper-tol-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
                                         <td>Lower Tolerance (°C)</td>
-                                        <td id="cfg-val-lower-tol" class="config-value">-</td>
-                                        <td><input type="number" id="sim-lower-tol-override" step="0.1" placeholder="-"></td>
+                                        <td id="cfg-val-lower-tol" class="config-value" style="font-weight: bold; font-size: 14px; text-align: center;">-</td>
+                                        <td><input type="text" id="sim-lower-tol-override" placeholder="-" style="text-align: center;"></td>
                                         <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-lower-tol-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
                                         <td>Bathers/Day</td>
-                                        <td id="cfg-val-bathers" class="config-value">-</td>
-                                        <td><input type="number" id="sim-bathers-override" step="1" placeholder="-"></td>
+                                        <td id="cfg-val-bathers" class="config-value" style="font-weight: bold; font-size: 14px; text-align: center;">-</td>
+                                        <td><input type="text" id="sim-bathers-override" placeholder="-" style="text-align: center;"></td>
                                         <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-bathers-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
                                         <td>Activity Factor</td>
-                                        <td id="cfg-val-activity" class="config-value">-</td>
-                                        <td><input type="number" id="sim-activity-override" step="0.1" placeholder="-"></td>
+                                        <td id="cfg-val-activity" class="config-value" style="font-weight: bold; font-size: 14px; text-align: center;">-</td>
+                                        <td><input type="text" id="sim-activity-override" placeholder="-" style="text-align: center;"></td>
                                         <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-activity-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
                                         <td>Wind Exposure</td>
-                                        <td id="cfg-val-wind" class="config-value">-</td>
-                                        <td><input type="number" id="sim-wind-override" step="0.01" placeholder="-"></td>
+                                        <td id="cfg-val-wind" class="config-value" style="font-weight: bold; font-size: 14px; text-align: center;">-</td>
+                                        <td><input type="text" id="sim-wind-override" placeholder="-" style="text-align: center;"></td>
                                         <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-wind-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
                                         <td>Solar Absorption</td>
-                                        <td id="cfg-val-solar" class="config-value">-</td>
-                                        <td><input type="number" id="sim-solar-override" step="0.01" placeholder="-"></td>
+                                        <td id="cfg-val-solar" class="config-value" style="font-weight: bold; font-size: 14px; text-align: center;">-</td>
+                                        <td><input type="text" id="sim-solar-override" placeholder="-" style="text-align: center;"></td>
                                         <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-solar-override')" title="Clear">&times;</button></td>
                                     </tr>
                                 </tbody>
