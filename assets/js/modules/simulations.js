@@ -429,7 +429,7 @@ const SimulationsModule = {
     },
 
     /**
-     * Render daily energy chart (area chart matching debug colors)
+     * Render daily energy chart (stacked area: HP bottom, Boiler on top)
      */
     renderDailyChart: function(dailyResults) {
         const canvas = document.getElementById('daily-energy-chart');
@@ -440,7 +440,6 @@ const SimulationsModule = {
         }
 
         // Prepare data - use thermal output (heat delivered), NOT electricity/fuel consumed
-        // For old runs without thermal columns, estimate using typical COP/efficiency
         const labels = dailyResults.map(d => d.date);
         const hpData = dailyResults.map(d => {
             const thermal = parseFloat(d.hp_thermal_kwh);
@@ -454,7 +453,6 @@ const SimulationsModule = {
             const fuel = parseFloat(d.total_boiler_kwh) || 0;
             return fuel * 0.92;  // Estimated thermal output
         });
-        const lossData = dailyResults.map(d => parseFloat(d.total_loss_kwh) || 0);
 
         new Chart(canvas, {
             type: 'line',
@@ -462,38 +460,25 @@ const SimulationsModule = {
                 labels: labels,
                 datasets: [
                     {
-                        label: 'Heat Demand (kWh)',
-                        data: lossData,
-                        borderColor: 'rgba(100, 100, 100, 0.8)',
-                        backgroundColor: 'transparent',
-                        fill: false,
+                        label: 'Heat Pump (kWh)',
+                        data: hpData,
+                        borderColor: 'rgba(40, 167, 69, 1)',
+                        backgroundColor: 'rgba(40, 167, 69, 0.7)',
+                        fill: 'origin',
                         pointRadius: 0,
-                        borderWidth: 1.5,
+                        borderWidth: 1,
                         tension: 0.1,
-                        order: 0  // Draw on top
+                        order: 2
                     },
                     {
                         label: 'Boiler (kWh)',
                         data: boilerData,
                         borderColor: 'rgba(220, 53, 69, 1)',
                         backgroundColor: 'rgba(220, 53, 69, 0.7)',
-                        fill: true,
+                        fill: 'origin',
                         pointRadius: 0,
-                        borderWidth: 0,
+                        borderWidth: 1,
                         tension: 0.1,
-                        stack: 'heating',
-                        order: 2
-                    },
-                    {
-                        label: 'Heat Pump (kWh)',
-                        data: hpData,
-                        borderColor: 'rgba(40, 167, 69, 1)',
-                        backgroundColor: 'rgba(40, 167, 69, 0.7)',
-                        fill: true,
-                        pointRadius: 0,
-                        borderWidth: 0,
-                        tension: 0.1,
-                        stack: 'heating',
                         order: 1
                     }
                 ]
@@ -2472,26 +2457,19 @@ const SimulationsModule = {
         }
 
         // Prepare data - use thermal output (heat delivered), NOT electricity consumed
-        // For old runs without thermal columns, estimate: HP thermal ≈ electricity × COP (assume 3.5)
         const labels = dailyResults.map(d => d.date);
         const hpData = dailyResults.map(d => {
             const thermal = parseFloat(d.hp_thermal_kwh);
             if (thermal > 0) return thermal;
-            // Fallback: estimate from electricity × average COP
             const elec = parseFloat(d.total_hp_kwh) || 0;
             return elec * 3.5;  // Estimated thermal output
         });
         const boilerData = dailyResults.map(d => {
             const thermal = parseFloat(d.boiler_thermal_kwh);
             if (thermal > 0) return thermal;
-            // Fallback: estimate from fuel × efficiency (assume 92%)
             const fuel = parseFloat(d.total_boiler_kwh) || 0;
             return fuel * 0.92;  // Estimated thermal output
         });
-        const lossData = dailyResults.map(d => parseFloat(d.total_loss_kwh) || 0);
-
-        // Stack data: Boiler on top of HP
-        const stackedBoilerData = boilerData.map((b, i) => b + hpData[i]);
 
         this.yearlyChart = new Chart(canvas, {
             type: 'line',
@@ -2499,37 +2477,26 @@ const SimulationsModule = {
                 labels: labels,
                 datasets: [
                     {
-                        label: 'Heat Demand (kWh)',
-                        data: lossData,
-                        borderColor: 'rgba(100, 100, 100, 0.8)',
-                        backgroundColor: 'transparent',
-                        fill: false,
-                        pointRadius: 0,
-                        borderWidth: 1.5,
-                        tension: 0.1,
-                        order: 0  // Draw on top
-                    },
-                    {
-                        label: 'Boiler (kWh)',
-                        data: stackedBoilerData,
-                        borderColor: 'rgba(220, 53, 69, 1)',
-                        backgroundColor: 'rgba(220, 53, 69, 0.7)',
-                        fill: '-1',  // Fill down to HP dataset
-                        pointRadius: 0,
-                        borderWidth: 0,
-                        tension: 0.1,
-                        order: 1
-                    },
-                    {
                         label: 'Heat Pump (kWh)',
                         data: hpData,
                         borderColor: 'rgba(40, 167, 69, 1)',
                         backgroundColor: 'rgba(40, 167, 69, 0.7)',
-                        fill: 'origin',  // Fill down to x-axis
+                        fill: 'origin',
                         pointRadius: 0,
-                        borderWidth: 0,
+                        borderWidth: 1,
                         tension: 0.1,
                         order: 2
+                    },
+                    {
+                        label: 'Boiler (kWh)',
+                        data: boilerData,
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        backgroundColor: 'rgba(220, 53, 69, 0.7)',
+                        fill: 'origin',
+                        pointRadius: 0,
+                        borderWidth: 1,
+                        tension: 0.1,
+                        order: 1
                     }
                 ]
             },
@@ -2572,6 +2539,7 @@ const SimulationsModule = {
                     },
                     y: {
                         display: true,
+                        stacked: true,
                         title: { display: true, text: 'Energy (kWh)' }
                     }
                 }
