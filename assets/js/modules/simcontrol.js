@@ -476,15 +476,14 @@ const SimControlModule = {
             overrides.control?.target_temp,
             '°C', 1
         );
-        // temp_tolerance is stored as single value in equipment (applies to both +/-) - NO DEFAULT
-        const tolerance = equip.temp_tolerance || control.temp_tolerance || control.upper_tolerance;
+        // Tolerance: check equipment (from PHP) then control section (from config_json)
         const upperTol = withOverride(
-            control.upper_tolerance || tolerance,
+            equip.upper_tolerance || control.upper_tolerance || equip.temp_tolerance || control.temp_tolerance,
             overrides.control?.upper_tolerance,
             '°C', 1
         );
         const lowerTol = withOverride(
-            control.lower_tolerance || tolerance,
+            equip.lower_tolerance || control.lower_tolerance || equip.temp_tolerance || control.temp_tolerance,
             overrides.control?.lower_tolerance,
             '°C', 1
         );

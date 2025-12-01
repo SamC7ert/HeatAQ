@@ -220,8 +220,15 @@ class EnergySimulator {
         // Control settings
         if (isset($uiConfig['control'])) {
             $this->equipment['control_strategy'] = $uiConfig['control']['strategy'] ?? $this->equipment['control_strategy'];
-            $this->equipment['target_temp'] = $uiConfig['control']['target_temp'] ?? 28;
-            $this->equipment['temp_tolerance'] = $uiConfig['control']['temp_tolerance'] ?? 2;
+            $this->equipment['target_temp'] = $uiConfig['control']['target_temp'] ?? null;
+            // Config stores upper/lower tolerance separately
+            $this->equipment['upper_tolerance'] = $uiConfig['control']['upper_tolerance'] ?? null;
+            $this->equipment['lower_tolerance'] = $uiConfig['control']['lower_tolerance'] ?? null;
+            // For backward compat, also check temp_tolerance
+            if (isset($uiConfig['control']['temp_tolerance'])) {
+                $this->equipment['upper_tolerance'] = $uiConfig['control']['temp_tolerance'];
+                $this->equipment['lower_tolerance'] = $uiConfig['control']['temp_tolerance'];
+            }
         }
 
         // Energy costs
@@ -230,13 +237,52 @@ class EnergySimulator {
             $this->equipment['boiler']['fuel_cost_per_kwh'] = $uiConfig['costs']['gas_nok_kwh'] ?? $this->equipment['boiler']['fuel_cost_per_kwh'];
         }
 
-        // Bathers settings - NO DEFAULTS, must be configured
+        // Water temperatures - needed for bather energy calculation
+        if (isset($uiConfig['water_temps'])) {
+            $this->equipment['water_temps'] = [
+                'cold_water' => $uiConfig['water_temps']['cold_water'] ?? null,
+                'shower_target' => $uiConfig['water_temps']['shower_target'] ?? null,
+                'hot_water_tank' => $uiConfig['water_temps']['hot_water_tank'] ?? null,
+                'hp_max_dhw' => $uiConfig['water_temps']['hp_max_dhw'] ?? null,
+            ];
+        }
+
+        // Equipment extras
+        if (isset($uiConfig['equipment']['showers_use_hp'])) {
+            $this->equipment['showers_use_hp'] = $uiConfig['equipment']['showers_use_hp'];
+        }
+
+        // Bathers settings - calculate kwh_per_visit from water volumes and temps
         if (isset($uiConfig['bathers'])) {
+            $perDay = $uiConfig['bathers']['per_day'] ?? null;
+            $refillLiters = $uiConfig['bathers']['refill_liters'] ?? null;
+            $showerLiters = $uiConfig['bathers']['shower_liters'] ?? null;
+            $activityFactor = $uiConfig['bathers']['activity_factor'] ?? null;
+
+            // Calculate kWh per visit from water heating requirements
+            // Energy = mass * specific_heat * temp_diff / 3600000 (to get kWh)
+            $kwhPerVisit = null;
+            if ($refillLiters !== null && $showerLiters !== null && isset($this->equipment['water_temps'])) {
+                $coldWater = $this->equipment['water_temps']['cold_water'] ?? 5;
+                $showerTarget = $this->equipment['water_temps']['shower_target'] ?? 40;
+                $poolTemp = $this->equipment['target_temp'] ?? 28;
+
+                // Pool refill heating: cold water -> pool temp
+                $refillEnergy = $refillLiters * 4.186 * ($poolTemp - $coldWater) / 3600; // kWh
+
+                // Shower heating: cold water -> shower target
+                $showerEnergy = $showerLiters * 4.186 * ($showerTarget - $coldWater) / 3600; // kWh
+
+                $kwhPerVisit = $refillEnergy + $showerEnergy;
+            }
+
             $this->equipment['bathers'] = [
-                'per_day' => $uiConfig['bathers']['per_day'] ?? null,
-                'activity_factor' => $uiConfig['bathers']['activity_factor'] ?? null,
-                'kwh_per_visit' => $uiConfig['bathers']['kwh_per_visit'] ?? null,
-                'open_hours' => $uiConfig['bathers']['open_hours'] ?? null,
+                'per_day' => $perDay,
+                'activity_factor' => $activityFactor,
+                'refill_liters' => $refillLiters,
+                'shower_liters' => $showerLiters,
+                'kwh_per_visit' => $kwhPerVisit,
+                'open_hours' => $uiConfig['bathers']['open_hours'] ?? 10, // Default 10 hours if not specified
             ];
         }
     }
