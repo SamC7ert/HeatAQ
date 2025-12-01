@@ -67,11 +67,12 @@ const AdminModule = {
                 <td>${isFixed
                     ? `<input type="date" class="inline-edit" value="2000-${dateValue}"
                         onchange="app.admin.updateHolidayDate('${def.id}', this.value)">`
-                    : `<select class="inline-edit" style="width:120px" onchange="app.admin.updateHolidayField('${def.id}', 'reference_day_id', this.value)">
+                    : `<input type="number" class="inline-edit" style="width:50px" value="${def.offset_days || 0}"
+                        onchange="app.admin.updateHolidayField('${def.id}', 'offset_days', this.value)">
+                       <span style="margin:0 4px">days from</span>
+                       <select class="inline-edit" onchange="app.admin.updateHolidayField('${def.id}', 'reference_day_id', this.value)">
                         ${refOptions}
-                       </select>
-                       <input type="number" class="inline-edit" style="width:50px" value="${def.offset_days || 0}"
-                        onchange="app.admin.updateHolidayField('${def.id}', 'offset_days', this.value)"> days`
+                       </select>`
                 }</td>
                 <td><button class="btn btn-xs btn-danger" onclick="app.admin.deleteHolidayDefinition('${def.id}')" title="Delete">×</button></td>
             </tr>`;
