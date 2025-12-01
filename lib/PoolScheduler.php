@@ -529,6 +529,11 @@ class PoolScheduler {
         $periods = $this->getPeriods($datetime);
 
         foreach ($periods as $period) {
+            // Skip invalid periods where from == to (zero-length period)
+            if ($period['from'] === $period['to']) {
+                continue;
+            }
+
             if ($period['from'] < $period['to']) {
                 // Normal case: 10-20
                 if ($hour >= $period['from'] && $hour < $period['to']) {
@@ -662,11 +667,18 @@ class PoolScheduler {
         $periods = $this->getPeriods($datetime);
 
         foreach ($periods as $period) {
+            // Skip invalid periods where from == to (zero-length period)
+            if ($period['from'] === $period['to']) {
+                continue;
+            }
+
             if ($period['from'] < $period['to']) {
+                // Normal case: 10-20
                 if ($hour >= $period['from'] && $hour < $period['to']) {
                     return $period;
                 }
             } else {
+                // Overnight case: 22-6
                 if ($hour >= $period['from'] || $hour < $period['to']) {
                     return $period;
                 }
