@@ -1,12 +1,12 @@
 # Database Schema
 
-Generated: 2025-11-30 21:18:13
+Generated: 2025-12-01 15:02:36
 
 Database: heataq_pool-353130302dd2
 
 ## audit_log
 
-Rows: 3841
+Rows: 5435
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -238,7 +238,7 @@ Rows: 101
 
 ## password_reset_attempts
 
-Rows: 0
+Rows: 2
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -254,7 +254,7 @@ Rows: 0
 
 ## password_reset_tokens
 
-Rows: 0
+Rows: 1
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -272,30 +272,6 @@ Rows: 0
 - `idx_user_id` (user_id)
 - `idx_expires` (expires_at)
 
-## pool_configurations
-
-Rows: 1
-
-| Column | Type | Null | Key | Default | Extra |
-|--------|------|------|-----|---------|-------|
-| config_id | varchar(50) | NO | PRI | NULL |  |
-| pool_site_id | int(11) | YES |  | NULL |  |
-| site_id | varchar(50) | YES | MUL | NULL |  |
-| name | varchar(100) | NO |  | NULL |  |
-| pool_area_m2 | decimal(8,2) | YES |  | NULL |  |
-| pool_volume_m3 | decimal(8,2) | YES |  | NULL |  |
-| pool_depth_m | decimal(4,2) | YES |  | NULL |  |
-| has_cover | tinyint(1) | YES |  | 0 |  |
-| has_tunnel | tinyint(1) | YES |  | 0 |  |
-| surface_type | varchar(50) | YES |  | NULL |  |
-| notes | text | YES |  | NULL |  |
-| created_at | timestamp | YES |  | current_timestamp() |  |
-| years_operating | tinyint(4) | NO |  | 3 |  |
-
-**Indexes:**
-- UNIQUE `PRIMARY` (config_id)
-- `site_id` (site_id)
-
 ## pool_sites
 
 Rows: 1
@@ -303,10 +279,16 @@ Rows: 1
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
 | id | int(11) | NO | PRI | NULL | auto_increment |
+| project_id | int(11) | YES | MUL | NULL |  |
 | site_id | varchar(50) | NO | UNI | NULL |  |
 | name | varchar(100) | NO |  | NULL |  |
 | latitude | decimal(10,6) | YES |  | NULL |  |
 | longitude | decimal(10,6) | YES |  | NULL |  |
+| weather_station_id | varchar(50) | YES | MUL | NULL |  |
+| solar_latitude | decimal(10,6) | YES |  | NULL |  |
+| solar_longitude | decimal(10,6) | YES |  | NULL |  |
+| solar_data_start | date | YES |  | NULL |  |
+| solar_data_end | date | YES |  | NULL |  |
 | elevation_m | int(11) | YES |  | NULL |  |
 | default_weather_station | varchar(50) | YES |  | NULL |  |
 | description | text | YES |  | NULL |  |
@@ -315,6 +297,8 @@ Rows: 1
 **Indexes:**
 - UNIQUE `PRIMARY` (id)
 - UNIQUE `idx_site_code` (site_id)
+- `idx_project_id` (project_id)
+- `idx_pool_sites_weather_station` (weather_station_id)
 
 ## pools
 
@@ -323,7 +307,7 @@ Rows: 1
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
 | pool_id | int(11) | NO | PRI | NULL | auto_increment |
-| site_id | varchar(50) | NO | MUL | NULL |  |
+| pool_site_id | int(11) | YES | MUL | NULL |  |
 | name | varchar(100) | NO |  | Main Pool |  |
 | description | text | YES |  | NULL |  |
 | length_m | decimal(6,2) | YES |  | 25.00 |  |
@@ -346,8 +330,8 @@ Rows: 1
 
 **Indexes:**
 - UNIQUE `PRIMARY` (pool_id)
-- `idx_site` (site_id)
 - `idx_active` (is_active)
+- `idx_pool_site_id` (pool_site_id)
 
 ## projects
 
@@ -357,8 +341,6 @@ Rows: 1
 |--------|------|------|-----|---------|-------|
 | project_id | int(11) | NO | PRI | NULL | auto_increment |
 | project_name | varchar(100) | NO |  | NULL |  |
-| project_code | varchar(50) | NO | UNI | NULL |  |
-| site_id | varchar(50) | YES | MUL | NULL |  |
 | description | text | YES |  | NULL |  |
 | is_active | tinyint(1) | YES |  | 1 |  |
 | settings | longtext | YES |  | NULL |  |
@@ -366,9 +348,6 @@ Rows: 1
 
 **Indexes:**
 - UNIQUE `PRIMARY` (project_id)
-- UNIQUE `project_code` (project_code)
-- `idx_site` (site_id)
-- `idx_code` (project_code)
 
 ## schedule_templates
 
@@ -394,7 +373,7 @@ Rows: 3
 
 ## simulation_daily_results
 
-Rows: 33312
+Rows: 49771
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -419,7 +398,7 @@ Rows: 33312
 
 ## simulation_hourly_results
 
-Rows: 798303
+Rows: 1192733
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -450,12 +429,11 @@ Rows: 798303
 
 ## simulation_runs
 
-Rows: 97
+Rows: 175
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
 | run_id | int(11) | NO | PRI | NULL | auto_increment |
-| site_id | varchar(50) | NO | MUL | NULL |  |
 | pool_id | int(11) | YES | MUL | NULL |  |
 | pool_site_id | int(11) | YES |  | NULL |  |
 | user_id | int(11) | YES |  | NULL |  |
@@ -471,18 +449,17 @@ Rows: 97
 
 **Indexes:**
 - UNIQUE `PRIMARY` (run_id)
-- `idx_site_id` (site_id)
 - `idx_status` (status)
 - `idx_created` (created_at)
 - `idx_pool_id` (pool_id)
 
 ## site_solar_daily
 
-Rows: 0
+Rows: 3653
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
-| site_id | varchar(50) | NO | PRI | NULL |  |
+| pool_site_id | int(11) | NO | PRI | NULL |  |
 | date | date | NO | PRI | NULL |  |
 | daily_kwh_m2 | decimal(6,4) | YES |  | NULL |  |
 | clear_sky_kwh_m2 | decimal(6,4) | YES |  | NULL |  |
@@ -490,25 +467,25 @@ Rows: 0
 | created_at | timestamp | YES |  | current_timestamp() |  |
 
 **Indexes:**
-- UNIQUE `PRIMARY` (site_id, date)
+- UNIQUE `PRIMARY` (pool_site_id, date)
 - `idx_date` (date)
-- `idx_site` (site_id)
+- `idx_pool_site_id` (pool_site_id)
 
 ## site_solar_hourly
 
-Rows: 0
+Rows: 87672
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
-| site_id | varchar(50) | NO | PRI | NULL |  |
+| pool_site_id | int(11) | NO | PRI | NULL |  |
 | timestamp | datetime | NO | PRI | NULL |  |
 | solar_wh_m2 | decimal(8,2) | YES |  | NULL |  |
 | clear_sky_wh_m2 | decimal(8,2) | YES |  | NULL |  |
 
 **Indexes:**
-- UNIQUE `PRIMARY` (site_id, timestamp)
+- UNIQUE `PRIMARY` (pool_site_id, timestamp)
 - `idx_timestamp` (timestamp)
-- `idx_site` (site_id)
+- `idx_pool_site_id` (pool_site_id)
 
 ## solar_daily_data
 
@@ -539,7 +516,7 @@ Rows: 50
 
 ## user_preferences
 
-Rows: 3
+Rows: 4
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -571,7 +548,7 @@ Rows: 5
 
 ## user_sessions
 
-Rows: 11
+Rows: 20
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
