@@ -31,6 +31,7 @@ class EnergySimulator {
 
     private $db;
     private $siteId;
+    private $poolSiteId;  // INT pool_site_id for solar tables
     private $scheduler;
 
     // Pool physical parameters
@@ -57,6 +58,12 @@ class EnergySimulator {
         $this->db = $db;
         $this->siteId = $siteId;
         $this->scheduler = $scheduler;
+
+        // Get numeric pool_site_id from VARCHAR site_id
+        $stmt = $db->prepare("SELECT id FROM pool_sites WHERE site_id = ?");
+        $stmt->execute([$siteId]);
+        $result = $stmt->fetch();
+        $this->poolSiteId = $result ? (int)$result['id'] : null;
 
         // Load pool configuration
         $this->poolConfig = $this->loadPoolConfig();
@@ -632,11 +639,12 @@ class EnergySimulator {
      * Check if hourly solar data is available for this site
      */
     private function hasHourlySolarData() {
+        if (!$this->poolSiteId) return false;
         try {
             $stmt = $this->db->prepare("
-                SELECT COUNT(*) FROM site_solar_hourly WHERE site_id = ? LIMIT 1
+                SELECT COUNT(*) FROM site_solar_hourly WHERE pool_site_id = ? LIMIT 1
             ");
-            $stmt->execute([$this->siteId]);
+            $stmt->execute([$this->poolSiteId]);
             return $stmt->fetchColumn() > 0;
         } catch (PDOException $e) {
             // Table doesn't exist yet
@@ -651,14 +659,15 @@ class EnergySimulator {
      * when fetched from NASA POWER API, so we just use solar_wh_m2 directly.
      */
     private function getHourlySolarData($startDate, $endDate) {
+        if (!$this->poolSiteId) return [];
         $stmt = $this->db->prepare("
             SELECT timestamp, solar_wh_m2
             FROM site_solar_hourly
-            WHERE site_id = ?
+            WHERE pool_site_id = ?
               AND DATE(timestamp) BETWEEN ? AND ?
             ORDER BY timestamp
         ");
-        $stmt->execute([$this->siteId, $startDate, $endDate]);
+        $stmt->execute([$this->poolSiteId, $startDate, $endDate]);
         $rows = $stmt->fetchAll();
 
         // Index by timestamp, convert Wh/m² to kWh/m²
@@ -1240,10 +1249,10 @@ class EnergySimulator {
             $stmt = $this->db->prepare("
                 SELECT solar_wh_m2
                 FROM site_solar_hourly
-                WHERE site_id = ? AND timestamp = ?
+                WHERE pool_site_id = ? AND timestamp = ?
                 LIMIT 1
             ");
-            $stmt->execute([$this->siteId, $timestamp]);
+            $stmt->execute([$this->poolSiteId, $timestamp]);
             $hourlyRow = $stmt->fetch();
             if ($hourlyRow) {
                 $hourlySolar = ($hourlyRow['solar_wh_m2'] ?? 0) / 1000; // Wh to kWh

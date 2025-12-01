@@ -8,7 +8,8 @@
 
 class NasaSolarFetcher {
     private $db;
-    private $siteId;
+    private $siteId;      // VARCHAR site_id (for pool_sites lookup)
+    private $poolSiteId;  // INT pool_site_id (for solar tables)
 
     // NASA POWER API endpoint
     const NASA_API_URL = 'https://power.larc.nasa.gov/api/temporal/daily/point';
@@ -16,6 +17,16 @@ class NasaSolarFetcher {
     public function __construct(PDO $db, string $siteId) {
         $this->db = $db;
         $this->siteId = $siteId;
+
+        // Get numeric pool_site_id from VARCHAR site_id
+        $stmt = $db->prepare("SELECT id FROM pool_sites WHERE site_id = ?");
+        $stmt->execute([$siteId]);
+        $result = $stmt->fetch();
+        $this->poolSiteId = $result ? (int)$result['id'] : null;
+
+        if (!$this->poolSiteId) {
+            throw new Exception("Site not found: {$siteId}");
+        }
     }
 
     /**
@@ -148,10 +159,10 @@ class NasaSolarFetcher {
         // Fetch from NASA
         $nasaData = $this->fetchFromNasa($latitude, $longitude, $startYear, $endYear);
 
-        // Prepare insert statements for both tables
+        // Prepare insert statements for both tables (using pool_site_id)
         $dailyStmt = $this->db->prepare("
             INSERT INTO site_solar_daily
-            (site_id, date, daily_kwh_m2, clear_sky_kwh_m2, cloud_factor)
+            (pool_site_id, date, daily_kwh_m2, clear_sky_kwh_m2, cloud_factor)
             VALUES (?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 daily_kwh_m2 = VALUES(daily_kwh_m2),
@@ -161,7 +172,7 @@ class NasaSolarFetcher {
 
         $hourlyStmt = $this->db->prepare("
             INSERT INTO site_solar_hourly
-            (site_id, timestamp, solar_wh_m2, clear_sky_wh_m2)
+            (pool_site_id, timestamp, solar_wh_m2, clear_sky_wh_m2)
             VALUES (?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
                 solar_wh_m2 = VALUES(solar_wh_m2),
@@ -171,18 +182,18 @@ class NasaSolarFetcher {
         // Clear existing data for this site in the date range
         $this->db->prepare("
             DELETE FROM site_solar_daily
-            WHERE site_id = ? AND date BETWEEN ? AND ?
+            WHERE pool_site_id = ? AND date BETWEEN ? AND ?
         ")->execute([
-            $this->siteId,
+            $this->poolSiteId,
             $startYear . '-01-01',
             $endYear . '-12-31'
         ]);
 
         $this->db->prepare("
             DELETE FROM site_solar_hourly
-            WHERE site_id = ? AND DATE(timestamp) BETWEEN ? AND ?
+            WHERE pool_site_id = ? AND DATE(timestamp) BETWEEN ? AND ?
         ")->execute([
-            $this->siteId,
+            $this->poolSiteId,
             $startYear . '-01-01',
             $endYear . '-12-31'
         ]);
@@ -205,7 +216,7 @@ class NasaSolarFetcher {
 
                 // Store daily data (raw from NASA)
                 $dailyStmt->execute([
-                    $this->siteId,
+                    $this->poolSiteId,
                     $dateFormatted,
                     round($dailyKwhM2, 4),
                     round($clearSkyKwh, 4),
@@ -222,7 +233,7 @@ class NasaSolarFetcher {
                     $timestamp = $dateFormatted . ' ' . sprintf('%02d:00:00', $hour);
 
                     $hourlyStmt->execute([
-                        $this->siteId,
+                        $this->poolSiteId,
                         $timestamp,
                         round($hourlyActual[$hour], 2),
                         round($hourlyClearSky[$hour], 2)
@@ -238,13 +249,13 @@ class NasaSolarFetcher {
                     solar_longitude = ?,
                     solar_data_start = ?,
                     solar_data_end = ?
-                WHERE site_id = ?
+                WHERE id = ?
             ")->execute([
                 $latitude,
                 $longitude,
                 $startYear . '-01-01',
                 $endYear . '-12-31',
-                $this->siteId
+                $this->poolSiteId
             ]);
 
             $this->db->commit();
@@ -273,10 +284,10 @@ class NasaSolarFetcher {
         $stmt = $this->db->prepare("
             SELECT solar_wh_m2, clear_sky_wh_m2
             FROM site_solar_hourly
-            WHERE site_id = ? AND timestamp = ?
+            WHERE pool_site_id = ? AND timestamp = ?
             LIMIT 1
         ");
-        $stmt->execute([$this->siteId, $timestamp]);
+        $stmt->execute([$this->poolSiteId, $timestamp]);
         return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 
@@ -287,9 +298,9 @@ class NasaSolarFetcher {
         $stmt = $this->db->prepare("
             SELECT MIN(timestamp) as min_date, MAX(timestamp) as max_date, COUNT(*) as hours
             FROM site_solar_hourly
-            WHERE site_id = ?
+            WHERE pool_site_id = ?
         ");
-        $stmt->execute([$this->siteId]);
+        $stmt->execute([$this->poolSiteId]);
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
 
@@ -300,10 +311,10 @@ class NasaSolarFetcher {
         $stmt = $this->db->prepare("
             SELECT daily_kwh_m2, clear_sky_kwh_m2, cloud_factor
             FROM site_solar_daily
-            WHERE site_id = ? AND date = ?
+            WHERE pool_site_id = ? AND date = ?
             LIMIT 1
         ");
-        $stmt->execute([$this->siteId, $date]);
+        $stmt->execute([$this->poolSiteId, $date]);
         return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 }

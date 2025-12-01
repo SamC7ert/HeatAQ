@@ -145,7 +145,20 @@ class HeatAQAPI {
             $params[':site_id'] = $this->siteId;
         }
     }
-    
+
+    /**
+     * Get numeric pool_site_id from VARCHAR site_id
+     * Used for tables that have been migrated to use pool_site_id
+     */
+    private function getPoolSiteId() {
+        if (!$this->siteId) return null;
+
+        $stmt = $this->db->prepare("SELECT id FROM pool_sites WHERE site_id = ?");
+        $stmt->execute([$this->siteId]);
+        $result = $stmt->fetch();
+        return $result ? (int)$result['id'] : null;
+    }
+
     // ====================================
     // MAIN HANDLER
     // ====================================
@@ -1914,19 +1927,19 @@ class HeatAQAPI {
     // ====================================
 
     private function getSolarStatus() {
-        // Check if site_solar_hourly table exists
-        $tableExists = $this->columnExists('site_solar_hourly', 'site_id');
+        // Get numeric pool_site_id
+        $poolSiteId = $this->getPoolSiteId();
 
-        if (!$tableExists) {
+        if (!$poolSiteId) {
             $this->sendResponse([
-                'status' => 'not_configured',
-                'message' => 'Solar hourly data table not yet created. Run migration first.',
+                'status' => 'no_site',
+                'message' => 'Site not found',
                 'has_data' => false
             ]);
             return;
         }
 
-        // Get solar data range for this site
+        // Get solar data range using pool_site_id
         $stmt = $this->db->prepare("
             SELECT
                 MIN(timestamp) as data_start,
@@ -1934,18 +1947,18 @@ class HeatAQAPI {
                 COUNT(*) as hour_count,
                 COUNT(DISTINCT DATE(timestamp)) as day_count
             FROM site_solar_hourly
-            WHERE site_id = ?
+            WHERE pool_site_id = ?
         ");
-        $stmt->execute([$this->siteId]);
+        $stmt->execute([$poolSiteId]);
         $stats = $stmt->fetch();
 
         // Get site location
         $locStmt = $this->db->prepare("
             SELECT solar_latitude, solar_longitude, solar_data_start, solar_data_end
             FROM pool_sites
-            WHERE site_id = ?
+            WHERE id = ?
         ");
-        $locStmt->execute([$this->siteId]);
+        $locStmt->execute([$poolSiteId]);
         $location = $locStmt->fetch();
 
         $this->sendResponse([
