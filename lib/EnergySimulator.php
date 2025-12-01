@@ -200,8 +200,15 @@ class EnergySimulator {
         }
 
         // Cover settings
+        // NOTE: has_cover comes from pools table and should NOT be overridden by config template
         if (isset($uiConfig['cover'])) {
-            $this->poolConfig['has_cover'] = $uiConfig['cover']['has_cover'] ?? $this->poolConfig['has_cover'];
+            // Only set has_cover if it's explicitly true in uiConfig, or if poolConfig doesn't have it yet
+            if (isset($uiConfig['cover']['has_cover']) && $uiConfig['cover']['has_cover'] === true) {
+                $this->poolConfig['has_cover'] = true;
+            } elseif ($this->poolConfig['has_cover'] === null && isset($uiConfig['cover']['has_cover'])) {
+                $this->poolConfig['has_cover'] = (bool)$uiConfig['cover']['has_cover'];
+            }
+            // Other cover settings can be overridden
             // Check both r_value (from pools table) and u_value (from config template)
             $this->poolConfig['cover_r_value'] = $uiConfig['cover']['r_value'] ?? $uiConfig['cover']['u_value'] ?? $this->poolConfig['cover_r_value'];
             // UI stores as percentage, convert to decimal
