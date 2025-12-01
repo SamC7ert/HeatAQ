@@ -1,5 +1,5 @@
 {
-    "generated_at": "2025-11-29 21:05:43",
+    "generated_at": "2025-11-30 20:23:36",
     "database": "heataq_pool-353130302dd2",
     "tables": {
         "audit_log": {
@@ -124,7 +124,7 @@
                     ]
                 }
             ],
-            "row_count": 3316
+            "row_count": 3664
         },
         "calendar_date_ranges": {
             "name": "calendar_date_ranges",
@@ -1128,6 +1128,161 @@
             ],
             "row_count": 101
         },
+        "password_reset_attempts": {
+            "name": "password_reset_attempts",
+            "columns": [
+                {
+                    "name": "attempt_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "email",
+                    "type": "varchar(255)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "ip_address",
+                    "type": "varchar(45)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "attempted_at",
+                    "type": "datetime",
+                    "null": "NO",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "attempt_id"
+                    ]
+                },
+                {
+                    "name": "idx_email_time",
+                    "unique": false,
+                    "columns": [
+                        "email",
+                        "attempted_at"
+                    ]
+                },
+                {
+                    "name": "idx_ip_time",
+                    "unique": false,
+                    "columns": [
+                        "ip_address",
+                        "attempted_at"
+                    ]
+                }
+            ],
+            "row_count": 0
+        },
+        "password_reset_tokens": {
+            "name": "password_reset_tokens",
+            "columns": [
+                {
+                    "name": "token_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "user_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "token",
+                    "type": "varchar(64)",
+                    "null": "NO",
+                    "key": "UNI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "datetime",
+                    "null": "NO",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                },
+                {
+                    "name": "expires_at",
+                    "type": "datetime",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "used_at",
+                    "type": "datetime",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "ip_address",
+                    "type": "varchar(45)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "token_id"
+                    ]
+                },
+                {
+                    "name": "idx_token",
+                    "unique": true,
+                    "columns": [
+                        "token"
+                    ]
+                },
+                {
+                    "name": "idx_user_id",
+                    "unique": false,
+                    "columns": [
+                        "user_id"
+                    ]
+                },
+                {
+                    "name": "idx_expires",
+                    "unique": false,
+                    "columns": [
+                        "expires_at"
+                    ]
+                }
+            ],
+            "row_count": 0
+        },
         "pool_configurations": {
             "name": "pool_configurations",
             "columns": [
@@ -1885,7 +2040,7 @@
                     ]
                 }
             ],
-            "row_count": 32582
+            "row_count": 33312
         },
         "simulation_hourly_results": {
             "name": "simulation_hourly_results",
@@ -2066,7 +2221,7 @@
                     ]
                 }
             ],
-            "row_count": 780809
+            "row_count": 798303
         },
         "simulation_runs": {
             "name": "simulation_runs",
@@ -2221,7 +2376,7 @@
                     ]
                 }
             ],
-            "row_count": 95
+            "row_count": 97
         },
         "site_solar_daily": {
             "name": "site_solar_daily",
@@ -2573,7 +2728,7 @@
                     ]
                 }
             ],
-            "row_count": 4
+            "row_count": 5
         },
         "user_sessions": {
             "name": "user_sessions",
@@ -2673,7 +2828,7 @@
                     ]
                 }
             ],
-            "row_count": 4
+            "row_count": 11
         },
         "users": {
             "name": "users",
@@ -2757,22 +2912,6 @@
                     "key": "",
                     "default": null,
                     "extra": ""
-                },
-                {
-                    "name": "password_reset_token",
-                    "type": "varchar(64)",
-                    "null": "YES",
-                    "key": "",
-                    "default": null,
-                    "extra": ""
-                },
-                {
-                    "name": "password_reset_expires",
-                    "type": "timestamp",
-                    "null": "YES",
-                    "key": "",
-                    "default": null,
-                    "extra": ""
                 }
             ],
             "indexes": [
@@ -2798,7 +2937,7 @@
                     ]
                 }
             ],
-            "row_count": 4
+            "row_count": 5
         },
         "weather_data": {
             "name": "weather_data",
