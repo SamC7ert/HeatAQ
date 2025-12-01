@@ -1,5 +1,5 @@
 {
-    "generated_at": "2025-11-30 20:23:36",
+    "generated_at": "2025-12-01 15:02:39",
     "database": "heataq_pool-353130302dd2",
     "tables": {
         "audit_log": {
@@ -124,7 +124,7 @@
                     ]
                 }
             ],
-            "row_count": 3664
+            "row_count": 5435
         },
         "calendar_date_ranges": {
             "name": "calendar_date_ranges",
@@ -1189,7 +1189,7 @@
                     ]
                 }
             ],
-            "row_count": 0
+            "row_count": 2
         },
         "password_reset_tokens": {
             "name": "password_reset_tokens",
@@ -1281,132 +1281,6 @@
                     ]
                 }
             ],
-            "row_count": 0
-        },
-        "pool_configurations": {
-            "name": "pool_configurations",
-            "columns": [
-                {
-                    "name": "config_id",
-                    "type": "varchar(50)",
-                    "null": "NO",
-                    "key": "PRI",
-                    "default": null,
-                    "extra": ""
-                },
-                {
-                    "name": "pool_site_id",
-                    "type": "int(11)",
-                    "null": "YES",
-                    "key": "",
-                    "default": null,
-                    "extra": ""
-                },
-                {
-                    "name": "site_id",
-                    "type": "varchar(50)",
-                    "null": "YES",
-                    "key": "MUL",
-                    "default": null,
-                    "extra": ""
-                },
-                {
-                    "name": "name",
-                    "type": "varchar(100)",
-                    "null": "NO",
-                    "key": "",
-                    "default": null,
-                    "extra": ""
-                },
-                {
-                    "name": "pool_area_m2",
-                    "type": "decimal(8,2)",
-                    "null": "YES",
-                    "key": "",
-                    "default": null,
-                    "extra": ""
-                },
-                {
-                    "name": "pool_volume_m3",
-                    "type": "decimal(8,2)",
-                    "null": "YES",
-                    "key": "",
-                    "default": null,
-                    "extra": ""
-                },
-                {
-                    "name": "pool_depth_m",
-                    "type": "decimal(4,2)",
-                    "null": "YES",
-                    "key": "",
-                    "default": null,
-                    "extra": ""
-                },
-                {
-                    "name": "has_cover",
-                    "type": "tinyint(1)",
-                    "null": "YES",
-                    "key": "",
-                    "default": "0",
-                    "extra": ""
-                },
-                {
-                    "name": "has_tunnel",
-                    "type": "tinyint(1)",
-                    "null": "YES",
-                    "key": "",
-                    "default": "0",
-                    "extra": ""
-                },
-                {
-                    "name": "surface_type",
-                    "type": "varchar(50)",
-                    "null": "YES",
-                    "key": "",
-                    "default": null,
-                    "extra": ""
-                },
-                {
-                    "name": "notes",
-                    "type": "text",
-                    "null": "YES",
-                    "key": "",
-                    "default": null,
-                    "extra": ""
-                },
-                {
-                    "name": "created_at",
-                    "type": "timestamp",
-                    "null": "YES",
-                    "key": "",
-                    "default": "current_timestamp()",
-                    "extra": ""
-                },
-                {
-                    "name": "years_operating",
-                    "type": "tinyint(4)",
-                    "null": "NO",
-                    "key": "",
-                    "default": "3",
-                    "extra": ""
-                }
-            ],
-            "indexes": [
-                {
-                    "name": "PRIMARY",
-                    "unique": true,
-                    "columns": [
-                        "config_id"
-                    ]
-                },
-                {
-                    "name": "site_id",
-                    "unique": false,
-                    "columns": [
-                        "site_id"
-                    ]
-                }
-            ],
             "row_count": 1
         },
         "pool_sites": {
@@ -1419,6 +1293,14 @@
                     "key": "PRI",
                     "default": null,
                     "extra": "auto_increment"
+                },
+                {
+                    "name": "project_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
                 },
                 {
                     "name": "site_id",
@@ -1447,6 +1329,46 @@
                 {
                     "name": "longitude",
                     "type": "decimal(10,6)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "weather_station_id",
+                    "type": "varchar(50)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "solar_latitude",
+                    "type": "decimal(10,6)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "solar_longitude",
+                    "type": "decimal(10,6)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "solar_data_start",
+                    "type": "date",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "solar_data_end",
+                    "type": "date",
                     "null": "YES",
                     "key": "",
                     "default": null,
@@ -1499,6 +1421,20 @@
                     "columns": [
                         "site_id"
                     ]
+                },
+                {
+                    "name": "idx_project_id",
+                    "unique": false,
+                    "columns": [
+                        "project_id"
+                    ]
+                },
+                {
+                    "name": "idx_pool_sites_weather_station",
+                    "unique": false,
+                    "columns": [
+                        "weather_station_id"
+                    ]
                 }
             ],
             "row_count": 1
@@ -1515,9 +1451,9 @@
                     "extra": "auto_increment"
                 },
                 {
-                    "name": "site_id",
-                    "type": "varchar(50)",
-                    "null": "NO",
+                    "name": "pool_site_id",
+                    "type": "int(11)",
+                    "null": "YES",
                     "key": "MUL",
                     "default": null,
                     "extra": ""
@@ -1684,17 +1620,17 @@
                     ]
                 },
                 {
-                    "name": "idx_site",
-                    "unique": false,
-                    "columns": [
-                        "site_id"
-                    ]
-                },
-                {
                     "name": "idx_active",
                     "unique": false,
                     "columns": [
                         "is_active"
+                    ]
+                },
+                {
+                    "name": "idx_pool_site_id",
+                    "unique": false,
+                    "columns": [
+                        "pool_site_id"
                     ]
                 }
             ],
@@ -1716,22 +1652,6 @@
                     "type": "varchar(100)",
                     "null": "NO",
                     "key": "",
-                    "default": null,
-                    "extra": ""
-                },
-                {
-                    "name": "project_code",
-                    "type": "varchar(50)",
-                    "null": "NO",
-                    "key": "UNI",
-                    "default": null,
-                    "extra": ""
-                },
-                {
-                    "name": "site_id",
-                    "type": "varchar(50)",
-                    "null": "YES",
-                    "key": "MUL",
                     "default": null,
                     "extra": ""
                 },
@@ -1774,27 +1694,6 @@
                     "unique": true,
                     "columns": [
                         "project_id"
-                    ]
-                },
-                {
-                    "name": "project_code",
-                    "unique": true,
-                    "columns": [
-                        "project_code"
-                    ]
-                },
-                {
-                    "name": "idx_site",
-                    "unique": false,
-                    "columns": [
-                        "site_id"
-                    ]
-                },
-                {
-                    "name": "idx_code",
-                    "unique": false,
-                    "columns": [
-                        "project_code"
                     ]
                 }
             ],
@@ -2040,7 +1939,7 @@
                     ]
                 }
             ],
-            "row_count": 33312
+            "row_count": 49771
         },
         "simulation_hourly_results": {
             "name": "simulation_hourly_results",
@@ -2221,7 +2120,7 @@
                     ]
                 }
             ],
-            "row_count": 798303
+            "row_count": 1192733
         },
         "simulation_runs": {
             "name": "simulation_runs",
@@ -2233,14 +2132,6 @@
                     "key": "PRI",
                     "default": null,
                     "extra": "auto_increment"
-                },
-                {
-                    "name": "site_id",
-                    "type": "varchar(50)",
-                    "null": "NO",
-                    "key": "MUL",
-                    "default": null,
-                    "extra": ""
                 },
                 {
                     "name": "pool_id",
@@ -2348,13 +2239,6 @@
                     ]
                 },
                 {
-                    "name": "idx_site_id",
-                    "unique": false,
-                    "columns": [
-                        "site_id"
-                    ]
-                },
-                {
                     "name": "idx_status",
                     "unique": false,
                     "columns": [
@@ -2376,14 +2260,14 @@
                     ]
                 }
             ],
-            "row_count": 97
+            "row_count": 175
         },
         "site_solar_daily": {
             "name": "site_solar_daily",
             "columns": [
                 {
-                    "name": "site_id",
-                    "type": "varchar(50)",
+                    "name": "pool_site_id",
+                    "type": "int(11)",
                     "null": "NO",
                     "key": "PRI",
                     "default": null,
@@ -2435,7 +2319,7 @@
                     "name": "PRIMARY",
                     "unique": true,
                     "columns": [
-                        "site_id",
+                        "pool_site_id",
                         "date"
                     ]
                 },
@@ -2447,21 +2331,21 @@
                     ]
                 },
                 {
-                    "name": "idx_site",
+                    "name": "idx_pool_site_id",
                     "unique": false,
                     "columns": [
-                        "site_id"
+                        "pool_site_id"
                     ]
                 }
             ],
-            "row_count": 0
+            "row_count": 3653
         },
         "site_solar_hourly": {
             "name": "site_solar_hourly",
             "columns": [
                 {
-                    "name": "site_id",
-                    "type": "varchar(50)",
+                    "name": "pool_site_id",
+                    "type": "int(11)",
                     "null": "NO",
                     "key": "PRI",
                     "default": null,
@@ -2497,7 +2381,7 @@
                     "name": "PRIMARY",
                     "unique": true,
                     "columns": [
-                        "site_id",
+                        "pool_site_id",
                         "timestamp"
                     ]
                 },
@@ -2509,14 +2393,14 @@
                     ]
                 },
                 {
-                    "name": "idx_site",
+                    "name": "idx_pool_site_id",
                     "unique": false,
                     "columns": [
-                        "site_id"
+                        "pool_site_id"
                     ]
                 }
             ],
-            "row_count": 0
+            "row_count": 87672
         },
         "solar_daily_data": {
             "name": "solar_daily_data",
@@ -2651,7 +2535,7 @@
                     ]
                 }
             ],
-            "row_count": 3
+            "row_count": 4
         },
         "user_projects": {
             "name": "user_projects",
@@ -2828,7 +2712,7 @@
                     ]
                 }
             ],
-            "row_count": 11
+            "row_count": 20
         },
         "users": {
             "name": "users",
