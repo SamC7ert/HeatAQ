@@ -160,7 +160,7 @@ const SimulationsModule = {
     },
 
     /**
-     * Select a run in history table and show its benchmark report
+     * Select a run in history table and show its detail
      */
     selectRun: async function(runId) {
         // Update selection state
@@ -171,7 +171,7 @@ const SimulationsModule = {
             row.classList.toggle('selected', parseInt(row.dataset.runId) === runId);
         });
 
-        // Fetch full run data and show benchmark report
+        // Fetch full run data and show detail
         try {
             const response = await fetch(`/api/simulation_api.php?action=get_run&run_id=${runId}`);
             const data = await response.json();
@@ -180,15 +180,13 @@ const SimulationsModule = {
                 throw new Error(data.error);
             }
 
-            const run = data.run;
+            // Store current run and render detail
+            this.currentRun = data.run;
+            this.renderRunDetail();
 
-            // Show benchmark report
-            if (typeof SimControlModule !== 'undefined' && run.summary) {
-                SimControlModule.showBenchmarkReport({
-                    summary: run.summary,
-                    meta: run.config || {}
-                });
-            }
+            // Show the detail container
+            const detail = document.getElementById('simulation-detail');
+            if (detail) detail.style.display = '';
 
         } catch (error) {
             console.error('Failed to load run:', error);
