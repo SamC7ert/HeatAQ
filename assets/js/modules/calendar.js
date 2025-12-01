@@ -130,16 +130,18 @@ const calendar = {
         let html = '';
 
         if (this.exceptionDays.length > 0) {
-            // Sort exception days and store for lookup
+            // Sort exception days: relative (Easter-based) first, then fixed by date
             this.sortedExceptions = [...this.exceptionDays].sort((a, b) => {
-                if (a.is_moving != b.is_moving) {
-                    return b.is_moving - a.is_moving;
+                const aIsFixed = parseInt(a.is_fixed) === 1;
+                const bIsFixed = parseInt(b.is_fixed) === 1;
+                if (aIsFixed !== bIsFixed) {
+                    return aIsFixed ? 1 : -1; // Relative days first
                 }
-                if (a.is_moving) {
-                    return (a.easter_offset_days || 0) - (b.easter_offset_days || 0);
+                if (!aIsFixed) {
+                    return (parseInt(a.offset_days) || 0) - (parseInt(b.offset_days) || 0);
                 }
-                return ((a.fixed_month || 0) * 100 + (a.fixed_day || 0)) -
-                       ((b.fixed_month || 0) * 100 + (b.fixed_day || 0));
+                return ((parseInt(a.fixed_month) || 0) * 100 + (parseInt(a.fixed_day) || 0)) -
+                       ((parseInt(b.fixed_month) || 0) * 100 + (parseInt(b.fixed_day) || 0));
             });
 
             html += `
@@ -156,20 +158,21 @@ const calendar = {
 
             this.sortedExceptions.forEach((exception, index) => {
                 let dateRef;
-                if (exception.is_moving) {
-                    const offset = exception.easter_offset_days || 0;
-                    dateRef = offset === 0 ? 'Easter' :
-                              offset > 0 ? `Easter+${offset}` : `Easter${offset}`;
+                const isFixed = parseInt(exception.is_fixed) === 1;
+                if (!isFixed) {
+                    // Relative to reference day (e.g., Easter)
+                    const offset = parseInt(exception.offset_days) || 0;
+                    const refName = exception.reference_day_name || 'Easter';
+                    dateRef = offset === 0 ? refName :
+                              offset > 0 ? `${refName}+${offset}` : `${refName}${offset}`;
                 } else {
                     dateRef = `${exception.fixed_day}/${exception.fixed_month}`;
                 }
 
-                const exceptionId = exception.exception_id || exception.id;
                 const currentDayScheduleId = exception.day_schedule_id;
 
-                // Store exception data in data attributes for new exceptions without ID
                 html += `
-                    <tr data-exception-id="${exceptionId || ''}" data-index="${index}">
+                    <tr data-exception-day-id="${exception.exception_day_id}" data-link-id="${exception.link_id || ''}" data-index="${index}">
                         <td>${exception.name}</td>
                         <td>${dateRef}</td>
                         <td>
@@ -191,35 +194,8 @@ const calendar = {
                 </table>
             `;
         } else {
-            html += '<p class="text-muted text-small">No exception days configured</p>';
+            html += '<p class="text-muted text-small">No exception days defined. Add them in Admin → Exception Days.</p>';
         }
-
-        // Inline form for adding exception day
-        html += `
-            <div style="margin-top: 10px; padding: 8px; background: var(--neutral-100); border-radius: 4px;">
-                <div style="display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin-bottom: 5px;">
-                    <input type="text" id="new-exception-name" class="form-control form-control-sm" placeholder="Name" style="width: 120px;" />
-                    <select id="new-exception-type" class="form-control form-control-sm" style="width: 100px;" onchange="app.calendar.toggleExceptionType()">
-                        <option value="fixed">Fixed</option>
-                        <option value="easter">Easter</option>
-                    </select>
-                    <span id="exception-fixed-inputs">
-                        <input type="number" id="new-exception-day" class="form-control form-control-sm" placeholder="Day" min="1" max="31" style="width: 55px;" />
-                        <span>/</span>
-                        <input type="number" id="new-exception-month" class="form-control form-control-sm" placeholder="Mon" min="1" max="12" style="width: 55px;" />
-                    </span>
-                    <span id="exception-easter-inputs" style="display: none;">
-                        <input type="number" id="new-exception-offset" class="form-control form-control-sm" placeholder="±days" style="width: 65px;" value="0" />
-                    </span>
-                    <select id="new-exception-schedule" class="form-control form-control-sm" style="width: 100px;">
-                        ${this.daySchedules.map(ds =>
-                            `<option value="${ds.day_schedule_id}" ${ds.name.toLowerCase().includes('closed') ? 'selected' : ''}>${ds.name}</option>`
-                        ).join('')}
-                    </select>
-                    <button class="btn btn-primary btn-sm" onclick="app.calendar.addExceptionDay()">Add</button>
-                </div>
-            </div>
-        `;
 
         container.innerHTML = html;
     },
@@ -238,35 +214,26 @@ const calendar = {
                 throw new Error('Exception not found');
             }
 
-            const exceptionId = exception.exception_id || exception.id;
             // Convert empty string to null
             const scheduleId = dayScheduleId && dayScheduleId !== '' ? parseInt(dayScheduleId) : null;
 
-            // Debug logging
-            console.log('updateExceptionSchedule:', { index, dayScheduleId, exceptionId, scheduleId, exception });
+            // Save to schedule_template_exceptions table
+            // - exception_day_id: the universal exception day definition
+            // - link_id: existing link (if any) in schedule_template_exceptions
+            // - template_id: current template
+            // - day_schedule_id: schedule to use (or null to remove)
+            await api.calendar.saveExceptionDay({
+                template_id: this.currentTemplateId,
+                exception_day_id: parseInt(exception.exception_day_id),
+                link_id: exception.link_id ? parseInt(exception.link_id) : null,
+                day_schedule_id: scheduleId
+            });
 
-            if (exceptionId) {
-                // Update existing exception - only send id and day_schedule_id
-                await api.calendar.saveExceptionDay({
-                    exception_id: parseInt(exceptionId),
-                    day_schedule_id: scheduleId
-                });
-                api.utils.showSuccess('Exception updated');
-            } else if (scheduleId) {
-                // Only create new exception if a schedule is actually being assigned
-                // No need to save "No Exception" for standard holidays
-                await api.calendar.saveExceptionDay({
-                    template_id: this.currentTemplateId,
-                    name: exception.name,
-                    day_schedule_id: scheduleId,
-                    is_moving: exception.is_moving ? 1 : 0,
-                    easter_offset_days: exception.easter_offset_days,
-                    fixed_month: exception.fixed_month,
-                    fixed_day: exception.fixed_day
-                });
-                api.utils.showSuccess('Exception created');
+            if (scheduleId) {
+                api.utils.showSuccess('Exception schedule saved');
+            } else {
+                api.utils.showSuccess('Exception schedule cleared');
             }
-            // If no exceptionId and no scheduleId, nothing to do (standard holiday with No Exception)
 
             // Reload to show updated data
             await this.loadCalendarRules(this.currentTemplateId);

@@ -646,98 +646,31 @@ class HeatAQAPI {
             $this->sendError('Invalid template ID');
         }
 
-        // Get saved exceptions for this template
+        // Get all exception days (universal definitions) with template-specific assignments
         $stmt = $this->db->prepare("
             SELECT
-                ce.id as exception_id,
-                ce.*,
+                ed.id as exception_day_id,
+                ed.name,
+                ed.is_fixed,
+                ed.fixed_month,
+                ed.fixed_day,
+                ed.reference_day_id,
+                ed.offset_days,
+                rd.name as reference_day_name,
+                ste.id as link_id,
+                ste.day_schedule_id,
                 ds.name as day_schedule_name
-            FROM calendar_exception_days ce
-            LEFT JOIN day_schedules ds ON ce.day_schedule_id = ds.day_schedule_id
-            WHERE ce.schedule_template_id = ?
+            FROM exception_days ed
+            LEFT JOIN reference_days rd ON ed.reference_day_id = rd.id
+            LEFT JOIN schedule_template_exceptions ste
+                ON ed.id = ste.exception_day_id AND ste.template_id = ?
+            LEFT JOIN day_schedules ds ON ste.day_schedule_id = ds.day_schedule_id
+            ORDER BY ed.is_fixed ASC,
+                     COALESCE(ed.offset_days, 0),
+                     COALESCE(ed.fixed_month, 0) * 100 + COALESCE(ed.fixed_day, 0)
         ");
         $stmt->execute([$templateId]);
-        $savedExceptions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        // Standard Norwegian holidays - will be merged with saved exceptions
-        $standardHolidays = [
-            // Fixed date holidays
-            ['name' => 'Nyttårsdag', 'is_moving' => 0, 'fixed_month' => 1, 'fixed_day' => 1],
-            ['name' => 'Arbeidernes dag', 'is_moving' => 0, 'fixed_month' => 5, 'fixed_day' => 1],
-            ['name' => 'Grunnlovsdag', 'is_moving' => 0, 'fixed_month' => 5, 'fixed_day' => 17],
-            ['name' => 'Julaften', 'is_moving' => 0, 'fixed_month' => 12, 'fixed_day' => 24],
-            ['name' => 'Første juledag', 'is_moving' => 0, 'fixed_month' => 12, 'fixed_day' => 25],
-            ['name' => 'Andre juledag', 'is_moving' => 0, 'fixed_month' => 12, 'fixed_day' => 26],
-            ['name' => 'Nyttårsaften', 'is_moving' => 0, 'fixed_month' => 12, 'fixed_day' => 31],
-            // Easter-relative holidays
-            ['name' => 'Palmesøndag', 'is_moving' => 1, 'easter_offset_days' => -7],
-            ['name' => 'Skjærtorsdag', 'is_moving' => 1, 'easter_offset_days' => -3],
-            ['name' => 'Langfredag', 'is_moving' => 1, 'easter_offset_days' => -2],
-            ['name' => 'Påskeaften', 'is_moving' => 1, 'easter_offset_days' => -1],
-            ['name' => 'Første påskedag', 'is_moving' => 1, 'easter_offset_days' => 0],
-            ['name' => 'Andre påskedag', 'is_moving' => 1, 'easter_offset_days' => 1],
-            ['name' => 'Kristi himmelfartsdag', 'is_moving' => 1, 'easter_offset_days' => 39],
-            ['name' => 'Første pinsedag', 'is_moving' => 1, 'easter_offset_days' => 49],
-            ['name' => 'Andre pinsedag', 'is_moving' => 1, 'easter_offset_days' => 50],
-        ];
-
-        // Build lookup of saved exceptions by key (name + date info)
-        $savedLookup = [];
-        foreach ($savedExceptions as $ex) {
-            if ($ex['is_moving']) {
-                $key = 'easter:' . $ex['easter_offset_days'];
-            } else {
-                $key = 'fixed:' . $ex['fixed_month'] . ':' . $ex['fixed_day'];
-            }
-            $savedLookup[$key] = $ex;
-        }
-
-        // Merge standard holidays with saved exceptions
-        $result = [];
-        foreach ($standardHolidays as $holiday) {
-            if ($holiday['is_moving']) {
-                $key = 'easter:' . $holiday['easter_offset_days'];
-            } else {
-                $key = 'fixed:' . $holiday['fixed_month'] . ':' . $holiday['fixed_day'];
-            }
-
-            if (isset($savedLookup[$key])) {
-                // Use saved exception (has exception_id and possibly day_schedule_id)
-                $result[] = $savedLookup[$key];
-                unset($savedLookup[$key]); // Remove from lookup so we don't duplicate
-            } else {
-                // Create placeholder with no saved id (will need to be created when saved)
-                $result[] = [
-                    'exception_id' => null,
-                    'id' => null,
-                    'schedule_template_id' => $templateId,
-                    'name' => $holiday['name'],
-                    'day_schedule_id' => null,
-                    'day_schedule_name' => null,
-                    'is_moving' => $holiday['is_moving'],
-                    'easter_offset_days' => $holiday['easter_offset_days'] ?? null,
-                    'fixed_month' => $holiday['fixed_month'] ?? null,
-                    'fixed_day' => $holiday['fixed_day'] ?? null,
-                ];
-            }
-        }
-
-        // Add any custom exceptions that weren't in the standard list
-        foreach ($savedLookup as $ex) {
-            $result[] = $ex;
-        }
-
-        // Sort by is_moving (easter first), then by date
-        usort($result, function($a, $b) {
-            if ($a['is_moving'] != $b['is_moving']) {
-                return $b['is_moving'] - $a['is_moving'];
-            }
-            if ($a['is_moving']) {
-                return ($a['easter_offset_days'] ?? 0) - ($b['easter_offset_days'] ?? 0);
-            }
-            return (($a['fixed_month'] ?? 0) * 100 + ($a['fixed_day'] ?? 0)) -
-                   (($b['fixed_month'] ?? 0) * 100 + ($b['fixed_day'] ?? 0));
-        });
+        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $this->sendResponse(['exceptions' => $result]);
     }
@@ -1140,12 +1073,17 @@ class HeatAQAPI {
     private function saveExceptionDay() {
         $input = $this->getPostInput();
 
-        // Debug: check what we received
         if (empty($input)) {
             $this->sendError('No input received');
         }
 
-        $exceptionId = isset($input['exception_id']) ? (int)$input['exception_id'] : 0;
+        $templateId = isset($input['template_id']) ? (int)$input['template_id'] : 0;
+        $exceptionDayId = isset($input['exception_day_id']) ? (int)$input['exception_day_id'] : 0;
+        $linkId = isset($input['link_id']) ? (int)$input['link_id'] : 0;
+
+        if (!$templateId || !$exceptionDayId) {
+            $this->sendError('template_id and exception_day_id are required');
+        }
 
         // Convert any non-positive value to null for foreign key
         $dayScheduleId = null;
@@ -1159,55 +1097,28 @@ class HeatAQAPI {
             }
         }
 
-        // DEBUG v4: Log what we're about to do
-        error_log("saveExceptionDay: exceptionId=$exceptionId, dayScheduleId=" . var_export($dayScheduleId, true));
-
-        // For updates, just update the day_schedule_id
-        if ($exceptionId > 0) {
-            if ($dayScheduleId === null) {
-                // V6: DELETE the record instead of setting NULL
-                // The standard holiday list will show "No Exception" for missing records
-                $stmt = $this->db->prepare("DELETE FROM calendar_exception_days WHERE id = ?");
-                $stmt->execute([$exceptionId]);
-                $this->sendResponse(['success' => true, 'v' => 'V6-DEL', 'deleted_id' => $exceptionId]);
-            } else {
-                $stmt = $this->db->prepare("UPDATE calendar_exception_days SET day_schedule_id = ? WHERE id = ?");
-                $stmt->execute([$dayScheduleId, $exceptionId]);
-                $this->sendResponse(['success' => true, 'v' => 'V6-UPD', 'id' => $exceptionId, 'ds' => $dayScheduleId]);
-            }
-            return;
-        }
-
-        // For new exceptions - this shouldn't be reached for "No Exception" selection
-        error_log("saveExceptionDay: Creating NEW exception (no exceptionId)");
-        $templateId = $input['template_id'] ?? 1;
-        $name = trim($input['name'] ?? '');
-        $isMoving = (int)($input['is_moving'] ?? 0);
-        $easterOffsetDays = array_key_exists('easter_offset_days', $input) ? $input['easter_offset_days'] : null;
-        $fixedMonth = $input['fixed_month'] ?? null;
-        $fixedDay = $input['fixed_day'] ?? null;
-
-        if (empty($name)) {
-            $this->sendError('Exception name is required');
-        }
-
-        if ($isMoving && $easterOffsetDays === null) {
-            $this->sendError('Easter offset is required for moving holidays');
-        }
-
-        if (!$isMoving && (!$fixedMonth || !$fixedDay)) {
-            $this->sendError('Fixed month and day are required for fixed holidays');
-        }
-
-        // Create new
         try {
-            $stmt = $this->db->prepare("
-                INSERT INTO calendar_exception_days (schedule_template_id, name, day_schedule_id, is_moving, easter_offset_days, fixed_month, fixed_day)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ");
-            $stmt->execute([$templateId, $name, $dayScheduleId, $isMoving, $easterOffsetDays, $fixedMonth, $fixedDay]);
-            $exceptionId = $this->db->lastInsertId();
-            $this->sendResponse(['success' => true, 'exception_id' => $exceptionId]);
+            if ($dayScheduleId === null) {
+                // No schedule assigned - delete the link if it exists
+                if ($linkId > 0) {
+                    $stmt = $this->db->prepare("DELETE FROM schedule_template_exceptions WHERE id = ?");
+                    $stmt->execute([$linkId]);
+                    $this->sendResponse(['success' => true, 'action' => 'deleted', 'link_id' => $linkId]);
+                } else {
+                    // Nothing to do - no link existed and none requested
+                    $this->sendResponse(['success' => true, 'action' => 'none']);
+                }
+            } else {
+                // Assign schedule - insert or update
+                $stmt = $this->db->prepare("
+                    INSERT INTO schedule_template_exceptions (template_id, exception_day_id, day_schedule_id)
+                    VALUES (?, ?, ?)
+                    ON DUPLICATE KEY UPDATE day_schedule_id = VALUES(day_schedule_id)
+                ");
+                $stmt->execute([$templateId, $exceptionDayId, $dayScheduleId]);
+                $newLinkId = $this->db->lastInsertId();
+                $this->sendResponse(['success' => true, 'action' => 'saved', 'link_id' => $newLinkId ?: $linkId]);
+            }
         } catch (Exception $e) {
             $this->sendError('Database error: ' . $e->getMessage());
         }
@@ -1224,13 +1135,14 @@ class HeatAQAPI {
         $this->sendResponse(['success' => true]);
     }
 
-    private function deleteExceptionDay($exceptionId) {
-        if (!$this->validateId($exceptionId)) {
-            $this->sendError('Invalid exception ID');
+    private function deleteExceptionDay($linkId) {
+        // Deletes the template-exception link (not the exception day definition)
+        if (!$this->validateId($linkId)) {
+            $this->sendError('Invalid link ID');
         }
 
-        $stmt = $this->db->prepare("DELETE FROM calendar_exception_days WHERE id = ?");
-        $stmt->execute([$exceptionId]);
+        $stmt = $this->db->prepare("DELETE FROM schedule_template_exceptions WHERE id = ?");
+        $stmt->execute([$linkId]);
 
         $this->sendResponse(['success' => true]);
     }
@@ -1287,8 +1199,8 @@ class HeatAQAPI {
         $stmt = $this->db->prepare("DELETE FROM calendar_date_ranges WHERE schedule_template_id = ?");
         $stmt->execute([$templateId]);
 
-        // Delete calendar exception days
-        $stmt = $this->db->prepare("DELETE FROM calendar_exception_days WHERE schedule_template_id = ?");
+        // Delete template-exception links
+        $stmt = $this->db->prepare("DELETE FROM schedule_template_exceptions WHERE template_id = ?");
         $stmt->execute([$templateId]);
 
         // Delete the template
@@ -1299,32 +1211,43 @@ class HeatAQAPI {
     }
 
     // ====================================
-    // ADMIN: HOLIDAY DEFINITIONS
+    // ADMIN: EXCEPTION DAY DEFINITIONS (Universal)
     // ====================================
 
     private function getHolidayDefinitions() {
+        // Get universal exception day definitions + reference days
         try {
-            // Production schema: holiday_code, holiday_name_no, holiday_name_en,
-            // calculation_type (enum), fixed_date (varchar), easter_offset (int)
             $stmt = $this->db->query("
                 SELECT
-                    holiday_code as id,
-                    holiday_name_no as name,
-                    holiday_name_en as name_en,
-                    CASE WHEN calculation_type = 'easter_relative' THEN 1 ELSE 0 END as is_moving,
-                    SUBSTRING(fixed_date, 1, 2) as fixed_month,
-                    SUBSTRING(fixed_date, 4, 2) as fixed_day,
-                    easter_offset as easter_offset_days
-                FROM holiday_definitions
-                ORDER BY
-                    CASE WHEN calculation_type = 'fixed' THEN fixed_date ELSE CONCAT('03-', LPAD(easter_offset + 100, 3, '0')) END
+                    ed.id,
+                    ed.name,
+                    ed.is_fixed,
+                    ed.fixed_month,
+                    ed.fixed_day,
+                    ed.reference_day_id,
+                    ed.offset_days,
+                    rd.name as reference_day_name
+                FROM exception_days ed
+                LEFT JOIN reference_days rd ON ed.reference_day_id = rd.id
+                ORDER BY ed.is_fixed ASC,
+                         COALESCE(ed.offset_days, 0),
+                         COALESCE(ed.fixed_month, 0) * 100 + COALESCE(ed.fixed_day, 0)
             ");
             $definitions = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            $this->sendResponse(['definitions' => $definitions]);
+
+            // Also get reference days for the dropdown
+            $refStmt = $this->db->query("SELECT id, name, description FROM reference_days ORDER BY id");
+            $referenceDays = $refStmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $this->sendResponse([
+                'definitions' => $definitions,
+                'reference_days' => $referenceDays
+            ]);
         } catch (PDOException $e) {
             $this->sendResponse([
                 'definitions' => [],
-                'error' => 'Holiday definitions table error',
+                'reference_days' => [],
+                'error' => 'Exception days table error',
                 'debug' => $e->getMessage()
             ]);
         }
@@ -1332,55 +1255,73 @@ class HeatAQAPI {
 
     private function saveHolidayDefinition() {
         $input = $this->getPostInput();
-        $code = $input['id'] ?? null;  // holiday_code is the primary key
-        $nameNo = $input['name'] ?? '';
-        $nameEn = $input['name_en'] ?? null;
-        $isMoving = $input['is_moving'] ?? 0;
+        $id = isset($input['id']) ? (int)$input['id'] : 0;
+        $name = trim($input['name'] ?? '');
+        $isFixed = (int)($input['is_fixed'] ?? 1);
         $fixedMonth = $input['fixed_month'] ?? null;
         $fixedDay = $input['fixed_day'] ?? null;
-        $easterOffset = $input['easter_offset_days'] ?? null;
+        $referenceDayId = $input['reference_day_id'] ?? null;
+        $offsetDays = $input['offset_days'] ?? null;
 
-        if (empty($nameNo)) {
+        if (empty($name)) {
             $this->sendError('Name is required');
         }
 
-        // Convert to production schema format
-        $calculationType = $isMoving ? 'easter_relative' : 'fixed';
-        $fixedDate = null;
-        if (!$isMoving && $fixedMonth && $fixedDay) {
-            $fixedDate = sprintf('%02d-%02d', $fixedMonth, $fixedDay);
-        }
-
-        if ($code) {
-            // Update existing
-            $stmt = $this->db->prepare("
-                UPDATE holiday_definitions
-                SET holiday_name_no = ?, holiday_name_en = ?, calculation_type = ?,
-                    fixed_date = ?, easter_offset = ?
-                WHERE holiday_code = ?
-            ");
-            $stmt->execute([$nameNo, $nameEn, $calculationType, $fixedDate, $easterOffset, $code]);
+        // Validate based on type
+        if ($isFixed) {
+            if (!$fixedMonth || !$fixedDay) {
+                $this->sendError('Fixed month and day are required for fixed holidays');
+            }
+            $referenceDayId = null;
+            $offsetDays = null;
         } else {
-            // Generate code from name for new entries
-            $code = strtolower(preg_replace('/[^a-zA-Z0-9]/', '_', $nameNo));
-            $stmt = $this->db->prepare("
-                INSERT INTO holiday_definitions (holiday_code, holiday_name_no, holiday_name_en,
-                    calculation_type, fixed_date, easter_offset)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ");
-            $stmt->execute([$code, $nameNo, $nameEn, $calculationType, $fixedDate, $easterOffset]);
+            if (!$referenceDayId) {
+                $this->sendError('Reference day is required for relative holidays');
+            }
+            if ($offsetDays === null || $offsetDays === '') {
+                $this->sendError('Offset days is required for relative holidays');
+            }
+            $fixedMonth = null;
+            $fixedDay = null;
         }
 
-        $this->sendResponse(['success' => true, 'id' => $code]);
+        try {
+            if ($id > 0) {
+                // Update existing
+                $stmt = $this->db->prepare("
+                    UPDATE exception_days
+                    SET name = ?, is_fixed = ?, fixed_month = ?, fixed_day = ?,
+                        reference_day_id = ?, offset_days = ?
+                    WHERE id = ?
+                ");
+                $stmt->execute([$name, $isFixed, $fixedMonth, $fixedDay, $referenceDayId, $offsetDays, $id]);
+            } else {
+                // Insert new
+                $stmt = $this->db->prepare("
+                    INSERT INTO exception_days (name, is_fixed, fixed_month, fixed_day, reference_day_id, offset_days)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ");
+                $stmt->execute([$name, $isFixed, $fixedMonth, $fixedDay, $referenceDayId, $offsetDays]);
+                $id = $this->db->lastInsertId();
+            }
+            $this->sendResponse(['success' => true, 'id' => $id]);
+        } catch (PDOException $e) {
+            $this->sendError('Database error: ' . $e->getMessage());
+        }
     }
 
     private function deleteHolidayDefinition($id) {
-        if (empty($id)) {
+        if (!$this->validateId($id)) {
             $this->sendError('Invalid ID');
         }
 
         try {
-            $stmt = $this->db->prepare("DELETE FROM holiday_definitions WHERE holiday_code = ?");
+            // First delete any template links
+            $stmt = $this->db->prepare("DELETE FROM schedule_template_exceptions WHERE exception_day_id = ?");
+            $stmt->execute([$id]);
+
+            // Then delete the definition
+            $stmt = $this->db->prepare("DELETE FROM exception_days WHERE id = ?");
             $stmt->execute([$id]);
             $this->sendResponse(['success' => true]);
         } catch (PDOException $e) {
