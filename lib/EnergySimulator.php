@@ -258,22 +258,38 @@ class EnergySimulator {
             $refillLiters = $uiConfig['bathers']['refill_liters'] ?? null;
             $showerLiters = $uiConfig['bathers']['shower_liters'] ?? null;
             $activityFactor = $uiConfig['bathers']['activity_factor'] ?? null;
+            $showersUseHp = $this->equipment['showers_use_hp'] ?? false;
 
             // Calculate kWh per visit from water heating requirements
             // Energy = mass * specific_heat * temp_diff / 3600000 (to get kWh)
+            $refillEnergy = null;
+            $showerEnergy = null;
             $kwhPerVisit = null;
-            if ($refillLiters !== null && $showerLiters !== null && isset($this->equipment['water_temps'])) {
-                $coldWater = $this->equipment['water_temps']['cold_water'] ?? 5;
-                $showerTarget = $this->equipment['water_temps']['shower_target'] ?? 40;
-                $poolTemp = $this->equipment['target_temp'] ?? 28;
 
-                // Pool refill heating: cold water -> pool temp
-                $refillEnergy = $refillLiters * 4.186 * ($poolTemp - $coldWater) / 3600; // kWh
+            if ($refillLiters !== null && isset($this->equipment['water_temps'])) {
+                $coldWater = $this->equipment['water_temps']['cold_water'] ?? null;
+                $poolTemp = $this->equipment['target_temp'] ?? null;
 
-                // Shower heating: cold water -> shower target
-                $showerEnergy = $showerLiters * 4.186 * ($showerTarget - $coldWater) / 3600; // kWh
+                if ($coldWater !== null && $poolTemp !== null) {
+                    // Pool refill heating: cold water -> pool temp (always included)
+                    $refillEnergy = $refillLiters * 4.186 * ($poolTemp - $coldWater) / 3600; // kWh
+                    $kwhPerVisit = $refillEnergy;
+                }
+            }
 
-                $kwhPerVisit = $refillEnergy + $showerEnergy;
+            if ($showerLiters !== null && isset($this->equipment['water_temps'])) {
+                $coldWater = $this->equipment['water_temps']['cold_water'] ?? null;
+                $showerTarget = $this->equipment['water_temps']['shower_target'] ?? null;
+
+                if ($coldWater !== null && $showerTarget !== null) {
+                    // Shower heating: cold water -> shower target
+                    $showerEnergy = $showerLiters * 4.186 * ($showerTarget - $coldWater) / 3600; // kWh
+
+                    // Only add shower energy to pool load if showers_use_hp is true
+                    if ($showersUseHp && $kwhPerVisit !== null) {
+                        $kwhPerVisit += $showerEnergy;
+                    }
+                }
             }
 
             $this->equipment['bathers'] = [
@@ -281,8 +297,11 @@ class EnergySimulator {
                 'activity_factor' => $activityFactor,
                 'refill_liters' => $refillLiters,
                 'shower_liters' => $showerLiters,
-                'kwh_per_visit' => $kwhPerVisit,
-                'open_hours' => $uiConfig['bathers']['open_hours'] ?? 10, // Default 10 hours if not specified
+                'refill_kwh_per_visit' => $refillEnergy,
+                'shower_kwh_per_visit' => $showerEnergy,
+                'kwh_per_visit' => $kwhPerVisit, // Only includes shower if showers_use_hp=true
+                'showers_use_hp' => $showersUseHp,
+                'open_hours' => $uiConfig['bathers']['open_hours'] ?? 10,
             ];
         }
     }
