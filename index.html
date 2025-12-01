@@ -701,14 +701,9 @@
                         <div id="sim-summary-cards" class="run-summary-cards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 20px;">
                         </div>
 
-                        <!-- Yearly Chart (below stats) -->
-                        <div id="sim-yearly-chart-container" style="height: 250px; position: relative; margin-top: 15px;">
-                            <canvas id="sim-yearly-chart"></canvas>
-                        </div>
-
-                        <!-- Benchmark Report (inside Last Results card) -->
-                        <div id="benchmark-report" class="benchmark-report" style="display: none; margin-top: 20px; padding-top: 15px; border-top: 1px solid #dee2e6;">
-                            <h4 style="margin: 0 0 15px 0;">Benchmark Report</h4>
+                        <!-- Simulation Report (above chart) -->
+                        <div id="benchmark-report" class="benchmark-report" style="display: none; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #dee2e6;">
+                            <h4 style="margin: 0 0 15px 0;">Simulation Report</h4>
                             <div class="benchmark-config" id="bench-config-summary" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 5px 20px; margin-bottom: 15px; font-size: 13px; line-height: 1.6;">
                                 <!-- Config will be populated by JS -->
                             </div>
@@ -754,6 +749,11 @@
                                     </table>
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- Yearly Chart (below report) -->
+                        <div id="sim-yearly-chart-container" style="height: 250px; position: relative;">
+                            <canvas id="sim-yearly-chart"></canvas>
                         </div>
                     </div>
                     </div><!-- end sim-tab-new -->
@@ -1034,9 +1034,9 @@
                             </div>
                         </div>
 
-                        <!-- Benchmark Report (Debug tab - below graph) -->
+                        <!-- Simulation Report (Debug tab - below graph) -->
                         <div id="benchmark-report-debug" class="benchmark-report card" style="display: none; margin-bottom: 15px;">
-                            <h4 style="margin: 0 0 15px 0;">Benchmark Report</h4>
+                            <h4 style="margin: 0 0 15px 0;">Simulation Report</h4>
                             <div class="benchmark-config" id="bench-config-summary-debug" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 5px 20px; margin-bottom: 15px; font-size: 13px; line-height: 1.6;">
                             </div>
                             <div class="benchmark-grid">
