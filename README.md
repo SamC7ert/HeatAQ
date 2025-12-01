@@ -108,15 +108,15 @@ This section helps Claude (AI assistant) maintain context across sessions.
 ### Database Hierarchy
 ```
 users → user_projects → projects → pool_sites → pools
-                                      ↓
-                              schedule_templates
-                              day_schedules
-                              week_schedules
-                              simulation_runs
-                              site_solar_daily/hourly
+                            ↓            ↓
+                   schedule_templates    simulation_runs
+                   day_schedules         site_solar_daily/hourly
+                   week_schedules
 ```
 
-All entity tables use INT `pool_site_id` as FK to `pool_sites.id`. The VARCHAR `pool_sites.site_id` is kept only for display names.
+- **Schedules** belong to `projects` (via `project_id`) - shared across all sites/pools in project
+- **Simulation/solar data** belong to `pool_sites` (via `pool_site_id`) - site-specific
+- The VARCHAR `pool_sites.site_id` is kept only for display names
 
 ### Development Principles
 
@@ -132,8 +132,9 @@ All entity tables use INT `pool_site_id` as FK to `pool_sites.id`. The VARCHAR `
 
 ### Recent Context (Dec 2024)
 
-- Completed migration from VARCHAR `site_id` to INT `pool_site_id` across all tables
-- User preferences are now project-scoped (user_id + project_id + pref_key)
+- Schedule tables (templates, day, week) now use `project_id` FK (not pool_site_id)
+- Simulation/solar tables use `pool_site_id` FK
+- User preferences are project-scoped (user_id + project_id + pref_key)
 - Migration archive function commits directly to master branch
 - Admin UI has separate Active/Inactive user cards
 
@@ -141,7 +142,6 @@ All entity tables use INT `pool_site_id` as FK to `pool_sites.id`. The VARCHAR `
 
 See [Roadmap](docs/ROADMAP.md) for full list. Key items:
 - Move target_heat and bathers from config_templates to pool level
-- Review remaining getSiteIdString() usages
 
 ---
 
@@ -156,4 +156,4 @@ Proprietary - All rights reserved
 For support, contact Aquarious AS
 
 ---
-*Version 105 - December 2024*
+*Version 106 - December 2024*
