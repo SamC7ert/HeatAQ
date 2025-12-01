@@ -1406,7 +1406,7 @@ const SimulationsModule = {
 
         // Clear individual card contents to show loading state
         ['debug-input', 'debug-evaporation', 'debug-convection', 'debug-radiation',
-         'debug-solar', 'debug-conduction', 'debug-cover', 'debug-heatpump', 'debug-boiler', 'debug-summary'].forEach(id => {
+         'debug-solar', 'debug-structural', 'debug-cover', 'debug-heatpump', 'debug-boiler', 'debug-summary'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.innerHTML = '<span style="color: #999;">Loading...</span>';
         });
@@ -1668,8 +1668,7 @@ const SimulationsModule = {
         setHtml('debug-convection', renderTable(data.convection));
         setHtml('debug-radiation', renderTable(data.radiation));
         setHtml('debug-solar', renderTable(data.solar_gain));
-        setHtml('debug-conduction', renderTable(data.conduction));
-        console.log('[Debug Cover]', data.cover);  // DEBUG
+        setHtml('debug-structural', renderTable(data.structural));
         setHtml('debug-cover', renderTable(data.cover));
 
         // Heat pump detail
