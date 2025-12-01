@@ -1,0 +1,8 @@
+2025-12-01 15:35:50 - Running migration: 019_drop_site_id_columns.sql
+Executing: DROP INDEX IF EXISTS `site_id` ON `pools`
+Executing: ALTER TABLE `pools` DROP COLUMN IF EXISTS `site_id`
+Executing: CREATE INDEX IF NOT EXISTS `idx_pool_site_id` ON `pools` (`pool_site_id`)
+Executing: DROP INDEX IF EXISTS `idx_site` ON `simulation_runs`
+Executing: DROP INDEX IF EXISTS `site_id` ON `simulation_runs`
+Executing: ALTER TABLE `simulation_runs` DROP COLUMN IF EXISTS `site_id`
+Executed 6 statements
