@@ -1590,15 +1590,12 @@ class HeatAQAPI {
             $this->sendError('Project name is required');
         }
 
-        // Generate a project code from name
-        $code = strtoupper(preg_replace('/[^a-zA-Z0-9]/', '', substr($name, 0, 10)));
-
         try {
             $stmt = $this->db->prepare("
-                INSERT INTO projects (project_name, project_code, description, is_active, created_at)
-                VALUES (?, ?, ?, 1, NOW())
+                INSERT INTO projects (project_name, description, is_active, created_at)
+                VALUES (?, ?, 1, NOW())
             ");
-            $stmt->execute([$name, $code, $description]);
+            $stmt->execute([$name, $description]);
             $projectId = $this->db->lastInsertId();
 
             $this->sendResponse(['success' => true, 'id' => $projectId, 'name' => $name]);
@@ -2875,7 +2872,7 @@ class HeatAQAPI {
     }
 
     /**
-     * Save site data to pool_sites and update projects.site_id
+     * Save site data to pool_sites (with project_id link)
      */
     private function saveSiteData() {
         $input = $this->getPostInput();
@@ -2885,6 +2882,7 @@ class HeatAQAPI {
         $latitude = $input['latitude'] ?? null;
         $longitude = $input['longitude'] ?? null;
         $wsId = $input['weather_station_id'] ?? null;
+        $projectId = $input['project_id'] ?? $this->projectId ?? 1;
 
         if (!$siteId && $name) {
             // Generate site_id from name
@@ -2905,30 +2903,21 @@ class HeatAQAPI {
             $existing = $stmt->fetch();
 
             if ($existing) {
-                // Update existing site
+                // Update existing site (include project_id link)
                 $stmt = $this->db->prepare("
                     UPDATE pool_sites
-                    SET name = ?, latitude = ?, longitude = ?, weather_station_id = ?
+                    SET name = ?, latitude = ?, longitude = ?, weather_station_id = ?,
+                        project_id = COALESCE(project_id, ?)
                     WHERE site_id = ?
                 ");
-                $stmt->execute([$name, $latitude, $longitude, $wsId, $siteId]);
+                $stmt->execute([$name, $latitude, $longitude, $wsId, $projectId, $siteId]);
             } else {
-                // Insert new site
+                // Insert new site with project_id link
                 $stmt = $this->db->prepare("
-                    INSERT INTO pool_sites (site_id, name, latitude, longitude, weather_station_id)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO pool_sites (site_id, name, latitude, longitude, weather_station_id, project_id)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 ");
-                $stmt->execute([$siteId, $name, $latitude, $longitude, $wsId]);
-            }
-
-            // Update projects table to point to this site
-            if ($this->projectId) {
-                $stmt = $this->db->prepare("UPDATE projects SET site_id = ? WHERE project_id = ?");
-                $stmt->execute([$siteId, $this->projectId]);
-            } else {
-                // Update all projects that don't have a site_id set, or update the first one
-                $stmt = $this->db->prepare("UPDATE projects SET site_id = ? WHERE project_id = 1");
-                $stmt->execute([$siteId]);
+                $stmt->execute([$siteId, $name, $latitude, $longitude, $wsId, $projectId]);
             }
 
             $this->sendResponse([
