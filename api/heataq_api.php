@@ -2160,20 +2160,6 @@ class HeatAQAPI {
         }
     }
 
-    private function columnExists($table, $column) {
-        try {
-            $stmt = $this->db->prepare("
-                SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-                WHERE TABLE_SCHEMA = DATABASE()
-                AND TABLE_NAME = ? AND COLUMN_NAME = ?
-            ");
-            $stmt->execute([$table, $column]);
-            return $stmt->fetchColumn() > 0;
-        } catch (PDOException $e) {
-            return false;
-        }
-    }
-
     private function saveUserPreference() {
         if (!$this->userId) {
             $this->sendError('Authentication required to save preferences', 401);
