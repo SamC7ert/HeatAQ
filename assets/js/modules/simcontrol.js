@@ -427,8 +427,10 @@ const SimControlModule = {
         // Config summary - detailed multi-column layout
         const config = results.meta?.pool_config || {};
         const equip = results.meta?.equipment || {};
+        // Control values are stored directly in equipment (target_temp, temp_tolerance)
         const control = results.meta?.control || equip.control || {};
-        const bathers = results.meta?.bathers || config.bathers || {};
+        // Bathers: NO DEFAULTS - must be configured, show '-' if missing
+        const bathers = results.meta?.bathers || equip.bathers || config.bathers || {};
         const overrides = results.meta?.config_override || {};
         const startDate = results.meta?.start_date || '';
         const endDate = results.meta?.end_date || '';
@@ -468,19 +470,20 @@ const SimControlModule = {
         const hpCop = fmt(equip.heat_pump?.cop_nominal, '', 1);
         const boilerEff = equip.boiler?.efficiency ? fmt(equip.boiler.efficiency * 100, '%', 0) : '-';
 
-        // Control values
+        // Control values - check equipment directly first, then control sub-object
         const targetTemp = withOverride(
-            control.target_temp || config.target_temp,
+            equip.target_temp || control.target_temp || config.target_temp,
             overrides.control?.target_temp,
             '°C', 1
         );
+        // Tolerance: check equipment (from PHP) then control section (from config_json)
         const upperTol = withOverride(
-            control.upper_tolerance || control.temp_tolerance,
+            equip.upper_tolerance || control.upper_tolerance || equip.temp_tolerance || control.temp_tolerance,
             overrides.control?.upper_tolerance,
             '°C', 1
         );
         const lowerTol = withOverride(
-            control.lower_tolerance || control.temp_tolerance,
+            equip.lower_tolerance || control.lower_tolerance || equip.temp_tolerance || control.temp_tolerance,
             overrides.control?.lower_tolerance,
             '°C', 1
         );

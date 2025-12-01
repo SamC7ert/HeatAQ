@@ -66,65 +66,26 @@ class EnergySimulator {
     }
 
     /**
-     * Load pool physical configuration from database
+     * Initialize pool configuration - all values from config template via setConfigFromUI()
+     * Note: pool_configurations table is deprecated, all config now in config_templates.config_json
      */
     private function loadPoolConfig() {
-        $stmt = $this->db->prepare("
-            SELECT * FROM pool_configurations
-            WHERE site_id = ?
-            LIMIT 1
-        ");
-        $stmt->execute([$this->siteId]);
-        $config = $stmt->fetch();
-
-        if (!$config) {
-            // Default configuration if no pool_configurations row exists
-            // Physical properties are conservative defaults - admin should configure actual values
-            // Simulation parameters will be overridden by config template via setConfigFromUI()
-            return [
-                // Physical pool properties (defaults)
-                'area_m2' => 312.5,      // 25m x 12.5m
-                'volume_m3' => 625,       // area × 2m depth
-                'depth_m' => 2.0,
-                'perimeter_m' => 75,      // 2×(25+12.5)
-                'has_tunnel' => true,
-                'cover_r_value' => 5.0,   // U-value when cover exists
-                // Simulation parameters - defaults here, overridden by config template
-                'has_cover' => true,                    // Config template decides
-                'cover_solar_transmittance' => 0.10,   // 10% (config template)
-                'solar_absorption' => 0.60,            // 60% (config template)
-                'wind_exposure_factor' => 1.0,         // Full exposure (config template)
-                'years_operating' => 3                  // Year 3 (config template)
-            ];
-        }
-
-        // These values from pool_configurations are PHYSICAL pool properties:
-        // - area, volume, depth, perimeter: geometry
-        // - has_tunnel: construction feature
-        // - cover_r_value: physical cover insulation
-        //
-        // These values are SIMULATION parameters (from config template JSON):
-        // - has_cover: whether to use cover in this simulation
-        // - cover_solar_transmittance: cover optical property for simulation
-        // - solar_absorption: water absorption for simulation
-        // - wind_exposure_factor: site exposure for simulation
-        // - years_operating: affects ground thermal state
-        //
-        // setConfigFromUI() will override simulation parameters from config template
+        // Return structure with null values - MUST be set via setConfigFromUI()
+        // No defaults - if value is null, calculation should handle appropriately
         return [
-            // Physical pool properties from database
-            'area_m2' => (float) ($config['area_m2'] ?? 312.5),
-            'volume_m3' => (float) ($config['volume_m3'] ?? 625),
-            'depth_m' => (float) ($config['depth_m'] ?? 2.0),
-            'perimeter_m' => (float) ($config['perimeter_m'] ?? 75),
-            'has_tunnel' => (bool) ($config['has_tunnel'] ?? true),
-            'cover_r_value' => (float) ($config['cover_r_value'] ?? 5.0),
-            // Simulation parameters - defaults here, overridden by config template
-            'has_cover' => true,                    // Default: use cover (config template decides)
-            'cover_solar_transmittance' => 0.10,   // 10% solar transmittance (config template)
-            'solar_absorption' => 0.60,            // 60% water absorption (config template)
-            'wind_exposure_factor' => 1.0,         // Full exposure (config template)
-            'years_operating' => 3                  // Year 3 steady state (config template)
+            // Physical pool properties - from config template pool section
+            'area_m2' => null,
+            'volume_m3' => null,
+            'depth_m' => null,
+            'perimeter_m' => null,        // Can be calculated from area if needed
+            'has_tunnel' => false,
+            'cover_r_value' => null,
+            // Simulation parameters - from config template
+            'has_cover' => null,
+            'cover_solar_transmittance' => null,
+            'solar_absorption' => null,
+            'wind_exposure_factor' => null,
+            'years_operating' => null
         ];
     }
 
@@ -182,11 +143,31 @@ class EnergySimulator {
     public function setConfigFromUI($uiConfig) {
         // Pool physical parameters
         if (isset($uiConfig['pool'])) {
-            $this->poolConfig['area_m2'] = $uiConfig['pool']['area_m2'] ?? $this->poolConfig['area_m2'];
-            $this->poolConfig['volume_m3'] = $uiConfig['pool']['volume_m3'] ?? $this->poolConfig['volume_m3'];
-            $this->poolConfig['depth_m'] = $uiConfig['pool']['depth_m'] ?? $this->poolConfig['depth_m'];
+            // Length and width are primary - area/volume/perimeter calculated from them
+            $length = $uiConfig['pool']['length_m'] ?? null;
+            $width = $uiConfig['pool']['width_m'] ?? null;
+            $depth = $uiConfig['pool']['depth_m'] ?? $this->poolConfig['depth_m'];
+
+            $this->poolConfig['length_m'] = $length;
+            $this->poolConfig['width_m'] = $width;
+            $this->poolConfig['depth_m'] = $depth;
+
+            // Calculate area, volume, perimeter from length × width
+            if ($length !== null && $width !== null) {
+                $this->poolConfig['area_m2'] = $length * $width;
+                $this->poolConfig['perimeter_m'] = 2 * ($length + $width);
+                if ($depth !== null) {
+                    $this->poolConfig['volume_m3'] = $length * $width * $depth;
+                }
+            } else {
+                // Fallback to provided values if length/width not set
+                $this->poolConfig['area_m2'] = $uiConfig['pool']['area_m2'] ?? $this->poolConfig['area_m2'];
+                $this->poolConfig['volume_m3'] = $uiConfig['pool']['volume_m3'] ?? $this->poolConfig['volume_m3'];
+            }
+
             $this->poolConfig['wind_exposure_factor'] = $uiConfig['pool']['wind_exposure'] ?? $this->poolConfig['wind_exposure_factor'];
             $this->poolConfig['years_operating'] = $uiConfig['pool']['years_operating'] ?? $this->poolConfig['years_operating'];
+            $this->poolConfig['has_tunnel'] = $uiConfig['pool']['has_tunnel'] ?? $this->poolConfig['has_tunnel'];
         }
 
         // Cover settings
@@ -220,14 +201,89 @@ class EnergySimulator {
         // Control settings
         if (isset($uiConfig['control'])) {
             $this->equipment['control_strategy'] = $uiConfig['control']['strategy'] ?? $this->equipment['control_strategy'];
-            $this->equipment['target_temp'] = $uiConfig['control']['target_temp'] ?? 28;
-            $this->equipment['temp_tolerance'] = $uiConfig['control']['temp_tolerance'] ?? 2;
+            $this->equipment['target_temp'] = $uiConfig['control']['target_temp'] ?? null;
+            // Config stores upper/lower tolerance separately
+            $this->equipment['upper_tolerance'] = $uiConfig['control']['upper_tolerance'] ?? null;
+            $this->equipment['lower_tolerance'] = $uiConfig['control']['lower_tolerance'] ?? null;
+            // For backward compat, also check temp_tolerance
+            if (isset($uiConfig['control']['temp_tolerance'])) {
+                $this->equipment['upper_tolerance'] = $uiConfig['control']['temp_tolerance'];
+                $this->equipment['lower_tolerance'] = $uiConfig['control']['temp_tolerance'];
+            }
         }
 
         // Energy costs
         if (isset($uiConfig['costs'])) {
             $this->equipment['electricity_cost_per_kwh'] = $uiConfig['costs']['electricity_nok_kwh'] ?? $this->equipment['electricity_cost_per_kwh'];
             $this->equipment['boiler']['fuel_cost_per_kwh'] = $uiConfig['costs']['gas_nok_kwh'] ?? $this->equipment['boiler']['fuel_cost_per_kwh'];
+        }
+
+        // Water temperatures - needed for bather energy calculation
+        if (isset($uiConfig['water_temps'])) {
+            $this->equipment['water_temps'] = [
+                'cold_water' => $uiConfig['water_temps']['cold_water'] ?? null,
+                'shower_target' => $uiConfig['water_temps']['shower_target'] ?? null,
+                'hot_water_tank' => $uiConfig['water_temps']['hot_water_tank'] ?? null,
+                'hp_max_dhw' => $uiConfig['water_temps']['hp_max_dhw'] ?? null,
+            ];
+        }
+
+        // Equipment extras
+        if (isset($uiConfig['equipment']['showers_use_hp'])) {
+            $this->equipment['showers_use_hp'] = $uiConfig['equipment']['showers_use_hp'];
+        }
+
+        // Bathers settings - calculate kwh_per_visit from water volumes and temps
+        if (isset($uiConfig['bathers'])) {
+            $perDay = $uiConfig['bathers']['per_day'] ?? null;
+            $refillLiters = $uiConfig['bathers']['refill_liters'] ?? null;
+            $showerLiters = $uiConfig['bathers']['shower_liters'] ?? null;
+            $activityFactor = $uiConfig['bathers']['activity_factor'] ?? null;
+            $showersUseHp = $this->equipment['showers_use_hp'] ?? false;
+
+            // Calculate kWh per visit from water heating requirements
+            // Energy = mass * specific_heat * temp_diff / 3600000 (to get kWh)
+            $refillEnergy = null;
+            $showerEnergy = null;
+            $kwhPerVisit = null;
+
+            if ($refillLiters !== null && isset($this->equipment['water_temps'])) {
+                $coldWater = $this->equipment['water_temps']['cold_water'] ?? null;
+                $poolTemp = $this->equipment['target_temp'] ?? null;
+
+                if ($coldWater !== null && $poolTemp !== null) {
+                    // Pool refill heating: cold water -> pool temp (always included)
+                    $refillEnergy = $refillLiters * 4.186 * ($poolTemp - $coldWater) / 3600; // kWh
+                    $kwhPerVisit = $refillEnergy;
+                }
+            }
+
+            if ($showerLiters !== null && isset($this->equipment['water_temps'])) {
+                $coldWater = $this->equipment['water_temps']['cold_water'] ?? null;
+                $showerTarget = $this->equipment['water_temps']['shower_target'] ?? null;
+
+                if ($coldWater !== null && $showerTarget !== null) {
+                    // Shower heating: cold water -> shower target
+                    $showerEnergy = $showerLiters * 4.186 * ($showerTarget - $coldWater) / 3600; // kWh
+
+                    // Only add shower energy to pool load if showers_use_hp is true
+                    if ($showersUseHp && $kwhPerVisit !== null) {
+                        $kwhPerVisit += $showerEnergy;
+                    }
+                }
+            }
+
+            $this->equipment['bathers'] = [
+                'per_day' => $perDay,
+                'activity_factor' => $activityFactor,
+                'refill_liters' => $refillLiters,
+                'shower_liters' => $showerLiters,
+                'refill_kwh_per_visit' => $refillEnergy,
+                'shower_kwh_per_visit' => $showerEnergy,
+                'kwh_per_visit' => $kwhPerVisit, // Only includes shower if showers_use_hp=true
+                'showers_use_hp' => $showersUseHp,
+                'open_hours' => $uiConfig['bathers']['open_hours'] ?? 10,
+            ];
         }
     }
 
@@ -747,8 +803,9 @@ class EnergySimulator {
         $pAir = $pSat * ($humidity / 100);
 
         // Evaporation rate coefficient (kg/m²·s·kPa)
-        // Increases with wind and activity
-        $activityFactor = $isOpen ? 1.3 : 1.0; // More evaporation when pool is in use
+        // Increases with wind and activity - activity factor from config
+        $configActivityFactor = $this->equipment['bathers']['activity_factor'] ?? null;
+        $activityFactor = $isOpen ? ($configActivityFactor ?? 1.0) : 1.0;
         $windFactor = 1 + 0.1 * $windSpeed * $this->poolConfig['wind_exposure_factor'];
 
         $evapCoeff = 0.0000375 * $activityFactor * $windFactor;
@@ -1268,8 +1325,9 @@ class EnergySimulator {
         // Effective wind speed (m/s)
         $effectWindSpeed = $windSpeed * $windFactor;
 
-        // Activity factor
-        $activityFactor = $isOpen ? 1.1 : 1.0; // Match Excel's 1.1
+        // Activity factor - from config (required when pool is open)
+        $configActivityFactor = $this->equipment['bathers']['activity_factor'] ?? null;
+        $activityFactor = $isOpen ? ($configActivityFactor ?? 1.0) : 1.0;
 
         // Evaporation using ASHRAE formula variant
         // E = (25 + 19*v) * A * (pw - pa) / L_v  [W]
@@ -1333,11 +1391,16 @@ class EnergySimulator {
         $condLossKW = $wallLossKW + $floorLossKW;
 
         // ========== WATER HEATING (bather makeup) ==========
-        // From Excel: 100 persons * 1.37 kWh/visit / 10 open hours = 13.7 kWh/hour
-        $bathersPerDay = 100;
-        $kwhPerVisit = 1.37;
-        $openHours = 10;
-        $waterHeatingKW = ($bathersPerDay * $kwhPerVisit) / $openHours;
+        // Values from configuration - NO DEFAULTS
+        $bathersPerDay = $this->equipment['bathers']['per_day'] ?? null;
+        $kwhPerVisit = $this->equipment['bathers']['kwh_per_visit'] ?? null;
+        $openHours = $this->equipment['bathers']['open_hours'] ?? null;
+
+        // Calculate water heating only if all bather values are configured
+        $waterHeatingKW = 0;
+        if ($bathersPerDay !== null && $kwhPerVisit !== null && $openHours !== null && $openHours > 0) {
+            $waterHeatingKW = ($bathersPerDay * $kwhPerVisit) / $openHours;
+        }
 
         // ========== APPLY COVER REDUCTION ==========
         if ($hasCover && !$isOpen) {
