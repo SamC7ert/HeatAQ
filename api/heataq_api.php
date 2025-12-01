@@ -2962,7 +2962,8 @@ class HeatAQAPI {
         $stmt = $this->db->prepare("
             SELECT
                 p.pool_id,
-                p.site_id,
+                p.pool_site_id,
+                ps.site_id,
                 p.name,
                 p.description,
                 p.length_m,
@@ -3094,18 +3095,18 @@ class HeatAQAPI {
                     $poolId
                 ]);
             } else {
-                // Create new pool (use pool_site_id FK, keep site_id for compatibility)
+                // Create new pool using pool_site_id FK
                 $stmt = $this->db->prepare("
                     INSERT INTO pools (
-                        site_id, pool_site_id, name, description,
+                        pool_site_id, name, description,
                         length_m, width_m, depth_m, area_m2, volume_m3,
                         wind_exposure, solar_absorption, years_operating,
                         has_cover, cover_r_value, cover_solar_transmittance,
                         has_tunnel, floor_insulated, pool_type
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
                 $stmt->execute([
-                    $siteId, $poolSiteId, $name, $description,
+                    $poolSiteId, $name, $description,
                     $length, $width, $depth, $area, $volume,
                     $windExposure, $solarAbsorption, $yearsOperating,
                     $hasCover, $coverRValue, $coverSolarTrans,
