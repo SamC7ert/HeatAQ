@@ -2850,7 +2850,7 @@ class HeatAQAPI {
                     ps.latitude,
                     ps.longitude,
                     ps.description,
-                    (SELECT COUNT(*) FROM pools p WHERE p.site_id = ps.site_id AND p.is_active = 1) as pool_count
+                    (SELECT COUNT(*) FROM pools p WHERE p.pool_site_id = ps.id AND p.is_active = 1) as pool_count
                 FROM pool_sites ps
                 ORDER BY ps.name
             ");
@@ -2982,8 +2982,8 @@ class HeatAQAPI {
                 p.is_active,
                 ps.name as site_name
             FROM pools p
-            JOIN pool_sites ps ON p.site_id = ps.site_id
-            WHERE p.site_id = ? AND p.is_active = 1
+            JOIN pool_sites ps ON p.pool_site_id = ps.id
+            WHERE ps.site_id = ? AND p.is_active = 1
             ORDER BY p.name
         ");
         $stmt->execute([$siteId]);
@@ -3005,7 +3005,7 @@ class HeatAQAPI {
                 p.*,
                 ps.name as site_name
             FROM pools p
-            JOIN pool_sites ps ON p.site_id = ps.site_id
+            JOIN pool_sites ps ON p.pool_site_id = ps.id
             WHERE p.pool_id = ?
         ");
         $stmt->execute([$poolId]);
@@ -3053,10 +3053,19 @@ class HeatAQAPI {
         $description = $input['description'] ?? '';
 
         try {
+            // Look up pool_site_id from site_id (for new FK relationship)
+            $poolSiteId = null;
+            if ($siteId) {
+                $lookupStmt = $this->db->prepare("SELECT id FROM pool_sites WHERE site_id = ? LIMIT 1");
+                $lookupStmt->execute([$siteId]);
+                $poolSiteId = $lookupStmt->fetchColumn();
+            }
+
             if ($poolId) {
-                // Update existing pool
+                // Update existing pool (also set pool_site_id if it was null)
                 $stmt = $this->db->prepare("
                     UPDATE pools SET
+                        pool_site_id = COALESCE(pool_site_id, ?),
                         name = ?,
                         description = ?,
                         length_m = ?,
@@ -3076,6 +3085,7 @@ class HeatAQAPI {
                     WHERE pool_id = ?
                 ");
                 $stmt->execute([
+                    $poolSiteId,
                     $name, $description,
                     $length, $width, $depth, $area, $volume,
                     $windExposure, $solarAbsorption, $yearsOperating,
@@ -3084,18 +3094,18 @@ class HeatAQAPI {
                     $poolId
                 ]);
             } else {
-                // Create new pool
+                // Create new pool (use pool_site_id FK, keep site_id for compatibility)
                 $stmt = $this->db->prepare("
                     INSERT INTO pools (
-                        site_id, name, description,
+                        site_id, pool_site_id, name, description,
                         length_m, width_m, depth_m, area_m2, volume_m3,
                         wind_exposure, solar_absorption, years_operating,
                         has_cover, cover_r_value, cover_solar_transmittance,
                         has_tunnel, floor_insulated, pool_type
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
                 $stmt->execute([
-                    $siteId, $name, $description,
+                    $siteId, $poolSiteId, $name, $description,
                     $length, $width, $depth, $area, $volume,
                     $windExposure, $solarAbsorption, $yearsOperating,
                     $hasCover, $coverRValue, $coverSolarTrans,
