@@ -1,12 +1,12 @@
 # Database Schema
 
-Generated: 2025-12-01 15:02:39
+Generated: 2025-12-01 16:10:06
 
 Database: heataq_pool-353130302dd2
 
 ## audit_log
 
-Rows: 5435
+Rows: 5695
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -521,12 +521,14 @@ Rows: 4
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
 | user_id | int(11) | NO | PRI | NULL |  |
+| project_id | int(11) | NO | PRI | NULL |  |
 | pref_key | varchar(50) | NO | PRI | NULL |  |
-| pref_value | varchar(255) | YES |  | NULL |  |
+| pref_value | text | YES |  | NULL |  |
 | updated_at | timestamp | YES |  | current_timestamp() | on update current_timestamp() |
 
 **Indexes:**
-- UNIQUE `PRIMARY` (user_id, pref_key)
+- UNIQUE `PRIMARY` (user_id, project_id, pref_key)
+- `idx_user_project` (user_id, project_id)
 
 ## user_projects
 

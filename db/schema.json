@@ -1,5 +1,5 @@
 {
-    "generated_at": "2025-12-01 15:02:39",
+    "generated_at": "2025-12-01 16:10:06",
     "database": "heataq_pool-353130302dd2",
     "tables": {
         "audit_log": {
@@ -124,7 +124,7 @@
                     ]
                 }
             ],
-            "row_count": 5435
+            "row_count": 5695
         },
         "calendar_date_ranges": {
             "name": "calendar_date_ranges",
@@ -2501,6 +2501,14 @@
                     "extra": ""
                 },
                 {
+                    "name": "project_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
                     "name": "pref_key",
                     "type": "varchar(50)",
                     "null": "NO",
@@ -2510,7 +2518,7 @@
                 },
                 {
                     "name": "pref_value",
-                    "type": "varchar(255)",
+                    "type": "text",
                     "null": "YES",
                     "key": "",
                     "default": null,
@@ -2531,7 +2539,16 @@
                     "unique": true,
                     "columns": [
                         "user_id",
+                        "project_id",
                         "pref_key"
+                    ]
+                },
+                {
+                    "name": "idx_user_project",
+                    "unique": false,
+                    "columns": [
+                        "user_id",
+                        "project_id"
                     ]
                 }
             ],
