@@ -464,22 +464,22 @@ const SimulationsModule = {
                         data: hpData,
                         borderColor: 'rgba(40, 167, 69, 1)',
                         backgroundColor: 'rgba(40, 167, 69, 0.7)',
-                        fill: 'origin',
+                        fill: true,
                         pointRadius: 0,
                         borderWidth: 1,
                         tension: 0.1,
-                        order: 2
+                        order: 1
                     },
                     {
                         label: 'Boiler (kWh)',
                         data: boilerData,
                         borderColor: 'rgba(220, 53, 69, 1)',
                         backgroundColor: 'rgba(220, 53, 69, 0.7)',
-                        fill: 'origin',
+                        fill: true,
                         pointRadius: 0,
                         borderWidth: 1,
                         tension: 0.1,
-                        order: 1
+                        order: 2
                     }
                 ]
             },
@@ -1946,19 +1946,6 @@ const SimulationsModule = {
                     },
                     {
                         type: 'bar',
-                        label: 'Boiler',
-                        data: data.map(d => d.boiler_output),
-                        backgroundColor: 'rgba(220, 53, 69, 0.85)',
-                        borderColor: 'rgba(220, 53, 69, 1)',
-                        borderWidth: 0,
-                        yAxisID: 'y',
-                        stack: 'heating',
-                        order: 3,
-                        barPercentage: 1.0,
-                        categoryPercentage: 1.0
-                    },
-                    {
-                        type: 'bar',
                         label: 'Heat Pump',
                         data: data.map(d => d.hp_output),
                         backgroundColor: 'rgba(40, 167, 69, 0.85)',
@@ -1967,6 +1954,19 @@ const SimulationsModule = {
                         yAxisID: 'y',
                         stack: 'heating',
                         order: 2,
+                        barPercentage: 1.0,
+                        categoryPercentage: 1.0
+                    },
+                    {
+                        type: 'bar',
+                        label: 'Boiler',
+                        data: data.map(d => d.boiler_output),
+                        backgroundColor: 'rgba(220, 53, 69, 0.85)',
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        borderWidth: 0,
+                        yAxisID: 'y',
+                        stack: 'heating',
+                        order: 3,
                         barPercentage: 1.0,
                         categoryPercentage: 1.0
                     }
@@ -2481,22 +2481,22 @@ const SimulationsModule = {
                         data: hpData,
                         borderColor: 'rgba(40, 167, 69, 1)',
                         backgroundColor: 'rgba(40, 167, 69, 0.7)',
-                        fill: 'origin',
+                        fill: true,
                         pointRadius: 0,
                         borderWidth: 1,
                         tension: 0.1,
-                        order: 2
+                        order: 1
                     },
                     {
                         label: 'Boiler (kWh)',
                         data: boilerData,
                         borderColor: 'rgba(220, 53, 69, 1)',
                         backgroundColor: 'rgba(220, 53, 69, 0.7)',
-                        fill: 'origin',
+                        fill: true,
                         pointRadius: 0,
                         borderWidth: 1,
                         tension: 0.1,
-                        order: 1
+                        order: 2
                     }
                 ]
             },
