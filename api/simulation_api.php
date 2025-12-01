@@ -171,37 +171,42 @@ try {
             // Initialize simulator
             $simulator = new EnergySimulator($pdo, $currentSiteId, $scheduler);
 
-            // Load pool data from pools table if pool_id provided
-            if ($poolId) {
-                $poolStmt = $pdo->prepare("
-                    SELECT * FROM pools WHERE pool_id = ? AND is_active = 1
-                ");
-                $poolStmt->execute([$poolId]);
-                $poolRow = $poolStmt->fetch();
-
-                if ($poolRow) {
-                    // Build pool config from database row
-                    $poolConfig = [
-                        'pool' => [
-                            'area_m2' => (float)$poolRow['area_m2'],
-                            'volume_m3' => (float)$poolRow['volume_m3'],
-                            'depth_m' => (float)$poolRow['depth_m'],
-                            'wind_exposure' => (float)$poolRow['wind_exposure'],
-                            'solar_absorption' => (float)$poolRow['solar_absorption'],
-                            'years_operating' => (int)$poolRow['years_operating'],
-                        ],
-                        'cover' => [
-                            'has_cover' => (bool)$poolRow['has_cover'],
-                            'r_value' => (float)$poolRow['cover_r_value'],
-                            'solar_transmittance' => (float)$poolRow['cover_solar_transmittance'],
-                        ],
-                        'solar' => [
-                            'has_tunnel' => (bool)$poolRow['has_tunnel'],
-                        ]
-                    ];
-                    $simulator->setConfigFromUI($poolConfig);
-                }
+            // Pool selection is required
+            if (!$poolId) {
+                sendError('Run not started - missing Pool selection', 400);
             }
+
+            // Load pool data from pools table
+            $poolStmt = $pdo->prepare("
+                SELECT * FROM pools WHERE pool_id = ? AND is_active = 1
+            ");
+            $poolStmt->execute([$poolId]);
+            $poolRow = $poolStmt->fetch();
+
+            if (!$poolRow) {
+                sendError('Run not started - selected Pool not found or inactive', 400);
+            }
+
+            // Build pool config from database row
+            $poolConfig = [
+                'pool' => [
+                    'area_m2' => (float)$poolRow['area_m2'],
+                    'volume_m3' => (float)$poolRow['volume_m3'],
+                    'depth_m' => (float)$poolRow['depth_m'],
+                    'wind_exposure' => (float)$poolRow['wind_exposure'],
+                    'solar_absorption' => (float)$poolRow['solar_absorption'],
+                    'years_operating' => (int)$poolRow['years_operating'],
+                ],
+                'cover' => [
+                    'has_cover' => (bool)$poolRow['has_cover'],
+                    'r_value' => (float)$poolRow['cover_r_value'],
+                    'solar_transmittance' => (float)$poolRow['cover_solar_transmittance'],
+                ],
+                'solar' => [
+                    'has_tunnel' => (bool)$poolRow['has_tunnel'],
+                ]
+            ];
+            $simulator->setConfigFromUI($poolConfig);
 
             // Load and apply configuration if specified
             if ($configId) {

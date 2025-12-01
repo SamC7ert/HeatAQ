@@ -1177,7 +1177,10 @@ class EnergySimulator {
             return 0;
         }
 
-        $volume = $this->poolConfig['volume_m3'];
+        $volume = $this->poolConfig['volume_m3'] ?? 0;
+        if ($volume <= 0) {
+            return 0; // Can't calculate heat without volume
+        }
         $mass = $volume * self::WATER_DENSITY; // kg
 
         // Energy required (kJ)
@@ -1191,7 +1194,10 @@ class EnergySimulator {
      * Calculate temperature change from heat balance
      */
     private function calculateTempChange($heatBalanceKW, $hours) {
-        $volume = $this->poolConfig['volume_m3'];
+        $volume = $this->poolConfig['volume_m3'] ?? 0;
+        if ($volume <= 0) {
+            return 0; // Can't calculate temp change without volume
+        }
         $mass = $volume * self::WATER_DENSITY;
 
         // Energy in kJ
