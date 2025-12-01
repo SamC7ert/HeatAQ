@@ -41,17 +41,33 @@ const SimControlModule = {
         }
 
         try {
-            // Get project's site_id from API - this is required
-            const projResponse = await fetch('./api/heataq_api.php?action=get_project_site');
-            const projData = await projResponse.json();
+            // Get project's site_id from localStorage (Project module stores it there)
+            // This is the source of truth for which site the user is working with
+            let projectSiteId = null;
+            const siteData = localStorage.getItem('heataq_site');
+            if (siteData) {
+                try {
+                    const site = JSON.parse(siteData);
+                    projectSiteId = site.site_id;
+                    console.log('[SimControl] Site from localStorage:', projectSiteId);
+                } catch (e) {
+                    console.warn('[SimControl] Failed to parse localStorage site data');
+                }
+            }
 
-            if (!projData.site_id) {
+            // Fallback to API if localStorage empty
+            if (!projectSiteId) {
+                const projResponse = await fetch('./api/heataq_api.php?action=get_project_site');
+                const projData = await projResponse.json();
+                projectSiteId = projData.site_id;
+                console.log('[SimControl] Site from API fallback:', projectSiteId);
+            }
+
+            if (!projectSiteId) {
                 console.error('[SimControl] No site_id configured for project');
                 select.innerHTML = '<option value="">ERROR: No site configured for project</option>';
                 return;
             }
-
-            const projectSiteId = projData.site_id;
             console.log('[SimControl] Project site_id:', projectSiteId);
 
             // Get all sites

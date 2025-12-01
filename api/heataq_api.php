@@ -1960,7 +1960,7 @@ class HeatAQAPI {
 
     private function getSiteLocation() {
         $stmt = $this->db->prepare("
-            SELECT site_id, site_name, latitude, longitude,
+            SELECT site_id, name as site_name, latitude, longitude,
                    solar_latitude, solar_longitude, solar_data_start, solar_data_end
             FROM pool_sites
             WHERE site_id = ?
