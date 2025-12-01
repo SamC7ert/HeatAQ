@@ -383,10 +383,10 @@ try {
                 $runs = [];
             }
 
-            // Decode JSON fields
+            // Decode JSON fields (handle NULL values for PHP 8.1+)
             foreach ($runs as &$run) {
-                $run['summary'] = json_decode($run['summary_json'], true);
-                $run['config'] = json_decode($run['config_snapshot'], true);
+                $run['summary'] = $run['summary_json'] ? json_decode($run['summary_json'], true) : null;
+                $run['config'] = $run['config_snapshot'] ? json_decode($run['config_snapshot'], true) : null;
                 unset($run['summary_json'], $run['config_snapshot']);
             }
 
@@ -425,8 +425,8 @@ try {
                 sendError('Simulation run not found', 404);
             }
 
-            $run['config'] = json_decode($run['config_snapshot'], true);
-            $run['summary'] = json_decode($run['summary_json'], true);
+            $run['config'] = $run['config_snapshot'] ? json_decode($run['config_snapshot'], true) : null;
+            $run['summary'] = $run['summary_json'] ? json_decode($run['summary_json'], true) : null;
             unset($run['config_snapshot'], $run['summary_json']);
 
             sendResponse(['run' => $run]);
@@ -456,7 +456,7 @@ try {
                 'start_date' => $run['start_date'],
                 'end_date' => $run['end_date'],
                 'status' => $run['status'],
-                'summary' => json_decode($run['summary_json'], true)
+                'summary' => $run['summary_json'] ? json_decode($run['summary_json'], true) : null
             ]);
             break;
 
