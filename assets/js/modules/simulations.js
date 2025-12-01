@@ -1133,6 +1133,9 @@ const SimulationsModule = {
             const startDate = document.getElementById('sim-start-date')?.value || '2024-01-01';
             const endDate = document.getElementById('sim-end-date')?.value || '2024-12-31';
 
+            // Get pool_id from SimControl selection
+            const poolId = typeof SimControlModule !== 'undefined' ? SimControlModule.currentPoolId : null;
+
             // Run all scenarios in parallel
             const promises = scenarios.map(async (scenario, idx) => {
                 try {
@@ -1144,6 +1147,7 @@ const SimulationsModule = {
                             scenario_name: `Analysis Case ${scenario.case}`,
                             start_date: startDate,
                             end_date: endDate,
+                            pool_id: poolId,
                             config_override: {
                                 equipment: {
                                     hp_capacity_kw: scenario.hp_capacity,
