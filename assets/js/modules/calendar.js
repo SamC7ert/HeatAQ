@@ -56,7 +56,7 @@ const calendar = {
         html += `
             <div class="form-group" style="margin-bottom: 12px;">
                 <label class="form-label text-small"><strong>Default (Year-Round):</strong></label>
-                <select id="default-week-schedule" class="form-control form-control-sm" onchange="app.calendar.saveDefaultSchedule()">
+                <select id="default-week-schedule" class="form-control form-control-sm" style="color: #333;" onchange="app.calendar.saveDefaultSchedule()">
                     <option value="">-- Select week schedule --</option>
                     ${this.weekSchedules.map(ws =>
                         `<option value="${ws.week_schedule_id}" ${defaultRange && defaultRange.week_schedule_id == ws.week_schedule_id ? 'selected' : ''}>${ws.name}</option>`
