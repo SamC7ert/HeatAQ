@@ -447,20 +447,10 @@ const SimulationsModule = {
             this.dailyChart = null;
         }
 
-        // Prepare data - use thermal output (heat delivered), NOT electricity/fuel consumed
+        // Prepare data - use thermal output (heat delivered)
         const labels = dailyResults.map(d => d.date);
-        const hpData = dailyResults.map(d => {
-            const thermal = parseFloat(d.hp_thermal_kwh);
-            if (thermal > 0) return thermal;
-            const elec = parseFloat(d.total_hp_kwh) || 0;
-            return elec * 3.5;  // Estimated thermal output
-        });
-        const boilerData = dailyResults.map(d => {
-            const thermal = parseFloat(d.boiler_thermal_kwh);
-            if (thermal > 0) return thermal;
-            const fuel = parseFloat(d.total_boiler_kwh) || 0;
-            return fuel * 0.92;  // Estimated thermal output
-        });
+        const hpData = dailyResults.map(d => parseFloat(d.hp_thermal_kwh) || 0);
+        const boilerData = dailyResults.map(d => parseFloat(d.boiler_thermal_kwh) || 0);
 
         this.dailyChart = new Chart(canvas, {
             type: 'line',
