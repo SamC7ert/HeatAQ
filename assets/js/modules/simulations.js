@@ -791,12 +791,15 @@ const SimulationsModule = {
     populateConfigValues: function(config) {
         if (!config) return;
 
-        // Format wind exposure as percentage (0.535 -> "53.5%")
-        const windValue = config.pool?.wind_exposure;
+        // Get pool data from ProjectModule (has wind_exposure, solar_absorption from pools table)
+        const pool = (typeof ProjectModule !== 'undefined') ? ProjectModule.currentPool : null;
+
+        // Wind exposure: check pools table first, then config template
+        const windValue = pool?.wind_exposure ?? config.pool?.wind_exposure;
         const windDisplay = (windValue !== undefined && windValue !== null) ? (windValue * 100).toFixed(1) + '%' : undefined;
 
-        // Solar absorption is already stored as percentage (60 = 60%)
-        const solarValue = config.solar?.absorption;
+        // Solar absorption: check pools table first, then config template
+        const solarValue = pool?.solar_absorption ?? config.solar?.absorption;
         const solarDisplay = (solarValue !== undefined && solarValue !== null) ? solarValue.toFixed(1) + '%' : undefined;
 
         // Map config values to display elements
