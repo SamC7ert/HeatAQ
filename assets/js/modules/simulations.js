@@ -115,7 +115,6 @@ const SimulationsModule = {
                         <th>&lt;1°C</th>
                         <th>&lt;2°C</th>
                         <th>Status</th>
-                        <th>Log</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -130,7 +129,6 @@ const SimulationsModule = {
                         const days1 = s.days_below_27 ?? '-';
                         const days2 = s.days_below_26 ?? '-';
                         const isSelected = this.selectedRunId === run.run_id;
-                        const logFile = run.log_file || null;
 
                         return `
                             <tr class="run-row ${run.status}${isSelected ? ' selected' : ''}"
@@ -145,8 +143,7 @@ const SimulationsModule = {
                                 <td>${elecMwh}</td>
                                 <td class="${days1 > 10 ? 'bad' : days1 > 0 ? 'warning' : ''}">${days1}</td>
                                 <td class="${days2 > 5 ? 'bad' : days2 > 0 ? 'warning' : ''}">${days2}</td>
-                                <td><span class="status-badge status-${run.status}">${run.status === 'completed' ? '✓' : run.status === 'failed' ? '✗' : run.status}</span></td>
-                                <td>${logFile ? `<a href="${logFile}" target="_blank" class="log-link" onclick="event.stopPropagation()">View</a>` : '-'}</td>
+                                <td><span class="status-badge status-${run.status}">${run.status}</span></td>
                             </tr>
                         `;
                     }).join('')}
@@ -260,17 +257,14 @@ const SimulationsModule = {
                 throw new Error(data.error);
             }
 
-            // Show success with date/time and checkmark
+            // Show success with date/time
             const now = new Date();
             const dateStr = now.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
             const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
             if (statusEl) {
-                statusEl.innerHTML = `<span style="background:#28a745;color:white;padding:2px 8px;border-radius:4px;font-weight:600;">✓ Completed</span> ${dateStr} ${timeStr}`;
+                statusEl.textContent = `Simulation completed ${dateStr} - ${timeStr}`;
                 statusEl.style.color = '#28a745';
             }
-
-            // Also show brief success banner at top of form
-            this.showSuccessBanner(`Simulation "${scenarioName}" completed successfully!`);
 
             // Show benchmark report
             if (typeof SimControlModule !== 'undefined' && data.summary) {
@@ -668,52 +662,6 @@ const SimulationsModule = {
         const div = document.createElement('div');
         div.textContent = text || '';
         return div.innerHTML;
-    },
-
-    /**
-     * Show a success banner at the top of the simulation form
-     * Auto-hides after 5 seconds
-     */
-    showSuccessBanner: function(message) {
-        // Remove any existing banner
-        const existing = document.getElementById('sim-success-banner');
-        if (existing) existing.remove();
-
-        // Create banner element
-        const banner = document.createElement('div');
-        banner.id = 'sim-success-banner';
-        banner.innerHTML = `
-            <span style="margin-right: 10px;">✓</span>
-            <span>${this.escapeHtml(message)}</span>
-            <button onclick="this.parentElement.remove()" style="margin-left:auto;background:none;border:none;color:white;cursor:pointer;font-size:18px;">&times;</button>
-        `;
-        banner.style.cssText = `
-            display: flex;
-            align-items: center;
-            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-            color: white;
-            padding: 12px 16px;
-            border-radius: 6px;
-            margin-bottom: 15px;
-            font-weight: 500;
-            box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
-            animation: slideIn 0.3s ease-out;
-        `;
-
-        // Insert at top of sim-tab-new content
-        const simTab = document.getElementById('sim-tab-new');
-        if (simTab) {
-            simTab.insertBefore(banner, simTab.firstChild);
-        }
-
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-            if (banner.parentElement) {
-                banner.style.opacity = '0';
-                banner.style.transition = 'opacity 0.3s';
-                setTimeout(() => banner.remove(), 300);
-            }
-        }, 5000);
     },
 
     formatDate: function(dateStr) {
