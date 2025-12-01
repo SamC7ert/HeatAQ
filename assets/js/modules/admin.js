@@ -540,25 +540,44 @@ const AdminModule = {
             }
         } catch (err) {
             console.error('Failed to load users:', err);
-            document.getElementById('users-list').innerHTML =
-                '<p class="error">Failed to load users</p>';
+            const activeList = document.getElementById('active-users-list');
+            if (activeList) activeList.innerHTML = '<p class="error">Failed to load users</p>';
         }
     },
 
     renderUsers: function() {
-        const container = document.getElementById('users-list');
-        if (!container) return;
+        const activeContainer = document.getElementById('active-users-list');
+        const inactiveContainer = document.getElementById('inactive-users-list');
 
-        if (this.users.length === 0) {
-            container.innerHTML = '<p class="text-muted">No users</p>';
-            return;
+        // Split users by active status
+        const activeUsers = this.users.filter(u => u.is_active);
+        const inactiveUsers = this.users.filter(u => !u.is_active);
+
+        // Render active users
+        if (activeContainer) {
+            if (activeUsers.length === 0) {
+                activeContainer.innerHTML = '<p class="text-muted">No active users</p>';
+            } else {
+                activeContainer.innerHTML = this.renderUsersTable(activeUsers);
+            }
         }
 
+        // Render inactive users
+        if (inactiveContainer) {
+            if (inactiveUsers.length === 0) {
+                inactiveContainer.innerHTML = '<p class="text-muted">No inactive users</p>';
+            } else {
+                inactiveContainer.innerHTML = this.renderUsersTable(inactiveUsers);
+            }
+        }
+    },
+
+    renderUsersTable: function(users) {
         let html = '<table class="data-table compact"><thead><tr>' +
-            '<th>Email</th><th>Name</th><th>Role</th><th>Projects</th><th>Active</th><th>Actions</th>' +
+            '<th>Email</th><th>Name</th><th>Role</th><th>Projects</th><th>Actions</th>' +
             '</tr></thead><tbody>';
 
-        this.users.forEach(user => {
+        users.forEach(user => {
             const roleLabel = user.role === 'admin' ? 'Admin' : 'Operator';
             const projectNames = user.project_names || '-';
             html += `<tr>
@@ -566,7 +585,6 @@ const AdminModule = {
                 <td>${user.name || '-'}</td>
                 <td>${roleLabel}</td>
                 <td>${projectNames}</td>
-                <td>${user.is_active ? 'Yes' : 'No'}</td>
                 <td>
                     <button class="btn btn-xs btn-secondary" onclick="app.admin.editUser(${user.user_id})">Edit</button>
                 </td>
@@ -574,7 +592,7 @@ const AdminModule = {
         });
 
         html += '</tbody></table>';
-        container.innerHTML = html;
+        return html;
     },
 
     addUser: function() {

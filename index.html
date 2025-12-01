@@ -1209,11 +1209,18 @@
                     <p class="text-muted">Manage users and access permissions</p>
 
                     <div class="card">
-                        <h3>Users</h3>
-                        <div id="users-list">
+                        <h3>Active Users</h3>
+                        <div id="active-users-list">
                             <p class="loading">Loading...</p>
                         </div>
                         <button class="btn btn-secondary btn-sm" onclick="app.admin.addUser()">+ Add User</button>
+                    </div>
+
+                    <div class="card">
+                        <h3>Inactive Users</h3>
+                        <div id="inactive-users-list">
+                            <p class="text-muted">No inactive users</p>
+                        </div>
                     </div>
 
                     <div class="card">
