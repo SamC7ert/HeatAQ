@@ -200,6 +200,8 @@ class NasaSolarFetcher {
 
         $dailyCount = 0;
         $hourlyCount = 0;
+        $actualStartDate = null;
+        $actualEndDate = null;
         $this->db->beginTransaction();
 
         try {
@@ -211,6 +213,15 @@ class NasaSolarFetcher {
                 if (!$date) continue;
 
                 $dateFormatted = $date->format('Y-m-d');
+
+                // Track actual date range
+                if ($actualStartDate === null || $dateFormatted < $actualStartDate) {
+                    $actualStartDate = $dateFormatted;
+                }
+                if ($actualEndDate === null || $dateFormatted > $actualEndDate) {
+                    $actualEndDate = $dateFormatted;
+                }
+
                 $clearSkyKwh = $nasaData['clear_sky'][$dateStr] ?? 0;
                 $cloudFactor = $clearSkyKwh > 0 ? $dailyKwhM2 / $clearSkyKwh : 1;
 
@@ -242,7 +253,7 @@ class NasaSolarFetcher {
                 }
             }
 
-            // Update site's solar data range
+            // Update site's solar data range with ACTUAL dates received
             $this->db->prepare("
                 UPDATE pool_sites SET
                     solar_latitude = ?,
@@ -253,8 +264,8 @@ class NasaSolarFetcher {
             ")->execute([
                 $latitude,
                 $longitude,
-                $startYear . '-01-01',
-                $endYear . '-12-31',
+                $actualStartDate ?? $startYear . '-01-01',
+                $actualEndDate ?? $endYear . '-12-31',
                 $this->poolSiteId
             ]);
 
@@ -266,8 +277,8 @@ class NasaSolarFetcher {
                 'hourly_records' => $hourlyCount,
                 'days_processed' => count($nasaData['all_sky']),
                 'date_range' => [
-                    'start' => $startYear . '-01-01',
-                    'end' => $endYear . '-12-31'
+                    'start' => $actualStartDate ?? $startYear . '-01-01',
+                    'end' => $actualEndDate ?? $endYear . '-12-31'
                 ]
             ];
 
