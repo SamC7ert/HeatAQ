@@ -45,12 +45,39 @@ const ProjectModule = {
     // Load site data from localStorage or API
     async loadSiteData() {
         try {
-            // Load from localStorage
+            // First try localStorage
             const siteData = localStorage.getItem('heataq_site');
             if (siteData) {
                 this.currentSite = JSON.parse(siteData);
-            } else {
-                // Default site
+            }
+
+            // If no site_id in localStorage, fetch from API to get the actual site_id
+            if (!this.currentSite?.site_id) {
+                try {
+                    const response = await fetch(`${config.API_BASE_URL}?action=get_sites`);
+                    const result = await response.json();
+                    if (result.sites && result.sites.length > 0) {
+                        // Use first site from DB (or match by project_id later)
+                        const dbSite = result.sites[0];
+                        this.currentSite = {
+                            ...this.currentSite,
+                            site_id: dbSite.site_id,
+                            name: dbSite.name,
+                            latitude: parseFloat(dbSite.latitude) || null,
+                            longitude: parseFloat(dbSite.longitude) || null,
+                            weather_station_id: dbSite.default_weather_station || dbSite.weather_station_id,
+                        };
+                        console.log('[Project] Loaded site from DB:', this.currentSite.site_id);
+                        // Save to localStorage with site_id
+                        localStorage.setItem('heataq_site', JSON.stringify(this.currentSite));
+                    }
+                } catch (err) {
+                    console.warn('[Project] Could not fetch site from API:', err);
+                }
+            }
+
+            // Fallback to default if still no site
+            if (!this.currentSite) {
                 this.currentSite = {
                     name: 'Main Site',
                     latitude: null,
