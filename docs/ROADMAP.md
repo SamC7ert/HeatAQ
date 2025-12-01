@@ -1,8 +1,29 @@
 # HeatAQ Roadmap
 
-**Last Updated:** December 2024
+**Last Updated:** December 2024 (Session: Exception Days & Simulator Debug)
 
 Long-term architectural improvements and technical debt items.
+
+---
+
+## Recent Changes (Dec 2024)
+
+### Exception Days Refactor (Migration 023)
+- Created universal `exception_days` table (Admin edits these)
+- Created `reference_days` table (Easter, Thanksgiving as anchor dates)
+- Created `reference_day_dates` table (actual dates per year)
+- Created `schedule_template_exceptions` junction table (links templates to exception days with day_schedule override)
+- Admin Exception Days page edits universal definitions
+- Schedule Management shows all exception days and allows assigning day_schedules per template
+
+### Config Templates Cleanup (Migration 024)
+- Removed `pool`, `cover`, `solar` sections from `config_templates.json_config`
+- Pool physical properties (has_cover, has_tunnel, solar_absorption) now ONLY come from pools table
+- Config templates should only contain: equipment, control, bathers settings
+
+### Schedule Period Bug Fix
+- Fixed bug where `from == to` periods (zero-length) matched all hours
+- Added `debug_schedule` endpoint to scheduler API for troubleshooting
 
 ---
 
@@ -178,6 +199,11 @@ New control strategy to minimize cost using spot electricity prices:
 
 ## Known Issues
 
+### Simulation / Scheduler
+- [ ] **Simulator debugging needed** - Cover/schedule logic verified working, need to validate full heat balance calculation
+- [ ] Debug tab "Cover On/Off" display depends on stored config_snapshot (re-run simulation after changes)
+- [ ] Schedule template exception days not loading in simulation (schedule_template_exceptions empty)
+
 ### Simulation UI
 - [ ] Site selector does not load correct site (may show non-existent site)
 - [ ] History tab only loads partial data
@@ -208,6 +234,7 @@ New control strategy to minimize cost using spot electricity prices:
 - [x] Remove VARCHAR site_id columns (completed Dec 2024)
 - [ ] Remove getSiteIdString() helper once no longer needed
 - [ ] Move target_heat and bathers from config_templates to pool level
+- [ ] Update EnergySimulator.setConfigFromUI() to ignore pool/cover/solar sections (defense in depth)
 
 ### Development Principles
 - **No silent fallbacks** - Fail with clear error instead of defaulting to magic values
