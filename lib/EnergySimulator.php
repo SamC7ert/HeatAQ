@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.9.0';  // Reverted to Inan & Atayilmaz (2022) evap + Bowen ratio conv
+    const VERSION = '3.9.1';  // U-value cover model (Python v3.6.0.3 parity)
 
     private $db;
     private $siteId;
@@ -40,9 +40,10 @@ class EnergySimulator {
     // Equipment parameters
     private $equipment;
 
-    // Intermediate calculation storage (for Bowen ratio linking evap→conv)
+    // Intermediate calculation storage (for Bowen ratio linking evap→conv, cover debug)
     private $lastEvapCalc = [];
     private $lastConvCalc = [];
+    private $lastCoverCalc = [];
 
     // Physical constants
     const WATER_DENSITY = 1000;      // kg/m³
@@ -375,6 +376,7 @@ class EnergySimulator {
                 'evaporation_kwh' => 0,
                 'convection_kwh' => 0,
                 'radiation_kwh' => 0,
+                'cover_loss_kwh' => 0,
                 'floor_loss_kwh' => 0,
                 'wall_loss_kwh' => 0,
                 'total_heat_loss_kwh' => 0,
@@ -477,6 +479,7 @@ class EnergySimulator {
                     'evaporation_kw' => round($losses['evaporation'], 3),
                     'convection_kw' => round($losses['convection'], 3),
                     'radiation_kw' => round($losses['radiation'], 3),
+                    'cover_kw' => round($losses['cover'], 3),
                     'conduction_kw' => round($losses['conduction'], 3),
                     'total_kw' => round($losses['total'], 3),
                 ],
@@ -540,6 +543,7 @@ class EnergySimulator {
             $results['summary']['evaporation_kwh'] += $losses['evaporation'];
             $results['summary']['convection_kwh'] += $losses['convection'];
             $results['summary']['radiation_kwh'] += $losses['radiation'];
+            $results['summary']['cover_loss_kwh'] += $losses['cover'];
             // Split conduction into floor and wall (rough estimate: 80% floor, 20% wall)
             $results['summary']['floor_loss_kwh'] += $losses['conduction'] * 0.8;
             $results['summary']['wall_loss_kwh'] += $losses['conduction'] * 0.2;
@@ -758,6 +762,10 @@ class EnergySimulator {
     /**
      * Calculate all heat losses
      *
+     * When pool is OPEN: evaporation + convection + radiation + conduction
+     * When pool is CLOSED with cover: cover (U-value) + conduction
+     *   - Evap/conv/rad are blocked by cover and replaced with U-value heat transfer
+     *
      * @param float $waterTemp Pool water temperature (°C)
      * @param float $airTemp Ambient air temperature (°C)
      * @param float $windSpeed Wind speed (m/s)
@@ -767,35 +775,104 @@ class EnergySimulator {
      */
     private function calculateHeatLosses($waterTemp, $airTemp, $windSpeed, $humidity, $isOpen) {
         $area = $this->poolConfig['area_m2'];
+        $hasCover = $this->poolConfig['has_cover'] ?? false;
+        $isCovered = $hasCover && !$isOpen;
 
-        // 1. EVAPORATION LOSS (dominant for outdoor pools)
-        // Uses simplified Carrier equation
-        $evapLoss = $this->calculateEvaporationLoss($waterTemp, $airTemp, $humidity, $windSpeed, $isOpen);
-
-        // 2. CONVECTION LOSS
-        $convLoss = $this->calculateConvectionLoss($waterTemp, $airTemp, $windSpeed);
-
-        // 3. RADIATION LOSS
-        $radLoss = $this->calculateRadiationLoss($waterTemp, $airTemp);
-
-        // 4. CONDUCTION LOSS (to ground/walls)
+        // CONDUCTION LOSS (to ground/walls) - always applies
         $condLoss = $this->calculateConductionLoss($waterTemp);
 
-        // Apply cover reduction if pool has cover and is closed
-        if ($this->poolConfig['has_cover'] && !$isOpen) {
-            $coverFactor = 0.1; // 90% reduction with cover
-            $evapLoss *= $coverFactor;
-            $convLoss *= $coverFactor;
-            $radLoss *= $coverFactor;
+        if ($isCovered) {
+            // COVERED: U-value model replaces surface losses
+            // Cover blocks evaporation, convection, radiation entirely
+            $evapLoss = 0;
+            $convLoss = 0;
+            $radLoss = 0;
+
+            // Calculate cover heat loss using U-value method
+            $coverLoss = $this->calculateCoverLoss($waterTemp, $airTemp, $windSpeed);
+        } else {
+            // OPEN: Normal surface losses
+            // 1. EVAPORATION LOSS (dominant for outdoor pools)
+            $evapLoss = $this->calculateEvaporationLoss($waterTemp, $airTemp, $humidity, $windSpeed, $isOpen);
+
+            // 2. CONVECTION LOSS (Bowen ratio - must follow evaporation)
+            $convLoss = $this->calculateConvectionLoss($waterTemp, $airTemp, $windSpeed);
+
+            // 3. RADIATION LOSS
+            $radLoss = $this->calculateRadiationLoss($waterTemp, $airTemp);
+
+            // No cover loss when open
+            $coverLoss = 0;
         }
+
+        $totalLoss = $evapLoss + $convLoss + $radLoss + $coverLoss + $condLoss;
 
         return [
             'evaporation' => max(0, $evapLoss),
             'convection' => max(0, $convLoss),
             'radiation' => max(0, $radLoss),
+            'cover' => max(0, $coverLoss),
             'conduction' => max(0, $condLoss),
-            'total' => max(0, $evapLoss + $convLoss + $radLoss + $condLoss)
+            'total' => max(0, $totalLoss)
         ];
+    }
+
+    /**
+     * Calculate heat loss through pool cover using U-value method
+     *
+     * Q_cover = U_effective × Area × (T_water - T_air) / 1000 [kW]
+     *
+     * U_effective includes wind correction:
+     * - U_rated assumes natural convection (h_nat ≈ 7 W/(m²·K))
+     * - Wind increases top surface heat transfer
+     * - h_wind = 5.7 + 3.8 * v_eff
+     * - U_eff = 1 / (1/U_rated - 1/h_nat + 1/h_wind)
+     */
+    private function calculateCoverLoss($waterTemp, $airTemp, $windSpeed) {
+        $area = $this->poolConfig['area_m2'];
+        $uRated = $this->poolConfig['cover_r_value'] ?? 5.0; // U-value W/(m²·K)
+        $windFactor = $this->poolConfig['wind_exposure_factor'] ?? 1.0;
+
+        // Effective wind speed
+        $vEff = $windSpeed * $windFactor;
+
+        // Natural convection coefficient assumed in rated U-value
+        $hNatural = 7.0; // W/(m²·K) - typical for horizontal surface
+
+        // Forced convection coefficient with wind (empirical)
+        $hWind = 5.7 + 3.8 * $vEff; // W/(m²·K)
+
+        // Calculate effective U-value with wind correction
+        // Resistance model: change only the air-side resistance
+        $uEffective = $uRated;
+        if ($uRated > 0 && $hNatural > 0 && $hWind > 0) {
+            $rTotal = 1.0 / $uRated - 1.0 / $hNatural + 1.0 / $hWind;
+            if ($rTotal > 0) {
+                $uEffective = 1.0 / $rTotal;
+            }
+        }
+
+        // Wind can only increase heat loss (U_eff >= U_rated)
+        $uEffective = max($uEffective, $uRated);
+
+        // Temperature difference
+        $tempDiff = $waterTemp - $airTemp;
+
+        // Heat loss through cover (kW)
+        $coverLoss = $uEffective * $area * $tempDiff / 1000;
+
+        // Store intermediate values for debug
+        $this->lastCoverCalc = [
+            'u_rated' => $uRated,
+            'v_eff' => $vEff,
+            'h_natural' => $hNatural,
+            'h_wind' => $hWind,
+            'u_effective' => $uEffective,
+            'temp_diff' => $tempDiff,
+            'cover_loss_kw' => $coverLoss,
+        ];
+
+        return max(0, $coverLoss);
     }
 
     /**
@@ -1486,16 +1563,37 @@ class EnergySimulator {
             $waterHeatingKW = ($bathersPerDay * $kwhPerVisit) / $openHours;
         }
 
-        // ========== APPLY COVER REDUCTION ==========
-        if ($hasCover && !$isOpen) {
-            $coverFactor = 0.1; // 90% reduction
-            $evapLossKW *= $coverFactor;
-            $convLossKW *= $coverFactor;
-            $radLossKW *= $coverFactor;
+        // ========== COVER CALCULATION (U-value method) ==========
+        $isCovered = $hasCover && !$isOpen;
+        $coverLossKW = 0;
+        $coverUEffective = 0;
+        $coverHNatural = 7.0;  // W/(m²·K)
+        $coverHWind = 5.7 + 3.8 * $effectWindSpeed;
+
+        if ($isCovered) {
+            // Cover blocks evap/conv/rad, replaces with U-value heat transfer
+            $evapLossKW = 0;
+            $convLossKW = 0;
+            $radLossKW = 0;
+
+            // Calculate effective U-value with wind correction
+            $uRated = $coverUValue ?? 5.0;
+            if ($uRated > 0 && $coverHNatural > 0 && $coverHWind > 0) {
+                $rTotal = 1.0 / $uRated - 1.0 / $coverHNatural + 1.0 / $coverHWind;
+                if ($rTotal > 0) {
+                    $coverUEffective = 1.0 / $rTotal;
+                }
+            }
+            $coverUEffective = max($coverUEffective, $uRated);
+
+            // Cover heat loss: Q = U_eff × A × ΔT
+            $coverTempDiff = $poolTemp - $airTemp;
+            $coverLossKW = $coverUEffective * $area * $coverTempDiff / 1000;
+            $coverLossKW = max(0, $coverLossKW);
         }
 
         // ========== TOTALS ==========
-        $totalLossKW = $evapLossKW + $convLossKW + $radLossKW + $condLossKW + $waterHeatingKW;
+        $totalLossKW = $evapLossKW + $convLossKW + $radLossKW + $coverLossKW + $condLossKW + $waterHeatingKW;
         $netRequirementKW = $totalLossKW - $solarGainKW;
 
         // ========== HEATING OUTPUT ==========
@@ -1606,6 +1704,17 @@ class EnergySimulator {
                 'diff_t4' => sprintf('%.0f', $radDiff),
                 'rad_loss_kw' => round($radLossKW, 3),
             ],
+            'cover' => [
+                'formula' => 'U-value Method (Python v3.6.0.3)',
+                'is_covered' => $isCovered,
+                'u_rated' => $coverUValue ?? 5.0,
+                'v_eff_ms' => round($effectWindSpeed, 3),
+                'h_natural' => $coverHNatural,
+                'h_wind' => round($coverHWind, 2),
+                'u_effective' => round($coverUEffective, 3),
+                'temp_diff_k' => $isCovered ? round($poolTemp - $airTemp, 2) : null,
+                'cover_loss_kw' => round($coverLossKW, 3),
+            ],
             'solar_gain' => [
                 'source' => $solarSource, // 'hourly' = pre-calculated, 'daily' = legacy bell curve
                 'daily_total_kwh_m2' => round($dailySolar, 3),
@@ -1659,6 +1768,7 @@ class EnergySimulator {
                 'evaporation_kw' => round($evapLossKW, 3),
                 'convection_kw' => round($convLossKW, 3),
                 'radiation_kw' => round($radLossKW, 3),
+                'cover_loss_kw' => round($coverLossKW, 3),
                 'wall_loss_kw' => round($wallLossKW, 3),
                 'floor_loss_kw' => round($floorLossKW, 3),
                 'water_heating_kw' => round($waterHeatingKW, 3),
