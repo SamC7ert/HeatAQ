@@ -1620,10 +1620,8 @@ const SimulationsModule = {
             statusEl.style.color = isOpen ? '#28a745' : '#dc3545';
         }
 
-        // Cover status (Cover On/Off)
-        // has_cover is in inp.pool (from debugSingleHour), not inp.config
-        const hasCover = inp.pool?.has_cover ?? inp.config?.has_cover;
-        const coverOn = hasCover && !isOpen;
+        // Cover status (Cover On/Off) - use actual calculated value from debug API
+        const coverOn = data.cover?.is_covered ?? (inp.config?.has_cover && !isOpen);
         setEl('debug-cover-status', coverOn ? 'Cover On' : 'Cover Off');
 
         // Water temperature display (from stored simulation data)
@@ -1663,7 +1661,7 @@ const SimulationsModule = {
         setHtml('debug-input', `
             <strong>Weather:</strong> ${inp.weather?.air_temp_c}°C, Wind: ${inp.weather?.wind_speed_ms} m/s, RH: ${inp.weather?.humidity_pct}%<br>
             <strong>Pool:</strong> ${inp.pool?.water_temp_c}°C, ${inp.pool?.area_m2} m²<br>
-            <strong>Config:</strong> Wind: ${windPct} exposure, Cover: ${(inp.pool?.has_cover ?? inp.config?.has_cover) ? 'Yes' : 'No'}
+            <strong>Config:</strong> Wind: ${windPct} exposure, has_cover: ${inp.config?.has_cover}, is_covered: ${data.cover?.is_covered}
         `);
         setHtml('debug-evaporation', renderTable(data.evaporation));
         setHtml('debug-convection', renderTable(data.convection));
