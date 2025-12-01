@@ -543,7 +543,7 @@ const SimControlModule = {
             '%', 1
         );
 
-        const strategy = equip.heat_pump?.strategy || config.control_strategy || 'reactive';
+        const strategy = equip.control_strategy || config.control_strategy || 'reactive';
         const hasOverrides = Object.keys(overrides).length > 0;
 
         // Build config HTML with clear sections

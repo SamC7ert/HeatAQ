@@ -1621,7 +1621,8 @@ const SimulationsModule = {
         }
 
         // Cover status (Cover On/Off)
-        const hasCover = inp.config?.has_cover;
+        // has_cover is in inp.pool (from debugSingleHour), not inp.config
+        const hasCover = inp.pool?.has_cover ?? inp.config?.has_cover;
         const coverOn = hasCover && !isOpen;
         setEl('debug-cover-status', coverOn ? 'Cover On' : 'Cover Off');
 
@@ -1662,7 +1663,7 @@ const SimulationsModule = {
         setHtml('debug-input', `
             <strong>Weather:</strong> ${inp.weather?.air_temp_c}°C, Wind: ${inp.weather?.wind_speed_ms} m/s, RH: ${inp.weather?.humidity_pct}%<br>
             <strong>Pool:</strong> ${inp.pool?.water_temp_c}°C, ${inp.pool?.area_m2} m²<br>
-            <strong>Config:</strong> Wind: ${windPct} exposure, Cover: ${inp.config?.has_cover ? 'Yes' : 'No'}
+            <strong>Config:</strong> Wind: ${windPct} exposure, Cover: ${(inp.pool?.has_cover ?? inp.config?.has_cover) ? 'Yes' : 'No'}
         `);
         setHtml('debug-evaporation', renderTable(data.evaporation));
         setHtml('debug-convection', renderTable(data.convection));
@@ -1691,6 +1692,42 @@ const SimulationsModule = {
                 <tr><td>Fuel input</td><td><code>${boiler.fuel_kw} kW</code></td></tr>
             </table>
         `);
+
+        // Predictive plan (from run config and stored data)
+        const preheatCard = document.getElementById('debug-preheat-card');
+        const strategy = hp.strategy || 'reactive';
+        const isPredictive = strategy === 'predictive';
+        const isHeatingWhenClosed = !isOpen && stored.hp_heat_kw > 0;
+
+        if (preheatCard) {
+            if (isPredictive) {
+                preheatCard.style.display = '';
+                const effectiveTarget = inp.pool?.target_temp;
+                setHtml('debug-preheat', `
+                    <table class="data-table compact" style="font-size: 11px;">
+                        <tr><td>Strategy</td><td><code style="color:#9c27b0;"><strong>PREDICTIVE</strong></code></td></tr>
+                        <tr><td>Pool State</td><td><code>${isOpen ? 'OPEN' : 'CLOSED'}</code></td></tr>
+                        <tr><td>Target</td><td><code>${effectiveTarget ?? 'none (coasting)'}</code></td></tr>
+                        <tr><td>Preheating?</td><td><code style="color:${isHeatingWhenClosed ? '#28a745' : '#666'};">${isHeatingWhenClosed ? 'YES - HP active' : 'No'}</code></td></tr>
+                        <tr><td>HP Output</td><td><code>${stored.hp_heat_kw?.toFixed(1) || 0} kW</code></td></tr>
+                    </table>
+                    <div style="margin-top: 8px; font-size: 10px; color: #888;">
+                        Predictive mode heats closed pool to prepare for opening
+                    </div>
+                `);
+            } else {
+                preheatCard.style.display = '';
+                setHtml('debug-preheat', `
+                    <table class="data-table compact" style="font-size: 11px;">
+                        <tr><td>Strategy</td><td><code>REACTIVE</code></td></tr>
+                        <tr><td>Mode</td><td><code>Heat only when open</code></td></tr>
+                    </table>
+                    <div style="margin-top: 8px; font-size: 10px; color: #888;">
+                        Reactive mode only heats during scheduled open hours
+                    </div>
+                `);
+            }
+        }
 
         // Summary
         const sum = data.summary || {};
