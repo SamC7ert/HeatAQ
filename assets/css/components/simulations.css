@@ -803,6 +803,11 @@ p.loading {
     font-style: italic;
 }
 
+/* Schedule Section - allow wider content */
+#schedules-section {
+    max-width: 1600px;
+}
+
 /* Schedule Grid (Calendar | Week | Days) */
 .schedule-grid-3 {
     display: grid;
