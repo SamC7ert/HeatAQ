@@ -99,10 +99,10 @@ class EnergySimulator {
         try {
             $stmt = $this->db->prepare("
                 SELECT config_json FROM config_templates
-                WHERE site_id = ?
+                WHERE pool_site_id = ?
                 LIMIT 1
             ");
-            $stmt->execute([$this->siteId]);
+            $stmt->execute([$this->poolSiteId]);
             $row = $stmt->fetch();
 
             if ($row && $row['config_json']) {
@@ -354,7 +354,7 @@ class EnergySimulator {
                 'simulator_version' => self::VERSION,
                 'start_date' => $startDate,
                 'end_date' => $endDate,
-                'site_id' => $this->siteId,
+                'pool_site_id' => $this->poolSiteId,
                 'pool_config' => $this->poolConfig,
                 'equipment' => $this->equipment,
                 'created_at' => date('Y-m-d H:i:s'),
@@ -622,11 +622,11 @@ class EnergySimulator {
             FROM weather_data wd
             JOIN weather_stations ws ON wd.station_id = ws.station_id
             JOIN pool_sites ps ON ws.station_id = ps.default_weather_station
-            WHERE ps.site_id = ?
+            WHERE ps.id = ?
               AND DATE(wd.timestamp) BETWEEN ? AND ?
             ORDER BY wd.timestamp
         ");
-        $stmt->execute([$this->siteId, $startDate, $endDate]);
+        $stmt->execute([$this->poolSiteId, $startDate, $endDate]);
         return $stmt->fetchAll();
     }
 
@@ -691,11 +691,11 @@ class EnergySimulator {
             FROM solar_daily_data sd
             JOIN weather_stations ws ON sd.station_id = ws.station_id
             JOIN pool_sites ps ON ws.station_id = ps.default_weather_station
-            WHERE ps.site_id = ?
+            WHERE ps.id = ?
               AND sd.date BETWEEN ? AND ?
             ORDER BY sd.date
         ");
-        $stmt->execute([$this->siteId, $startDate, $endDate]);
+        $stmt->execute([$this->poolSiteId, $startDate, $endDate]);
         $rows = $stmt->fetchAll();
 
         // Index by date (legacy format)
@@ -1226,11 +1226,11 @@ class EnergySimulator {
             FROM weather_data wd
             JOIN weather_stations ws ON wd.station_id = ws.station_id
             JOIN pool_sites ps ON ws.station_id = ps.default_weather_station
-            WHERE ps.site_id = ?
+            WHERE ps.id = ?
               AND wd.timestamp = ?
             LIMIT 1
         ");
-        $stmt->execute([$this->siteId, $timestamp]);
+        $stmt->execute([$this->poolSiteId, $timestamp]);
         $weather = $stmt->fetch();
 
         if (!$weather) {
@@ -1266,10 +1266,10 @@ class EnergySimulator {
                 FROM solar_daily_data sd
                 JOIN weather_stations ws ON sd.station_id = ws.station_id
                 JOIN pool_sites ps ON ws.station_id = ps.default_weather_station
-                WHERE ps.site_id = ? AND sd.date = ?
+                WHERE ps.id = ? AND sd.date = ?
                 LIMIT 1
             ");
-            $stmt->execute([$this->siteId, $date]);
+            $stmt->execute([$this->poolSiteId, $date]);
             $solar = $stmt->fetch();
             if ($solar) {
                 $dailySolar = (float) $solar['daily_total_kwh_m2'];
