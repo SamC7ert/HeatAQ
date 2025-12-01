@@ -1,0 +1,6 @@
+2025-12-01 16:02:25 - Running migration: 018_drop_varchar_site_id.sql
+Executing: ALTER TABLE `simulation_runs` DROP FOREIGN KEY IF EXISTS `fk_sim_run_site`
+Executing: ALTER TABLE `pools` DROP FOREIGN KEY IF EXISTS `fk_pool_site`
+Executing: UPDATE simulation_runs SET pool_site_id = 1 WHERE pool_site_id IS NULL
+Executing: SELECT COUNT(*) as rows_without_pool_site_id FROM simulation_runs WHERE pool_sit...
+Executed 4 statements
