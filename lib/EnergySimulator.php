@@ -647,19 +647,16 @@ class EnergySimulator {
             $stmt->execute([$this->poolSiteId]);
             return $stmt->fetchColumn() > 0;
         } catch (PDOException $e) {
-            // Table doesn't exist yet
             return false;
         }
     }
 
     /**
      * Get hourly solar data for date range (pre-calculated values from NASA POWER)
-     *
-     * Solar data is already adjusted for actual conditions (clouds, etc.)
-     * when fetched from NASA POWER API, so we just use solar_wh_m2 directly.
      */
     private function getHourlySolarData($startDate, $endDate) {
         if (!$this->poolSiteId) return [];
+
         $stmt = $this->db->prepare("
             SELECT timestamp, solar_wh_m2
             FROM site_solar_hourly
@@ -1245,7 +1242,7 @@ class EnergySimulator {
         $solarSource = 'none';
 
         // First try hourly data
-        if ($this->hasHourlySolarData()) {
+        if ($this->hasHourlySolarData() && $this->poolSiteId) {
             $stmt = $this->db->prepare("
                 SELECT solar_wh_m2
                 FROM site_solar_hourly

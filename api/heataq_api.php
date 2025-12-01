@@ -1940,6 +1940,7 @@ class HeatAQAPI {
         }
 
         // Get solar data range using pool_site_id
+        $stats = ['data_start' => null, 'data_end' => null, 'hour_count' => 0, 'day_count' => 0];
         $stmt = $this->db->prepare("
             SELECT
                 MIN(timestamp) as data_start,
@@ -1950,7 +1951,7 @@ class HeatAQAPI {
             WHERE pool_site_id = ?
         ");
         $stmt->execute([$poolSiteId]);
-        $stats = $stmt->fetch();
+        $stats = $stmt->fetch() ?: $stats;
 
         // Get site location
         $locStmt = $this->db->prepare("
