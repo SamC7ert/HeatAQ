@@ -1542,7 +1542,7 @@ const SimulationsModule = {
      * Render debug calculation results - populates new UI structure
      */
     renderDebugResults: function(data) {
-        console.log('[V79 renderDebugResults]', data);
+        console.log('[V80 renderDebugResults]', data);
 
         // Log schedule debug info prominently
         if (data.schedule_debug) {
