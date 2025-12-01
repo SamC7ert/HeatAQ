@@ -28,14 +28,13 @@ class PoolScheduler {
      * Initialize scheduler from database
      *
      * @param PDO $db Database connection
-     * @param string $siteId Site identifier (string)
+     * @param int $poolSiteId Integer pool_site_id (references pool_sites.id)
      * @param int|null $templateId Optional specific template ID
-     * @param int|null $poolSiteId Optional integer site ID (preferred over string)
      */
-    public function __construct($db, $siteId = 'arendal_aquatic', $templateId = null, $poolSiteId = null) {
+    public function __construct($db, $poolSiteId = 1, $templateId = null) {
         $this->db = $db;
-        $this->siteId = $siteId;
-        $this->poolSiteId = $poolSiteId;
+        $this->poolSiteId = (int)$poolSiteId;
+        $this->siteId = null; // Deprecated - kept for compatibility
 
         // Load configuration from database
         $this->template = $this->loadTemplate($templateId);

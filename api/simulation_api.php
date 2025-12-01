@@ -42,29 +42,19 @@ if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
     require_once __DIR__ . '/../auth.php';
     $auth = HeatAQAuth::check(Config::requiresAuth());
     if ($auth) {
-        // Support both string site_id (legacy) and integer pool_site_id (new)
-        $currentSiteId = $auth['project']['site_id'];
-        $currentPoolSiteId = $auth['project']['pool_site_id'] ?? null;
+        if (!isset($auth['project']['pool_site_id'])) {
+            header('Content-Type: application/json');
+            http_response_code(500);
+            echo json_encode(['error' => 'Auth context missing pool_site_id']);
+            exit;
+        }
+        $currentPoolSiteId = (int)$auth['project']['pool_site_id'];
         $currentUserId = $auth['user']['user_id'] ?? null;
     }
 } else {
-    $currentSiteId = 'arendal_aquatic';
-    $currentPoolSiteId = null; // Will be looked up if needed
+    // Development mode - use pool_site_id directly
+    $currentPoolSiteId = 1; // Direct INT reference to pool_sites.id
     $currentUserId = null;
-}
-
-/**
- * Get the integer pool_site_id, looking it up from site_id if needed
- */
-function getPoolSiteId($pdo, $siteId, $poolSiteId = null) {
-    if ($poolSiteId !== null) {
-        return $poolSiteId;
-    }
-    // Look up pool_site_id from site_id string
-    $stmt = $pdo->prepare("SELECT id FROM pool_sites WHERE site_id = ?");
-    $stmt->execute([$siteId]);
-    $result = $stmt->fetch();
-    return $result ? $result['id'] : null;
 }
 
 // Include required classes
@@ -166,10 +156,11 @@ try {
             $poolId = getParam('pool_id', null);
 
             // Initialize scheduler (with optional template selection)
-            $scheduler = new PoolScheduler($pdo, $currentSiteId, $templateId);
+            $poolSiteId = $currentPoolSiteId;
+            $scheduler = new PoolScheduler($pdo, $poolSiteId, $templateId);
 
             // Initialize simulator
-            $simulator = new EnergySimulator($pdo, $currentSiteId, $scheduler);
+            $simulator = new EnergySimulator($pdo, $poolSiteId, $scheduler);
 
             // Pool selection is required
             if (!$poolId) {
@@ -312,8 +303,9 @@ try {
             // Create simulation run record
             $scheduleTemplate = $scheduler->getTemplate();
             $configTemplateName = $configRow['template_name'] ?? null;
+            $poolSiteId = $currentPoolSiteId;
             $runId = createSimulationRun($pdo, [
-                'site_id' => $currentSiteId,
+                'pool_site_id' => $poolSiteId,
                 'pool_id' => $poolId,
                 'user_id' => $currentUserId,
                 'scenario_name' => $scenarioName,
@@ -367,6 +359,9 @@ try {
             $limit = (int) getParam('limit', 50);
             $offset = (int) getParam('offset', 0);
 
+            // Ensure we have pool_site_id
+            $poolSiteId = $currentPoolSiteId;
+
             try {
                 // Note: LIMIT/OFFSET as prepared params can cause issues, so we embed them directly (already cast to int)
                 $stmt = $pdo->prepare("
@@ -382,11 +377,11 @@ try {
                         summary_json,
                         config_snapshot
                     FROM simulation_runs
-                    WHERE site_id = ?
+                    WHERE pool_site_id = ?
                     ORDER BY created_at DESC
                     LIMIT {$limit} OFFSET {$offset}
                 ");
-                $stmt->execute([$currentSiteId]);
+                $stmt->execute([$poolSiteId]);
                 $runs = $stmt->fetchAll(PDO::FETCH_ASSOC);
             } catch (Exception $e) {
                 // Table might not exist yet
@@ -403,8 +398,8 @@ try {
             // Get total count
             $totalCount = 0;
             try {
-                $countStmt = $pdo->prepare("SELECT COUNT(*) FROM simulation_runs WHERE site_id = ?");
-                $countStmt->execute([$currentSiteId]);
+                $countStmt = $pdo->prepare("SELECT COUNT(*) FROM simulation_runs WHERE pool_site_id = ?");
+                $countStmt->execute([$poolSiteId]);
                 $totalCount = $countStmt->fetchColumn();
             } catch (Exception $e) {
                 $totalCount = count($runs);
@@ -424,11 +419,12 @@ try {
                 sendError('run_id parameter required');
             }
 
+            $poolSiteId = $currentPoolSiteId;
             $stmt = $pdo->prepare("
                 SELECT * FROM simulation_runs
-                WHERE run_id = ? AND site_id = ?
+                WHERE run_id = ? AND pool_site_id = ?
             ");
-            $stmt->execute([$runId, $currentSiteId]);
+            $stmt->execute([$runId, $poolSiteId]);
             $run = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if (!$run) {
@@ -448,12 +444,13 @@ try {
                 sendError('run_id parameter required');
             }
 
+            $poolSiteId = $currentPoolSiteId;
             $stmt = $pdo->prepare("
                 SELECT run_id, scenario_name, start_date, end_date, status, summary_json
                 FROM simulation_runs
-                WHERE run_id = ? AND site_id = ?
+                WHERE run_id = ? AND pool_site_id = ?
             ");
-            $stmt->execute([$runId, $currentSiteId]);
+            $stmt->execute([$runId, $poolSiteId]);
             $run = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if (!$run) {
@@ -477,8 +474,9 @@ try {
             }
 
             // Verify run belongs to site
-            $stmt = $pdo->prepare("SELECT run_id FROM simulation_runs WHERE run_id = ? AND site_id = ?");
-            $stmt->execute([$runId, $currentSiteId]);
+            $poolSiteId = $currentPoolSiteId;
+            $stmt = $pdo->prepare("SELECT run_id FROM simulation_runs WHERE run_id = ? AND pool_site_id = ?");
+            $stmt->execute([$runId, $poolSiteId]);
             if (!$stmt->fetch()) {
                 sendError('Simulation run not found', 404);
             }
@@ -510,8 +508,9 @@ try {
             $dateFilter = getParam('date'); // Optional single date filter
 
             // Verify run belongs to site
-            $stmt = $pdo->prepare("SELECT run_id FROM simulation_runs WHERE run_id = ? AND site_id = ?");
-            $stmt->execute([$runId, $currentSiteId]);
+            $poolSiteId = $currentPoolSiteId;
+            $stmt = $pdo->prepare("SELECT run_id FROM simulation_runs WHERE run_id = ? AND pool_site_id = ?");
+            $stmt->execute([$runId, $poolSiteId]);
             if (!$stmt->fetch()) {
                 sendError('Simulation run not found', 404);
             }
@@ -557,8 +556,9 @@ try {
             }
 
             // Verify run belongs to site
-            $stmt = $pdo->prepare("SELECT run_id FROM simulation_runs WHERE run_id = ? AND site_id = ?");
-            $stmt->execute([$runId, $currentSiteId]);
+            $poolSiteId = $currentPoolSiteId;
+            $stmt = $pdo->prepare("SELECT run_id FROM simulation_runs WHERE run_id = ? AND pool_site_id = ?");
+            $stmt->execute([$runId, $poolSiteId]);
             if (!$stmt->fetch()) {
                 sendError('Simulation run not found', 404);
             }
@@ -583,12 +583,12 @@ try {
                 $range = $stmt->fetch(PDO::FETCH_ASSOC);
 
                 sendResponse([
-                    'site_id' => $currentSiteId,
+                    'pool_site_id' => $currentPoolSiteId,
                     'weather_range' => $range
                 ]);
             } catch (Exception $e) {
                 sendResponse([
-                    'site_id' => $currentSiteId,
+                    'pool_site_id' => $currentPoolSiteId,
                     'weather_range' => [
                         'min_date' => '2014-01-01',
                         'max_date' => '2023-12-31'
@@ -600,8 +600,9 @@ try {
             break;
 
         case 'get_pool_config':
-            $scheduler = new PoolScheduler($pdo, $currentSiteId);
-            $simulator = new EnergySimulator($pdo, $currentSiteId, $scheduler);
+            $poolSiteId = $currentPoolSiteId;
+            $scheduler = new PoolScheduler($pdo, $poolSiteId);
+            $simulator = new EnergySimulator($pdo, $poolSiteId, $scheduler);
 
             sendResponse([
                 'simulator_version' => EnergySimulator::getVersion(),
@@ -641,17 +642,18 @@ try {
 
             // Get run_id (specified or most recent completed run covering this date)
             if (!$runId) {
+                $poolSiteId = $currentPoolSiteId;
                 $stmt = $pdo->prepare("
                     SELECT run_id, scenario_name
                     FROM simulation_runs
-                    WHERE site_id = ?
+                    WHERE pool_site_id = ?
                       AND status = 'completed'
                       AND start_date <= ?
                       AND end_date >= ?
                     ORDER BY created_at DESC
                     LIMIT 1
                 ");
-                $stmt->execute([$currentSiteId, $date, $date]);
+                $stmt->execute([$poolSiteId, $date, $date]);
                 $run = $stmt->fetch();
 
                 if (!$run) {
@@ -685,8 +687,9 @@ try {
 
             // Initialize scheduler with the stored schedule template
             $scheduleTemplateId = $configSnapshot['schedule_template_id'] ?? null;
-            $scheduler = new PoolScheduler($pdo, $currentSiteId, $scheduleTemplateId);
-            $simulator = new EnergySimulator($pdo, $currentSiteId, $scheduler);
+            $poolSiteIdForDebug = $currentPoolSiteId;
+            $scheduler = new PoolScheduler($pdo, $poolSiteIdForDebug, $scheduleTemplateId);
+            $simulator = new EnergySimulator($pdo, $poolSiteIdForDebug, $scheduler);
 
             // Apply the stored config from the run (equipment settings, pool config, etc.)
             if (!empty($configSnapshot['equipment'])) {
@@ -766,17 +769,18 @@ try {
 
             // Get run_id (specified or most recent completed run that covers this date range)
             if (!$runId) {
+                $poolSiteId = $currentPoolSiteId;
                 $stmt = $pdo->prepare("
                     SELECT run_id, scenario_name, start_date, end_date
                     FROM simulation_runs
-                    WHERE site_id = ?
+                    WHERE pool_site_id = ?
                       AND status = 'completed'
                       AND start_date <= ?
                       AND end_date >= ?
                     ORDER BY created_at DESC
                     LIMIT 1
                 ");
-                $stmt->execute([$currentSiteId, $startDate, $endDate]);
+                $stmt->execute([$poolSiteId, $startDate, $endDate]);
                 $run = $stmt->fetch();
 
                 if (!$run) {
@@ -869,11 +873,11 @@ try {
 function createSimulationRun($pdo, $data) {
     $stmt = $pdo->prepare("
         INSERT INTO simulation_runs
-        (site_id, pool_id, user_id, scenario_name, description, start_date, end_date, status, config_snapshot, created_at)
+        (pool_site_id, pool_id, user_id, scenario_name, description, start_date, end_date, status, config_snapshot, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, NOW())
     ");
     $stmt->execute([
-        $data['site_id'],
+        $data['pool_site_id'],
         $data['pool_id'] ?? null,
         $data['user_id'],
         $data['scenario_name'],

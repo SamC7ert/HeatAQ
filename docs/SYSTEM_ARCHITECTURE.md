@@ -311,9 +311,8 @@ User Action → Validate Client-Side → api.js POST
 │   ENERGY SIMULATOR (lib/EnergySimulator.php)                               │
 │   Constructor receives:                                                     │
 │   ├─ $db: PDO database connection                                          │
-│   ├─ $siteId: VARCHAR site identifier                                      │
-│   ├─ $scheduler: PoolScheduler instance                                    │
-│   └─ Derives: poolSiteId (INT) for solar table queries                    │
+│   ├─ $poolSiteId: INT pool_site_id (references pool_sites.id)             │
+│   └─ $scheduler: PoolScheduler instance                                    │
 │                                                                             │
 │   setConfigFromUI() receives pool config:                                  │
 │   ├─ pool: { area_m2, volume_m3, depth_m, wind_exposure, solar_absorption }│
@@ -341,7 +340,7 @@ User Action → Validate Client-Side → api.js POST
 │                            ▼                                                │
 │   DATA STORAGE (simulation_api.php)                                        │
 │   1. simulation_runs table:                                                │
-│      ├─ run_id, site_id, pool_id, user_id                                 │
+│      ├─ run_id, pool_site_id, pool_id, user_id                            │
 │      ├─ scenario_name, description                                         │
 │      ├─ start_date, end_date, status                                       │
 │      ├─ config_snapshot (JSON of full config used)                        │
