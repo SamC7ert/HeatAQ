@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.9.1';  // U-value cover model (Python v3.6.0.3 parity)
+    const VERSION = '3.9.2';  // Structural losses matching Python v3.6.0.3
 
     private $db;
     private $siteId;
@@ -44,6 +44,7 @@ class EnergySimulator {
     private $lastEvapCalc = [];
     private $lastConvCalc = [];
     private $lastCoverCalc = [];
+    private $lastStructuralCalc = [];
 
     // Physical constants
     const WATER_DENSITY = 1000;      // kg/m³
@@ -54,6 +55,12 @@ class EnergySimulator {
     const AIR_SPECIFIC_HEAT = 1005;  // J/(kg·K) - c_p for air
     const ATM_PRESSURE = 101325;     // Pa - atmospheric pressure
     const MOLECULAR_RATIO = 0.622;   // M_water/M_air = 18.02/28.97
+
+    // Structural losses (Python v3.6.0.3)
+    const Q_POOL_FLUX = 1.51;        // W/m² - steady-state floor heat flux (year 3+)
+    const U_WALLS = 0.58;            // W/(m²·K) - wall U-value
+    const T_REF_LOW = 5;             // °C - reference temperature for flux scaling
+    const T_REF_HIGH = 28;           // °C - reference pool temperature for flux
 
     /**
      * Initialize simulator
@@ -431,12 +438,14 @@ class EnergySimulator {
             $hourlySolar = $this->getSolarForHour($solarData, $date, $hourOfDay);
 
             // Calculate heat losses
+            $tunnelTemp = isset($hour['tunnel_temperature']) ? (float) $hour['tunnel_temperature'] : null;
             $losses = $this->calculateHeatLosses(
                 $currentWaterTemp,
                 (float) $hour['air_temperature'],
                 (float) ($hour['wind_speed'] ?? 2.0),
                 (float) ($hour['humidity'] ?? 70),
-                $targetTemp !== null // is pool open?
+                $targetTemp !== null, // is pool open?
+                $tunnelTemp
             );
 
             // Calculate solar gain
@@ -480,7 +489,8 @@ class EnergySimulator {
                     'convection_kw' => round($losses['convection'], 3),
                     'radiation_kw' => round($losses['radiation'], 3),
                     'cover_kw' => round($losses['cover'], 3),
-                    'conduction_kw' => round($losses['conduction'], 3),
+                    'floor_kw' => round($losses['floor'], 3),
+                    'walls_kw' => round($losses['walls'], 3),
                     'total_kw' => round($losses['total'], 3),
                 ],
                 'gains' => [
@@ -544,9 +554,9 @@ class EnergySimulator {
             $results['summary']['convection_kwh'] += $losses['convection'];
             $results['summary']['radiation_kwh'] += $losses['radiation'];
             $results['summary']['cover_loss_kwh'] += $losses['cover'];
-            // Split conduction into floor and wall (rough estimate: 80% floor, 20% wall)
-            $results['summary']['floor_loss_kwh'] += $losses['conduction'] * 0.8;
-            $results['summary']['wall_loss_kwh'] += $losses['conduction'] * 0.2;
+            // Floor and wall losses (Python v3.6.0.3 structural model)
+            $results['summary']['floor_loss_kwh'] += $losses['floor'];
+            $results['summary']['wall_loss_kwh'] += $losses['walls'];
             $results['summary']['total_heat_loss_kwh'] += $losses['total'];
             $results['summary']['total_solar_gain_kwh'] += $solarGain;
 
@@ -771,15 +781,18 @@ class EnergySimulator {
      * @param float $windSpeed Wind speed (m/s)
      * @param float $humidity Relative humidity (%)
      * @param bool $isOpen Is pool open (affects evaporation)
+     * @param float|null $tunnelTemp Tunnel temperature for wall losses (°C)
      * @return array Heat losses in kW
      */
-    private function calculateHeatLosses($waterTemp, $airTemp, $windSpeed, $humidity, $isOpen) {
+    private function calculateHeatLosses($waterTemp, $airTemp, $windSpeed, $humidity, $isOpen, $tunnelTemp = null) {
         $area = $this->poolConfig['area_m2'];
         $hasCover = $this->poolConfig['has_cover'] ?? false;
         $isCovered = $hasCover && !$isOpen;
 
-        // CONDUCTION LOSS (to ground/walls) - always applies
-        $condLoss = $this->calculateConductionLoss($waterTemp);
+        // STRUCTURAL LOSSES (floor and walls) - always applies
+        $structural = $this->calculateStructuralLosses($waterTemp, $tunnelTemp);
+        $floorLoss = $structural['floor'];
+        $wallLoss = $structural['walls'];
 
         if ($isCovered) {
             // COVERED: U-value model replaces surface losses
@@ -805,14 +818,15 @@ class EnergySimulator {
             $coverLoss = 0;
         }
 
-        $totalLoss = $evapLoss + $convLoss + $radLoss + $coverLoss + $condLoss;
+        $totalLoss = $evapLoss + $convLoss + $radLoss + $coverLoss + $floorLoss + $wallLoss;
 
         return [
             'evaporation' => max(0, $evapLoss),
             'convection' => max(0, $convLoss),
             'radiation' => max(0, $radLoss),
             'cover' => max(0, $coverLoss),
-            'conduction' => max(0, $condLoss),
+            'floor' => max(0, $floorLoss),
+            'walls' => max(0, $wallLoss),
             'total' => max(0, $totalLoss)
         ];
     }
@@ -1019,34 +1033,68 @@ class EnergySimulator {
     }
 
     /**
-     * Calculate conduction heat loss to ground
-     * Uses years_operating to adjust for ground thermal stabilization
+     * Calculate structural heat losses (floor and walls) - Python v3.6.0.3
      *
-     * Ground around pool warms up over time:
-     * - Year 1: Cold ground, higher losses (factor ~1.5)
-     * - Year 2: Warming ground (factor ~1.2)
-     * - Year 3+: Steady state (factor 1.0)
+     * Floor: Flux-based model with temperature scaling
+     *   Q_floor = q_pool × A × (T_water - T_ref_low) / (T_ref_high - T_ref_low)
+     *   where q_pool = 1.51 W/m² at steady state (year 3+)
+     *
+     * Walls: U-value model against tunnel/ambient temperature
+     *   Q_walls = U_walls × A_walls × (T_water - T_tunnel)
+     *
+     * @param float $waterTemp Pool water temperature (°C)
+     * @param float|null $tunnelTemp Tunnel temperature (°C), falls back to 15°C
+     * @return array ['floor' => kW, 'walls' => kW]
      */
-    private function calculateConductionLoss($waterTemp) {
-        // Ground temperature assumed ~10°C year-round in Norway
-        $groundTemp = 10;
-        $tempDiff = $waterTemp - $groundTemp;
+    private function calculateStructuralLosses($waterTemp, $tunnelTemp = null) {
+        $area = $this->poolConfig['area_m2'];
 
-        // U-value for pool walls/floor (W/m²·K)
-        // Typical insulated pool: 0.3-0.5, uninsulated: 1.0-2.0
-        $uValue = 0.5;
-
-        // Years operating affects ground thermal - ground warms up over time
+        // Years operating factor (ground warms up over time)
         $yearsOperating = $this->poolConfig['years_operating'] ?? 3;
         $groundFactor = $this->getGroundThermalFactor($yearsOperating);
 
-        // Calculate areas
-        $bottomArea = $this->poolConfig['area_m2'];
-        $perimeter = $this->poolConfig['perimeter_m'] ?? $this->calculatePerimeter();
-        $sideArea = $perimeter * $this->poolConfig['depth_m'];
-        $totalArea = $bottomArea + $sideArea;
+        // Base flux adjusted for operating years
+        $qPoolFlux = self::Q_POOL_FLUX * $groundFactor;
 
-        return $uValue * $totalArea * $tempDiff * $groundFactor / 1000; // kW
+        // FLOOR LOSSES - flux-based model with temperature scaling
+        // Python: losses['floor'] = q_pool * area * (T_water - 5) / (28 - 5) / 1000
+        $tempScale = ($waterTemp - self::T_REF_LOW) / (self::T_REF_HIGH - self::T_REF_LOW);
+        $floorLoss = $qPoolFlux * $area * $tempScale / 1000; // kW
+
+        // WALL LOSSES - U-value model against tunnel temperature
+        // Python: losses['walls'] = u_walls * wall_area * (T_water - T_tunnel) / 1000
+        $tunnelRef = $tunnelTemp ?? 15.0; // Default if no tunnel data
+        $length = $this->poolConfig['length_m'] ?? sqrt($area * 2);
+        $width = $this->poolConfig['width_m'] ?? sqrt($area / 2);
+        $depth = $this->poolConfig['depth_m'] ?? 1.5;
+
+        // Wall area = perimeter × average depth
+        $perimeter = 2 * ($length + $width);
+        $wallArea = $perimeter * $depth;
+
+        $wallLoss = self::U_WALLS * $wallArea * ($waterTemp - $tunnelRef) / 1000; // kW
+
+        // Store debug data
+        $this->lastStructuralCalc = [
+            'water_temp_c' => round($waterTemp, 1),
+            'tunnel_temp_c' => round($tunnelRef, 1),
+            'years_operating' => $yearsOperating,
+            'ground_factor' => round($groundFactor, 2),
+            'q_pool_flux_w_m2' => round($qPoolFlux, 3),
+            'floor_area_m2' => round($area, 1),
+            'temp_scale' => round($tempScale, 3),
+            'floor_loss_kw' => round($floorLoss, 3),
+            'wall_area_m2' => round($wallArea, 1),
+            'u_walls_w_m2k' => self::U_WALLS,
+            'delta_t_wall_k' => round($waterTemp - $tunnelRef, 1),
+            'wall_loss_kw' => round($wallLoss, 3),
+            'total_kw' => round($floorLoss + $wallLoss, 3),
+        ];
+
+        return [
+            'floor' => max(0, $floorLoss),
+            'walls' => max(0, $wallLoss)
+        ];
     }
 
     /**
@@ -1536,20 +1584,22 @@ class EnergySimulator {
             $solarGainKW = $solarKWm2 * $area * $solarAbsorption;
         }
 
-        // ========== CONDUCTION CALCULATION ==========
-        $groundTemp = 10; // °C assumed
-        $groundTempDiff = $poolTemp - $groundTemp;
-        $uValueWall = 0.58; // W/(m²·K) from Excel
+        // ========== STRUCTURAL LOSSES (Python v3.6.0.3) ==========
         $groundFactor = $this->getGroundThermalFactor($yearsOperating);
 
-        // Wall loss (kW)
-        $wallLossKW = $uValueWall * $wallArea * $groundTempDiff * $groundFactor / 1000;
+        // FLOOR: Flux-based model with temperature scaling
+        // Python: losses['floor'] = q_pool * area * (T_water - 5) / (28 - 5) / 1000
+        $qPoolFlux = self::Q_POOL_FLUX * $groundFactor; // Adjusted for years operating
+        $tempScale = ($poolTemp - self::T_REF_LOW) / (self::T_REF_HIGH - self::T_REF_LOW);
+        $floorLossKW = $qPoolFlux * $floorArea * $tempScale / 1000;
 
-        // Floor loss (kW)
-        $floorLossKW = $uValueWall * $floorArea * $groundTempDiff * $groundFactor / 1000;
+        // WALLS: U-value model against tunnel temperature
+        // Python: losses['walls'] = u_walls * wall_area * (T_water - T_tunnel) / 1000
+        $tunnelRef = $tunnelTemp ?? 15.0; // Default if no tunnel data
+        $wallLossKW = self::U_WALLS * $wallArea * ($poolTemp - $tunnelRef) / 1000;
 
-        // Total conduction
-        $condLossKW = $wallLossKW + $floorLossKW;
+        // Total structural losses
+        $condLossKW = max(0, $floorLossKW) + max(0, $wallLossKW);
 
         // ========== WATER HEATING (bather makeup) ==========
         // Values from configuration - NO DEFAULTS
@@ -1723,16 +1773,29 @@ class EnergySimulator {
                 'cover_transmittance' => $hasCover && !$isOpen ? $coverTransmittance : 1.0,
                 'solar_gain_kw' => round($solarGainKW, 3),
             ],
-            'conduction' => [
-                'ground_temp_c' => $groundTemp,
-                'temp_diff_k' => round($groundTempDiff, 2),
-                'u_value' => $uValueWall,
-                'wall_area_m2' => round($wallArea, 1),
-                'floor_area_m2' => $floorArea,
-                'ground_factor' => $groundFactor,
-                'wall_loss_kw' => round($wallLossKW, 3),
-                'floor_loss_kw' => round($floorLossKW, 3),
-                'total_cond_kw' => round($condLossKW, 3),
+            'structural' => [
+                'formula' => 'Python v3.6.0.3 structural model',
+                'years_operating' => $yearsOperating,
+                'ground_factor' => round($groundFactor, 2),
+                'floor' => [
+                    'method' => 'Flux-based with temperature scaling',
+                    'q_pool_flux_base' => self::Q_POOL_FLUX,
+                    'q_pool_flux_adjusted' => round($qPoolFlux, 3),
+                    'floor_area_m2' => $floorArea,
+                    't_ref_low_c' => self::T_REF_LOW,
+                    't_ref_high_c' => self::T_REF_HIGH,
+                    'temp_scale' => round($tempScale, 3),
+                    'floor_loss_kw' => round(max(0, $floorLossKW), 3),
+                ],
+                'walls' => [
+                    'method' => 'U-value against tunnel temp',
+                    'u_walls' => self::U_WALLS,
+                    'wall_area_m2' => round($wallArea, 1),
+                    'tunnel_temp_c' => round($tunnelRef, 1),
+                    'delta_t_k' => round($poolTemp - $tunnelRef, 1),
+                    'wall_loss_kw' => round(max(0, $wallLossKW), 3),
+                ],
+                'total_structural_kw' => round($condLossKW, 3),
             ],
             'water_heating' => [
                 'bathers_per_day' => $bathersPerDay,

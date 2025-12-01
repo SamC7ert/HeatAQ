@@ -691,6 +691,7 @@ const ProjectModule = {
         document.getElementById('edit-pool-cover-solar').value = pool.cover_solar_trans ?? 10;
         document.getElementById('edit-pool-has-tunnel').value = pool.has_tunnel ? '1' : '0';
         document.getElementById('edit-pool-floor-insulated').value = pool.floor_insulated ? '1' : '0';
+        document.getElementById('edit-pool-years').value = pool.years_operating ?? 3;
 
         // Calculate and show dimensions
         this.calcPoolDimensions();
@@ -745,7 +746,8 @@ const ProjectModule = {
             cover_r_value: parseFloat(document.getElementById('edit-pool-cover-u')?.value) || 5.0,
             cover_solar_transmittance: parseFloat(document.getElementById('edit-pool-cover-solar')?.value) || 10,
             has_tunnel: document.getElementById('edit-pool-has-tunnel')?.value === '1',
-            floor_insulated: document.getElementById('edit-pool-floor-insulated')?.value === '1'
+            floor_insulated: document.getElementById('edit-pool-floor-insulated')?.value === '1',
+            years_operating: parseInt(document.getElementById('edit-pool-years')?.value) || 3
         };
 
         // Update local state

@@ -156,6 +156,7 @@
                                 <option value="1">Hisøy Swim Club - Standard Hours</option>
                             </select>
                             <button class="btn btn-secondary btn-sm" onclick="app.schedules.toggleNewOHCForm()">+ New</button>
+                            <button class="btn btn-primary btn-sm" onclick="app.schedules.saveOHC()">Save</button>
                             <button class="btn btn-danger btn-sm" onclick="app.schedules.deleteOHC()">Delete</button>
                         </div>
                         <div id="ohc-description" class="ohc-description">
@@ -1113,10 +1114,10 @@
                                     <h4 style="margin: 0 0 8px 0; font-size: 13px;">Solar Gain</h4>
                                     <div id="debug-solar" style="font-size: 12px;"></div>
                                 </div>
-                                <!-- Conduction -->
+                                <!-- Structural Losses (Floor/Walls) -->
                                 <div class="card" style="padding: 10px;">
-                                    <h4 style="margin: 0 0 8px 0; font-size: 13px;">Conduction</h4>
-                                    <div id="debug-conduction" style="font-size: 12px;"></div>
+                                    <h4 style="margin: 0 0 8px 0; font-size: 13px;">Structural (Floor/Walls)</h4>
+                                    <div id="debug-structural" style="font-size: 12px;"></div>
                                 </div>
                                 <!-- Cover -->
                                 <div class="card" style="padding: 10px;">
@@ -1475,8 +1476,8 @@
                 </div>
             </div>
 
-            <!-- Tunnel & Floor -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+            <!-- Tunnel, Floor & Years Operating -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                 <div>
                     <label style="display: block; margin-bottom: 5px; font-weight: 500;">Pool Tunnel</label>
                     <select id="edit-pool-has-tunnel" class="form-control">
@@ -1490,6 +1491,11 @@
                         <option value="1">Insulated</option>
                         <option value="0">Uninsulated</option>
                     </select>
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 5px; font-weight: 500;">Years Operating</label>
+                    <input type="number" id="edit-pool-years" class="form-control" min="1" max="50" value="3">
+                    <small class="text-muted">Ground warming factor</small>
                 </div>
             </div>
 
@@ -1512,11 +1518,11 @@
     <script src="./assets/js/modules/navigation.js?v=90"></script>
     <script src="./assets/js/modules/schedules.js?v=90"></script>
     <script src="./assets/js/modules/calendar.js?v=90"></script>
-    <script src="./assets/js/modules/simulations.js?v=97"></script>
+    <script src="./assets/js/modules/simulations.js?v=98"></script>
     <script src="./assets/js/modules/simcontrol.js?v=92"></script>
     <script src="./assets/js/modules/configuration.js?v=90"></script>
     <script src="./assets/js/modules/admin.js?v=90"></script>
-    <script src="./assets/js/modules/project.js?v=91"></script>
+    <script src="./assets/js/modules/project.js?v=92"></script>
     <script src="./assets/js/app.js?v=90"></script>
 </body>
 </html>
