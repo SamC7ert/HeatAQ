@@ -358,6 +358,7 @@ try {
             $offset = (int) getParam('offset', 0);
 
             try {
+                // Note: LIMIT/OFFSET as prepared params can cause issues, so we embed them directly (already cast to int)
                 $stmt = $pdo->prepare("
                     SELECT
                         run_id,
@@ -373,9 +374,9 @@ try {
                     FROM simulation_runs
                     WHERE site_id = ?
                     ORDER BY created_at DESC
-                    LIMIT ? OFFSET ?
+                    LIMIT {$limit} OFFSET {$offset}
                 ");
-                $stmt->execute([$currentSiteId, $limit, $offset]);
+                $stmt->execute([$currentSiteId]);
                 $runs = $stmt->fetchAll(PDO::FETCH_ASSOC);
             } catch (Exception $e) {
                 // Table might not exist yet
@@ -505,23 +506,23 @@ try {
                 sendError('Simulation run not found', 404);
             }
 
-            // Build query based on filters
+            // Build query based on filters (LIMIT/OFFSET embedded directly, already cast to int)
             if ($dateFilter) {
                 $stmt = $pdo->prepare("
                     SELECT * FROM simulation_hourly_results
                     WHERE run_id = ? AND DATE(timestamp) = ?
                     ORDER BY timestamp
-                    LIMIT ? OFFSET ?
+                    LIMIT {$limit} OFFSET {$offset}
                 ");
-                $stmt->execute([$runId, $dateFilter, $limit, $offset]);
+                $stmt->execute([$runId, $dateFilter]);
             } else {
                 $stmt = $pdo->prepare("
                     SELECT * FROM simulation_hourly_results
                     WHERE run_id = ?
                     ORDER BY timestamp
-                    LIMIT ? OFFSET ?
+                    LIMIT {$limit} OFFSET {$offset}
                 ");
-                $stmt->execute([$runId, $limit, $offset]);
+                $stmt->execute([$runId]);
             }
             $hourlyResults = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
