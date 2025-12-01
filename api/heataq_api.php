@@ -2575,12 +2575,27 @@ class HeatAQAPI {
                 $description = trim($m[1]);
             }
 
+            // Check if log file exists (indicates migration was run)
+            $logFilename = preg_replace('/\.sql$/', '_log.txt', $filename);
+            $logPath = $migrationsDir . '/' . $logFilename;
+            $hasLog = file_exists($logPath);
+            $logSuccess = false;
+
+            if ($hasLog) {
+                // Check if log indicates success
+                $logContent = file_get_contents($logPath);
+                $logSuccess = strpos($logContent, 'SUCCESS') !== false;
+            }
+
             $pending[] = [
                 'filename' => $filename,
                 'path' => $file,
                 'description' => $description,
                 'size' => filesize($file),
-                'modified' => date('Y-m-d H:i:s', filemtime($file))
+                'modified' => date('Y-m-d H:i:s', filemtime($file)),
+                'has_log' => $hasLog,
+                'log_file' => $hasLog ? $logFilename : null,
+                'log_success' => $logSuccess
             ];
         }
 

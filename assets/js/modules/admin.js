@@ -1082,8 +1082,25 @@ const AdminModule = {
                 const actionsId = 'actions-migrate-' + m.filename.replace(/[^a-z0-9]/gi, '-');
                 html += `<tr id="${rowId}">`;
                 html += `<td><code>${m.filename}</code></td>`;
-                html += `<td id="${descId}">${m.description || '-'}</td>`;
-                html += `<td id="${actionsId}"><button class="btn btn-sm btn-primary" onclick="AdminModule.runMigration('${m.filename}', this)">Run</button></td>`;
+
+                // Show log link if log file exists
+                if (m.has_log && m.log_file) {
+                    const logColor = m.log_success ? 'green' : 'red';
+                    const logIcon = m.log_success ? '✓' : '✗';
+                    html += `<td id="${descId}"><a href="db/migrations/${m.log_file}" target="_blank" style="color: ${logColor};">${logIcon} View log</a></td>`;
+                } else {
+                    html += `<td id="${descId}">${m.description || '-'}</td>`;
+                }
+
+                // Show Done + Archive if log exists and was successful, otherwise Run button
+                if (m.has_log && m.log_success) {
+                    html += `<td id="${actionsId}">
+                        <button class="btn btn-sm btn-success" disabled>✓ Done</button>
+                        <button class="btn btn-sm btn-secondary" onclick="AdminModule.archiveMigration('${m.filename}')" style="margin-left: 5px;">Archive</button>
+                    </td>`;
+                } else {
+                    html += `<td id="${actionsId}"><button class="btn btn-sm btn-primary" onclick="AdminModule.runMigration('${m.filename}', this)">Run</button></td>`;
+                }
                 html += '</tr>';
             });
 
