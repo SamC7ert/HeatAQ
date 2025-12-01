@@ -921,7 +921,7 @@ class HeatAQAPI {
             $stmt->execute([$name, $description, $baseWeekScheduleId, $templateId]);
         } else {
             // Create new - generate unique version
-            $siteId = $this->getSiteIdString() ?? 'default_site';
+            $poolSiteId = $this->poolSiteId;
 
             // Find next available version for this name
             $stmt = $this->db->prepare("
@@ -934,10 +934,10 @@ class HeatAQAPI {
             $nextVer = ($row && $row['max_ver']) ? 'v' . number_format($row['max_ver'] + 0.1, 1) : 'v1.0';
 
             $stmt = $this->db->prepare("
-                INSERT INTO schedule_templates (site_id, name, version, description, base_week_schedule_id)
+                INSERT INTO schedule_templates (pool_site_id, name, version, description, base_week_schedule_id)
                 VALUES (?, ?, ?, ?, ?)
             ");
-            $stmt->execute([$siteId, $name, $nextVer, $description, $baseWeekScheduleId]);
+            $stmt->execute([$poolSiteId, $name, $nextVer, $description, $baseWeekScheduleId]);
             $templateId = $this->db->lastInsertId();
         }
 
@@ -971,11 +971,11 @@ class HeatAQAPI {
                 $stmt->execute([$scheduleId]);
             } else {
                 // Create new
-                $siteId = $this->getSiteIdString() ?? 'default_site';
+                $poolSiteId = $this->poolSiteId;
                 $stmt = $this->db->prepare("
-                    INSERT INTO day_schedules (site_id, name, is_closed) VALUES (?, ?, ?)
+                    INSERT INTO day_schedules (pool_site_id, name, is_closed) VALUES (?, ?, ?)
                 ");
-                $stmt->execute([$siteId, $name, $isClosed]);
+                $stmt->execute([$poolSiteId, $name, $isClosed]);
                 $scheduleId = $this->db->lastInsertId();
             }
 
@@ -1042,15 +1042,15 @@ class HeatAQAPI {
             ]);
         } else {
             // Create new
-            $siteId = $this->getSiteIdString() ?? 'default_site';
+            $poolSiteId = $this->poolSiteId;
             $stmt = $this->db->prepare("
                 INSERT INTO week_schedules
-                (site_id, name, monday_schedule_id, tuesday_schedule_id, wednesday_schedule_id,
+                (pool_site_id, name, monday_schedule_id, tuesday_schedule_id, wednesday_schedule_id,
                  thursday_schedule_id, friday_schedule_id, saturday_schedule_id, sunday_schedule_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             $stmt->execute([
-                $siteId, $name,
+                $poolSiteId, $name,
                 $dayScheduleIds['monday'], $dayScheduleIds['tuesday'], $dayScheduleIds['wednesday'],
                 $dayScheduleIds['thursday'], $dayScheduleIds['friday'], $dayScheduleIds['saturday'], $dayScheduleIds['sunday']
             ]);
