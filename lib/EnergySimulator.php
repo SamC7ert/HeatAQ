@@ -66,65 +66,26 @@ class EnergySimulator {
     }
 
     /**
-     * Load pool physical configuration from database
+     * Initialize pool configuration - all values from config template via setConfigFromUI()
+     * Note: pool_configurations table is deprecated, all config now in config_templates.config_json
      */
     private function loadPoolConfig() {
-        $stmt = $this->db->prepare("
-            SELECT * FROM pool_configurations
-            WHERE site_id = ?
-            LIMIT 1
-        ");
-        $stmt->execute([$this->siteId]);
-        $config = $stmt->fetch();
-
-        if (!$config) {
-            // Default configuration if no pool_configurations row exists
-            // Physical properties are conservative defaults - admin should configure actual values
-            // Simulation parameters will be overridden by config template via setConfigFromUI()
-            return [
-                // Physical pool properties (defaults)
-                'area_m2' => 312.5,      // 25m x 12.5m
-                'volume_m3' => 625,       // area × 2m depth
-                'depth_m' => 2.0,
-                'perimeter_m' => 75,      // 2×(25+12.5)
-                'has_tunnel' => true,
-                'cover_r_value' => 5.0,   // U-value when cover exists
-                // Simulation parameters - defaults here, overridden by config template
-                'has_cover' => true,                    // Config template decides
-                'cover_solar_transmittance' => 0.10,   // 10% (config template)
-                'solar_absorption' => 0.60,            // 60% (config template)
-                'wind_exposure_factor' => 1.0,         // Full exposure (config template)
-                'years_operating' => 3                  // Year 3 (config template)
-            ];
-        }
-
-        // These values from pool_configurations are PHYSICAL pool properties:
-        // - area, volume, depth, perimeter: geometry
-        // - has_tunnel: construction feature
-        // - cover_r_value: physical cover insulation
-        //
-        // These values are SIMULATION parameters (from config template JSON):
-        // - has_cover: whether to use cover in this simulation
-        // - cover_solar_transmittance: cover optical property for simulation
-        // - solar_absorption: water absorption for simulation
-        // - wind_exposure_factor: site exposure for simulation
-        // - years_operating: affects ground thermal state
-        //
-        // setConfigFromUI() will override simulation parameters from config template
+        // Return structure with null values - MUST be set via setConfigFromUI()
+        // No defaults - if value is null, calculation should handle appropriately
         return [
-            // Physical pool properties from database
-            'area_m2' => (float) ($config['area_m2'] ?? 312.5),
-            'volume_m3' => (float) ($config['volume_m3'] ?? 625),
-            'depth_m' => (float) ($config['depth_m'] ?? 2.0),
-            'perimeter_m' => (float) ($config['perimeter_m'] ?? 75),
-            'has_tunnel' => (bool) ($config['has_tunnel'] ?? true),
-            'cover_r_value' => (float) ($config['cover_r_value'] ?? 5.0),
-            // Simulation parameters - defaults here, overridden by config template
-            'has_cover' => true,                    // Default: use cover (config template decides)
-            'cover_solar_transmittance' => 0.10,   // 10% solar transmittance (config template)
-            'solar_absorption' => 0.60,            // 60% water absorption (config template)
-            'wind_exposure_factor' => 1.0,         // Full exposure (config template)
-            'years_operating' => 3                  // Year 3 steady state (config template)
+            // Physical pool properties - from config template pool section
+            'area_m2' => null,
+            'volume_m3' => null,
+            'depth_m' => null,
+            'perimeter_m' => null,        // Can be calculated from area if needed
+            'has_tunnel' => false,
+            'cover_r_value' => null,
+            // Simulation parameters - from config template
+            'has_cover' => null,
+            'cover_solar_transmittance' => null,
+            'solar_absorption' => null,
+            'wind_exposure_factor' => null,
+            'years_operating' => null
         ];
     }
 
@@ -187,6 +148,17 @@ class EnergySimulator {
             $this->poolConfig['depth_m'] = $uiConfig['pool']['depth_m'] ?? $this->poolConfig['depth_m'];
             $this->poolConfig['wind_exposure_factor'] = $uiConfig['pool']['wind_exposure'] ?? $this->poolConfig['wind_exposure_factor'];
             $this->poolConfig['years_operating'] = $uiConfig['pool']['years_operating'] ?? $this->poolConfig['years_operating'];
+            $this->poolConfig['has_tunnel'] = $uiConfig['pool']['has_tunnel'] ?? $this->poolConfig['has_tunnel'];
+
+            // Calculate perimeter from area if not provided (assume 2:1 rectangular pool)
+            // For area A with 2:1 ratio: length = sqrt(2*A), width = sqrt(A/2)
+            // Perimeter = 2*(length + width) = 2*(sqrt(2*A) + sqrt(A/2))
+            if ($this->poolConfig['area_m2'] !== null && $this->poolConfig['perimeter_m'] === null) {
+                $area = $this->poolConfig['area_m2'];
+                $length = sqrt(2 * $area);
+                $width = sqrt($area / 2);
+                $this->poolConfig['perimeter_m'] = 2 * ($length + $width);
+            }
         }
 
         // Cover settings
