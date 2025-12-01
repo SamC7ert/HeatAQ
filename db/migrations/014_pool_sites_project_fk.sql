@@ -10,8 +10,11 @@
 -- ============================================
 -- STEP 1 CLEANUP: Remove site_id from pools
 -- ============================================
--- First drop any index on site_id
-ALTER TABLE pools DROP INDEX IF EXISTS idx_site;
+-- First drop the FK constraint that references site_id
+ALTER TABLE pools DROP FOREIGN KEY fk_pool_site;
+
+-- Now drop the index
+ALTER TABLE pools DROP INDEX idx_site;
 
 -- Remove the old VARCHAR column (we now use pool_site_id INT FK)
 ALTER TABLE pools DROP COLUMN site_id;
