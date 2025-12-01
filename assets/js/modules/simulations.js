@@ -9,6 +9,7 @@ const SimulationsModule = {
     currentRun: null,
     weatherRange: null,
     debugTimestamp: null,  // Current debug date+hour for chart highlighting
+    dailyChart: null,      // Chart instance for History tab
 
     /**
      * Initialize simulations module
@@ -187,6 +188,9 @@ const SimulationsModule = {
             // Show the detail container
             const detail = document.getElementById('simulation-detail');
             if (detail) detail.style.display = '';
+
+            // Load and render the daily chart
+            this.loadDailyResults(runId);
 
         } catch (error) {
             console.error('Failed to load run:', error);
@@ -437,6 +441,12 @@ const SimulationsModule = {
             return;
         }
 
+        // Destroy existing chart if any
+        if (this.dailyChart) {
+            this.dailyChart.destroy();
+            this.dailyChart = null;
+        }
+
         // Prepare data - use thermal output (heat delivered), NOT electricity/fuel consumed
         const labels = dailyResults.map(d => d.date);
         const hpData = dailyResults.map(d => {
@@ -452,7 +462,7 @@ const SimulationsModule = {
             return fuel * 0.92;  // Estimated thermal output
         });
 
-        new Chart(canvas, {
+        this.dailyChart = new Chart(canvas, {
             type: 'line',
             data: {
                 labels: labels,
