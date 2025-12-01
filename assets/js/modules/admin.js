@@ -23,6 +23,7 @@ const AdminModule = {
 
             if (data.definitions) {
                 this.holidayDefinitions = data.definitions;
+                this.referenceDays = data.reference_days || [];
                 this.renderHolidayDefinitions();
             }
         } catch (err) {
@@ -46,23 +47,31 @@ const AdminModule = {
             '</tr></thead><tbody>';
 
         this.holidayDefinitions.forEach(def => {
-            const isMoving = def.is_moving == 1;
-            const dateValue = isMoving
-                ? (def.easter_offset_days || 0)
-                : `${String(def.fixed_month || 1).padStart(2,'0')}-${String(def.fixed_day || 1).padStart(2,'0')}`;
+            const isFixed = parseInt(def.is_fixed) === 1;
+            const dateValue = isFixed
+                ? `${String(def.fixed_month || 1).padStart(2,'0')}-${String(def.fixed_day || 1).padStart(2,'0')}`
+                : (def.offset_days || 0);
+
+            // Reference day dropdown options
+            const refOptions = this.referenceDays.map(rd =>
+                `<option value="${rd.id}" ${rd.id == def.reference_day_id ? 'selected' : ''}>${rd.name}</option>`
+            ).join('');
 
             html += `<tr data-id="${def.id}">
                 <td><input type="text" class="inline-edit" value="${def.name || ''}"
                     onchange="app.admin.updateHolidayField('${def.id}', 'name', this.value)"></td>
                 <td><select class="inline-edit" onchange="app.admin.updateHolidayType('${def.id}', this.value)">
-                    <option value="fixed" ${!isMoving ? 'selected' : ''}>Fixed</option>
-                    <option value="moving" ${isMoving ? 'selected' : ''}>Moving</option>
+                    <option value="fixed" ${isFixed ? 'selected' : ''}>Fixed</option>
+                    <option value="relative" ${!isFixed ? 'selected' : ''}>Relative</option>
                 </select></td>
-                <td>${isMoving
-                    ? `<input type="number" class="inline-edit" style="width:60px" value="${def.easter_offset_days || 0}"
-                        onchange="app.admin.updateHolidayField('${def.id}', 'easter_offset_days', this.value)"> days from Easter`
-                    : `<input type="date" class="inline-edit" value="2000-${dateValue}"
+                <td>${isFixed
+                    ? `<input type="date" class="inline-edit" value="2000-${dateValue}"
                         onchange="app.admin.updateHolidayDate('${def.id}', this.value)">`
+                    : `<select class="inline-edit" style="width:120px" onchange="app.admin.updateHolidayField('${def.id}', 'reference_day_id', this.value)">
+                        ${refOptions}
+                       </select>
+                       <input type="number" class="inline-edit" style="width:50px" value="${def.offset_days || 0}"
+                        onchange="app.admin.updateHolidayField('${def.id}', 'offset_days', this.value)"> days`
                 }</td>
                 <td><button class="btn btn-xs btn-danger" onclick="app.admin.deleteHolidayDefinition('${def.id}')" title="Delete">×</button></td>
             </tr>`;
@@ -73,22 +82,36 @@ const AdminModule = {
     },
 
     updateHolidayField: async function(id, field, value) {
-        const def = this.holidayDefinitions.find(d => d.id === id);
+        const def = this.holidayDefinitions.find(d => String(d.id) === String(id));
         if (!def) return;
         def[field] = value;
         await this.saveHolidayInline(def);
     },
 
     updateHolidayType: async function(id, type) {
-        const def = this.holidayDefinitions.find(d => d.id === id);
+        const def = this.holidayDefinitions.find(d => String(d.id) === String(id));
         if (!def) return;
-        def.is_moving = type === 'moving' ? 1 : 0;
+        def.is_fixed = type === 'fixed' ? 1 : 0;
+        // Set defaults based on type
+        if (def.is_fixed == 1) {
+            def.reference_day_id = null;
+            def.offset_days = null;
+            if (!def.fixed_month) def.fixed_month = 1;
+            if (!def.fixed_day) def.fixed_day = 1;
+        } else {
+            def.fixed_month = null;
+            def.fixed_day = null;
+            if (!def.reference_day_id && this.referenceDays.length > 0) {
+                def.reference_day_id = this.referenceDays[0].id;
+            }
+            if (def.offset_days === null) def.offset_days = 0;
+        }
         await this.saveHolidayInline(def);
-        this.renderHolidayDefinitions(); // Re-render to show correct date field
+        this.renderHolidayDefinitions(); // Re-render to show correct fields
     },
 
     updateHolidayDate: async function(id, dateValue) {
-        const def = this.holidayDefinitions.find(d => d.id === id);
+        const def = this.holidayDefinitions.find(d => String(d.id) === String(id));
         if (!def) return;
         // dateValue is like "2000-05-17", extract month and day
         const parts = dateValue.split('-');
@@ -105,10 +128,11 @@ const AdminModule = {
                 body: JSON.stringify({
                     id: def.id,
                     name: def.name,
-                    is_moving: def.is_moving,
+                    is_fixed: def.is_fixed,
                     fixed_month: def.fixed_month,
                     fixed_day: def.fixed_day,
-                    easter_offset_days: def.easter_offset_days
+                    reference_day_id: def.reference_day_id,
+                    offset_days: def.offset_days
                 })
             });
             const result = await response.json();
@@ -125,7 +149,7 @@ const AdminModule = {
     },
 
     editHolidayDefinition: function(id) {
-        const def = this.holidayDefinitions.find(d => d.id === id);
+        const def = this.holidayDefinitions.find(d => String(d.id) === String(id));
         if (def) {
             this.showHolidayForm(def);
         }
@@ -133,7 +157,13 @@ const AdminModule = {
 
     showHolidayForm: function(existingDef) {
         const isEdit = !!existingDef;
-        const title = isEdit ? 'Edit Holiday' : 'Add Holiday';
+        const title = isEdit ? 'Edit Exception Day' : 'Add Exception Day';
+        const isFixed = existingDef ? parseInt(existingDef.is_fixed) === 1 : true;
+
+        // Reference day dropdown options
+        const refOptions = this.referenceDays.map(rd =>
+            `<option value="${rd.id}" ${rd.id == existingDef?.reference_day_id ? 'selected' : ''}>${rd.name}</option>`
+        ).join('');
 
         const html = `
             <div class="modal-overlay" onclick="app.admin.closeHolidayForm()">
@@ -143,7 +173,7 @@ const AdminModule = {
                         <input type="hidden" id="holiday-id" value="${existingDef?.id || ''}">
 
                         <div class="form-group">
-                            <label>Name (Norwegian)</label>
+                            <label>Name</label>
                             <input type="text" id="holiday-name" class="form-control" required
                                 value="${existingDef?.name || ''}" placeholder="e.g., Langfredag">
                         </div>
@@ -151,12 +181,12 @@ const AdminModule = {
                         <div class="form-group">
                             <label>Type</label>
                             <select id="holiday-type" class="form-control" onchange="app.admin.toggleHolidayType()">
-                                <option value="fixed" ${!existingDef?.is_moving ? 'selected' : ''}>Fixed Date</option>
-                                <option value="moving" ${existingDef?.is_moving ? 'selected' : ''}>Relative to Easter</option>
+                                <option value="fixed" ${isFixed ? 'selected' : ''}>Fixed Date</option>
+                                <option value="relative" ${!isFixed ? 'selected' : ''}>Relative to Reference Day</option>
                             </select>
                         </div>
 
-                        <div id="fixed-date-fields" style="${existingDef?.is_moving ? 'display:none' : ''}">
+                        <div id="fixed-date-fields" style="${!isFixed ? 'display:none' : ''}">
                             <div class="form-row">
                                 <div class="form-group">
                                     <label>Day</label>
@@ -171,12 +201,18 @@ const AdminModule = {
                             </div>
                         </div>
 
-                        <div id="moving-date-fields" style="${existingDef?.is_moving ? '' : 'display:none'}">
+                        <div id="relative-date-fields" style="${isFixed ? 'display:none' : ''}">
                             <div class="form-group">
-                                <label>Days from Easter (negative = before)</label>
-                                <input type="number" id="holiday-offset" class="form-control" min="-60" max="60"
-                                    value="${existingDef?.easter_offset_days || 0}">
-                                <small class="text-muted">E.g., -2 = Good Friday, +1 = Easter Monday</small>
+                                <label>Reference Day</label>
+                                <select id="holiday-reference" class="form-control">
+                                    ${refOptions}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Offset (days)</label>
+                                <input type="number" id="holiday-offset" class="form-control" min="-100" max="100"
+                                    value="${existingDef?.offset_days || 0}">
+                                <small class="text-muted">Negative = before, Positive = after. E.g., -2 for Good Friday</small>
                             </div>
                         </div>
 
@@ -205,7 +241,7 @@ const AdminModule = {
     toggleHolidayType: function() {
         const type = document.getElementById('holiday-type').value;
         document.getElementById('fixed-date-fields').style.display = type === 'fixed' ? '' : 'none';
-        document.getElementById('moving-date-fields').style.display = type === 'moving' ? '' : 'none';
+        document.getElementById('relative-date-fields').style.display = type === 'relative' ? '' : 'none';
     },
 
     closeHolidayForm: function() {
@@ -217,16 +253,17 @@ const AdminModule = {
         const id = document.getElementById('holiday-id').value;
         const name = document.getElementById('holiday-name').value;
         const type = document.getElementById('holiday-type').value;
-        const isMoving = type === 'moving';
+        const isFixed = type === 'fixed';
 
         const data = {
             action: 'save_holiday_definition',
             id: id || null,
             name: name,
-            is_moving: isMoving ? 1 : 0,
-            fixed_day: isMoving ? null : parseInt(document.getElementById('holiday-day').value),
-            fixed_month: isMoving ? null : parseInt(document.getElementById('holiday-month').value),
-            easter_offset_days: isMoving ? parseInt(document.getElementById('holiday-offset').value) : null
+            is_fixed: isFixed ? 1 : 0,
+            fixed_day: isFixed ? parseInt(document.getElementById('holiday-day').value) : null,
+            fixed_month: isFixed ? parseInt(document.getElementById('holiday-month').value) : null,
+            reference_day_id: !isFixed ? parseInt(document.getElementById('holiday-reference').value) : null,
+            offset_days: !isFixed ? parseInt(document.getElementById('holiday-offset').value) : null
         };
 
         try {
@@ -244,8 +281,8 @@ const AdminModule = {
                 alert('Failed to save: ' + (result.error || 'Unknown error'));
             }
         } catch (err) {
-            console.error('Failed to save holiday definition:', err);
-            alert('Failed to save holiday definition');
+            console.error('Failed to save exception day:', err);
+            alert('Failed to save exception day');
         }
     },
 
