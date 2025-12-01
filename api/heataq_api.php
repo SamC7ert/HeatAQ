@@ -139,6 +139,20 @@ class HeatAQAPI {
         }
     }
 
+    /**
+     * Get the VARCHAR site_id from pool_sites table using the INT poolSiteId
+     * Used for schedule tables that still use VARCHAR site_id
+     */
+    private function getSiteIdString() {
+        if (!$this->poolSiteId) {
+            return null;
+        }
+        $stmt = $this->db->prepare("SELECT site_id FROM pool_sites WHERE id = ? LIMIT 1");
+        $stmt->execute([$this->poolSiteId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ? $row['site_id'] : null;
+    }
+
     // ====================================
     // MAIN HANDLER
     // ====================================
@@ -815,7 +829,7 @@ class HeatAQAPI {
      * Diagnose site_id mismatches between auth and schedule tables
      */
     private function diagnoseSiteIds() {
-        $currentSiteId = $this->siteId;
+        $currentSiteId = $this->getSiteIdString();
 
         // Get all unique site_ids from schedule tables
         $tables = [
@@ -862,7 +876,7 @@ class HeatAQAPI {
     private function fixSiteIds() {
         $input = $this->getPostInput();
         $oldSiteId = $input['old_site_id'] ?? null;
-        $newSiteId = $input['new_site_id'] ?? $this->siteId;
+        $newSiteId = $input['new_site_id'] ?? $this->getSiteIdString();
 
         if (!$oldSiteId) {
             $this->sendError('old_site_id is required');
@@ -907,7 +921,7 @@ class HeatAQAPI {
             $stmt->execute([$name, $description, $baseWeekScheduleId, $templateId]);
         } else {
             // Create new - generate unique version
-            $siteId = $this->siteId ?? 'arendal_aquatic';
+            $siteId = $this->getSiteIdString() ?? 'default_site';
 
             // Find next available version for this name
             $stmt = $this->db->prepare("
@@ -957,7 +971,7 @@ class HeatAQAPI {
                 $stmt->execute([$scheduleId]);
             } else {
                 // Create new
-                $siteId = $this->siteId ?? 'arendal_aquatic';
+                $siteId = $this->getSiteIdString() ?? 'default_site';
                 $stmt = $this->db->prepare("
                     INSERT INTO day_schedules (site_id, name, is_closed) VALUES (?, ?, ?)
                 ");
@@ -1028,7 +1042,7 @@ class HeatAQAPI {
             ]);
         } else {
             // Create new
-            $siteId = $this->siteId ?? 'arendal_aquatic';
+            $siteId = $this->getSiteIdString() ?? 'default_site';
             $stmt = $this->db->prepare("
                 INSERT INTO week_schedules
                 (site_id, name, monday_schedule_id, tuesday_schedule_id, wednesday_schedule_id,
@@ -1958,12 +1972,12 @@ class HeatAQAPI {
 
     private function getSiteLocation() {
         $stmt = $this->db->prepare("
-            SELECT site_id, name as site_name, latitude, longitude,
+            SELECT id, site_id, name as site_name, latitude, longitude,
                    solar_latitude, solar_longitude, solar_data_start, solar_data_end
             FROM pool_sites
-            WHERE site_id = ?
+            WHERE id = ?
         ");
-        $stmt->execute([$this->siteId]);
+        $stmt->execute([$this->poolSiteId]);
         $site = $stmt->fetch();
 
         if (!$site) {
@@ -2004,9 +2018,9 @@ class HeatAQAPI {
         $stmt = $this->db->prepare("
             UPDATE pool_sites
             SET solar_latitude = ?, solar_longitude = ?
-            WHERE site_id = ?
+            WHERE id = ?
         ");
-        $stmt->execute([$lat, $lon, $this->siteId]);
+        $stmt->execute([$lat, $lon, $this->poolSiteId]);
 
         $this->sendResponse(['success' => true, 'latitude' => $lat, 'longitude' => $lon]);
     }
@@ -2022,9 +2036,9 @@ class HeatAQAPI {
         if ($latitude === null || $longitude === null) {
             $stmt = $this->db->prepare("
                 SELECT solar_latitude, solar_longitude, latitude, longitude
-                FROM pool_sites WHERE site_id = ?
+                FROM pool_sites WHERE id = ?
             ");
-            $stmt->execute([$this->siteId]);
+            $stmt->execute([$this->poolSiteId]);
             $site = $stmt->fetch();
 
             $latitude = $site['solar_latitude'] ?? $site['latitude'] ?? null;
@@ -2039,7 +2053,8 @@ class HeatAQAPI {
         require_once __DIR__ . '/../lib/NasaSolarFetcher.php';
 
         try {
-            $fetcher = new NasaSolarFetcher($this->db, $this->siteId);
+            // Pass INT pool_site_id (pool_sites.id) to the fetcher
+            $fetcher = new NasaSolarFetcher($this->db, $this->poolSiteId);
             $result = $fetcher->fetchAndStore(
                 (float) $latitude,
                 (float) $longitude,
@@ -2872,14 +2887,18 @@ class HeatAQAPI {
      * Get the current project's site_id for SimControl to use
      */
     private function getProjectSite() {
-        // Return the site_id associated with the current project
-        if ($this->siteId) {
+        // Return the pool_site_id (INT) associated with the current project
+        if ($this->poolSiteId) {
+            // Also look up the VARCHAR site_id for compatibility
+            $siteIdString = $this->getSiteIdString();
             $this->sendResponse([
-                'site_id' => $this->siteId,
+                'pool_site_id' => $this->poolSiteId,
+                'site_id' => $siteIdString,  // VARCHAR for compatibility
                 'project_id' => $this->projectId
             ]);
         } else {
             $this->sendResponse([
+                'pool_site_id' => null,
                 'site_id' => null,
                 'error' => 'No site associated with current session'
             ]);
@@ -2988,7 +3007,7 @@ class HeatAQAPI {
      * Get pools for a site (or all pools for current user's site)
      */
     private function getPools() {
-        $siteId = $_GET['site_id'] ?? $this->siteId;
+        $siteId = $_GET['site_id'] ?? $this->getSiteIdString();
 
         // Check if pools table exists
         $tableCheck = $this->db->query("SHOW TABLES LIKE 'pools'");
@@ -3068,7 +3087,7 @@ class HeatAQAPI {
         $input = $this->getPostInput();
 
         $poolId = $input['pool_id'] ?? null;
-        $siteId = $input['site_id'] ?? $this->siteId;
+        $siteId = $input['site_id'] ?? $this->getSiteIdString();
         $name = $input['name'] ?? 'Main Pool';
 
         // Physical dimensions
