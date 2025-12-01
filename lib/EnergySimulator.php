@@ -51,19 +51,14 @@ class EnergySimulator {
      * Initialize simulator
      *
      * @param PDO $db Database connection
-     * @param string $siteId Site identifier
+     * @param int $poolSiteId Integer pool_site_id (references pool_sites.id)
      * @param PoolScheduler $scheduler Scheduler instance
      */
-    public function __construct($db, $siteId = 'arendal_aquatic', $scheduler = null) {
+    public function __construct($db, $poolSiteId = 1, $scheduler = null) {
         $this->db = $db;
-        $this->siteId = $siteId;
+        $this->poolSiteId = (int)$poolSiteId;
+        $this->siteId = null; // Deprecated - kept for compatibility
         $this->scheduler = $scheduler;
-
-        // Get numeric pool_site_id from VARCHAR site_id
-        $stmt = $db->prepare("SELECT id FROM pool_sites WHERE site_id = ?");
-        $stmt->execute([$siteId]);
-        $result = $stmt->fetch();
-        $this->poolSiteId = $result ? (int)$result['id'] : null;
 
         // Load pool configuration
         $this->poolConfig = $this->loadPoolConfig();

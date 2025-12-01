@@ -1,43 +1,20 @@
--- Migration 018: Drop VARCHAR site_id columns from tables that now use INT pool_site_id
+-- Migration 018: Migrate from VARCHAR site_id to INT pool_site_id
 -- This cleanup follows migration 017 which added pool_site_id
 --
 -- Tables affected:
--- - site_solar_hourly: now uses pool_site_id (INT) for foreign key
--- - site_solar_fetch_log: now uses pool_site_id (INT) for foreign key
--- - pools: now uses pool_site_id (INT) for foreign key
+-- - simulation_runs: populate pool_site_id (was using site_id string)
+-- - pools: drop site_id (already using pool_site_id)
 --
--- The pool_sites.site_id column is KEPT as it's the source VARCHAR identifier
+-- NOTE: site_solar_hourly and site_solar_fetch_log already dropped site_id in migration 017
+-- NOTE: pool_sites.site_id is KEPT as the source VARCHAR identifier
 
--- 1. Drop site_id from site_solar_hourly
--- First drop index if exists
-DROP INDEX IF EXISTS `idx_site` ON `site_solar_hourly`;
-DROP INDEX IF EXISTS `idx_site_id` ON `site_solar_hourly`;
+-- Phase 1: Populate pool_site_id for existing simulation_runs
+-- Simple approach: only one pool exists, so set pool_site_id = 1 everywhere
+UPDATE simulation_runs SET pool_site_id = 1 WHERE pool_site_id IS NULL;
 
-ALTER TABLE `site_solar_hourly`
-DROP COLUMN IF EXISTS `site_id`;
-
--- 2. Drop site_id from site_solar_fetch_log
-DROP INDEX IF EXISTS `idx_site` ON `site_solar_fetch_log`;
-DROP INDEX IF EXISTS `site_id` ON `site_solar_fetch_log`;
-
-ALTER TABLE `site_solar_fetch_log`
-DROP COLUMN IF EXISTS `site_id`;
-
--- 3. Drop site_id from pools table
+-- Phase 2: Drop site_id column from pools table
 DROP INDEX IF EXISTS `site_id` ON `pools`;
+ALTER TABLE `pools` DROP COLUMN IF EXISTS `site_id`;
 
-ALTER TABLE `pools`
-DROP COLUMN IF EXISTS `site_id`;
-
--- 4. Ensure pool_site_id indexes exist
-CREATE INDEX IF NOT EXISTS `idx_pool_site_id` ON `site_solar_hourly` (`pool_site_id`);
-CREATE INDEX IF NOT EXISTS `idx_pool_site_id` ON `site_solar_fetch_log` (`pool_site_id`);
+-- Ensure pool_site_id index exists on pools
 CREATE INDEX IF NOT EXISTS `idx_pool_site_id` ON `pools` (`pool_site_id`);
-
--- Verify the columns were dropped
--- SELECT 'site_solar_hourly columns:' as info;
--- DESCRIBE site_solar_hourly;
--- SELECT 'site_solar_fetch_log columns:' as info;
--- DESCRIBE site_solar_fetch_log;
--- SELECT 'pools columns:' as info;
--- DESCRIBE pools;
