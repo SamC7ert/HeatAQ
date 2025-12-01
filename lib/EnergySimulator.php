@@ -556,8 +556,9 @@ class EnergySimulator {
                         $effectiveTarget = $this->closedPlan['target_night'];
                         $isPreheat = ($currentWaterTemp < $effectiveTarget - 0.1);
                     } else {
-                        // Not yet time - let pool coast (just cover losses)
-                        $effectiveTarget = null; // No heating target
+                        // Not yet time - maintain current temperature (cover losses only)
+                        // Python lines 1267-1269: Q_hp = min(Q_demand, hp_capacity)
+                        $effectiveTarget = $currentWaterTemp;
                     }
                 }
 
