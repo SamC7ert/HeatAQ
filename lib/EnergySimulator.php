@@ -585,15 +585,14 @@ class EnergySimulator {
     }
 
     /**
-     * Get hourly solar data for date range (new method - pre-calculated values)
+     * Get hourly solar data for date range (pre-calculated values from NASA POWER)
+     *
+     * Solar data is already adjusted for actual conditions (clouds, etc.)
+     * when fetched from NASA POWER API, so we just use solar_wh_m2 directly.
      */
     private function getHourlySolarData($startDate, $endDate) {
         $stmt = $this->db->prepare("
-            SELECT
-                timestamp,
-                solar_wh_m2,
-                clear_sky_wh_m2,
-                cloud_factor
+            SELECT timestamp, solar_wh_m2
             FROM site_solar_hourly
             WHERE site_id = ?
               AND DATE(timestamp) BETWEEN ? AND ?
@@ -602,15 +601,11 @@ class EnergySimulator {
         $stmt->execute([$this->siteId, $startDate, $endDate]);
         $rows = $stmt->fetchAll();
 
-        // Index by timestamp
+        // Index by timestamp, convert Wh/m² to kWh/m²
         $solarByTimestamp = [];
         foreach ($rows as $row) {
-            $ts = $row['timestamp'];
-            // Convert Wh/m² to kWh/m² for consistency with existing code
-            $solarByTimestamp[$ts] = [
-                'hourly_kwh_m2' => $row['solar_wh_m2'] / 1000,
-                'hourly_clear_sky_kwh_m2' => $row['clear_sky_wh_m2'] / 1000,
-                'cloud_factor' => $row['cloud_factor']
+            $solarByTimestamp[$row['timestamp']] = [
+                'hourly_kwh_m2' => ($row['solar_wh_m2'] ?? 0) / 1000
             ];
         }
         return $solarByTimestamp;
@@ -1182,7 +1177,7 @@ class EnergySimulator {
         // First try hourly data
         if ($this->hasHourlySolarData()) {
             $stmt = $this->db->prepare("
-                SELECT solar_wh_m2, clear_sky_wh_m2
+                SELECT solar_wh_m2
                 FROM site_solar_hourly
                 WHERE site_id = ? AND timestamp = ?
                 LIMIT 1
@@ -1190,7 +1185,7 @@ class EnergySimulator {
             $stmt->execute([$this->siteId, $timestamp]);
             $hourlyRow = $stmt->fetch();
             if ($hourlyRow) {
-                $hourlySolar = $hourlyRow['solar_wh_m2'] / 1000; // Wh to kWh
+                $hourlySolar = ($hourlyRow['solar_wh_m2'] ?? 0) / 1000; // Wh to kWh
                 $dailySolar = $hourlySolar * 24; // Estimate for display
                 $solarSource = 'hourly';
             }

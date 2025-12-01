@@ -463,6 +463,13 @@ class HeatAQAPI {
                     $this->getSites();
                     break;
 
+                case 'save_site':
+                    if (!$this->canEdit()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->saveSiteData();
+                    break;
+
                 case 'get_pools':
                     $this->getPools();
                     break;
@@ -2865,6 +2872,74 @@ class HeatAQAPI {
         $sites = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $this->sendResponse(['sites' => $sites]);
+    }
+
+    /**
+     * Save site data to pool_sites and update projects.site_id
+     */
+    private function saveSiteData() {
+        $input = $this->getPostInput();
+
+        $siteId = $input['site_id'] ?? null;
+        $name = $input['name'] ?? 'Main Site';
+        $latitude = $input['latitude'] ?? null;
+        $longitude = $input['longitude'] ?? null;
+        $wsId = $input['weather_station_id'] ?? null;
+
+        if (!$siteId && $name) {
+            // Generate site_id from name
+            $siteId = strtolower($name);
+            $siteId = str_replace(['æ', 'ø', 'å'], ['ae', 'o', 'a'], $siteId);
+            $siteId = preg_replace('/[^a-z0-9]+/', '_', $siteId);
+            $siteId = trim($siteId, '_');
+        }
+
+        if (!$siteId) {
+            $this->sendError('site_id is required');
+        }
+
+        try {
+            // Check if site exists
+            $stmt = $this->db->prepare("SELECT id FROM pool_sites WHERE site_id = ?");
+            $stmt->execute([$siteId]);
+            $existing = $stmt->fetch();
+
+            if ($existing) {
+                // Update existing site
+                $stmt = $this->db->prepare("
+                    UPDATE pool_sites
+                    SET name = ?, latitude = ?, longitude = ?, weather_station_id = ?
+                    WHERE site_id = ?
+                ");
+                $stmt->execute([$name, $latitude, $longitude, $wsId, $siteId]);
+            } else {
+                // Insert new site
+                $stmt = $this->db->prepare("
+                    INSERT INTO pool_sites (site_id, name, latitude, longitude, weather_station_id)
+                    VALUES (?, ?, ?, ?, ?)
+                ");
+                $stmt->execute([$siteId, $name, $latitude, $longitude, $wsId]);
+            }
+
+            // Update projects table to point to this site
+            if ($this->projectId) {
+                $stmt = $this->db->prepare("UPDATE projects SET site_id = ? WHERE project_id = ?");
+                $stmt->execute([$siteId, $this->projectId]);
+            } else {
+                // Update all projects that don't have a site_id set, or update the first one
+                $stmt = $this->db->prepare("UPDATE projects SET site_id = ? WHERE project_id = 1");
+                $stmt->execute([$siteId]);
+            }
+
+            $this->sendResponse([
+                'success' => true,
+                'site_id' => $siteId,
+                'message' => $existing ? 'Site updated' : 'Site created'
+            ]);
+
+        } catch (PDOException $e) {
+            $this->sendError('Failed to save site: ' . $e->getMessage());
+        }
     }
 
     /**
