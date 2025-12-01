@@ -1669,6 +1669,7 @@ const SimulationsModule = {
         setHtml('debug-radiation', renderTable(data.radiation));
         setHtml('debug-solar', renderTable(data.solar_gain));
         setHtml('debug-conduction', renderTable(data.conduction));
+        console.log('[Debug Cover]', data.cover);  // DEBUG
         setHtml('debug-cover', renderTable(data.cover));
 
         // Heat pump detail
