@@ -139,6 +139,27 @@ class HeatAQAPI {
         }
     }
 
+    // ====================================
+    // PROJECT FILTERING (for schedules)
+    // ====================================
+
+    private function addProjectFilter($query) {
+        if ($this->projectId) {
+            if (stripos($query, 'WHERE') !== false) {
+                $query = str_replace('WHERE', "WHERE project_id = :project_id AND", $query);
+            } else {
+                $query .= " WHERE project_id = :project_id";
+            }
+        }
+        return $query;
+    }
+
+    private function bindProjectParam(&$params) {
+        if ($this->projectId) {
+            $params[':project_id'] = $this->projectId;
+        }
+    }
+
     /**
      * Get the VARCHAR site_id from pool_sites table using the INT poolSiteId
      * Used for schedule tables that still use VARCHAR site_id
@@ -506,12 +527,12 @@ class HeatAQAPI {
     
     private function getTemplates() {
         $query = "SELECT * FROM schedule_templates";
-        $query = $this->addSiteFilter($query);
+        $query = $this->addProjectFilter($query);
         $query .= " ORDER BY name";
-        
+
         $params = [];
-        $this->bindSiteParam($params);
-        
+        $this->bindProjectParam($params);
+
         if ($params) {
             $stmt = $this->db->prepare($query);
             $stmt->execute($params);
@@ -519,17 +540,17 @@ class HeatAQAPI {
         } else {
             $templates = $this->db->query($query)->fetchAll();
         }
-        
+
         $this->sendResponse(['templates' => $templates]);
     }
     
     private function getDaySchedules() {
         $query = "SELECT * FROM day_schedules";
-        $query = $this->addSiteFilter($query);
+        $query = $this->addProjectFilter($query);
         $query .= " ORDER BY name";
-        
+
         $params = [];
-        $this->bindSiteParam($params);
+        $this->bindProjectParam($params);
         
         if ($params) {
             $stmt = $this->db->prepare($query);
@@ -581,11 +602,13 @@ class HeatAQAPI {
             LEFT JOIN day_schedules d7 ON ws.sunday_schedule_id = d7.day_schedule_id
         ";
         
-        $query = $this->addSiteFilter($query, 'ws.site_id');
+        if ($this->projectId) {
+            $query .= " WHERE ws.project_id = :project_id";
+        }
         $query .= " ORDER BY ws.name";
-        
+
         $params = [];
-        $this->bindSiteParam($params);
+        $this->bindProjectParam($params);
         
         if ($params) {
             $stmt = $this->db->prepare($query);
@@ -921,23 +944,27 @@ class HeatAQAPI {
             $stmt->execute([$name, $description, $baseWeekScheduleId, $templateId]);
         } else {
             // Create new - generate unique version
-            $poolSiteId = $this->poolSiteId;
+            $projectId = $this->projectId;
+            if (!$projectId) {
+                $this->sendError('project_id required to create schedule template');
+                return;
+            }
 
             // Find next available version for this name
             $stmt = $this->db->prepare("
                 SELECT MAX(CAST(SUBSTRING(version, 2) AS DECIMAL(10,1))) as max_ver
                 FROM schedule_templates
-                WHERE name = ?
+                WHERE name = ? AND project_id = ?
             ");
-            $stmt->execute([$name]);
+            $stmt->execute([$name, $projectId]);
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
             $nextVer = ($row && $row['max_ver']) ? 'v' . number_format($row['max_ver'] + 0.1, 1) : 'v1.0';
 
             $stmt = $this->db->prepare("
-                INSERT INTO schedule_templates (pool_site_id, name, version, description, base_week_schedule_id)
+                INSERT INTO schedule_templates (project_id, name, version, description, base_week_schedule_id)
                 VALUES (?, ?, ?, ?, ?)
             ");
-            $stmt->execute([$poolSiteId, $name, $nextVer, $description, $baseWeekScheduleId]);
+            $stmt->execute([$projectId, $name, $nextVer, $description, $baseWeekScheduleId]);
             $templateId = $this->db->lastInsertId();
         }
 
@@ -971,11 +998,14 @@ class HeatAQAPI {
                 $stmt->execute([$scheduleId]);
             } else {
                 // Create new
-                $poolSiteId = $this->poolSiteId;
+                $projectId = $this->projectId;
+                if (!$projectId) {
+                    throw new Exception('project_id required to create day schedule');
+                }
                 $stmt = $this->db->prepare("
-                    INSERT INTO day_schedules (pool_site_id, name, is_closed) VALUES (?, ?, ?)
+                    INSERT INTO day_schedules (project_id, name, is_closed) VALUES (?, ?, ?)
                 ");
-                $stmt->execute([$poolSiteId, $name, $isClosed]);
+                $stmt->execute([$projectId, $name, $isClosed]);
                 $scheduleId = $this->db->lastInsertId();
             }
 
@@ -1042,15 +1072,19 @@ class HeatAQAPI {
             ]);
         } else {
             // Create new
-            $poolSiteId = $this->poolSiteId;
+            $projectId = $this->projectId;
+            if (!$projectId) {
+                $this->sendError('project_id required to create week schedule');
+                return;
+            }
             $stmt = $this->db->prepare("
                 INSERT INTO week_schedules
-                (pool_site_id, name, monday_schedule_id, tuesday_schedule_id, wednesday_schedule_id,
+                (project_id, name, monday_schedule_id, tuesday_schedule_id, wednesday_schedule_id,
                  thursday_schedule_id, friday_schedule_id, saturday_schedule_id, sunday_schedule_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             $stmt->execute([
-                $poolSiteId, $name,
+                $projectId, $name,
                 $dayScheduleIds['monday'], $dayScheduleIds['tuesday'], $dayScheduleIds['wednesday'],
                 $dayScheduleIds['thursday'], $dayScheduleIds['friday'], $dayScheduleIds['saturday'], $dayScheduleIds['sunday']
             ]);

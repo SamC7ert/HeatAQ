@@ -64,17 +64,20 @@ Clean project/site/pool hierarchy with INT foreign keys throughout.
 **Hierarchy:**
 ```
 users → user_projects → projects → pool_sites → pools
+                            ↓            ↓
+                   schedule_templates    simulation_runs
+                   day_schedules         site_solar_daily/hourly
+                   week_schedules
 ```
 
 **Completed (Dec 2024):**
-- [x] All tables use INT `pool_site_id` (FK to pool_sites.id)
+- [x] Schedule tables use INT `project_id` (FK to projects.project_id)
+- [x] Site-specific tables use INT `pool_site_id` (FK to pool_sites.id)
 - [x] Dropped VARCHAR `site_id` from: pools, simulation_runs, schedule_templates, day_schedules, week_schedules
 - [x] User preferences are project-scoped (user_id + project_id + pref_key)
-- [x] EnergySimulator, PoolScheduler, APIs all use pool_site_id
 
 **Remaining:**
 - [ ] Move target_heat and bathers from config_templates to pool level
-- [ ] Review if pool_sites.site_id VARCHAR is still needed (used for display names)
 
 ---
 
