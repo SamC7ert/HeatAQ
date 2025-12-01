@@ -1,6 +1,6 @@
 # HeatAQ Roadmap
 
-**Last Updated:** November 2024 (V104+)
+**Last Updated:** December 2024
 
 Long-term architectural improvements and technical debt items.
 
@@ -57,19 +57,24 @@ Long-term architectural improvements and technical debt items.
 
 ### Project → Site → Pool Hierarchy
 **Priority:** Medium
-**Status:** In Progress
+**Status:** Complete (Dec 2024)
 
-Transitioning to a clean project/site/pool hierarchy with parameters at appropriate levels.
+Clean project/site/pool hierarchy with INT foreign keys throughout.
 
-**Target hierarchy:**
+**Hierarchy:**
 ```
-users → user_projects → projects → sites → pools
+users → user_projects → projects → pool_sites → pools
 ```
 
-**In progress:**
-- Moving parameters from config_templates to relevant entity level (pool, site, project)
-- Some parameters will remain in config (equipment settings, control strategies)
-- Updating EnergySimulator, PoolScheduler, APIs to use new structure
+**Completed (Dec 2024):**
+- [x] All tables use INT `pool_site_id` (FK to pool_sites.id)
+- [x] Dropped VARCHAR `site_id` from: pools, simulation_runs, schedule_templates, day_schedules, week_schedules
+- [x] User preferences are project-scoped (user_id + project_id + pref_key)
+- [x] EnergySimulator, PoolScheduler, APIs all use pool_site_id
+
+**Remaining:**
+- [ ] Move target_heat and bathers from config_templates to pool level
+- [ ] Review if pool_sites.site_id VARCHAR is still needed (used for display names)
 
 ---
 
@@ -94,10 +99,10 @@ users → user_projects → projects → sites → pools
 - [x] Hard Refresh button for cache bypass
 - [x] Git merge via API endpoint
 
-### User Preferences Sync (V90-V95)
+### User Preferences Sync (V90-V95, updated Dec 2024)
 - [x] Server-side user preferences table
 - [x] Cross-device settings sync
-- [x] Fallback to localStorage
+- [x] Project-scoped preferences (user_id + project_id + pref_key)
 
 ---
 
@@ -197,8 +202,14 @@ New control strategy to minimize cost using spot electricity prices:
 - [ ] Remove deprecated PHP endpoints
 - [ ] Consolidate duplicate JavaScript modules
 - [ ] Add TypeScript types for better IDE support
-- [ ] Review and remove all fallback logic (error instead of silent fallbacks)
+- [x] Remove VARCHAR site_id columns (completed Dec 2024)
+- [ ] Remove getSiteIdString() helper once no longer needed
 - [ ] Move target_heat and bathers from config_templates to pool level
+
+### Development Principles
+- **No silent fallbacks** - Fail with clear error instead of defaulting to magic values
+- **Thorough over quick** - Fix root cause, not symptoms
+- **INT foreign keys** - Use proper FK relationships, not VARCHAR lookups
 
 ### Testing infrastructure
 - [ ] Unit tests for EnergySimulator

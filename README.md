@@ -99,6 +99,52 @@ git pull origin main
 - [Heating Algorithm](docs/HEATING_ALGORITHM.md)
 - [Roadmap](docs/ROADMAP.md)
 
+---
+
+## Claude Code Handover Notes
+
+This section helps Claude (AI assistant) maintain context across sessions.
+
+### Database Hierarchy
+```
+users → user_projects → projects → pool_sites → pools
+                                      ↓
+                              schedule_templates
+                              day_schedules
+                              week_schedules
+                              simulation_runs
+                              site_solar_daily/hourly
+```
+
+All entity tables use INT `pool_site_id` as FK to `pool_sites.id`. The VARCHAR `pool_sites.site_id` is kept only for display names.
+
+### Development Principles
+
+1. **No silent fallbacks** - Never use patterns like `$value ?? 'default'` for critical data. Fail with a clear error instead. Silent fallbacks hide bugs and cause data inconsistencies.
+
+2. **Thorough over quick** - Fix root causes, not symptoms. If a bug appears, trace it back to understand why before patching.
+
+3. **INT foreign keys** - All relationships use INT FKs. No VARCHAR lookups for data relationships.
+
+4. **Versioning** - Increment version in commits. Current version tracked in this file footer.
+
+5. **Test migrations first** - Run migrations on staging/test before production. Check for duplicate methods, syntax errors.
+
+### Recent Context (Dec 2024)
+
+- Completed migration from VARCHAR `site_id` to INT `pool_site_id` across all tables
+- User preferences are now project-scoped (user_id + project_id + pref_key)
+- Migration archive function commits directly to master branch
+- Admin UI has separate Active/Inactive user cards
+
+### Pending Items
+
+See [Roadmap](docs/ROADMAP.md) for full list. Key items:
+- Move target_heat and bathers from config_templates to pool level
+- Review remaining getSiteIdString() usages
+
+---
+
 ## Authors
 - Developed for Aquarious AS, Norway
 - Pool energy optimization specialists
@@ -110,4 +156,4 @@ Proprietary - All rights reserved
 For support, contact Aquarious AS
 
 ---
-*Version 104 - November 2024*
+*Version 105 - December 2024*
