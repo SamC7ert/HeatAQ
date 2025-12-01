@@ -1,0 +1,4 @@
+2025-12-01 12:02:53 - Running migration: 016_add_weather_station_to_pool_sites.sql
+Executing: ALTER TABLE pool_sites
+ADD COLUMN weather_station_id VARCHAR(50) NULL AFTER long...
+ERROR: SQLSTATE[42S21]: Column already exists: 1060 Duplicate column name 'weather_station_id'
