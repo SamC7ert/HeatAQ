@@ -57,6 +57,19 @@ Both Archive and Export use **branch-then-merge** pattern for clean git history.
 4. **Archive** → automatically exports schema, commits, merges to master, pushes
 5. Done! GitHub is in sync.
 
+## Design Principles
+
+### NEVER Hardcode Default Values
+- User preferences (site, pool, config) must come from user's last choice
+- Always validate against database before using
+- Fallback: query database for first available option
+- Example: Site selection uses cookie → validate in DB → fallback to first DB record
+
+### Data Flow
+- Frontend saves preference → sets cookie → backend reads cookie
+- Backend validates cookie value exists in DB before using
+- If invalid/missing, query DB for first available option
+
 ## Key Architecture Points
 
 ### Tech Stack
@@ -99,6 +112,7 @@ Both Archive and Export use **branch-then-merge** pattern for clean git history.
 | Login fails on desktop | Untrusted submit event | Fixed V105 - calls handleLogin() directly |
 | Password reset button disabled | Recursive validation bug | Fixed V113 - separated validation functions |
 | Stale branches in dropdown | Deleted remote refs cached | Fixed V112 - uses `git fetch --prune` |
+| Wrong site in SimControl | Hardcoded default 'arendal_aquatic' | Fixed - now reads from cookie, validates in DB |
 
 ### Password Reset Flow
 The password reset form (`reset_password.html`) includes:

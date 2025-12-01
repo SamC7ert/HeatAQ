@@ -23,9 +23,45 @@ if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
         $currentPoolSiteId = $auth['project']['pool_site_id'] ?? null;
     }
 } else {
-    // If auth not required, use default site
-    $currentSiteId = 'arendal_aquatic';
+    // If auth not required, get site from user preference (cookie/session)
+    // NEVER hardcode default values - get from user's last choice
+    $currentSiteId = null;
     $currentPoolSiteId = null;
+
+    // Try to get from cookie (set by frontend)
+    if (isset($_COOKIE['heataq_site_id']) && !empty($_COOKIE['heataq_site_id'])) {
+        $currentSiteId = $_COOKIE['heataq_site_id'];
+    }
+
+    // Validate site exists in database if we have one
+    if ($currentSiteId) {
+        try {
+            $db = Config::getDatabase();
+            $stmt = $db->prepare("SELECT site_id FROM pool_sites WHERE site_id = ? LIMIT 1");
+            $stmt->execute([$currentSiteId]);
+            if (!$stmt->fetch()) {
+                // Site not found in DB, clear it
+                $currentSiteId = null;
+            }
+        } catch (Exception $e) {
+            // DB error, continue without site
+            $currentSiteId = null;
+        }
+    }
+
+    // If still no site, get first available from database
+    if (!$currentSiteId) {
+        try {
+            $db = Config::getDatabase();
+            $stmt = $db->query("SELECT site_id FROM pool_sites ORDER BY id LIMIT 1");
+            $row = $stmt->fetch();
+            if ($row) {
+                $currentSiteId = $row['site_id'];
+            }
+        } catch (Exception $e) {
+            // No sites available
+        }
+    }
 }
 
 // ====================================
