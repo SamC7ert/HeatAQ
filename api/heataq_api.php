@@ -18,49 +18,42 @@ if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
     require_once __DIR__ . '/../auth.php';
     $auth = HeatAQAuth::check(Config::requiresAuth());
     if ($auth) {
-        // Support both string site_id (legacy) and integer pool_site_id (new)
-        $currentSiteId = $auth['project']['site_id'];
-        $currentPoolSiteId = $auth['project']['pool_site_id'] ?? null;
+        if (!isset($auth['project']['pool_site_id'])) {
+            header('Content-Type: application/json');
+            http_response_code(500);
+            echo json_encode(['error' => 'Auth context missing pool_site_id']);
+            exit;
+        }
+        $currentPoolSiteId = (int)$auth['project']['pool_site_id'];
     }
 } else {
-    // If auth not required, get site from user preference (cookie/session)
-    // NEVER hardcode default values - get from user's last choice
-    $currentSiteId = null;
+    // Development mode - get pool_site_id from cookie or use default
     $currentPoolSiteId = null;
 
     // Try to get from cookie (set by frontend)
-    if (isset($_COOKIE['heataq_site_id']) && !empty($_COOKIE['heataq_site_id'])) {
-        $currentSiteId = $_COOKIE['heataq_site_id'];
+    if (isset($_COOKIE['heataq_pool_site_id']) && !empty($_COOKIE['heataq_pool_site_id'])) {
+        $currentPoolSiteId = (int)$_COOKIE['heataq_pool_site_id'];
     }
 
-    // Validate site exists in database if we have one
-    if ($currentSiteId) {
+    // Validate pool_site_id exists in database if we have one
+    if ($currentPoolSiteId) {
         try {
             $db = Config::getDatabase();
-            $stmt = $db->prepare("SELECT site_id FROM pool_sites WHERE site_id = ? LIMIT 1");
-            $stmt->execute([$currentSiteId]);
+            $stmt = $db->prepare("SELECT id FROM pool_sites WHERE id = ? LIMIT 1");
+            $stmt->execute([$currentPoolSiteId]);
             if (!$stmt->fetch()) {
                 // Site not found in DB, clear it
-                $currentSiteId = null;
+                $currentPoolSiteId = null;
             }
         } catch (Exception $e) {
             // DB error, continue without site
-            $currentSiteId = null;
+            $currentPoolSiteId = null;
         }
     }
 
-    // If still no site, get first available from database
-    if (!$currentSiteId) {
-        try {
-            $db = Config::getDatabase();
-            $stmt = $db->query("SELECT site_id FROM pool_sites ORDER BY id LIMIT 1");
-            $row = $stmt->fetch();
-            if ($row) {
-                $currentSiteId = $row['site_id'];
-            }
-        } catch (Exception $e) {
-            // No sites available
-        }
+    // Development mode default: use pool_site_id = 1
+    if (!$currentPoolSiteId) {
+        $currentPoolSiteId = 1;
     }
 }
 
@@ -79,27 +72,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 class HeatAQAPI {
     private $db;
-    private $siteId;
+    private $poolSiteId;  // INT reference to pool_sites.id
     private $userId;
     private $projectId;
     private $userRole;
     private $postInput = null;  // Store POST body to avoid double-read
 
-    public function __construct($siteId = null, $auth = null) {
+    public function __construct($poolSiteId = null, $auth = null) {
         try {
             // Get database connection from Config
             $this->db = Config::getDatabase();
-            
-            // Set site context
-            $this->siteId = $siteId;
-            
+
+            // Set site context (INT pool_site_id)
+            $this->poolSiteId = $poolSiteId ? (int)$poolSiteId : null;
+
             // Set auth context if available
             if ($auth) {
                 $this->userId = $auth['user']['user_id'] ?? null;
                 $this->projectId = $auth['project']['project_id'] ?? null;
                 $this->userRole = $auth['user']['role'] ?? null;
             }
-            
+
         } catch (Exception $e) {
             $this->sendError($e->getMessage());
         }
@@ -128,35 +121,22 @@ class HeatAQAPI {
     // ====================================
     // SITE FILTERING
     // ====================================
-    
-    private function addSiteFilter($query, $paramName = 'site_id') {
-        if ($this->siteId) {
+
+    private function addSiteFilter($query, $paramName = 'pool_site_id') {
+        if ($this->poolSiteId) {
             if (stripos($query, 'WHERE') !== false) {
-                $query = str_replace('WHERE', "WHERE {$paramName} = :site_id AND", $query);
+                $query = str_replace('WHERE', "WHERE {$paramName} = :pool_site_id AND", $query);
             } else {
-                $query .= " WHERE {$paramName} = :site_id";
+                $query .= " WHERE {$paramName} = :pool_site_id";
             }
         }
         return $query;
     }
-    
+
     private function bindSiteParam(&$params) {
-        if ($this->siteId) {
-            $params[':site_id'] = $this->siteId;
+        if ($this->poolSiteId) {
+            $params[':pool_site_id'] = $this->poolSiteId;
         }
-    }
-
-    /**
-     * Get numeric pool_site_id from VARCHAR site_id
-     * Used for tables that have been migrated to use pool_site_id
-     */
-    private function getPoolSiteId() {
-        if (!$this->siteId) return null;
-
-        $stmt = $this->db->prepare("SELECT id FROM pool_sites WHERE site_id = ?");
-        $stmt->execute([$this->siteId]);
-        $result = $stmt->fetch();
-        return $result ? (int)$result['id'] : null;
     }
 
     // ====================================
