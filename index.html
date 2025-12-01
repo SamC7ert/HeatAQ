@@ -1002,8 +1002,36 @@
                             </div>
                         </div>
 
+                        <!-- Weekly Graph -->
+                        <div class="card" style="padding: 12px; margin-bottom: 15px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <h4 style="margin: 0; font-size: 14px;">Weekly Heat Profile (Thu-Wed)</h4>
+                                <div id="week-nav-buttons" style="display: none;">
+                                    <button onclick="app.simulations.navigateWeek(-1)" class="btn btn-sm btn-secondary" style="padding: 2px 10px; font-size: 14px;" title="Previous week">◀</button>
+                                    <button onclick="app.simulations.navigateWeek(1)" class="btn btn-sm btn-secondary" style="padding: 2px 10px; font-size: 14px; margin-left: 4px;" title="Next week">▶</button>
+                                </div>
+                            </div>
+                            <div id="debug-weekly-chart-placeholder" style="height: 60px; background: #f9f9f9; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999;">
+                                Press Calculate to load weekly data
+                            </div>
+                            <div id="debug-weekly-charts" style="display: none;">
+                                <!-- Production Chart (HP + Boiler vs Heat Loss) -->
+                                <div style="height: 180px; margin-bottom: 10px;">
+                                    <canvas id="weekly-production-chart"></canvas>
+                                </div>
+                                <!-- Weather Chart (Temperature + Wind) -->
+                                <div style="height: 120px; margin-bottom: 10px;">
+                                    <canvas id="weekly-weather-chart"></canvas>
+                                </div>
+                                <!-- Top 3 Heat Loss Periods -->
+                                <div id="top-heat-loss-periods" style="font-size: 12px; padding: 8px; background: #f5f5f5; border-radius: 4px;">
+                                    <strong style="color: #666;">Peak demand periods:</strong>
+                                    <span id="peak-periods-list" style="color: #999;">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
 
-                        <!-- Benchmark Report (Debug tab copy) -->
+                        <!-- Benchmark Report (Debug tab - below graph) -->
                         <div id="benchmark-report-debug" class="benchmark-report card" style="display: none; margin-bottom: 15px;">
                             <h4 style="margin: 0 0 15px 0;">Benchmark Report</h4>
                             <div class="benchmark-config" id="bench-config-summary-debug" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 5px 20px; margin-bottom: 15px; font-size: 13px; line-height: 1.6;">
@@ -1048,35 +1076,6 @@
                                         <tr><td>Days &lt; 27°C</td><td id="bench-days-27-debug">-</td></tr>
                                         <tr><td>Days &lt; 26°C</td><td id="bench-days-26-debug">-</td></tr>
                                     </table>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Weekly Graph -->
-                        <div class="card" style="padding: 12px; margin-bottom: 15px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                <h4 style="margin: 0; font-size: 14px;">Weekly Heat Profile (Thu-Wed)</h4>
-                                <div id="week-nav-buttons" style="display: none;">
-                                    <button onclick="app.simulations.navigateWeek(-1)" class="btn btn-sm btn-secondary" style="padding: 2px 10px; font-size: 14px;" title="Previous week">◀</button>
-                                    <button onclick="app.simulations.navigateWeek(1)" class="btn btn-sm btn-secondary" style="padding: 2px 10px; font-size: 14px; margin-left: 4px;" title="Next week">▶</button>
-                                </div>
-                            </div>
-                            <div id="debug-weekly-chart-placeholder" style="height: 60px; background: #f9f9f9; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #999;">
-                                Press Calculate to load weekly data
-                            </div>
-                            <div id="debug-weekly-charts" style="display: none;">
-                                <!-- Production Chart (HP + Boiler vs Heat Loss) -->
-                                <div style="height: 180px; margin-bottom: 10px;">
-                                    <canvas id="weekly-production-chart"></canvas>
-                                </div>
-                                <!-- Weather Chart (Temperature + Wind) -->
-                                <div style="height: 120px; margin-bottom: 10px;">
-                                    <canvas id="weekly-weather-chart"></canvas>
-                                </div>
-                                <!-- Top 3 Heat Loss Periods -->
-                                <div id="top-heat-loss-periods" style="font-size: 12px; padding: 8px; background: #f5f5f5; border-radius: 4px;">
-                                    <strong style="color: #666;">Peak demand periods:</strong>
-                                    <span id="peak-periods-list" style="color: #999;">Loading...</span>
                                 </div>
                             </div>
                         </div>
