@@ -1,0 +1,16 @@
+2025-12-01 16:54:14 - Running migration: 021_schedule_tables_drop_site_id.sql
+Executing: UPDATE schedule_templates st
+JOIN pool_sites ps ON st.site_id = ps.site_id
+SET s...
+Executing: UPDATE day_schedules ds
+JOIN pool_sites ps ON ds.site_id = ps.site_id
+SET ds.poo...
+Executing: UPDATE week_schedules ws
+JOIN pool_sites ps ON ws.site_id = ps.site_id
+SET ws.po...
+Executing: UPDATE schedule_templates SET pool_site_id = 1 WHERE pool_site_id IS NULL
+Executing: UPDATE day_schedules SET pool_site_id = 1 WHERE pool_site_id IS NULL
+Executing: UPDATE week_schedules SET pool_site_id = 1 WHERE pool_site_id IS NULL
+Executing: SET FOREIGN_KEY_CHECKS = 0
+Executing: ALTER TABLE schedule_templates DROP COLUMN IF EXISTS site_id
+ERROR: SQLSTATE[HY000]: General error: 1828 Cannot drop column 'site_id': needed in a foreign key constraint 'heataq_pool@002d353130302dd2/schedule_templates_ibfk_1'
