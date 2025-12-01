@@ -432,15 +432,53 @@ const ProjectModule = {
             if (ws) wsName = ws.name || ws.station_name;
         }
 
-        // Update site
+        // Generate site_id from name if not exists (slug format)
+        let siteId = this.currentSite?.site_id;
+        if (!siteId && name) {
+            siteId = name.toLowerCase()
+                .replace(/[æ]/g, 'ae').replace(/[ø]/g, 'o').replace(/[å]/g, 'a')
+                .replace(/[^a-z0-9]+/g, '_')
+                .replace(/^_+|_+$/g, '');
+        }
+
+        // Update site object
         this.currentSite = {
             ...this.currentSite,
+            site_id: siteId,
             name: name || 'Main Site',
             latitude: lat,
             longitude: lng,
             weather_station_id: wsId,
             weather_station_name: wsName
         };
+
+        // Save to database via API
+        try {
+            const response = await fetch(`${config.API_BASE_URL}?action=save_site`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    site_id: siteId,
+                    name: name,
+                    latitude: lat,
+                    longitude: lng,
+                    weather_station_id: wsId
+                })
+            });
+            const result = await response.json();
+
+            if (result.error) {
+                console.error('[Project] Failed to save site to DB:', result.error);
+            } else {
+                console.log('[Project] Site saved to database:', result);
+                // Update site_id if server assigned one
+                if (result.site_id) {
+                    this.currentSite.site_id = result.site_id;
+                }
+            }
+        } catch (err) {
+            console.error('[Project] API error saving site:', err);
+        }
 
         // Save to localStorage
         localStorage.setItem('heataq_site', JSON.stringify(this.currentSite));
