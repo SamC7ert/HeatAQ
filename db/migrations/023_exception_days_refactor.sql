@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS reference_days (
 
 -- Insert standard reference days
 INSERT INTO reference_days (id, name, description) VALUES
-    (1, 'Easter (Norway)', 'Easter Sunday - Norwegian calendar')
+    (1, '1. Påskedag', 'Easter Sunday')
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 
 -- ============================================
