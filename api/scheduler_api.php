@@ -255,6 +255,43 @@ try {
             ]);
             break;
 
+        case 'debug_schedule':
+            // Full debug endpoint - shows all scheduler data for diagnosing issues
+            $template = $scheduler->getTemplate();
+            $schedules = $scheduler->getSchedules();
+            $weekSchedules = $scheduler->getWeekSchedules();
+            $dateRanges = $scheduler->getDateRanges();
+            $exceptions = $scheduler->getExceptionDays();
+
+            // Test date from parameter or today
+            $testDate = getParam('date', date('Y-m-d'));
+            $debugInfo = $scheduler->getScheduleDebugInfo($testDate);
+
+            // Also test specific hours to see when pool is "open"
+            $hourlyCheck = [];
+            for ($h = 0; $h < 24; $h++) {
+                $testDateTime = $testDate . ' ' . sprintf('%02d', $h) . ':00:00';
+                $period = $scheduler->getCurrentPeriod($testDateTime);
+                $hourlyCheck[$h] = [
+                    'hour' => $h,
+                    'is_open' => $period !== null,
+                    'period' => $period
+                ];
+            }
+
+            sendResponse([
+                'status' => 'ok',
+                'debug_date' => $testDate,
+                'debug_info' => $debugInfo,
+                'hourly_check' => $hourlyCheck,
+                'full_template' => $template,
+                'all_day_schedules' => $schedules,
+                'all_week_schedules' => $weekSchedules,
+                'date_ranges' => $dateRanges,
+                'exception_days' => $exceptions
+            ]);
+            break;
+
         default:
             sendError('Invalid action. Valid actions: get_schedule_for_date, get_periods, get_schedule_range, is_open, get_current_temperature, get_transitions, find_next_opening, get_all_schedules, get_week_schedules, get_date_ranges, get_exception_days, test_scheduler');
     }
