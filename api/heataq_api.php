@@ -2576,15 +2576,25 @@ class HeatAQAPI {
             }
 
             // Check if log file exists (indicates migration was run)
+            // Check for both _log.txt (success) and _error.txt (failure) files
             $logFilename = preg_replace('/\.sql$/', '_log.txt', $filename);
+            $errorFilename = preg_replace('/\.sql$/', '_error.txt', $filename);
             $logPath = $migrationsDir . '/' . $logFilename;
+            $errorPath = $migrationsDir . '/' . $errorFilename;
+
             $hasLog = file_exists($logPath);
+            $hasError = file_exists($errorPath);
             $logSuccess = false;
+            $actualLogFile = null;
 
             if ($hasLog) {
+                $actualLogFile = $logFilename;
                 // Check if log indicates success
                 $logContent = file_get_contents($logPath);
                 $logSuccess = strpos($logContent, 'SUCCESS') !== false;
+            } elseif ($hasError) {
+                $actualLogFile = $errorFilename;
+                $logSuccess = false;
             }
 
             $pending[] = [
@@ -2593,8 +2603,8 @@ class HeatAQAPI {
                 'description' => $description,
                 'size' => filesize($file),
                 'modified' => date('Y-m-d H:i:s', filemtime($file)),
-                'has_log' => $hasLog,
-                'log_file' => $hasLog ? $logFilename : null,
+                'has_log' => $hasLog || $hasError,
+                'log_file' => $actualLogFile,
                 'log_success' => $logSuccess
             ];
         }
@@ -2768,6 +2778,14 @@ class HeatAQAPI {
         if (file_exists($logPath)) {
             rename($logPath, $oldMigrationsDir . '/' . $logFilename);
             $log[] = "✓ Moved $logFilename to old_migrations/";
+        }
+
+        // Also move error file if exists
+        $errorFilename = preg_replace('/\.sql$/', '_error.txt', $filename);
+        $errorPath = $migrationsDir . '/' . $errorFilename;
+        if (file_exists($errorPath)) {
+            rename($errorPath, $oldMigrationsDir . '/' . $errorFilename);
+            $log[] = "✓ Moved $errorFilename to old_migrations/";
         }
 
         // Export schema (without git push - we'll do our own commit)
