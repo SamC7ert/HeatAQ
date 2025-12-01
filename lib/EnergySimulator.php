@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.8.0';
+    const VERSION = '3.9.0';  // Reverted to Inan & Atayilmaz (2022) evap + Bowen ratio conv
 
     private $db;
     private $siteId;
@@ -40,12 +40,19 @@ class EnergySimulator {
     // Equipment parameters
     private $equipment;
 
+    // Intermediate calculation storage (for Bowen ratio linking evap→conv)
+    private $lastEvapCalc = [];
+    private $lastConvCalc = [];
+
     // Physical constants
     const WATER_DENSITY = 1000;      // kg/m³
     const WATER_SPECIFIC_HEAT = 4186; // J/(kg·K)
     const STEFAN_BOLTZMANN = 5.67e-8; // W/(m²·K⁴)
     const WATER_EMISSIVITY = 0.95;
-    const LATENT_HEAT_VAPORIZATION = 2.45e6; // J/kg at ~20°C
+    const LATENT_HEAT_VAPORIZATION = 2454000; // J/kg (Inan & Atayilmaz 2022)
+    const AIR_SPECIFIC_HEAT = 1005;  // J/(kg·K) - c_p for air
+    const ATM_PRESSURE = 101325;     // Pa - atmospheric pressure
+    const MOLECULAR_RATIO = 0.622;   // M_water/M_air = 18.02/28.97
 
     /**
      * Initialize simulator
@@ -793,54 +800,119 @@ class EnergySimulator {
 
     /**
      * Calculate evaporation heat loss
-     * Using simplified ASHRAE method
+     * Using Inan & Atayilmaz (2022) method for outdoor pools
+     *
+     * Formula: E = (0.28 + 0.784 * v_eff) * (ΔP^0.695) / L_v
+     * Where:
+     *   0.28 = natural convection coefficient (evaporation even with zero wind)
+     *   0.784 = forced convection coefficient (wind-driven)
+     *   v_eff = effective wind speed (m/s)
+     *   ΔP = vapor pressure difference (Pa)
+     *   L_v = latent heat of vaporization (J/kg)
+     *
+     * Returns array with Q_evap (kW) and intermediate values for Bowen ratio calc
      */
     private function calculateEvaporationLoss($waterTemp, $airTemp, $humidity, $windSpeed, $isOpen) {
         $area = $this->poolConfig['area_m2'];
+        $windFactor = $this->poolConfig['wind_exposure_factor'] ?? 1.0;
 
-        // Saturation vapor pressure at water temperature (kPa)
-        $pWater = 0.6108 * exp(17.27 * $waterTemp / ($waterTemp + 237.3));
+        // Magnus formula for saturation vapor pressure (Pa)
+        // P = 611.2 * exp(17.67 * T / (T + 243.5))
+        $pWaterPa = 611.2 * exp(17.67 * $waterTemp / ($waterTemp + 243.5));
+        $pAirSatPa = 611.2 * exp(17.67 * $airTemp / ($airTemp + 243.5));
 
-        // Saturation vapor pressure at air temperature (kPa)
-        $pSat = 0.6108 * exp(17.27 * $airTemp / ($airTemp + 237.3));
+        // Actual vapor pressure in air (Pa)
+        $pAirActualPa = $pAirSatPa * ($humidity / 100);
 
-        // Actual vapor pressure in air
-        $pAir = $pSat * ($humidity / 100);
+        // Vapor pressure difference (Pa)
+        $deltaP = $pWaterPa - $pAirActualPa;
 
-        // Evaporation rate coefficient (kg/m²·s·kPa)
-        // Increases with wind and activity - activity factor from config
+        // Effective wind speed (m/s) - wind factor is exposure reduction
+        $vEff = $windSpeed * $windFactor;
+
+        // Inan & Atayilmaz (2022) evaporation formula
+        // E_per_m2 = (0.28 + 0.784 * v_eff) * (ΔP^0.695) / L_v  [kg/(m²·s)]
+        $windCoeff = 0.28 + 0.784 * $vEff;
+        $evapPerM2 = $windCoeff * pow(max(0, $deltaP), 0.695) / self::LATENT_HEAT_VAPORIZATION;
+
+        // Apply activity factor if pool is open
         $configActivityFactor = $this->equipment['bathers']['activity_factor'] ?? null;
         $activityFactor = $isOpen ? ($configActivityFactor ?? 1.0) : 1.0;
-        $windFactor = 1 + 0.1 * $windSpeed * $this->poolConfig['wind_exposure_factor'];
+        $evapPerM2 *= $activityFactor;
 
-        $evapCoeff = 0.0000375 * $activityFactor * $windFactor;
-
-        // Evaporation rate (kg/s)
-        $evapRate = $evapCoeff * $area * ($pWater - $pAir);
+        // Total evaporation rate (kg/s)
+        $evapRateKgS = $evapPerM2 * $area;
 
         // Heat loss (kW)
-        $evapLoss = $evapRate * self::LATENT_HEAT_VAPORIZATION / 1000;
+        $evapLossKW = $evapRateKgS * self::LATENT_HEAT_VAPORIZATION / 1000;
 
-        return max(0, $evapLoss);
+        // Store intermediate values for Bowen ratio calculation
+        $this->lastEvapCalc = [
+            'p_water_pa' => $pWaterPa,
+            'p_air_sat_pa' => $pAirSatPa,
+            'p_air_actual_pa' => $pAirActualPa,
+            'delta_p' => $deltaP,
+            'v_eff' => $vEff,
+            'wind_coeff' => $windCoeff,
+            'evap_per_m2' => $evapPerM2,
+            'evap_rate_kgs' => $evapRateKgS,
+            'activity_factor' => $activityFactor,
+            'evap_loss_kw' => $evapLossKW,
+        ];
+
+        return max(0, $evapLossKW);
     }
 
     /**
-     * Calculate convection heat loss
+     * Calculate convection heat loss using Bowen ratio method
+     *
+     * The Bowen ratio links sensible heat (convection) to latent heat (evaporation):
+     * Bo = (c_p * P_atm) / (0.622 * L_v) * ΔT / ΔP
+     *
+     * Where:
+     *   c_p = specific heat of air (1005 J/kg·K)
+     *   P_atm = atmospheric pressure (101325 Pa)
+     *   0.622 = molecular mass ratio M_water/M_air
+     *   L_v = latent heat of vaporization (2454000 J/kg)
+     *   ΔT = water temp - air temp (K)
+     *   ΔP = vapor pressure difference (Pa)
+     *
+     * Then: Q_conv = Bo * Q_evap
+     *
+     * Must be called AFTER calculateEvaporationLoss (uses stored values)
      */
     private function calculateConvectionLoss($waterTemp, $airTemp, $windSpeed) {
-        $area = $this->poolConfig['area_m2'];
         $tempDiff = $waterTemp - $airTemp;
 
-        if ($tempDiff <= 0) {
-            return 0; // No loss if air is warmer
+        // Get vapor pressure difference from evaporation calculation
+        $deltaP = $this->lastEvapCalc['delta_p'] ?? 0;
+        $evapLossKW = $this->lastEvapCalc['evap_loss_kw'] ?? 0;
+
+        // Prevent division by zero - use small positive value
+        if (abs($deltaP) < 1.0) {
+            $deltaP = $deltaP >= 0 ? 1.0 : -1.0;
         }
 
-        // Convection coefficient (W/m²·K) - increases with wind
-        // McAdams correlation for forced convection
-        $hConv = 5.7 + 3.8 * $windSpeed * $this->poolConfig['wind_exposure_factor'];
+        // Bowen ratio formula (thermodynamic derivation)
+        // Bo = (c_p * P_atm) / (0.622 * L_v) * ΔT / ΔP
+        $bowenNumerator = self::AIR_SPECIFIC_HEAT * self::ATM_PRESSURE * $tempDiff;
+        $bowenDenominator = self::MOLECULAR_RATIO * self::LATENT_HEAT_VAPORIZATION * $deltaP;
+        $bowenRatio = $bowenDenominator != 0 ? $bowenNumerator / $bowenDenominator : 0;
 
-        // Heat loss (kW)
-        return $hConv * $area * $tempDiff / 1000;
+        // Convection loss = Bowen ratio * Evaporation loss
+        $convLossKW = $bowenRatio * $evapLossKW;
+
+        // Store intermediate values for debug
+        $this->lastConvCalc = [
+            'temp_diff_k' => $tempDiff,
+            'delta_p' => $deltaP,
+            'bowen_numerator' => $bowenNumerator,
+            'bowen_denominator' => $bowenDenominator,
+            'bowen_ratio' => $bowenRatio,
+            'conv_loss_kw' => $convLossKW,
+        ];
+
+        return max(0, $convLossKW);
     }
 
     /**
@@ -1318,52 +1390,54 @@ class EnergySimulator {
         $wallArea = $perimeter * $depth;
         $floorArea = $area;
 
-        // ========== EVAPORATION CALCULATION ==========
-        // Saturation vapor pressure at water temp (Pa)
-        $pWaterKPa = 0.6108 * exp(17.27 * $poolTemp / ($poolTemp + 237.3));
-        $pWaterPa = $pWaterKPa * 1000;
-
-        // Saturation vapor pressure at air temp (Pa)
-        $pSatKPa = 0.6108 * exp(17.27 * $airTemp / ($airTemp + 237.3));
-        $pSatPa = $pSatKPa * 1000;
+        // ========== EVAPORATION CALCULATION (Inan & Atayilmaz 2022) ==========
+        // Magnus formula for saturation vapor pressure (Pa)
+        // P = 611.2 * exp(17.67 * T / (T + 243.5))
+        $pWaterPa = 611.2 * exp(17.67 * $poolTemp / ($poolTemp + 243.5));
+        $pAirSatPa = 611.2 * exp(17.67 * $airTemp / ($airTemp + 243.5));
 
         // Actual vapor pressure in air (Pa)
-        $pAirPa = $pSatPa * ($humidity / 100);
+        $pAirActualPa = $pAirSatPa * ($humidity / 100);
 
         // Vapor pressure difference (Pa)
-        $vpDiff = $pWaterPa - $pAirPa;
+        $vpDiff = $pWaterPa - $pAirActualPa;
 
         // Effective wind speed (m/s)
         $effectWindSpeed = $windSpeed * $windFactor;
 
+        // Inan & Atayilmaz (2022) evaporation formula
+        // E_per_m2 = (0.28 + 0.784 * v_eff) * (ΔP^0.695) / L_v  [kg/(m²·s)]
+        $windCoeff = 0.28 + 0.784 * $effectWindSpeed;
+        $evapPerUnitArea = $windCoeff * pow(max(0, $vpDiff), 0.695) / self::LATENT_HEAT_VAPORIZATION;
+
         // Activity factor - from config (required when pool is open)
         $configActivityFactor = $this->equipment['bathers']['activity_factor'] ?? null;
         $activityFactor = $isOpen ? ($configActivityFactor ?? 1.0) : 1.0;
+        $evapPerUnitArea *= $activityFactor;
 
-        // Evaporation using ASHRAE formula variant
-        // E = (25 + 19*v) * A * (pw - pa) / L_v  [W]
-        // where v=wind speed, A=area, pw/pa in kPa, L_v=latent heat
-        $windCoeff = 25 + 19 * $effectWindSpeed; // W/(m²·kPa)
-        $evapRateKgPerS = $windCoeff * $area * ($vpDiff / 1000) / self::LATENT_HEAT_VAPORIZATION;
-        $evapPerUnitArea = $evapRateKgPerS / $area;
+        // Total evaporation rate (kg/s)
+        $evapRateKgPerS = $evapPerUnitArea * $area;
 
         // Heat loss from evaporation (kW)
-        $evapLossKW = $evapRateKgPerS * self::LATENT_HEAT_VAPORIZATION / 1000 * $activityFactor;
+        $evapLossKW = $evapRateKgPerS * self::LATENT_HEAT_VAPORIZATION / 1000;
 
-        // ========== CONVECTION CALCULATION ==========
-        // Using Bowen ratio approach: Q_conv = β * Q_evap
-        // β = (c_p / L_v) * (T_water - T_air) / (p_water - p_air) * P_atm
+        // ========== CONVECTION CALCULATION (Bowen Ratio Method) ==========
+        // Bo = (c_p * P_atm) / (0.622 * L_v) * ΔT / ΔP
         $tempDiff = $poolTemp - $airTemp; // K (same as °C difference)
-        $cP = 1005; // J/(kg·K) specific heat of air
-        $pAtm = 101325; // Pa
 
-        // Bowen ratio
-        $bowenNumerator = $cP * $tempDiff * $pAtm;
-        $bowenDenominator = self::LATENT_HEAT_VAPORIZATION * $vpDiff;
-        $bowenRatio = $bowenDenominator > 0 ? $bowenNumerator / $bowenDenominator : 0;
+        // Prevent division by zero
+        $deltaPForBowen = $vpDiff;
+        if (abs($deltaPForBowen) < 1.0) {
+            $deltaPForBowen = $deltaPForBowen >= 0 ? 1.0 : -1.0;
+        }
+
+        // Bowen ratio (thermodynamic derivation)
+        $bowenNumerator = self::AIR_SPECIFIC_HEAT * self::ATM_PRESSURE * $tempDiff;
+        $bowenDenominator = self::MOLECULAR_RATIO * self::LATENT_HEAT_VAPORIZATION * $deltaPForBowen;
+        $bowenRatio = $bowenDenominator != 0 ? $bowenNumerator / $bowenDenominator : 0;
 
         // Convection loss (kW) = Bowen ratio * Evaporation
-        $convLossKW = abs($bowenRatio) * $evapLossKW;
+        $convLossKW = $bowenRatio * $evapLossKW;
 
         // ========== RADIATION CALCULATION ==========
         $tWaterK = $poolTemp + 273.15;
@@ -1504,18 +1578,21 @@ class EnergySimulator {
                 ],
             ],
             'evaporation' => [
+                'formula' => 'Inan & Atayilmaz (2022)',
                 'p_water_sat_pa' => round($pWaterPa, 1),
-                'p_air_sat_pa' => round($pSatPa, 1),
-                'p_air_actual_pa' => round($pAirPa, 1),
+                'p_air_sat_pa' => round($pAirSatPa, 1),
+                'p_air_actual_pa' => round($pAirActualPa, 1),
                 'vapor_diff_pa' => round($vpDiff, 1),
                 'effect_wind_speed_ms' => round($effectWindSpeed, 3),
                 'wind_coeff' => round($windCoeff, 2),
-                'evap_per_unit_area_kgm2s' => sprintf('%.6f', $evapPerUnitArea),
+                'evap_per_unit_area_kgm2s' => sprintf('%.6f', $evapPerUnitArea / $activityFactor), // Before activity
+                'evap_per_unit_area_with_activity' => sprintf('%.6f', $evapPerUnitArea),
                 'evap_rate_kgs' => sprintf('%.4f', $evapRateKgPerS),
                 'activity_factor' => $activityFactor,
                 'evap_loss_kw' => round($evapLossKW, 3),
             ],
             'convection' => [
+                'formula' => 'Bowen Ratio Method',
                 'temp_diff_k' => round($tempDiff, 2),
                 'bowen_numerator' => round($bowenNumerator, 0),
                 'bowen_denominator' => round($bowenDenominator, 0),
