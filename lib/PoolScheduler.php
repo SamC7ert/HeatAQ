@@ -58,28 +58,20 @@ class PoolScheduler {
                 WHERE template_id = ?
             ");
             $stmt->execute([$templateId]);
-        } elseif ($this->poolSiteId) {
-            // Prefer integer pool_site_id if available
-            $stmt = $this->db->prepare("
-                SELECT * FROM schedule_templates
-                WHERE pool_site_id = ?
-                LIMIT 1
-            ");
-            $stmt->execute([$this->poolSiteId]);
         } else {
-            // Fallback to string site_id
+            // Use default template (template_id = 1)
             $stmt = $this->db->prepare("
                 SELECT * FROM schedule_templates
-                WHERE site_id = ?
+                WHERE template_id = 1
                 LIMIT 1
             ");
-            $stmt->execute([$this->siteId]);
+            $stmt->execute();
         }
 
         $result = $stmt->fetch();
 
         if (!$result) {
-            throw new Exception("No schedule template found for site: {$this->siteId}");
+            throw new Exception("No schedule template found");
         }
 
         return $result;
@@ -87,14 +79,11 @@ class PoolScheduler {
 
     /**
      * Get site filter condition and value for queries
-     * Uses pool_site_id (integer) if available, falls back to site_id (string)
+     * Note: Schedule tables now use project_id, not pool_site_id
      */
     private function getSiteFilter($tableAlias = null) {
-        $col = $tableAlias ? "{$tableAlias}." : "";
-        if ($this->poolSiteId) {
-            return ["condition" => "{$col}pool_site_id = ?", "value" => $this->poolSiteId];
-        }
-        return ["condition" => "{$col}site_id = ?", "value" => $this->siteId];
+        // Schedule tables are now project-level (no site filter needed)
+        return ["condition" => "1=1", "value" => null];
     }
 
     /**
@@ -103,16 +92,13 @@ class PoolScheduler {
      * @return array Schedule data indexed by name
      */
     private function loadDaySchedules() {
-        $filter = $this->getSiteFilter();
-
-        // Load base schedules
+        // Load base schedules (project-level, no site filter)
         $stmt = $this->db->prepare("
             SELECT day_schedule_id, name, description
             FROM day_schedules
-            WHERE {$filter['condition']}
             ORDER BY name
         ");
-        $stmt->execute([$filter['value']]);
+        $stmt->execute();
         $rows = $stmt->fetchAll();
 
         $schedules = [];
@@ -124,8 +110,7 @@ class PoolScheduler {
             ];
         }
 
-        // Load periods for each schedule
-        $filter = $this->getSiteFilter('ds');
+        // Load periods for each schedule (project-level, no site filter)
         $stmt = $this->db->prepare("
             SELECT
                 ds.name as schedule_name,
@@ -137,10 +122,9 @@ class PoolScheduler {
                 dsp.period_order
             FROM day_schedule_periods dsp
             JOIN day_schedules ds ON dsp.day_schedule_id = ds.day_schedule_id
-            WHERE {$filter['condition']}
             ORDER BY ds.name, dsp.period_order, dsp.start_time
         ");
-        $stmt->execute([$filter['value']]);
+        $stmt->execute();
         $periods = $stmt->fetchAll();
 
         foreach ($periods as $period) {
@@ -180,7 +164,7 @@ class PoolScheduler {
      * @return array Week schedules indexed by ID
      */
     private function loadWeekSchedules() {
-        $filter = $this->getSiteFilter('ws');
+        // Project-level, no site filter
         $stmt = $this->db->prepare("
             SELECT
                 ws.week_schedule_id,
@@ -200,9 +184,8 @@ class PoolScheduler {
             LEFT JOIN day_schedules d5 ON ws.friday_schedule_id = d5.day_schedule_id
             LEFT JOIN day_schedules d6 ON ws.saturday_schedule_id = d6.day_schedule_id
             LEFT JOIN day_schedules d7 ON ws.sunday_schedule_id = d7.day_schedule_id
-            WHERE {$filter['condition']}
         ");
-        $stmt->execute([$filter['value']]);
+        $stmt->execute();
         $rows = $stmt->fetchAll();
 
         $weekSchedules = [];
