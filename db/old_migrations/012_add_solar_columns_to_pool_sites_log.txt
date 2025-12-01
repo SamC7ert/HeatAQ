@@ -1,0 +1,7 @@
+2025-12-01 07:52:19 - Running migration: 012_add_solar_columns_to_pool_sites.sql
+Executing: ALTER TABLE pool_sites
+    ADD COLUMN solar_latitude DECIMAL(10,6) NULL AFTER lo...
+Executing: UPDATE pool_sites
+SET solar_latitude = latitude,
+    solar_longitude = longitude...
+Executed 2 statements
