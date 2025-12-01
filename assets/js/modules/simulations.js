@@ -516,7 +516,16 @@ const SimulationsModule = {
                         display: true,
                         ticks: {
                             maxTicksLimit: 12,
-                            font: { size: 9 }
+                            font: { size: 10 },
+                            callback: function(value, index) {
+                                // Format date labels as "Jan", "Feb", etc. or "Jan 15"
+                                const dateStr = this.getLabelForValue(value);
+                                if (!dateStr) return '';
+                                const date = new Date(dateStr);
+                                const day = date.getDate();
+                                const month = date.toLocaleDateString('en-US', { month: 'short' });
+                                return day === 1 ? month : `${month} ${day}`;
+                            }
                         }
                     },
                     y: {
@@ -2029,15 +2038,13 @@ const SimulationsModule = {
                         },
                         ticks: {
                             maxRotation: 0,
-                            font: { size: 9 },
-                            padding: 2,
+                            font: { size: 10 },
+                            padding: 4,
                             autoSkip: false,
                             callback: function(value, index) {
-                                // Show day label at hour 0
-                                if (index % 24 === 0) {
-                                    return this.getLabelForValue(value);
-                                }
-                                return '';
+                                // Show labels where they exist (at hour 3 positions)
+                                const label = this.getLabelForValue(value);
+                                return label || '';
                             }
                         }
                     },
@@ -2201,14 +2208,13 @@ const SimulationsModule = {
                         },
                         ticks: {
                             maxRotation: 0,
-                            font: { size: 9 },
-                            padding: 2,
+                            font: { size: 10 },
+                            padding: 4,
                             autoSkip: false,
                             callback: function(value, index) {
-                                if (index % 24 === 0) {
-                                    return this.getLabelForValue(value);
-                                }
-                                return '';
+                                // Show labels where they exist (at hour 3 positions)
+                                const label = this.getLabelForValue(value);
+                                return label || '';
                             }
                         }
                     },
@@ -2217,7 +2223,7 @@ const SimulationsModule = {
                         display: true,
                         position: 'left',
                         title: { display: true, text: '°C', font: { size: 10 } },
-                        ticks: { font: { size: 9 } },
+                        ticks: { font: { size: 10 } },
                         grid: { color: 'rgba(0, 0, 0, 0.08)' }
                     },
                     y1: {
@@ -2226,7 +2232,7 @@ const SimulationsModule = {
                         position: 'right',
                         title: { display: true, text: 'm/s', font: { size: 10 } },
                         grid: { drawOnChartArea: false },
-                        ticks: { font: { size: 9 } }
+                        ticks: { font: { size: 10 } }
                     }
                 }
             },
@@ -2552,7 +2558,16 @@ const SimulationsModule = {
                         display: true,
                         ticks: {
                             maxTicksLimit: 12,
-                            font: { size: 9 }
+                            font: { size: 10 },
+                            callback: function(value, index) {
+                                // Format date labels as "Jan", "Feb", etc. or "Jan 15"
+                                const dateStr = this.getLabelForValue(value);
+                                if (!dateStr) return '';
+                                const date = new Date(dateStr);
+                                const day = date.getDate();
+                                const month = date.toLocaleDateString('en-US', { month: 'short' });
+                                return day === 1 ? month : `${month} ${day}`;
+                            }
                         }
                     },
                     y: {
