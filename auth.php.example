@@ -1,234 +1,240 @@
 <?php
 /**
- * HeatAQ Authentication Module
- * Validates user sessions and provides auth context to APIs
+ * HeatAQ Session Authentication
+ * Version: 2.2 - Fixed for new database structure
+ * Include this file in any PHP that requires authentication
  *
- * Usage:
- * $auth = HeatAQAuth::check(true);  // Required auth - redirects on failure
- * $auth = HeatAQAuth::check(false); // Optional auth - returns null if not logged in
- *
- * Returns:
- * [
- *     'user' => ['user_id' => int, 'name' => string, 'email' => string, 'role' => string],
- *     'project' => ['project_id' => int, 'project_name' => string, 'site_id' => string, 'pool_site_id' => int]
- * ]
- *
- * Note: site_id comes from pool_sites table (linked via project_id), not projects table
+ * Note: site_id now comes from pool_sites table (linked via project_id), not projects table
  */
 
+// Include configuration loader
 require_once __DIR__ . '/config.php';
 
 class HeatAQAuth {
-    private static $db = null;
-    private static $sessionConfig = null;
+    private static $pdo = null;
+    private static $user = null;
+    private static $project = null;
+    private static $session = null;
 
     /**
-     * Check authentication status
-     * @param bool $required If true, redirect to login if not authenticated
-     * @return array|null Auth data or null if not authenticated
+     * Initialize database connection
      */
-    public static function check($required = true) {
-        self::initDB();
-
-        // Start PHP session if not already started
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
+    private static function initDB() {
+        if (self::$pdo === null) {
+            try {
+                self::$pdo = Config::getDatabase();
+            } catch (Exception $e) {
+                throw new Exception('Database connection failed');
+            }
         }
+        return self::$pdo;
+    }
 
-        $sessionName = self::$sessionConfig['name'] ?? 'heataq_session';
+    /**
+     * Check if user is authenticated
+     * @param bool $requireAuth If true, will exit with 401 if not authenticated
+     * @return array|false User and project data if authenticated
+     */
+    public static function check($requireAuth = true) {
+        session_start();
 
-        // Get session ID from multiple sources
+        $sessionConfig = Config::getSessionConfig();
+        $sessionName = $sessionConfig['name'];
+
+        // Check for session ID in multiple places
         $sessionId = null;
 
         // 1. Check PHP session
         if (isset($_SESSION[$sessionName . '_session_id'])) {
             $sessionId = $_SESSION[$sessionName . '_session_id'];
         }
-
         // 2. Check Authorization header
-        if (!$sessionId) {
-            $headers = getallheaders();
-            $authHeader = $headers['Authorization'] ?? $headers['authorization'] ?? '';
-            if (preg_match('/^Bearer\s+(.+)$/i', $authHeader, $matches)) {
-                $sessionId = $matches[1];
-            }
+        elseif (isset($_SERVER['HTTP_AUTHORIZATION'])) {
+            $sessionId = str_replace('Bearer ', '', $_SERVER['HTTP_AUTHORIZATION']);
         }
-
         // 3. Check X-Session-ID header
-        if (!$sessionId) {
-            $headers = getallheaders();
-            $sessionId = $headers['X-Session-ID'] ?? $headers['x-session-id'] ?? null;
+        elseif (isset($_SERVER['HTTP_X_SESSION_ID'])) {
+            $sessionId = $_SERVER['HTTP_X_SESSION_ID'];
         }
-
-        // 4. Check cookie
-        if (!$sessionId && isset($_COOKIE[$sessionName])) {
-            $sessionId = $_COOKIE[$sessionName];
+        // 4. Check POST/GET parameter
+        elseif (isset($_REQUEST['session_id'])) {
+            $sessionId = $_REQUEST['session_id'];
         }
 
         if (!$sessionId) {
-            return self::handleNotAuthenticated($required);
+            if ($requireAuth) {
+                self::unauthorized('No session provided');
+            }
+            return false;
         }
 
-        // Validate session in database
-        // Note: site_id now comes from pool_sites (via project_id), not from projects
-        $stmt = self::$db->prepare("
-            SELECT
-                us.session_id,
-                us.user_id,
-                us.project_id,
-                us.expires_at,
-                u.name as user_name,
-                u.email,
-                u.is_super_admin,
-                p.project_name,
-                ps.site_id,
-                ps.id as pool_site_id,
-                COALESCE(up.role, 'viewer') as role
-            FROM user_sessions us
-            JOIN users u ON us.user_id = u.user_id
-            JOIN projects p ON us.project_id = p.project_id
+        // Verify session in database
+        $pdo = self::initDB();
+
+        // Join with pool_sites to get site_id and pool_site_id
+        // NOTE: site_id comes from pool_sites (via project_id), NOT from projects table
+        $stmt = $pdo->prepare("
+            SELECT s.*, u.*, p.*,
+                   up.role as user_role,
+                   ps.site_id,
+                   ps.id as pool_site_id
+            FROM user_sessions s
+            JOIN users u ON s.user_id = u.user_id
+            JOIN projects p ON s.project_id = p.project_id
+            LEFT JOIN user_projects up ON u.user_id = up.user_id AND p.project_id = up.project_id
             LEFT JOIN pool_sites ps ON ps.project_id = p.project_id
-            LEFT JOIN user_projects up ON up.user_id = us.user_id AND up.project_id = us.project_id
-            WHERE us.session_id = ?
-              AND us.expires_at > NOW()
-              AND u.is_active = 1
-              AND p.is_active = 1
+            WHERE s.session_id = ?
+            AND s.expires_at > NOW()
+            AND u.is_active = 1
+            AND p.is_active = 1
         ");
+
         $stmt->execute([$sessionId]);
-        $session = $stmt->fetch(PDO::FETCH_ASSOC);
+        $session = $stmt->fetch();
 
         if (!$session) {
-            // Session invalid or expired
-            self::clearSession($sessionName);
-            return self::handleNotAuthenticated($required);
-        }
-
-        // Super admins get owner role
-        if ($session['is_super_admin']) {
-            $session['role'] = 'owner';
+            if ($requireAuth) {
+                self::unauthorized('Invalid or expired session');
+            }
+            return false;
         }
 
         // Update last activity
-        $stmt = self::$db->prepare("
-            UPDATE user_sessions
-            SET last_activity = NOW()
-            WHERE session_id = ?
-        ");
+        $stmt = $pdo->prepare("UPDATE user_sessions SET last_activity = NOW() WHERE session_id = ?");
         $stmt->execute([$sessionId]);
 
-        // Return auth context
+        // Store in static properties for easy access
+        self::$session = $session;
+        self::$user = [
+            'user_id' => $session['user_id'],
+            'email' => $session['email'],
+            'name' => $session['name'],
+            'is_super_admin' => $session['is_super_admin'],
+            'role' => $session['user_role'] ?: ($session['is_super_admin'] ? 'owner' : 'viewer')
+        ];
+        self::$project = [
+            'project_id' => $session['project_id'],
+            'project_name' => $session['project_name'],
+            'site_id' => $session['site_id'],  // From pool_sites, may be null
+            'pool_site_id' => $session['pool_site_id'] ? (int)$session['pool_site_id'] : null
+        ];
+
+        // Update PHP session
+        $_SESSION[$sessionName . '_user_id'] = self::$user['user_id'];
+        $_SESSION[$sessionName . '_project_id'] = self::$project['project_id'];
+        $_SESSION[$sessionName . '_site_id'] = self::$project['site_id'];
+        $_SESSION[$sessionName . '_pool_site_id'] = self::$project['pool_site_id'];
+        $_SESSION[$sessionName . '_user_role'] = self::$user['role'];
+
         return [
-            'user' => [
-                'user_id' => (int)$session['user_id'],
-                'name' => $session['user_name'],
-                'email' => $session['email'],
-                'role' => $session['role'],
-                'is_super_admin' => (bool)$session['is_super_admin']
-            ],
-            'project' => [
-                'project_id' => (int)$session['project_id'],
-                'project_name' => $session['project_name'],
-                'site_id' => $session['site_id'],  // From pool_sites, may be null
-                'pool_site_id' => $session['pool_site_id'] ? (int)$session['pool_site_id'] : null
-            ],
-            'session_id' => $sessionId
+            'user' => self::$user,
+            'project' => self::$project
         ];
     }
 
     /**
-     * Get current user ID without full auth check
+     * Check if user has specific role
      */
-    public static function getUserId() {
-        $auth = self::check(false);
-        return $auth ? $auth['user']['user_id'] : null;
+    public static function hasRole($requiredRole) {
+        if (!self::$user) {
+            return false;
+        }
+
+        $roleHierarchy = [
+            'viewer' => 1,
+            'operator' => 2,
+            'admin' => 3,
+            'owner' => 4
+        ];
+
+        $userLevel = $roleHierarchy[self::$user['role']] ?? 0;
+        $requiredLevel = $roleHierarchy[$requiredRole] ?? 999;
+
+        return $userLevel >= $requiredLevel;
     }
 
     /**
-     * Get current project ID without full auth check
+     * Get current user
      */
-    public static function getProjectId() {
-        $auth = self::check(false);
-        return $auth ? $auth['project']['project_id'] : null;
+    public static function getUser() {
+        return self::$user;
     }
 
     /**
-     * Logout current user
+     * Get current project
+     */
+    public static function getProject() {
+        return self::$project;
+    }
+
+    /**
+     * Get site ID for current project (string)
+     */
+    public static function getSiteId() {
+        return self::$project['site_id'] ?? null;
+    }
+
+    /**
+     * Get pool site ID for current project (integer)
+     */
+    public static function getPoolSiteId() {
+        return self::$project['pool_site_id'] ?? null;
+    }
+
+    /**
+     * Log an audit event
+     */
+    public static function audit($action, $entityType = null, $entityId = null, $oldValues = null, $newValues = null) {
+        if (!self::$user || !self::$pdo) {
+            return;
+        }
+
+        try {
+            $stmt = self::$pdo->prepare("
+                INSERT INTO audit_log (user_id, project_id, action, entity_type, entity_id, old_values, new_values, ip_address)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ");
+
+            $stmt->execute([
+                self::$user['user_id'],
+                self::$project['project_id'],
+                $action,
+                $entityType,
+                $entityId,
+                $oldValues ? json_encode($oldValues) : null,
+                $newValues ? json_encode($newValues) : null,
+                $_SERVER['REMOTE_ADDR'] ?? null
+            ]);
+        } catch (Exception $e) {
+            error_log('Audit log error: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Logout current session
      */
     public static function logout() {
-        self::initDB();
+        if (self::$session) {
+            $pdo = self::initDB();
+            $stmt = $pdo->prepare("DELETE FROM user_sessions WHERE session_id = ?");
+            $stmt->execute([self::$session['session_id']]);
 
-        if (session_status() === PHP_SESSION_NONE) {
-            session_start();
+            self::audit('logout');
         }
 
-        $sessionName = self::$sessionConfig['name'] ?? 'heataq_session';
-        $sessionId = $_SESSION[$sessionName . '_session_id'] ?? null;
-
-        if ($sessionId) {
-            // Delete from database
-            $stmt = self::$db->prepare("DELETE FROM user_sessions WHERE session_id = ?");
-            $stmt->execute([$sessionId]);
-        }
-
-        // Clear PHP session
-        self::clearSession($sessionName);
+        session_destroy();
+        self::$user = null;
+        self::$project = null;
+        self::$session = null;
     }
 
     /**
-     * Initialize database connection
+     * Send 401 unauthorized response
      */
-    private static function initDB() {
-        if (!self::$db) {
-            self::$db = Config::getDatabase();
-            self::$sessionConfig = Config::getSessionConfig();
-        }
-    }
-
-    /**
-     * Handle not authenticated case
-     */
-    private static function handleNotAuthenticated($required) {
-        if ($required) {
-            // For API requests, return 401
-            if (self::isApiRequest()) {
-                http_response_code(401);
-                header('Content-Type: application/json');
-                echo json_encode(['error' => 'Authentication required', 'redirect' => '/login.html']);
-                exit;
-            }
-
-            // For page requests, redirect to login
-            header('Location: /login.html');
-            exit;
-        }
-
-        return null;
-    }
-
-    /**
-     * Check if this is an API request
-     */
-    private static function isApiRequest() {
-        $uri = $_SERVER['REQUEST_URI'] ?? '';
-        $accept = $_SERVER['HTTP_ACCEPT'] ?? '';
-
-        return strpos($uri, '/api/') !== false
-            || strpos($accept, 'application/json') !== false
-            || isset($_SERVER['HTTP_X_REQUESTED_WITH']);
-    }
-
-    /**
-     * Clear session data
-     */
-    private static function clearSession($sessionName) {
-        unset($_SESSION[$sessionName . '_session_id']);
-        unset($_SESSION[$sessionName . '_user_id']);
-        unset($_SESSION[$sessionName . '_project_id']);
-        unset($_SESSION[$sessionName . '_site_id']);
-
-        // Clear cookie if set
-        if (isset($_COOKIE[$sessionName])) {
-            setcookie($sessionName, '', time() - 3600, '/');
-        }
+    private static function unauthorized($message = 'Unauthorized') {
+        http_response_code(401);
+        header('Content-Type: application/json');
+        echo json_encode(['error' => $message]);
+        exit;
     }
 }
