@@ -376,28 +376,47 @@ const ProjectModule = {
         modal.style.display = 'flex';
     },
 
-    // Update solar data status display
-    updateSolarStatus() {
+    // Update solar data status display - check database for actual data
+    async updateSolarStatus() {
         const statusEl = document.getElementById('solar-fetch-status');
         const lastUpdatedEl = document.getElementById('solar-last-updated');
-        const site = this.currentSite || {};
 
-        if (statusEl) {
+        if (!statusEl) return;
+
+        // Show loading state
+        statusEl.textContent = 'Checking solar data...';
+        statusEl.style.color = '#666';
+
+        try {
+            // Call API to get actual solar data status from database
+            const response = await fetch(`${config.API_BASE_URL}?action=get_solar_status`);
+            const result = await response.json();
+
+            if (result.has_data) {
+                // Format date range
+                const startDate = result.data_start ? new Date(result.data_start).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '?';
+                const endDate = result.data_end ? new Date(result.data_end).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '?';
+                statusEl.textContent = `✓ Solar data: ${startDate} to ${endDate} (${result.day_count} days)`;
+                statusEl.style.color = '#28a745';
+
+                if (lastUpdatedEl) {
+                    lastUpdatedEl.textContent = `${result.hour_count.toLocaleString()} hourly records`;
+                }
+            } else {
+                statusEl.textContent = 'Not fetched - click to load 10 years of hourly solar radiation data';
+                statusEl.style.color = '#666';
+                if (lastUpdatedEl) lastUpdatedEl.textContent = '';
+            }
+        } catch (error) {
+            console.error('[Project] Error checking solar status:', error);
+            // Fallback to localStorage check
+            const site = this.currentSite || {};
             if (site.solar_last_fetched) {
                 statusEl.textContent = `✓ Solar data loaded (${site.solar_days || '?'} days)`;
                 statusEl.style.color = '#28a745';
             } else {
                 statusEl.textContent = 'Not fetched - click to load 10 years of hourly solar radiation data';
                 statusEl.style.color = '#666';
-            }
-        }
-
-        if (lastUpdatedEl) {
-            if (site.solar_last_fetched) {
-                const date = new Date(site.solar_last_fetched);
-                lastUpdatedEl.textContent = `Last updated: ${date.toLocaleDateString()} at ${date.toLocaleTimeString()}`;
-            } else {
-                lastUpdatedEl.textContent = '';
             }
         }
     },
