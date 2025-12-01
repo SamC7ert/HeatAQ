@@ -281,19 +281,18 @@ class PoolScheduler {
         try {
             $stmt = $this->db->prepare("
                 SELECT
-                    ce.id,
-                    ce.name,
-                    ce.day_schedule_id,
+                    ste.id,
+                    ed.name,
+                    ste.day_schedule_id,
                     ds.name as day_schedule_name,
-                    ce.fixed_month,
-                    ce.fixed_day,
-                    ce.is_moving,
-                    ce.easter_offset_days,
-                    ce.priority
-                FROM calendar_exception_days ce
-                LEFT JOIN day_schedules ds ON ce.day_schedule_id = ds.day_schedule_id
-                WHERE ce.schedule_template_id = ?
-                ORDER BY ce.priority DESC
+                    ed.fixed_month,
+                    ed.fixed_day,
+                    ed.is_moving,
+                    ed.easter_offset_days
+                FROM schedule_template_exceptions ste
+                JOIN exception_days ed ON ste.exception_day_id = ed.id
+                LEFT JOIN day_schedules ds ON ste.day_schedule_id = ds.day_schedule_id
+                WHERE ste.template_id = ?
             ");
             $stmt->execute([$this->templateId]);
             $rows = $stmt->fetchAll();
@@ -309,7 +308,7 @@ class PoolScheduler {
                     'fixed_day' => $row['fixed_day'] ? (int) $row['fixed_day'] : null,
                     'is_moving' => (bool) $row['is_moving'],
                     'easter_offset' => $row['easter_offset_days'] !== null ? (int) $row['easter_offset_days'] : null,
-                    'priority' => $row['priority'] ?? 50
+                    'priority' => 50
                 ];
             }
 
