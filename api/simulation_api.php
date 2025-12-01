@@ -368,7 +368,8 @@ try {
                         status,
                         created_at,
                         completed_at,
-                        summary_json
+                        summary_json,
+                        config_snapshot
                     FROM simulation_runs
                     WHERE site_id = ?
                     ORDER BY created_at DESC
@@ -381,10 +382,11 @@ try {
                 $runs = [];
             }
 
-            // Decode summary JSON
+            // Decode JSON fields
             foreach ($runs as &$run) {
                 $run['summary'] = json_decode($run['summary_json'], true);
-                unset($run['summary_json']);
+                $run['config'] = json_decode($run['config_snapshot'], true);
+                unset($run['summary_json'], $run['config_snapshot']);
             }
 
             // Get total count
