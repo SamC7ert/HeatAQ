@@ -1542,7 +1542,7 @@ const SimulationsModule = {
      * Render debug calculation results - populates new UI structure
      */
     renderDebugResults: function(data) {
-        console.log('[V79 renderDebugResults]', data);
+        console.log('[V80 renderDebugResults]', data);
 
         // Log schedule debug info prominently
         if (data.schedule_debug) {
@@ -1669,6 +1669,7 @@ const SimulationsModule = {
         setHtml('debug-radiation', renderTable(data.radiation));
         setHtml('debug-solar', renderTable(data.solar_gain));
         setHtml('debug-conduction', renderTable(data.conduction));
+        console.log('[Debug Cover]', data.cover);  // DEBUG
         setHtml('debug-cover', renderTable(data.cover));
 
         // Heat pump detail
