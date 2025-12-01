@@ -1,6 +1,6 @@
 # HeatAQ System Architecture Documentation
-Version: 104
-Date: November 2024
+Version: 105
+Date: December 2024
 
 ## System Overview
 
@@ -260,6 +260,143 @@ User Action → Validate Client-Side → api.js POST
                                           ↓
                                     Return Success
 ```
+
+### 4. Simulation Run Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        SIMULATION RUN DATA FLOW                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   USER INTERFACE (simulations.js / simcontrol.js)                          │
+│   ├─ Pool dropdown: SimControlModule.currentPoolId                         │
+│   ├─ Config dropdown: sim-config-select                                     │
+│   ├─ Schedule dropdown: sim-ohc-select                                      │
+│   ├─ Dates: sim-start-date, sim-end-date                                   │
+│   └─ Run button → startSimulation()                                        │
+│                            │                                                │
+│                            ▼                                                │
+│   API REQUEST (POST /api/simulation_api.php?action=run_simulation)         │
+│   {                                                                         │
+│     pool_id: number,        ← Required: selects pool from pools table      │
+│     config_id: number,      ← Required: selects config from config_templates│
+│     template_id: number,    ← Optional: schedule template override         │
+│     start_date: string,     ← YYYY-MM-DD                                   │
+│     end_date: string,       ← YYYY-MM-DD                                   │
+│     scenario_name: string,  ← Display name for run                         │
+│     config_override: {      ← Optional overrides                           │
+│       equipment: { hp_capacity_kw, boiler_capacity_kw },                   │
+│       control: { strategy, target_temp }                                   │
+│     }                                                                       │
+│   }                                                                         │
+│                            │                                                │
+│                            ▼                                                │
+│   SIMULATION_API.PHP (Backend)                                             │
+│   1. Validate pool_id → sendError if missing                               │
+│   2. Validate config_id → sendError if missing                             │
+│   3. Load from pools table:                                                │
+│      ├─ area_m2, volume_m3, depth_m                                        │
+│      ├─ wind_exposure, solar_absorption                                    │
+│      ├─ has_cover, cover_r_value, cover_solar_transmittance               │
+│      └─ has_tunnel                                                         │
+│   4. Load from config_templates table:                                     │
+│      ├─ json_config (full config object)                                   │
+│      ├─ hp_capacity_kw, boiler_capacity_kw                                 │
+│      ├─ target_temp, control_strategy                                      │
+│      └─ template_name                                                      │
+│   5. Apply config_override if provided                                     │
+│   6. Initialize: PoolScheduler, EnergySimulator                           │
+│                            │                                                │
+│                            ▼                                                │
+│   ENERGY SIMULATOR (lib/EnergySimulator.php)                               │
+│   Constructor receives:                                                     │
+│   ├─ $db: PDO database connection                                          │
+│   ├─ $siteId: VARCHAR site identifier                                      │
+│   ├─ $scheduler: PoolScheduler instance                                    │
+│   └─ Derives: poolSiteId (INT) for solar table queries                    │
+│                                                                             │
+│   setConfigFromUI() receives pool config:                                  │
+│   ├─ pool: { area_m2, volume_m3, depth_m, wind_exposure, solar_absorption }│
+│   ├─ cover: { has_cover, r_value, solar_transmittance }                   │
+│   ├─ solar: { has_tunnel }                                                 │
+│   └─ control: { target_temp, strategy }                                    │
+│                                                                             │
+│   runSimulation(startDate, endDate) returns:                               │
+│   {                                                                         │
+│     meta: {                                                                 │
+│       simulator_version, start_date, end_date, site_id,                    │
+│       pool_config, equipment, created_at                                   │
+│     },                                                                      │
+│     hourly: [ { timestamp, water_temp, hp_output_kw, boiler_output_kw,    │
+│                 solar_gain_kw, total_loss_kw, ... } ],                     │
+│     daily: [ { date, total_hp_kwh, total_boiler_kwh, avg_water_temp, ... }]│
+│     summary: {                                                              │
+│       total_hours, open_hours, total_heat_loss_kwh, total_solar_gain_kwh, │
+│       hp_thermal_kwh, boiler_thermal_kwh, total_hp_energy_kwh,            │
+│       total_boiler_energy_kwh, total_electricity_kwh, total_cost,         │
+│       avg_cop, days_below_27, days_below_26                               │
+│     }                                                                       │
+│   }                                                                         │
+│                            │                                                │
+│                            ▼                                                │
+│   DATA STORAGE (simulation_api.php)                                        │
+│   1. simulation_runs table:                                                │
+│      ├─ run_id, site_id, pool_id, user_id                                 │
+│      ├─ scenario_name, description                                         │
+│      ├─ start_date, end_date, status                                       │
+│      ├─ config_snapshot (JSON of full config used)                        │
+│      ├─ summary_json (JSON of summary results)                            │
+│      └─ created_at, completed_at                                           │
+│   2. simulation_daily_results table:                                       │
+│      └─ run_id, date, total_hp_kwh, total_boiler_kwh, ...                 │
+│   3. simulation_hourly_results table:                                      │
+│      └─ run_id, timestamp, water_temp, hp_heat_kw, ...                    │
+│                            │                                                │
+│                            ▼                                                │
+│   API RESPONSE → simulations.js                                            │
+│   {                                                                         │
+│     status: "success",                                                      │
+│     run_id: number,                                                         │
+│     simulator_version: string,                                              │
+│     summary: { ... },                                                       │
+│     meta: { ... },                                                          │
+│     daily_count: number,                                                    │
+│     hourly_count: number                                                    │
+│   }                                                                         │
+│                            │                                                │
+│                            ▼                                                │
+│   DISPLAY (simcontrol.js)                                                  │
+│   showBenchmarkReport(results) renders:                                    │
+│   ├─ Period, Pool dimensions, Equipment specs                              │
+│   ├─ Target temp, Tolerance, Strategy                                      │
+│   ├─ Energy totals (HP, Boiler, Loss, Solar)                              │
+│   ├─ Cost summary, COP average                                             │
+│   └─ Days below threshold                                                  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Modules Involved in Simulation:
+
+| Module | Location | Role |
+|--------|----------|------|
+| SimulationsModule | assets/js/modules/simulations.js | UI, triggers runs, displays history |
+| SimControlModule | assets/js/modules/simcontrol.js | Pool/Config selection, report display |
+| simulation_api.php | api/simulation_api.php | REST endpoint, orchestrates run |
+| EnergySimulator | lib/EnergySimulator.php | Core calculation engine |
+| PoolScheduler | lib/PoolScheduler.php | Schedule resolution |
+| Config | config.php | Database connection |
+
+#### Data Sources for Simulation:
+
+| Data | Table | Key Fields |
+|------|-------|------------|
+| Pool physical properties | pools | area_m2, volume_m3, depth_m, wind_exposure |
+| Pool cover settings | pools | has_cover, cover_r_value, cover_solar_transmittance |
+| Equipment config | config_templates | hp_capacity_kw, boiler_capacity_kw, target_temp |
+| Weather data | weather_data | temperature, humidity, wind_speed |
+| Solar radiation | site_solar_hourly | pool_site_id, timestamp, solar_wh_m2 |
+| Schedule periods | day_schedule_periods | start_time, end_time, target_temp |
 
 ## Database Relationships
 
