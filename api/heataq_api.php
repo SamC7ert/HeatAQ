@@ -2351,9 +2351,14 @@ class HeatAQAPI {
         $log = [];
         $log[] = "Merging branch: $branch";
 
-        // Fetch all branches
-        $log[] = "Fetching...";
-        $log[] = trim(shell_exec('git fetch --all 2>&1'));
+        // Fetch all branches with prune to remove stale refs
+        $log[] = "Fetching all branches...";
+        $log[] = trim(shell_exec('git fetch --all --prune 2>&1'));
+
+        // Pull latest from the selected branch (update remote tracking)
+        $log[] = "Pulling latest from $branch...";
+        $pullBranchOutput = shell_exec("git fetch origin $branch 2>&1");
+        $log[] = trim($pullBranchOutput);
 
         // Ensure we're on master
         $currentBranch = trim(shell_exec('git branch --show-current 2>&1'));
