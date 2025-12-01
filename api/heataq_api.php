@@ -2760,41 +2760,56 @@ class HeatAQAPI {
         $schemaOutput = shell_exec('php ' . escapeshellarg($dbDir . '/dump_schema.php') . ' 2>&1');
         $log[] = "✓ Schema exported";
 
-        // Commit to branch, then merge to master
+        // Commit directly to master and push
         $repoRoot = realpath(__DIR__ . '/..');
         $oldDir = getcwd();
         chdir($repoRoot);
 
         $migrationName = preg_replace('/^\d{3}_/', '', $filename);
         $migrationName = preg_replace('/\.sql$/', '', $migrationName);
-        $branch = 'db-migration-archive';
-        $commitMsg = "Apply migration: $migrationName";
+        $commitMsg = "Archive migration: $migrationName";
 
-        $log[] = "Committing to branch $branch...";
+        $log[] = "Committing to master...";
 
-        // Git commands: commit to branch, push, merge to master, push master
-        $commands = [
-            "git checkout " . escapeshellarg($branch) . " 2>/dev/null || git checkout -b " . escapeshellarg($branch),
-            "git add db/old_migrations/",
-            "git add db/schema.json db/schema.md",
-            "git add -u db/migrations/",
-            "git commit -m " . escapeshellarg($commitMsg) . " || echo 'No changes to commit'",
-            "git push -u origin " . escapeshellarg($branch),
-            "git checkout master",
-            "git merge " . escapeshellarg($branch) . " -m " . escapeshellarg("Merge: $commitMsg"),
-            "git push origin master"
-        ];
+        // Get current branch to restore later
+        $currentBranch = trim(shell_exec('git rev-parse --abbrev-ref HEAD 2>/dev/null'));
+        $log[] = "Current branch: $currentBranch";
+
+        // Stash any uncommitted changes, switch to master, commit, push, restore
+        $commands = [];
+
+        // Only stash/switch if not already on master
+        if ($currentBranch !== 'master') {
+            $commands[] = "git stash --include-untracked";
+            $commands[] = "git checkout master";
+            $commands[] = "git pull origin master --no-edit";
+        }
+
+        // Stage the migration archive changes
+        $commands[] = "git add db/old_migrations/";
+        $commands[] = "git add db/schema.json db/schema.md 2>/dev/null || true";
+        $commands[] = "git add -u db/migrations/";
+        $commands[] = "git commit -m " . escapeshellarg($commitMsg);
+        $commands[] = "git push origin master";
+
+        // Restore original branch if we switched
+        if ($currentBranch !== 'master') {
+            $commands[] = "git checkout " . escapeshellarg($currentBranch);
+            $commands[] = "git stash pop 2>/dev/null || true";
+        }
 
         $fullCommand = implode(' && ', $commands) . ' 2>&1';
         $output = shell_exec($fullCommand);
 
-        $merged = strpos($output, 'fatal') === false && strpos($output, 'CONFLICT') === false;
+        $pushed = strpos($output, 'fatal') === false &&
+                  strpos($output, 'CONFLICT') === false &&
+                  strpos($output, 'rejected') === false;
 
-        if ($merged) {
-            $log[] = "✓ Committed and merged to master";
+        if ($pushed) {
+            $log[] = "✓ Committed to master";
             $log[] = "✓ Pushed to origin/master";
         } else {
-            $log[] = "⚠ Git operation may have failed";
+            $log[] = "⚠ Git operation may have failed:";
             $log[] = trim($output);
         }
 
