@@ -1940,17 +1940,37 @@ class HeatAQAPI {
         }
 
         // Get solar data range using pool_site_id
-        $stmt = $this->db->prepare("
-            SELECT
-                MIN(timestamp) as data_start,
-                MAX(timestamp) as data_end,
-                COUNT(*) as hour_count,
-                COUNT(DISTINCT DATE(timestamp)) as day_count
-            FROM site_solar_hourly
-            WHERE pool_site_id = ?
-        ");
-        $stmt->execute([$poolSiteId]);
-        $stats = $stmt->fetch();
+        $stats = ['data_start' => null, 'data_end' => null, 'hour_count' => 0, 'day_count' => 0];
+        try {
+            $stmt = $this->db->prepare("
+                SELECT
+                    MIN(timestamp) as data_start,
+                    MAX(timestamp) as data_end,
+                    COUNT(*) as hour_count,
+                    COUNT(DISTINCT DATE(timestamp)) as day_count
+                FROM site_solar_hourly
+                WHERE pool_site_id = ?
+            ");
+            $stmt->execute([$poolSiteId]);
+            $stats = $stmt->fetch() ?: $stats;
+        } catch (PDOException $e) {
+            // pool_site_id column may not exist yet - try site_id fallback
+            try {
+                $stmt = $this->db->prepare("
+                    SELECT
+                        MIN(timestamp) as data_start,
+                        MAX(timestamp) as data_end,
+                        COUNT(*) as hour_count,
+                        COUNT(DISTINCT DATE(timestamp)) as day_count
+                    FROM site_solar_hourly
+                    WHERE site_id = ?
+                ");
+                $stmt->execute([$this->siteId]);
+                $stats = $stmt->fetch() ?: $stats;
+            } catch (PDOException $e2) {
+                // Table doesn't exist or other error
+            }
+        }
 
         // Get site location
         $locStmt = $this->db->prepare("

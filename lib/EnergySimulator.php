@@ -639,12 +639,25 @@ class EnergySimulator {
      * Check if hourly solar data is available for this site
      */
     private function hasHourlySolarData() {
-        if (!$this->poolSiteId) return false;
+        // Try pool_site_id first
+        if ($this->poolSiteId) {
+            try {
+                $stmt = $this->db->prepare("
+                    SELECT COUNT(*) FROM site_solar_hourly WHERE pool_site_id = ? LIMIT 1
+                ");
+                $stmt->execute([$this->poolSiteId]);
+                if ($stmt->fetchColumn() > 0) return true;
+            } catch (PDOException $e) {
+                // pool_site_id column may not exist yet
+            }
+        }
+
+        // Fallback to site_id
         try {
             $stmt = $this->db->prepare("
-                SELECT COUNT(*) FROM site_solar_hourly WHERE pool_site_id = ? LIMIT 1
+                SELECT COUNT(*) FROM site_solar_hourly WHERE site_id = ? LIMIT 1
             ");
-            $stmt->execute([$this->poolSiteId]);
+            $stmt->execute([$this->siteId]);
             return $stmt->fetchColumn() > 0;
         } catch (PDOException $e) {
             // Table doesn't exist yet
@@ -659,16 +672,41 @@ class EnergySimulator {
      * when fetched from NASA POWER API, so we just use solar_wh_m2 directly.
      */
     private function getHourlySolarData($startDate, $endDate) {
-        if (!$this->poolSiteId) return [];
-        $stmt = $this->db->prepare("
-            SELECT timestamp, solar_wh_m2
-            FROM site_solar_hourly
-            WHERE pool_site_id = ?
-              AND DATE(timestamp) BETWEEN ? AND ?
-            ORDER BY timestamp
-        ");
-        $stmt->execute([$this->poolSiteId, $startDate, $endDate]);
-        $rows = $stmt->fetchAll();
+        $rows = [];
+
+        // Try pool_site_id first
+        if ($this->poolSiteId) {
+            try {
+                $stmt = $this->db->prepare("
+                    SELECT timestamp, solar_wh_m2
+                    FROM site_solar_hourly
+                    WHERE pool_site_id = ?
+                      AND DATE(timestamp) BETWEEN ? AND ?
+                    ORDER BY timestamp
+                ");
+                $stmt->execute([$this->poolSiteId, $startDate, $endDate]);
+                $rows = $stmt->fetchAll();
+            } catch (PDOException $e) {
+                // pool_site_id column may not exist yet
+            }
+        }
+
+        // Fallback to site_id if no results
+        if (empty($rows)) {
+            try {
+                $stmt = $this->db->prepare("
+                    SELECT timestamp, solar_wh_m2
+                    FROM site_solar_hourly
+                    WHERE site_id = ?
+                      AND DATE(timestamp) BETWEEN ? AND ?
+                    ORDER BY timestamp
+                ");
+                $stmt->execute([$this->siteId, $startDate, $endDate]);
+                $rows = $stmt->fetchAll();
+            } catch (PDOException $e) {
+                return [];
+            }
+        }
 
         // Index by timestamp, convert Wh/m² to kWh/m²
         $solarByTimestamp = [];
@@ -1246,14 +1284,37 @@ class EnergySimulator {
 
         // First try hourly data
         if ($this->hasHourlySolarData()) {
-            $stmt = $this->db->prepare("
-                SELECT solar_wh_m2
-                FROM site_solar_hourly
-                WHERE pool_site_id = ? AND timestamp = ?
-                LIMIT 1
-            ");
-            $stmt->execute([$this->poolSiteId, $timestamp]);
-            $hourlyRow = $stmt->fetch();
+            $hourlyRow = null;
+            // Try pool_site_id first
+            if ($this->poolSiteId) {
+                try {
+                    $stmt = $this->db->prepare("
+                        SELECT solar_wh_m2
+                        FROM site_solar_hourly
+                        WHERE pool_site_id = ? AND timestamp = ?
+                        LIMIT 1
+                    ");
+                    $stmt->execute([$this->poolSiteId, $timestamp]);
+                    $hourlyRow = $stmt->fetch();
+                } catch (PDOException $e) {
+                    // pool_site_id column may not exist yet
+                }
+            }
+            // Fallback to site_id
+            if (!$hourlyRow) {
+                try {
+                    $stmt = $this->db->prepare("
+                        SELECT solar_wh_m2
+                        FROM site_solar_hourly
+                        WHERE site_id = ? AND timestamp = ?
+                        LIMIT 1
+                    ");
+                    $stmt->execute([$this->siteId, $timestamp]);
+                    $hourlyRow = $stmt->fetch();
+                } catch (PDOException $e) {
+                    // Table may not exist
+                }
+            }
             if ($hourlyRow) {
                 $hourlySolar = ($hourlyRow['solar_wh_m2'] ?? 0) / 1000; // Wh to kWh
                 $dailySolar = $hourlySolar * 24; // Estimate for display
