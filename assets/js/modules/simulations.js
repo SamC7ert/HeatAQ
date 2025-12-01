@@ -1391,8 +1391,12 @@ const SimulationsModule = {
         // Set button to loading state
         this.setDebugButtonState('loading');
 
-        // Save date to localStorage for persistence (user-specific)
-        localStorage.setItem(this.getUserKey('debug_date'), date);
+        // Save date to server preferences (with localStorage fallback)
+        if (typeof SimControlModule !== 'undefined') {
+            SimControlModule.savePreference('debug_date', date);
+        } else {
+            localStorage.setItem(this.getUserKey('debug_date'), date);
+        }
 
         // Store current debug timestamp for chart highlighting (no seconds to match chart data format)
         this.debugTimestamp = `${date} ${hour.padStart(2, '0')}:00`;
@@ -1779,8 +1783,12 @@ const SimulationsModule = {
         const newDate = currentDate.toISOString().split('T')[0];
         dateInput.value = newDate;
 
-        // Save to localStorage and reload (user-specific)
-        localStorage.setItem(this.getUserKey('debug_date'), newDate);
+        // Save to server preferences and reload
+        if (typeof SimControlModule !== 'undefined') {
+            SimControlModule.savePreference('debug_date', newDate);
+        } else {
+            localStorage.setItem(this.getUserKey('debug_date'), newDate);
+        }
         this.loadWeeklyChart();
     },
 
@@ -1832,10 +1840,19 @@ const SimulationsModule = {
 
         if (dateInput) {
             dateInput.value = date;
-            localStorage.setItem(this.getUserKey('debug_date'), date);
+            // Save to server preferences
+            if (typeof SimControlModule !== 'undefined') {
+                SimControlModule.savePreference('debug_date', date);
+            } else {
+                localStorage.setItem(this.getUserKey('debug_date'), date);
+            }
         }
         if (hourSelect) {
             hourSelect.value = hour;
+            // Save hour to server preferences too
+            if (typeof SimControlModule !== 'undefined') {
+                SimControlModule.savePreference('debug_hour', hour);
+            }
         }
 
         // Trigger recalculation
@@ -2275,22 +2292,41 @@ const SimulationsModule = {
     initDebug: function() {
         const self = this;
 
-        // Restore saved debug date
+        // Restore saved debug date (from server preferences or localStorage)
         const dateInput = document.getElementById('debug-date');
-        const savedDate = localStorage.getItem(this.getUserKey('debug_date'));
+        const hourSelect = document.getElementById('debug-hour');
+
+        // Try server preferences first, fall back to localStorage
+        let savedDate = null;
+        let savedHour = null;
+        if (typeof SimControlModule !== 'undefined') {
+            savedDate = SimControlModule.getPreference('debug_date');
+            savedHour = SimControlModule.getPreference('debug_hour');
+        }
+        if (!savedDate) {
+            savedDate = localStorage.getItem(this.getUserKey('debug_date'));
+        }
+
         if (dateInput && savedDate) {
             dateInput.value = savedDate;
         }
+        if (hourSelect && savedHour) {
+            hourSelect.value = savedHour;
+        }
 
-        // Track parameter changes to update button state
+        // Track parameter changes to update button state and save preference
         const paramInputs = ['debug-date', 'debug-hour'];
         paramInputs.forEach(id => {
             const el = document.getElementById(id);
             if (el) {
                 el.addEventListener('change', function() {
                     self.setDebugButtonState('changed');
-                    if (id === 'debug-date') {
-                        localStorage.setItem(self.getUserKey('debug_date'), this.value);
+                    // Save to server preferences (with localStorage fallback)
+                    const prefKey = id === 'debug-date' ? 'debug_date' : 'debug_hour';
+                    if (typeof SimControlModule !== 'undefined') {
+                        SimControlModule.savePreference(prefKey, this.value);
+                    } else {
+                        localStorage.setItem(self.getUserKey(prefKey), this.value);
                     }
                 });
             }
