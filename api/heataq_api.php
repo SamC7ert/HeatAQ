@@ -2881,7 +2881,7 @@ class HeatAQAPI {
         $name = $input['name'] ?? 'Main Site';
         $latitude = $input['latitude'] ?? null;
         $longitude = $input['longitude'] ?? null;
-        $wsId = $input['weather_station_id'] ?? null;
+        $weatherStationId = $input['weather_station_id'] ?? null;
         $projectId = $input['project_id'] ?? $this->projectId ?? 1;
 
         if (!$siteId && $name) {
@@ -2910,14 +2910,14 @@ class HeatAQAPI {
                         project_id = COALESCE(project_id, ?)
                     WHERE site_id = ?
                 ");
-                $stmt->execute([$name, $latitude, $longitude, $wsId, $projectId, $siteId]);
+                $stmt->execute([$name, $latitude, $longitude, $weatherStationId, $projectId, $siteId]);
             } else {
                 // Insert new site with project_id link
                 $stmt = $this->db->prepare("
                     INSERT INTO pool_sites (site_id, name, latitude, longitude, weather_station_id, project_id)
                     VALUES (?, ?, ?, ?, ?, ?)
                 ");
-                $stmt->execute([$siteId, $name, $latitude, $longitude, $wsId, $projectId]);
+                $stmt->execute([$siteId, $name, $latitude, $longitude, $weatherStationId, $projectId]);
             }
 
             $this->sendResponse([
