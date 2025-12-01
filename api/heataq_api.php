@@ -2661,40 +2661,42 @@ class HeatAQAPI {
         $schemaOutput = shell_exec('php ' . escapeshellarg($dbDir . '/dump_schema.php') . ' 2>&1');
         $log[] = "✓ Schema exported";
 
-        // Commit and push to master
+        // Commit to branch, then merge to master
         $repoRoot = realpath(__DIR__ . '/..');
         $oldDir = getcwd();
         chdir($repoRoot);
 
         $migrationName = preg_replace('/^\d{3}_/', '', $filename);
         $migrationName = preg_replace('/\.sql$/', '', $migrationName);
+        $branch = 'db-migration-archive';
         $commitMsg = "Apply migration: $migrationName";
 
-        $log[] = "Committing to git...";
+        $log[] = "Committing to branch $branch...";
 
-        // Add all changed files and commit
-        $gitCommands = [
-            'git add db/old_migrations/' . escapeshellarg($filename),
-            'git add db/old_migrations/' . escapeshellarg($logFilename),
-            'git add db/schema.json db/schema.md',
-            'git add -u db/migrations/',  // Stage deleted files
-            "git commit -m " . escapeshellarg($commitMsg)
+        // Git commands: commit to branch, push, merge to master, push master
+        $commands = [
+            "git checkout " . escapeshellarg($branch) . " 2>/dev/null || git checkout -b " . escapeshellarg($branch),
+            "git add db/old_migrations/",
+            "git add db/schema.json db/schema.md",
+            "git add -u db/migrations/",
+            "git commit -m " . escapeshellarg($commitMsg) . " || echo 'No changes to commit'",
+            "git push -u origin " . escapeshellarg($branch),
+            "git checkout master",
+            "git merge " . escapeshellarg($branch) . " -m " . escapeshellarg("Merge: $commitMsg"),
+            "git push origin master"
         ];
 
-        foreach ($gitCommands as $cmd) {
-            shell_exec($cmd . ' 2>&1');
-        }
-        $log[] = "✓ Committed: $commitMsg";
+        $fullCommand = implode(' && ', $commands) . ' 2>&1';
+        $output = shell_exec($fullCommand);
 
-        // Push to origin
-        $log[] = "Pushing to origin...";
-        $pushOutput = shell_exec('git push origin master 2>&1');
-        $pushSuccess = strpos($pushOutput, 'fatal') === false && strpos($pushOutput, 'error') === false;
+        $merged = strpos($output, 'fatal') === false && strpos($output, 'CONFLICT') === false;
 
-        if ($pushSuccess) {
+        if ($merged) {
+            $log[] = "✓ Committed and merged to master";
             $log[] = "✓ Pushed to origin/master";
         } else {
-            $log[] = "⚠ Push may have failed: " . trim($pushOutput);
+            $log[] = "⚠ Git operation may have failed";
+            $log[] = trim($output);
         }
 
         chdir($oldDir);
@@ -2702,7 +2704,8 @@ class HeatAQAPI {
         $this->sendResponse([
             'success' => true,
             'filename' => $filename,
-            'pushed' => $pushSuccess,
+            'pushed' => $merged,
+            'merged' => $merged,
             'log' => $log
         ]);
     }

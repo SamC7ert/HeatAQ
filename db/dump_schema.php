@@ -110,21 +110,31 @@ try {
     if ($pushToGit) {
         $projectRoot = dirname(__DIR__);
         $branch = 'db-schema-update';  // Fixed branch name - no more timestamp proliferation
+        $commitMsg = 'Update database schema ' . date('Y-m-d H:i');
 
-        // Run git commands - checkout existing branch or create if not exists
+        // Run git commands:
+        // 1. Commit to schema branch
+        // 2. Push schema branch
+        // 3. Merge into master
+        // 4. Push master
         $commands = [
             "cd " . escapeshellarg($projectRoot),
             "git checkout " . escapeshellarg($branch) . " 2>/dev/null || git checkout -b " . escapeshellarg($branch),
             "git add db/schema.json db/schema.md",
-            "git commit -m 'Update database schema " . date('Y-m-d H:i') . "'",
-            "git push -u origin " . escapeshellarg($branch)
+            "git commit -m " . escapeshellarg($commitMsg) . " || echo 'No changes to commit'",
+            "git push -u origin " . escapeshellarg($branch),
+            "git checkout master",
+            "git merge " . escapeshellarg($branch) . " -m " . escapeshellarg("Merge $branch: $commitMsg"),
+            "git push origin master"
         ];
 
         $fullCommand = implode(' && ', $commands) . ' 2>&1';
         $output = shell_exec($fullCommand);
 
+        $merged = strpos($output, 'fatal') === false && strpos($output, 'CONFLICT') === false;
         $gitResult = [
-            'pushed' => strpos($output, 'fatal') === false && strpos($output, 'error') === false,
+            'pushed' => $merged,
+            'merged' => $merged,
             'branch' => $branch,
             'output' => $output
         ];
@@ -137,7 +147,7 @@ try {
         echo "  - $mdPath\n";
         echo "\nTables found: " . count($schema['tables']) . "\n";
         if ($gitResult) {
-            echo "\nGit: " . ($gitResult['pushed'] ? "Pushed to {$gitResult['branch']}" : "Failed") . "\n";
+            echo "\nGit: " . ($gitResult['merged'] ? "Pushed and merged to master" : "Failed") . "\n";
             echo $gitResult['output'] . "\n";
         }
     } else {

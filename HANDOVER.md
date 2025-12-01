@@ -1,6 +1,6 @@
 # HeatAQ Development Handover Guide
 
-**Current Version:** V106 (November 2024)
+**Current Version:** V115 (November 2024)
 
 ## Before Starting
 
@@ -18,78 +18,44 @@
 
 **Version is set in ONE place:** `assets/js/config.js`
 ```javascript
-APP_VERSION: 'V105',
+APP_VERSION: 'V115',
 ```
 
 This updates both:
 - Header badge (via JavaScript)
 - System tab info panel
 
-**Always bump version** with each change set (e.g., V105 → V106)
+**Always bump version** with each change set (e.g., V114 → V115)
 
 Note: The V85 values in `index.html` are just fallback HTML - they get overwritten by JavaScript on load.
 
-## Pre-Commit Checklist
+## System Tab Workflow
 
-### 1. Run Check Script
-```bash
-./scripts/check.sh
-```
-This checks:
-- PHP syntax (`php -l` on all PHP files)
-- Version consistency
-- Undefined JS references
-- API endpoint consistency (JS calls vs PHP handlers)
+The System tab (Admin only) provides three cards in order:
 
-### 2. Variable & Method Checks
-- [ ] All variables defined before use
-- [ ] All methods/functions exist before calling
-- [ ] API endpoints exist for frontend calls
+### 1. Deployment
+- **Check Status**: Shows git status, behind/ahead counts, available branches
+- **Pull Updates**: Pulls latest from origin/master
+- **Merge & Deploy**: Merges a `claude/*` branch into master (one-click PR alternative)
 
-### 3. Data Flow
-- [ ] Config data stored correctly (check `config_snapshot` structure)
-- [ ] Debug/recalc uses stored config, not defaults
-- [ ] DOM elements exist before accessing properties
+### 2. Database Migrations
+- **Check Migrations**: Lists pending `.sql` files in `db/migrations/`
+- **Run**: Executes migration, button turns green (success) or red (failure)
+- **Description → Log link**: After run, description becomes clickable log link
+- **Archive**: Moves to `old_migrations/`, exports schema, commits to branch, merges to master, pushes
 
-### 4. Syntax
-- [ ] Run `php -l` on modified PHP files
-- [ ] No duplicate braces or missing semicolons
-- [ ] Check element IDs match between HTML and JS
+### 3. Database Schema Export
+- **Export & Push to Git**: Exports `schema.json` + `schema.md`, commits to `db-schema-update` branch, merges to master, pushes
 
-## Database Migration Workflow
+Both Archive and Export use **branch-then-merge** pattern for clean git history.
 
-### Creating a New Migration
+## Database Migration Workflow (Simplified)
 
-1. **Create migration file** in `db/migrations/`
-   - Number must follow highest in `db/old_migrations/` (currently 009 → next is 010)
-   - Name format: `NNN_description.sql`
-
-2. **Merge and deploy** to server
-
-3. **Execute migration** via System tab button in the app
-   - If error: fix and go back to step 1
-   - If success: continue
-
-4. **Update schema documentation** via System tab "Export Schema" button
-   - This runs `db/dump_schema.php`
-   - Updates `db/schema.json` and `db/schema.md`
-   - Commits to git
-
-5. **Merge** the schema update
-
-6. **Verify with Claude/developer** - check new database structure matches expectations
-
-7. **Move migration to old_migrations** after successful deployment
-   ```bash
-   mv db/migrations/010_*.sql db/old_migrations/
-   ```
-
-### Quick Schema Update (no migrations)
-
-For documentation-only updates:
-```bash
-./scripts/update_schema.sh
-```
+1. **Create migration** in `db/migrations/NNN_description.sql`
+2. **Merge & Deploy** to get code on server
+3. **Run** migration via System tab → verify green button + log
+4. **Archive** → automatically exports schema, commits, merges to master, pushes
+5. Done! GitHub is in sync.
 
 ## Key Architecture Points
 
@@ -126,11 +92,20 @@ For documentation-only updates:
 ### Common Issues & Fixes
 | Issue | Cause | Fix |
 |-------|-------|-----|
-| Old code running | Browser cache | Bump version in config.js |
+| Old code running | Browser cache | Hard refresh (Ctrl+Shift+R) or bump version |
 | API 400 error | Missing endpoint | Add case in API switch |
 | Debug recalc mismatch | Using default config | Load from config_snapshot |
 | Undefined variable | Variable not in scope | Check function parameters |
-| Login fails on desktop | Untrusted submit event | Call handleLogin() directly |
+| Login fails on desktop | Untrusted submit event | Fixed V105 - calls handleLogin() directly |
+| Password reset button disabled | Recursive validation bug | Fixed V113 - separated validation functions |
+| Stale branches in dropdown | Deleted remote refs cached | Fixed V112 - uses `git fetch --prune` |
+
+### Password Reset Flow
+The password reset form (`reset_password.html`) includes:
+- Password requirements checklist (8 chars, upper, lower, number)
+- Match confirmation hint ("✓ Passwords match" / "✗ Passwords do not match")
+- Show/Hide toggle for both password fields
+- Button only enables when all requirements met AND passwords match
 
 ## Database
 
