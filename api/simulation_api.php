@@ -208,8 +208,13 @@ try {
             ];
             $simulator->setConfigFromUI($poolConfig);
 
-            // Load and apply configuration if specified
-            if ($configId) {
+            // Config selection is required
+            if (!$configId) {
+                sendError('Run not started - missing Config selection', 400);
+            }
+
+            // Load and apply configuration
+            {
                 $config = null;
                 $configRow = null;
 
