@@ -427,8 +427,10 @@ const SimControlModule = {
         // Config summary - detailed multi-column layout
         const config = results.meta?.pool_config || {};
         const equip = results.meta?.equipment || {};
+        // Control values are stored directly in equipment (target_temp, temp_tolerance)
         const control = results.meta?.control || equip.control || {};
-        const bathers = results.meta?.bathers || config.bathers || {};
+        // Bathers: EnergySimulator uses 100/day default, activity_factor 1.0
+        const bathers = results.meta?.bathers || config.bathers || { per_day: 100, activity_factor: 1.0 };
         const overrides = results.meta?.config_override || {};
         const startDate = results.meta?.start_date || '';
         const endDate = results.meta?.end_date || '';
@@ -468,19 +470,21 @@ const SimControlModule = {
         const hpCop = fmt(equip.heat_pump?.cop_nominal, '', 1);
         const boilerEff = equip.boiler?.efficiency ? fmt(equip.boiler.efficiency * 100, '%', 0) : '-';
 
-        // Control values
+        // Control values - check equipment directly first, then control sub-object
         const targetTemp = withOverride(
-            control.target_temp || config.target_temp,
+            equip.target_temp || control.target_temp || config.target_temp,
             overrides.control?.target_temp,
             '°C', 1
         );
+        // temp_tolerance is stored as single value in equipment (applies to both +/-)
+        const tolerance = equip.temp_tolerance || control.temp_tolerance || control.upper_tolerance || 2;
         const upperTol = withOverride(
-            control.upper_tolerance || control.temp_tolerance,
+            control.upper_tolerance || tolerance,
             overrides.control?.upper_tolerance,
             '°C', 1
         );
         const lowerTol = withOverride(
-            control.lower_tolerance || control.temp_tolerance,
+            control.lower_tolerance || tolerance,
             overrides.control?.lower_tolerance,
             '°C', 1
         );

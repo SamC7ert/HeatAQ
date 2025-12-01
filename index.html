@@ -952,6 +952,56 @@
                             </div>
                         </div>
 
+                        <!-- Benchmark Report Section (shown after simulation completes) -->
+                        <div id="benchmark-report" class="benchmark-report card" style="display: none; margin-bottom: 15px;">
+                            <h3>Simulation Results - Benchmark Report</h3>
+                            <div class="benchmark-config" id="bench-config-summary" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 5px 20px; margin-bottom: 15px; font-size: 13px; line-height: 1.6;">
+                                <!-- Config will be populated by JS -->
+                            </div>
+                            <div class="benchmark-grid">
+                                <div class="benchmark-section">
+                                    <h4>Thermal Losses (MWh/year)</h4>
+                                    <table class="data-table compact">
+                                        <tr><td>Evaporation</td><td id="bench-evap">-</td></tr>
+                                        <tr><td>Convection</td><td id="bench-conv">-</td></tr>
+                                        <tr><td>Radiation</td><td id="bench-rad">-</td></tr>
+                                        <tr><td>Floor losses</td><td id="bench-floor">-</td></tr>
+                                        <tr><td>Wall losses</td><td id="bench-wall">-</td></tr>
+                                        <tr><td>Solar gain</td><td id="bench-solar">-</td></tr>
+                                        <tr class="total"><td>Total system loss</td><td id="bench-total-loss">-</td></tr>
+                                    </table>
+                                </div>
+                                <div class="benchmark-section">
+                                    <h4>Heating Delivered (MWh/year)</h4>
+                                    <table class="data-table compact">
+                                        <tr><td>Heat pump thermal</td><td id="bench-hp-thermal">-</td></tr>
+                                        <tr><td>Boiler thermal</td><td id="bench-boiler-thermal">-</td></tr>
+                                        <tr class="total"><td>Total delivered</td><td id="bench-total-delivered">-</td></tr>
+                                        <tr><td>Unmet need</td><td id="bench-unmet">-</td></tr>
+                                    </table>
+                                </div>
+                                <div class="benchmark-section">
+                                    <h4>Electricity (MWh/year)</h4>
+                                    <table class="data-table compact">
+                                        <tr><td>HP electricity</td><td id="bench-hp-elec">-</td></tr>
+                                        <tr><td>Boiler fuel</td><td id="bench-boiler-fuel">-</td></tr>
+                                        <tr><td>Shower heating</td><td id="bench-shower">-</td></tr>
+                                        <tr class="total"><td>Total electricity</td><td id="bench-total-elec">-</td></tr>
+                                    </table>
+                                </div>
+                                <div class="benchmark-section">
+                                    <h4>Temperature (°C)</h4>
+                                    <table class="data-table compact">
+                                        <tr><td>Minimum</td><td id="bench-temp-min">-</td></tr>
+                                        <tr><td>Average</td><td id="bench-temp-avg">-</td></tr>
+                                        <tr><td>Maximum</td><td id="bench-temp-max">-</td></tr>
+                                        <tr><td>Days &lt; 27°C</td><td id="bench-days-27">-</td></tr>
+                                        <tr><td>Days &lt; 26°C</td><td id="bench-days-26">-</td></tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Weekly Graph -->
                         <div class="card" style="padding: 12px; margin-bottom: 15px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
@@ -1029,56 +1079,6 @@
                             <div class="card" style="margin-top: 12px; padding: 10px;">
                                 <h4 style="margin: 0 0 8px 0; font-size: 13px;">Summary</h4>
                                 <div id="debug-summary" style="font-size: 12px;"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Benchmark Report Section -->
-                    <div id="benchmark-report" class="benchmark-report card" style="display: none;">
-                        <h3>Simulation Results - Benchmark Report</h3>
-                        <div class="benchmark-config" id="bench-config-summary" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 5px 20px; margin-bottom: 15px; font-size: 13px; line-height: 1.6;">
-                            <!-- Config will be populated by JS -->
-                        </div>
-                        <div class="benchmark-grid">
-                            <div class="benchmark-section">
-                                <h4>Thermal Losses (MWh/year)</h4>
-                                <table class="data-table compact">
-                                    <tr><td>Evaporation</td><td id="bench-evap">-</td></tr>
-                                    <tr><td>Convection</td><td id="bench-conv">-</td></tr>
-                                    <tr><td>Radiation</td><td id="bench-rad">-</td></tr>
-                                    <tr><td>Floor losses</td><td id="bench-floor">-</td></tr>
-                                    <tr><td>Wall losses</td><td id="bench-wall">-</td></tr>
-                                    <tr><td>Solar gain</td><td id="bench-solar">-</td></tr>
-                                    <tr class="total"><td>Total system loss</td><td id="bench-total-loss">-</td></tr>
-                                </table>
-                            </div>
-                            <div class="benchmark-section">
-                                <h4>Heating Delivered (MWh/year)</h4>
-                                <table class="data-table compact">
-                                    <tr><td>Heat pump thermal</td><td id="bench-hp-thermal">-</td></tr>
-                                    <tr><td>Boiler thermal</td><td id="bench-boiler-thermal">-</td></tr>
-                                    <tr class="total"><td>Total delivered</td><td id="bench-total-delivered">-</td></tr>
-                                    <tr><td>Unmet need</td><td id="bench-unmet">-</td></tr>
-                                </table>
-                            </div>
-                            <div class="benchmark-section">
-                                <h4>Electricity (MWh/year)</h4>
-                                <table class="data-table compact">
-                                    <tr><td>HP electricity</td><td id="bench-hp-elec">-</td></tr>
-                                    <tr><td>Boiler fuel</td><td id="bench-boiler-fuel">-</td></tr>
-                                    <tr><td>Shower heating</td><td id="bench-shower">-</td></tr>
-                                    <tr class="total"><td>Total electricity</td><td id="bench-total-elec">-</td></tr>
-                                </table>
-                            </div>
-                            <div class="benchmark-section">
-                                <h4>Temperature (°C)</h4>
-                                <table class="data-table compact">
-                                    <tr><td>Minimum</td><td id="bench-temp-min">-</td></tr>
-                                    <tr><td>Average</td><td id="bench-temp-avg">-</td></tr>
-                                    <tr><td>Maximum</td><td id="bench-temp-max">-</td></tr>
-                                    <tr><td>Days &lt; 27°C</td><td id="bench-days-27">-</td></tr>
-                                    <tr><td>Days &lt; 26°C</td><td id="bench-days-26">-</td></tr>
-                                </table>
                             </div>
                         </div>
                     </div>
