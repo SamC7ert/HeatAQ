@@ -414,12 +414,15 @@ const SimControlModule = {
         }
     },
 
-    // Show benchmark report
+    // Show benchmark report (in both Simulate and Debug tabs)
     showBenchmarkReport: function(results) {
         const report = document.getElementById('benchmark-report');
-        if (!report) return;
+        const reportDebug = document.getElementById('benchmark-report-debug');
 
-        report.style.display = '';
+        if (report) report.style.display = '';
+        if (reportDebug) reportDebug.style.display = '';
+
+        if (!report && !reportDebug) return;
 
         // Fill in the values
         const summary = results.summary || {};
@@ -525,43 +528,53 @@ const SimControlModule = {
             <div><strong>Cover R:</strong> ${fmt(config.cover_r_value, ' m²K/W', 1)}</div>
             ${hasOverrides ? '<div style="grid-column:1/-1;margin-top:8px;padding-top:8px;border-top:1px solid #dee2e6;color:#0d6efd;font-size:12px;">✓ = Override value applied (from config overrides)</div>' : ''}
         `;
-        document.getElementById('bench-config-summary').innerHTML = configHtml;
+        // Helper to set both main and debug elements
+        const setEl = (id, value) => {
+            const el = document.getElementById(id);
+            const elDebug = document.getElementById(id + '-debug');
+            if (el) el.textContent = value;
+            if (elDebug) elDebug.textContent = value;
+        };
+        const setHtml = (id, html) => {
+            const el = document.getElementById(id);
+            const elDebug = document.getElementById(id + '-debug');
+            if (el) el.innerHTML = html;
+            if (elDebug) elDebug.innerHTML = html;
+        };
+
+        setHtml('bench-config-summary', configHtml);
 
         // Thermal losses (convert kWh to MWh)
         const toMWh = (val) => val ? (val / 1000).toFixed(1) : '-';
 
         // Note: Current simulator stores total_heat_loss_kwh
         // For detailed breakdown, we need to enhance the simulator
-        document.getElementById('bench-evap').textContent = toMWh(summary.evaporation_kwh) || '-';
-        document.getElementById('bench-conv').textContent = toMWh(summary.convection_kwh) || '-';
-        document.getElementById('bench-rad').textContent = toMWh(summary.radiation_kwh) || '-';
-        document.getElementById('bench-floor').textContent = toMWh(summary.floor_loss_kwh) || '-';
-        document.getElementById('bench-wall').textContent = toMWh(summary.wall_loss_kwh) || '-';
-        document.getElementById('bench-solar').textContent = summary.total_solar_gain_kwh
-            ? '-' + toMWh(summary.total_solar_gain_kwh)
-            : '-';
-        document.getElementById('bench-total-loss').textContent = toMWh(summary.total_heat_loss_kwh);
+        setEl('bench-evap', toMWh(summary.evaporation_kwh) || '-');
+        setEl('bench-conv', toMWh(summary.convection_kwh) || '-');
+        setEl('bench-rad', toMWh(summary.radiation_kwh) || '-');
+        setEl('bench-floor', toMWh(summary.floor_loss_kwh) || '-');
+        setEl('bench-wall', toMWh(summary.wall_loss_kwh) || '-');
+        setEl('bench-solar', summary.total_solar_gain_kwh ? '-' + toMWh(summary.total_solar_gain_kwh) : '-');
+        setEl('bench-total-loss', toMWh(summary.total_heat_loss_kwh));
 
         // Heating delivered
-        document.getElementById('bench-hp-thermal').textContent = toMWh(summary.hp_thermal_kwh) || '-';
-        document.getElementById('bench-boiler-thermal').textContent = toMWh(summary.boiler_thermal_kwh) || '-';
-        document.getElementById('bench-total-delivered').textContent =
-            toMWh((summary.hp_thermal_kwh || 0) + (summary.boiler_thermal_kwh || 0));
-        document.getElementById('bench-unmet').textContent = toMWh(summary.unmet_kwh) || '-';
+        setEl('bench-hp-thermal', toMWh(summary.hp_thermal_kwh) || '-');
+        setEl('bench-boiler-thermal', toMWh(summary.boiler_thermal_kwh) || '-');
+        setEl('bench-total-delivered', toMWh((summary.hp_thermal_kwh || 0) + (summary.boiler_thermal_kwh || 0)));
+        setEl('bench-unmet', toMWh(summary.unmet_kwh) || '-');
 
         // Electricity
-        document.getElementById('bench-hp-elec').textContent = toMWh(summary.total_hp_energy_kwh);
-        document.getElementById('bench-boiler-fuel').textContent = toMWh(summary.total_boiler_energy_kwh);
-        document.getElementById('bench-shower').textContent = toMWh(summary.shower_heating_kwh) || '-';
-        document.getElementById('bench-total-elec').textContent =
-            toMWh((summary.total_hp_energy_kwh || 0) + (summary.total_boiler_energy_kwh || 0) + (summary.shower_heating_kwh || 0));
+        setEl('bench-hp-elec', toMWh(summary.total_hp_energy_kwh));
+        setEl('bench-boiler-fuel', toMWh(summary.total_boiler_energy_kwh));
+        setEl('bench-shower', toMWh(summary.shower_heating_kwh) || '-');
+        setEl('bench-total-elec', toMWh((summary.total_hp_energy_kwh || 0) + (summary.total_boiler_energy_kwh || 0) + (summary.shower_heating_kwh || 0)));
 
         // Temperature
-        document.getElementById('bench-temp-min').textContent = summary.min_water_temp?.toFixed(2) || '-';
-        document.getElementById('bench-temp-avg').textContent = summary.avg_water_temp?.toFixed(2) || '-';
-        document.getElementById('bench-temp-max').textContent = summary.max_water_temp?.toFixed(2) || '-';
-        document.getElementById('bench-days-27').textContent = summary.days_below_27 || '0';
-        document.getElementById('bench-days-26').textContent = summary.days_below_26 || '0';
+        setEl('bench-temp-min', summary.min_water_temp?.toFixed(2) || '-');
+        setEl('bench-temp-avg', summary.avg_water_temp?.toFixed(2) || '-');
+        setEl('bench-temp-max', summary.max_water_temp?.toFixed(2) || '-');
+        setEl('bench-days-27', summary.days_below_27 || '0');
+        setEl('bench-days-26', summary.days_below_26 || '0');
     },
 
     // Hide benchmark report
