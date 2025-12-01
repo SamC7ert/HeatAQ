@@ -18,49 +18,42 @@ if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
     require_once __DIR__ . '/../auth.php';
     $auth = HeatAQAuth::check(Config::requiresAuth());
     if ($auth) {
-        // Support both string site_id (legacy) and integer pool_site_id (new)
-        $currentSiteId = $auth['project']['site_id'];
-        $currentPoolSiteId = $auth['project']['pool_site_id'] ?? null;
+        if (!isset($auth['project']['pool_site_id'])) {
+            header('Content-Type: application/json');
+            http_response_code(500);
+            echo json_encode(['error' => 'Auth context missing pool_site_id']);
+            exit;
+        }
+        $currentPoolSiteId = (int)$auth['project']['pool_site_id'];
     }
 } else {
-    // If auth not required, get site from user preference (cookie/session)
-    // NEVER hardcode default values - get from user's last choice
-    $currentSiteId = null;
+    // Development mode - get pool_site_id from cookie or use default
     $currentPoolSiteId = null;
 
     // Try to get from cookie (set by frontend)
-    if (isset($_COOKIE['heataq_site_id']) && !empty($_COOKIE['heataq_site_id'])) {
-        $currentSiteId = $_COOKIE['heataq_site_id'];
+    if (isset($_COOKIE['heataq_pool_site_id']) && !empty($_COOKIE['heataq_pool_site_id'])) {
+        $currentPoolSiteId = (int)$_COOKIE['heataq_pool_site_id'];
     }
 
-    // Validate site exists in database if we have one
-    if ($currentSiteId) {
+    // Validate pool_site_id exists in database if we have one
+    if ($currentPoolSiteId) {
         try {
             $db = Config::getDatabase();
-            $stmt = $db->prepare("SELECT site_id FROM pool_sites WHERE site_id = ? LIMIT 1");
-            $stmt->execute([$currentSiteId]);
+            $stmt = $db->prepare("SELECT id FROM pool_sites WHERE id = ? LIMIT 1");
+            $stmt->execute([$currentPoolSiteId]);
             if (!$stmt->fetch()) {
                 // Site not found in DB, clear it
-                $currentSiteId = null;
+                $currentPoolSiteId = null;
             }
         } catch (Exception $e) {
             // DB error, continue without site
-            $currentSiteId = null;
+            $currentPoolSiteId = null;
         }
     }
 
-    // If still no site, get first available from database
-    if (!$currentSiteId) {
-        try {
-            $db = Config::getDatabase();
-            $stmt = $db->query("SELECT site_id FROM pool_sites ORDER BY id LIMIT 1");
-            $row = $stmt->fetch();
-            if ($row) {
-                $currentSiteId = $row['site_id'];
-            }
-        } catch (Exception $e) {
-            // No sites available
-        }
+    // Development mode default: use pool_site_id = 1
+    if (!$currentPoolSiteId) {
+        $currentPoolSiteId = 1;
     }
 }
 
@@ -79,27 +72,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 class HeatAQAPI {
     private $db;
-    private $siteId;
+    private $poolSiteId;  // INT reference to pool_sites.id
     private $userId;
     private $projectId;
     private $userRole;
     private $postInput = null;  // Store POST body to avoid double-read
 
-    public function __construct($siteId = null, $auth = null) {
+    public function __construct($poolSiteId = null, $auth = null) {
         try {
             // Get database connection from Config
             $this->db = Config::getDatabase();
-            
-            // Set site context
-            $this->siteId = $siteId;
-            
+
+            // Set site context (INT pool_site_id)
+            $this->poolSiteId = $poolSiteId ? (int)$poolSiteId : null;
+
             // Set auth context if available
             if ($auth) {
                 $this->userId = $auth['user']['user_id'] ?? null;
                 $this->projectId = $auth['project']['project_id'] ?? null;
                 $this->userRole = $auth['user']['role'] ?? null;
             }
-            
+
         } catch (Exception $e) {
             $this->sendError($e->getMessage());
         }
@@ -128,35 +121,22 @@ class HeatAQAPI {
     // ====================================
     // SITE FILTERING
     // ====================================
-    
-    private function addSiteFilter($query, $paramName = 'site_id') {
-        if ($this->siteId) {
+
+    private function addSiteFilter($query, $paramName = 'pool_site_id') {
+        if ($this->poolSiteId) {
             if (stripos($query, 'WHERE') !== false) {
-                $query = str_replace('WHERE', "WHERE {$paramName} = :site_id AND", $query);
+                $query = str_replace('WHERE', "WHERE {$paramName} = :pool_site_id AND", $query);
             } else {
-                $query .= " WHERE {$paramName} = :site_id";
+                $query .= " WHERE {$paramName} = :pool_site_id";
             }
         }
         return $query;
     }
-    
+
     private function bindSiteParam(&$params) {
-        if ($this->siteId) {
-            $params[':site_id'] = $this->siteId;
+        if ($this->poolSiteId) {
+            $params[':pool_site_id'] = $this->poolSiteId;
         }
-    }
-
-    /**
-     * Get numeric pool_site_id from VARCHAR site_id
-     * Used for tables that have been migrated to use pool_site_id
-     */
-    private function getPoolSiteId() {
-        if (!$this->siteId) return null;
-
-        $stmt = $this->db->prepare("SELECT id FROM pool_sites WHERE site_id = ?");
-        $stmt->execute([$this->siteId]);
-        $result = $stmt->fetch();
-        return $result ? (int)$result['id'] : null;
     }
 
     // ====================================
@@ -2124,6 +2104,9 @@ class HeatAQAPI {
             return;
         }
 
+        // Get project_id from auth context or default to 1
+        $projectId = $this->projectId ?? 1;
+
         try {
             // Check if table exists
             if (!$this->tableExists('user_preferences')) {
@@ -2131,12 +2114,24 @@ class HeatAQAPI {
                 return;
             }
 
-            $stmt = $this->db->prepare("
-                SELECT pref_key, pref_value
-                FROM user_preferences
-                WHERE user_id = ?
-            ");
-            $stmt->execute([$this->userId]);
+            // Check if project_id column exists (migration 020)
+            $hasProjectId = $this->columnExists('user_preferences', 'project_id');
+
+            if ($hasProjectId) {
+                $stmt = $this->db->prepare("
+                    SELECT pref_key, pref_value
+                    FROM user_preferences
+                    WHERE user_id = ? AND project_id = ?
+                ");
+                $stmt->execute([$this->userId, $projectId]);
+            } else {
+                $stmt = $this->db->prepare("
+                    SELECT pref_key, pref_value
+                    FROM user_preferences
+                    WHERE user_id = ?
+                ");
+                $stmt->execute([$this->userId]);
+            }
             $rows = $stmt->fetchAll();
 
             $preferences = [];
@@ -2144,9 +2139,23 @@ class HeatAQAPI {
                 $preferences[$row['pref_key']] = $row['pref_value'];
             }
 
-            $this->sendResponse(['preferences' => $preferences]);
+            $this->sendResponse(['preferences' => $preferences, 'project_id' => $projectId]);
         } catch (PDOException $e) {
             $this->sendResponse(['preferences' => [], 'error' => 'Failed to load preferences']);
+        }
+    }
+
+    private function columnExists($table, $column) {
+        try {
+            $stmt = $this->db->prepare("
+                SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                AND TABLE_NAME = ? AND COLUMN_NAME = ?
+            ");
+            $stmt->execute([$table, $column]);
+            return $stmt->fetchColumn() > 0;
+        } catch (PDOException $e) {
+            return false;
         }
     }
 
@@ -2155,6 +2164,9 @@ class HeatAQAPI {
             $this->sendError('Authentication required to save preferences', 401);
             return;
         }
+
+        // Get project_id from auth context or default to 1
+        $projectId = $this->projectId ?? 1;
 
         $input = $this->getPostInput();
         $key = $input['key'] ?? null;
@@ -2167,6 +2179,18 @@ class HeatAQAPI {
 
         // Validate key (only allow known preference keys)
         $allowedKeys = [
+            // SimControl selections
+            'sim_pool_id',        // Selected pool ID
+            'sim_config_id',      // Selected config template ID
+            'sim_schedule_id',    // Selected schedule (OHC) ID
+            'sim_start_date',     // Simulation start date
+            'sim_end_date',       // Simulation end date
+            // Debug tab
+            'debug_date',         // Debug date
+            'debug_hour',         // Debug hour
+            // Case comparison (JSON)
+            'case_config',        // JSON: all 5 case configurations
+            // Legacy keys (keep for compatibility)
             'selected_config',
             'selected_ohc',
             'selected_tab',
@@ -2181,11 +2205,12 @@ class HeatAQAPI {
             return;
         }
 
-        // For sim_overrides, ensure value is valid JSON if provided
-        if ($key === 'sim_overrides' && $value !== null && $value !== '') {
+        // For JSON keys, ensure value is valid JSON if provided
+        $jsonKeys = ['sim_overrides', 'case_config'];
+        if (in_array($key, $jsonKeys) && $value !== null && $value !== '') {
             $decoded = json_decode($value, true);
             if (json_last_error() !== JSON_ERROR_NONE) {
-                $this->sendError('sim_overrides must be valid JSON');
+                $this->sendError($key . ' must be valid JSON');
                 return;
             }
         }
@@ -2196,23 +2221,37 @@ class HeatAQAPI {
                 $this->db->exec("
                     CREATE TABLE IF NOT EXISTS user_preferences (
                         user_id INT NOT NULL,
+                        project_id INT NOT NULL DEFAULT 1,
                         pref_key VARCHAR(50) NOT NULL,
                         pref_value TEXT,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                        PRIMARY KEY (user_id, pref_key)
+                        PRIMARY KEY (user_id, project_id, pref_key)
                     )
                 ");
             }
 
-            // Upsert preference
-            $stmt = $this->db->prepare("
-                INSERT INTO user_preferences (user_id, pref_key, pref_value)
-                VALUES (?, ?, ?)
-                ON DUPLICATE KEY UPDATE pref_value = VALUES(pref_value)
-            ");
-            $stmt->execute([$this->userId, $key, $value]);
+            // Check if project_id column exists (migration 020)
+            $hasProjectId = $this->columnExists('user_preferences', 'project_id');
 
-            $this->sendResponse(['success' => true]);
+            if ($hasProjectId) {
+                // Upsert preference with project_id
+                $stmt = $this->db->prepare("
+                    INSERT INTO user_preferences (user_id, project_id, pref_key, pref_value)
+                    VALUES (?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE pref_value = VALUES(pref_value)
+                ");
+                $stmt->execute([$this->userId, $projectId, $key, $value]);
+            } else {
+                // Legacy: no project_id column yet
+                $stmt = $this->db->prepare("
+                    INSERT INTO user_preferences (user_id, pref_key, pref_value)
+                    VALUES (?, ?, ?)
+                    ON DUPLICATE KEY UPDATE pref_value = VALUES(pref_value)
+                ");
+                $stmt->execute([$this->userId, $key, $value]);
+            }
+
+            $this->sendResponse(['success' => true, 'project_id' => $projectId]);
         } catch (PDOException $e) {
             $this->sendError('Failed to save preference: ' . $e->getMessage());
         }

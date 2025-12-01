@@ -19,10 +19,41 @@ const SimControlModule = {
             this.loadConfigOptions();
             // Load weather range info
             this.loadWeatherRange();
+            // Restore saved dates and add listeners
+            this.initDateInputs();
         }
 
         // Initialize current tab
         this.switchTab(this.currentTab);
+    },
+
+    // Initialize date inputs - restore saved values and add change listeners
+    initDateInputs: function() {
+        const startInput = document.getElementById('sim-start-date');
+        const endInput = document.getElementById('sim-end-date');
+
+        // Restore saved dates
+        const savedStart = this.getPreference('sim_start_date');
+        const savedEnd = this.getPreference('sim_end_date');
+
+        if (savedStart && startInput) {
+            startInput.value = savedStart;
+        }
+        if (savedEnd && endInput) {
+            endInput.value = savedEnd;
+        }
+
+        // Add change listeners to save dates
+        if (startInput) {
+            startInput.addEventListener('change', () => {
+                this.savePreference('sim_start_date', startInput.value);
+            });
+        }
+        if (endInput) {
+            endInput.addEventListener('change', () => {
+                this.savePreference('sim_end_date', endInput.value);
+            });
+        }
     },
 
     // Currently selected site and pool
@@ -100,7 +131,9 @@ const SimControlModule = {
             console.log('[SimControl] Selected site:', projectSite.name);
 
             // Set cookie for backend API to read (expires in 1 year)
-            document.cookie = `heataq_site_id=${this.currentSiteId}; path=/; max-age=31536000`;
+            // Use pool_site_id (INT) - look up from site data
+            const poolSiteId = projectSite.id;  // pool_sites.id
+            document.cookie = `heataq_pool_site_id=${poolSiteId}; path=/; max-age=31536000`;
 
             await this.loadPools(this.currentSiteId);
 
@@ -182,10 +215,13 @@ const SimControlModule = {
         if (!select) return;
 
         this.currentSiteId = select.value;
-        this.savePreference('sim_site_id', this.currentSiteId);
 
-        // Set cookie for backend API to read (expires in 1 year)
-        document.cookie = `heataq_site_id=${this.currentSiteId}; path=/; max-age=31536000`;
+        // Find selected site to get pool_site_id (INT)
+        const site = this.sites.find(s => s.site_id === this.currentSiteId);
+        if (site) {
+            // Set cookie for backend API to read (expires in 1 year)
+            document.cookie = `heataq_pool_site_id=${site.id}; path=/; max-age=31536000`;
+        }
 
         await this.loadPools(this.currentSiteId);
     },

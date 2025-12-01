@@ -197,6 +197,8 @@ New control strategy to minimize cost using spot electricity prices:
 - [ ] Remove deprecated PHP endpoints
 - [ ] Consolidate duplicate JavaScript modules
 - [ ] Add TypeScript types for better IDE support
+- [ ] Review and remove all fallback logic (error instead of silent fallbacks)
+- [ ] Move target_heat and bathers from config_templates to pool level
 
 ### Testing infrastructure
 - [ ] Unit tests for EnergySimulator
