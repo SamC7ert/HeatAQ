@@ -143,22 +143,31 @@ class EnergySimulator {
     public function setConfigFromUI($uiConfig) {
         // Pool physical parameters
         if (isset($uiConfig['pool'])) {
-            $this->poolConfig['area_m2'] = $uiConfig['pool']['area_m2'] ?? $this->poolConfig['area_m2'];
-            $this->poolConfig['volume_m3'] = $uiConfig['pool']['volume_m3'] ?? $this->poolConfig['volume_m3'];
-            $this->poolConfig['depth_m'] = $uiConfig['pool']['depth_m'] ?? $this->poolConfig['depth_m'];
+            // Length and width are primary - area/volume/perimeter calculated from them
+            $length = $uiConfig['pool']['length_m'] ?? null;
+            $width = $uiConfig['pool']['width_m'] ?? null;
+            $depth = $uiConfig['pool']['depth_m'] ?? $this->poolConfig['depth_m'];
+
+            $this->poolConfig['length_m'] = $length;
+            $this->poolConfig['width_m'] = $width;
+            $this->poolConfig['depth_m'] = $depth;
+
+            // Calculate area, volume, perimeter from length × width
+            if ($length !== null && $width !== null) {
+                $this->poolConfig['area_m2'] = $length * $width;
+                $this->poolConfig['perimeter_m'] = 2 * ($length + $width);
+                if ($depth !== null) {
+                    $this->poolConfig['volume_m3'] = $length * $width * $depth;
+                }
+            } else {
+                // Fallback to provided values if length/width not set
+                $this->poolConfig['area_m2'] = $uiConfig['pool']['area_m2'] ?? $this->poolConfig['area_m2'];
+                $this->poolConfig['volume_m3'] = $uiConfig['pool']['volume_m3'] ?? $this->poolConfig['volume_m3'];
+            }
+
             $this->poolConfig['wind_exposure_factor'] = $uiConfig['pool']['wind_exposure'] ?? $this->poolConfig['wind_exposure_factor'];
             $this->poolConfig['years_operating'] = $uiConfig['pool']['years_operating'] ?? $this->poolConfig['years_operating'];
             $this->poolConfig['has_tunnel'] = $uiConfig['pool']['has_tunnel'] ?? $this->poolConfig['has_tunnel'];
-
-            // Calculate perimeter from area if not provided (assume 2:1 rectangular pool)
-            // For area A with 2:1 ratio: length = sqrt(2*A), width = sqrt(A/2)
-            // Perimeter = 2*(length + width) = 2*(sqrt(2*A) + sqrt(A/2))
-            if ($this->poolConfig['area_m2'] !== null && $this->poolConfig['perimeter_m'] === null) {
-                $area = $this->poolConfig['area_m2'];
-                $length = sqrt(2 * $area);
-                $width = sqrt($area / 2);
-                $this->poolConfig['perimeter_m'] = 2 * ($length + $width);
-            }
         }
 
         // Cover settings
