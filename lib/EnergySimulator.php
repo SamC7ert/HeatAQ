@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.21';  // Increase water temp decimals for comparison debugging
+    const VERSION = '3.10.22';  // Session cache for open_plan in debug comparison
 
     private $db;
     private $siteId;
@@ -1588,6 +1588,13 @@ class EnergySimulator {
             'hp_capacity' => $hpCapacity,
             'target_temp' => $targetTemp,
         ];
+    }
+
+    /**
+     * Public wrapper for calculateOpenPlanRates - used by debug_week replay
+     */
+    public function calculateOpenPlanRatesPublic($waterTemp, $periodDemandTotal, $periodDuration) {
+        return $this->calculateOpenPlanRates($waterTemp, $periodDemandTotal, $periodDuration);
     }
 
     /**

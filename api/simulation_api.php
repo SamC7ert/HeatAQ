@@ -16,6 +16,9 @@
  * - GET ?action=get_version - Get simulator version
  */
 
+// Start session for debug cache
+session_start();
+
 // Enable error output for debugging
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
@@ -715,6 +718,18 @@ try {
                 'hp_cop' => (float)$stored['hp_cop'],
             ];
 
+            // Check session cache for open_plan/heating_mode (populated by debug_week)
+            if (isset($_SESSION['debug_cache'][$runId][$timestamp])) {
+                $cached = $_SESSION['debug_cache'][$runId][$timestamp];
+                $debug['stored']['heating_mode'] = $cached['heating_mode'] ?? null;
+                $debug['stored']['open_plan'] = $cached['open_plan'] ?? null;
+                $debug['stored']['cache_source'] = 'session';
+            } else {
+                $debug['stored']['heating_mode'] = null;
+                $debug['stored']['open_plan'] = null;
+                $debug['stored']['cache_source'] = 'not_cached';
+            }
+
             // Add config info from the run
             $scheduleDebug = $scheduler->getScheduleDebugInfo($date);
             $debug['config_info'] = [
@@ -843,6 +858,76 @@ try {
                 ];
             }
 
+            // ===== REPLAY SCHEDULING to cache open_plan/heating_mode for debug =====
+            // Load config from run to recreate simulator state
+            $configStmt = $pdo->prepare("SELECT config_snapshot FROM simulation_runs WHERE run_id = ?");
+            $configStmt->execute([$runId]);
+            $runConfig = $configStmt->fetch();
+            $configSnapshot = $runConfig ? json_decode($runConfig['config_snapshot'], true) : [];
+
+            // Initialize simulator with scheduler
+            $scheduleTemplateId = $configSnapshot['schedule_template_id'] ?? null;
+            $scheduler = new PoolScheduler($pdo, $currentPoolSiteId, $scheduleTemplateId);
+            $simulator = new EnergySimulator($pdo, $currentPoolSiteId, $scheduler);
+
+            if (!empty($configSnapshot['equipment'])) {
+                $simulator->setEquipment($configSnapshot['equipment']);
+            }
+            if (!empty($configSnapshot['pool_config'])) {
+                $simulator->setPoolConfig($configSnapshot['pool_config']);
+            }
+
+            // Replay scheduling decisions for the week
+            $debugCache = [];
+            $prevIsOpen = null;
+            $currentOpenPlan = null;
+
+            foreach ($rows as $i => $row) {
+                $ts = $row['timestamp'];
+                $isOpen = (bool)$row['is_open'];
+                $waterTemp = (float)$row['water_temp'];
+                $totalLoss = (float)$row['total_loss_kw'];
+
+                // Detect OPEN transition
+                if ($prevIsOpen === false && $isOpen === true) {
+                    // Calculate period duration and sum actual losses (like simulation does)
+                    $periodDuration = 0;
+                    $periodDemandTotal = 0;
+                    for ($j = $i; $j < count($rows) && (bool)$rows[$j]['is_open']; $j++) {
+                        $periodDuration++;
+                        $periodDemandTotal += (float)$rows[$j]['total_loss_kw'];
+                    }
+                    // Use simulator's calculateOpenPlanRates with actual summed losses
+                    $currentOpenPlan = $simulator->calculateOpenPlanRatesPublic($waterTemp, $periodDemandTotal, $periodDuration);
+                }
+
+                // Clear plan on CLOSE transition
+                if ($prevIsOpen === true && $isOpen === false) {
+                    $currentOpenPlan = null;
+                }
+
+                // Determine heating mode
+                $heatingMode = 'reactive';
+                $controlStrategy = $configSnapshot['equipment']['control_strategy'] ?? 'reactive';
+                if ($controlStrategy === 'predictive') {
+                    if ($isOpen && $currentOpenPlan !== null) {
+                        $heatingMode = 'open_plan';
+                    } elseif (!$isOpen) {
+                        $heatingMode = 'closed_plan';
+                    }
+                }
+
+                $debugCache[$ts] = [
+                    'heating_mode' => $heatingMode,
+                    'open_plan' => $currentOpenPlan,
+                ];
+
+                $prevIsOpen = $isOpen;
+            }
+
+            // Store in session keyed by run_id
+            $_SESSION['debug_cache'][$runId] = $debugCache;
+
             sendResponse([
                 'run_id' => (int)$runId,
                 'source' => 'stored', // Indicates data comes from DB, not recalculated
@@ -851,6 +936,7 @@ try {
                 'center_date' => $centerDate,
                 'hours' => count($hourlyData),
                 'data' => $hourlyData,
+                'debug_cache_size' => count($debugCache),  // For verification
             ]);
             break;
 
