@@ -1348,17 +1348,15 @@ const AdminModule = {
      */
     applyDebugMode: function(enabled) {
         // Toggle top debug section (parameters, heat balance, chart)
-        const debugTop = document.getElementById('debug-only-top');
+        const debugTop = document.getElementById('debug-only-content');
         if (debugTop) {
             debugTop.style.display = enabled ? '' : 'none';
         }
 
-        // Toggle bottom debug section (detail cards) - only if it's currently shown
-        // debug-results has its own visibility toggle via debugHour()
-        // When debug mode is off, we hide it; when on, we don't force it visible
-        const debugResults = document.getElementById('debug-results');
-        if (debugResults && !enabled) {
-            debugResults.style.display = 'none';
+        // Toggle bottom debug section (detail cards)
+        const debugBottom = document.getElementById('debug-only-bottom');
+        if (debugBottom) {
+            debugBottom.style.display = enabled ? '' : 'none';
         }
     },
 

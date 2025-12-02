@@ -925,8 +925,8 @@
 
                     <!-- Details Tab Content (renamed from Debug) -->
                     <div id="sim-tab-debug" class="sim-tab-content" style="display: none;">
-                        <!-- Debug-only: top section (hidden unless debug mode enabled) -->
-                        <div id="debug-only-top" style="display: none;">
+                        <!-- Debug-only content wrapper (controlled by admin debug mode toggle) -->
+                        <div id="debug-only-content" style="display: none;">
                         <!-- Top row: Inputs (left) + Heat Output (right) -->
                         <div style="display: grid; grid-template-columns: 280px 1fr; gap: 15px; margin-bottom: 15px;">
                             <!-- Compact Inputs -->
@@ -1037,11 +1037,10 @@
                                 </div>
                             </div>
                         </div>
-
-                        </div><!-- end debug-only-top -->
+                        </div><!-- end debug-only-content (top section) -->
 
                         <!-- Simulation Report (Details tab - always visible) -->
-                        <div id="benchmark-report-debug" class="benchmark-report card" style="display: none; margin-bottom: 15px;">
+                        <div id="benchmark-report-debug" class="benchmark-report card" style="margin-bottom: 15px;">
                             <h4 style="margin: 0 0 15px 0;">Simulation Report</h4>
                             <div class="benchmark-config" id="bench-config-summary-debug" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 5px 20px; margin-bottom: 15px; font-size: 13px; line-height: 1.6;">
                             </div>
@@ -1090,8 +1089,9 @@
                             </div>
                         </div>
 
-                        <!-- Detail Cards Grid -->
-                        <div id="debug-results" style="display: none;">
+                        <!-- Detail Cards Grid (debug-only) -->
+                        <div id="debug-only-bottom" style="display: none;">
+                        <div id="debug-results">
                             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
                                 <!-- Input Values -->
                                 <div class="card" style="padding: 10px;">
@@ -1153,6 +1153,7 @@
                             <div class="card" style="margin-top: 12px; padding: 10px; display: none;" id="debug-comparison">
                             </div>
                         </div>
+                        </div><!-- end debug-only-bottom -->
                     </div>
                 </section>
 
