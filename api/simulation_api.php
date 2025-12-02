@@ -896,107 +896,22 @@ try {
                 'thermal_mass_rate_after_setPoolConfig' => $simulator->getThermalMassRate(),
             ];
 
-            // Replay scheduling decisions for the week
-            $debugCache = [];
-            $prevIsOpen = null;
-            $currentOpenPlan = null;
-            $debugPlanCall = null;  // Debug: first plan call on SELECTED date
+            // Replay scheduling using consolidated method in simulator
+            // This ensures debug uses same logic as run()
+            $replayResult = $simulator->replaySchedulingForData($rows, $centerDate);
+            $debugCache = $replayResult['cache'];
+            $debugPlanCall = $replayResult['debug_plan_call'];
 
-            $prevWaterTemp = null;  // Track previous hour's END temp = this hour's START temp
-
-            foreach ($rows as $i => $row) {
-                $ts = $row['timestamp'];
-                $tsDate = substr($ts, 0, 10);  // Extract YYYY-MM-DD
-                $isOpen = (bool)$row['is_open'];
-                $waterTempEnd = (float)$row['water_temp'];  // This is END-of-hour temp
-                $totalLoss = (float)$row['total_loss_kw'];
-
-                // For START-of-hour temp, use previous hour's END temp (or current if first hour)
-                $waterTempStart = ($i > 0 && $prevWaterTemp !== null) ? $prevWaterTemp : $waterTempEnd;
-
-                // Detect OPEN transition
-                if ($prevIsOpen === false && $isOpen === true) {
-                    // Use START temp (previous hour's END) - this is what simulation used for plan
-                    $transitionWaterTemp = $waterTempStart;
-
-                    // Calculate period duration
-                    $periodDuration = 0;
-                    for ($j = $i; $j < count($rows) && (bool)$rows[$j]['is_open']; $j++) {
-                        $periodDuration++;
-                    }
-
-                    // Calculate demand like simulation does: use SAME waterTemp for all hours
-                    // (simulation calls calculateHeatLosses with constant waterTemp)
-                    $periodDemandTotal = 0;
-                    for ($j = $i; $j < $i + $periodDuration && $j < count($rows); $j++) {
-                        $hourRow = $rows[$j];
-                        // Recalculate losses at transition waterTemp (like simulation does)
-                        $hourLosses = $simulator->calculateHeatLossesPublic(
-                            $transitionWaterTemp,  // Use START temp for ALL hours
-                            (float)($hourRow['air_temp'] ?? 15),
-                            (float)($hourRow['wind_speed'] ?? 2),
-                            70,  // humidity estimate
-                            true,  // is_open
-                            null   // tunnel temp
-                        );
-                        $periodDemandTotal += $hourLosses['total'];
-                    }
-
-                    // Now calculate plan with same logic as simulation (using START temp)
-                    // Debug: capture inputs
-                    $planInputs = [
-                        'waterTemp' => $transitionWaterTemp,
-                        'periodDemandTotal' => $periodDemandTotal,
-                        'periodDuration' => $periodDuration,
-                        'thermalMassRate_before' => $simulator->getThermalMassRate(),
-                    ];
-
-                    $currentOpenPlan = $simulator->calculateOpenPlanRatesPublic($transitionWaterTemp, $periodDemandTotal, $periodDuration);
-
-                    // Debug: capture outputs (first call on SELECTED date)
-                    if ($debugPlanCall === null && $tsDate === $centerDate) {
-                        $planOutputs = [
-                            'thermal_mass_rate' => $currentOpenPlan['thermal_mass_rate'] ?? 'NOT SET',
-                            'hp_rate' => $currentOpenPlan['hp_rate'] ?? 'NOT SET',
-                            'energy_buffer' => $currentOpenPlan['energy_buffer'] ?? 'NOT SET',
-                            'temp_diff' => $currentOpenPlan['temp_diff'] ?? 'NOT SET',
-                        ];
-                        $debugPlanCall = ['inputs' => $planInputs, 'outputs' => $planOutputs, 'timestamp' => $ts, 'selected_date' => $centerDate];
-                    }
-
-                    $currentOpenPlan['transition_water_temp'] = $transitionWaterTemp;  // Store for debugging
-                    $currentOpenPlan['transition_hour'] = $ts;
-                    // Map thermal_mass_rate to thermal_mass (consistent with simulation hourly output)
-                    $currentOpenPlan['thermal_mass'] = $currentOpenPlan['thermal_mass_rate'] ?? 0;
+            // Apply control_strategy to heating modes (reactive strategy overrides planned modes)
+            $controlStrategy = $configSnapshot['equipment']['control_strategy'] ?? 'reactive';
+            if ($controlStrategy !== 'predictive') {
+                foreach ($debugCache as $ts => &$cached) {
+                    $cached['heating_mode'] = 'reactive';
                 }
-
-                // Clear plan on CLOSE transition
-                if ($prevIsOpen === true && $isOpen === false) {
-                    $currentOpenPlan = null;
-                }
-
-                // Determine heating mode
-                $heatingMode = 'reactive';
-                $controlStrategy = $configSnapshot['equipment']['control_strategy'] ?? 'reactive';
-                if ($controlStrategy === 'predictive') {
-                    if ($isOpen && $currentOpenPlan !== null) {
-                        $heatingMode = 'open_plan';
-                    } elseif (!$isOpen) {
-                        $heatingMode = 'closed_plan';
-                    }
-                }
-
-                $debugCache[$ts] = [
-                    'heating_mode' => $heatingMode,
-                    'open_plan' => $currentOpenPlan,
-                ];
-
-                $prevIsOpen = $isOpen;
-                $prevWaterTemp = $waterTempEnd;  // Track for next iteration
+                unset($cached);
             }
 
             // Store in session keyed by run_id
-            // Ensure session is started (auth.php may or may not have started it)
             if (session_status() === PHP_SESSION_NONE) {
                 session_start();
             }
