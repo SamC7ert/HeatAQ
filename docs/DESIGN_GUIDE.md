@@ -164,13 +164,16 @@ Card variants:
 
 ### Buttons
 
-#### Button Types & Colors
+#### Button Types & Colors (Updated V129)
 | Type | Label | Color | Hex | Usage |
 |------|-------|-------|-----|-------|
-| Primary | + New | Blue | `#006494` | Create new items |
+| Add/New | + New, + Add | Light Green | `#90EE90` | Create new items (all "+" buttons) |
+| Update | Update Data | Yellow | `#FFD700` | Fetch/update data actions |
 | Primary | Save | Blue | `#006494` | Save changes |
 | Danger | Delete | Red | `#d62828` | Destructive actions |
 | Secondary | Cancel | Gray | `#6c757d` | Cancel/close dialogs |
+
+**Note:** All buttons with "+" prefix (+ New, + Add, + Add Station, etc.) use light green styling with black text for visual consistency.
 
 #### Button Placement Convention
 ```

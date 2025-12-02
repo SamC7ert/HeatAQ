@@ -618,7 +618,7 @@ const AdminModule = {
                     <div class="form-actions">
                         <button class="btn btn-secondary" onclick="app.admin.closeStationModal()">Cancel</button>
                         ${isEdit ? `<button class="btn btn-danger" onclick="app.admin.deleteWeatherStation('${existingStation.station_id}')" style="margin-right: auto;">Delete</button>` : ''}
-                        <button class="btn btn-primary" onclick="app.admin.saveStation('${existingStation?.station_id || ''}')">${isEdit ? 'Save' : '+ Add Station'}</button>
+                        <button class="btn ${isEdit ? 'btn-primary' : ''}" ${isEdit ? '' : 'style="background: #90EE90; color: #000;"'} onclick="app.admin.saveStation('${existingStation?.station_id || ''}')">${isEdit ? 'Save' : '+ Add Station'}</button>
                     </div>
                 </div>
             </div>
