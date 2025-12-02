@@ -899,12 +899,13 @@ try {
             $debugCache = [];
             $prevIsOpen = null;
             $currentOpenPlan = null;
-            $debugPlanCall = null;  // Debug: first plan call inputs/outputs
+            $debugPlanCall = null;  // Debug: first plan call on SELECTED date
 
             $prevWaterTemp = null;  // Track previous hour's END temp = this hour's START temp
 
             foreach ($rows as $i => $row) {
                 $ts = $row['timestamp'];
+                $tsDate = substr($ts, 0, 10);  // Extract YYYY-MM-DD
                 $isOpen = (bool)$row['is_open'];
                 $waterTempEnd = (float)$row['water_temp'];  // This is END-of-hour temp
                 $totalLoss = (float)$row['total_loss_kw'];
@@ -951,15 +952,15 @@ try {
 
                     $currentOpenPlan = $simulator->calculateOpenPlanRatesPublic($transitionWaterTemp, $periodDemandTotal, $periodDuration);
 
-                    // Debug: capture outputs (only first call)
-                    if ($debugPlanCall === null) {
+                    // Debug: capture outputs (first call on SELECTED date)
+                    if ($debugPlanCall === null && $tsDate === $centerDate) {
                         $planOutputs = [
                             'thermal_mass_rate' => $currentOpenPlan['thermal_mass_rate'] ?? 'NOT SET',
                             'hp_rate' => $currentOpenPlan['hp_rate'] ?? 'NOT SET',
                             'energy_buffer' => $currentOpenPlan['energy_buffer'] ?? 'NOT SET',
                             'temp_diff' => $currentOpenPlan['temp_diff'] ?? 'NOT SET',
                         ];
-                        $debugPlanCall = ['inputs' => $planInputs, 'outputs' => $planOutputs, 'timestamp' => $ts];
+                        $debugPlanCall = ['inputs' => $planInputs, 'outputs' => $planOutputs, 'timestamp' => $ts, 'selected_date' => $centerDate];
                     }
 
                     $currentOpenPlan['transition_water_temp'] = $transitionWaterTemp;  // Store for debugging

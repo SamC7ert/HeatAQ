@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.33';  // Debug first_open_plan in debug_week response
+    const VERSION = '3.10.35';  // debug_plan_call now captures SELECTED date transition
 
     private $db;
     private $siteId;
@@ -53,6 +53,7 @@ class EnergySimulator {
     private $openPlan = null;            // Current plan for open period
     private $openPlanTimestamp = null;   // When open plan was created
     private $lastPreheatCalc = [];       // Debug info for preheating
+    private $debugFirstOpenPlan = null;  // Debug: capture first open plan calculation
 
     // Physical constants
     const WATER_DENSITY = 1000;      // kg/m³
@@ -830,6 +831,9 @@ class EnergySimulator {
 
         // Add simulator version to results
         $results['version'] = self::VERSION;
+
+        // Add debug info for first open plan calculation
+        $results['meta']['debug_first_open_plan'] = $this->debugFirstOpenPlan;
 
         return $results;
     }
@@ -1659,6 +1663,28 @@ class EnergySimulator {
 
         // Use shared calculation
         $plan = $this->calculateOpenPlanRates($waterTemp, $periodDemandTotal, $periodDuration);
+
+        // Debug: capture first open plan calculation
+        if ($this->debugFirstOpenPlan === null) {
+            $this->debugFirstOpenPlan = [
+                'timestamp' => $timestamp,
+                'inputs' => [
+                    'waterTemp' => $waterTemp,
+                    'periodDemandTotal' => round($periodDemandTotal, 2),
+                    'periodDuration' => $periodDuration,
+                    'thermalMassRate' => $this->thermalMassRate,
+                    'targetTemp' => $this->poolConfig['target_temp'] ?? 28,
+                ],
+                'outputs' => [
+                    'hp_rate' => $plan['hp_rate'] ?? null,
+                    'boiler_rate' => $plan['boiler_rate'] ?? null,
+                    'thermal_mass_rate' => $plan['thermal_mass_rate'] ?? null,
+                    'energy_buffer' => $plan['energy_buffer'] ?? null,
+                    'temp_diff' => $plan['temp_diff'] ?? null,
+                    'case' => $plan['case'] ?? null,
+                ],
+            ];
+        }
 
         // Add temp_start for compatibility
         $plan['temp_start'] = round($waterTemp, 2);
