@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.27';  // Added debug logging for thermalMassRate
+    const VERSION = '3.10.28';  // Added thermal_mass_rate to meta for debugging
 
     private $db;
     private $siteId;
@@ -409,6 +409,7 @@ class EnergySimulator {
                 'pool_site_id' => $this->poolSiteId,
                 'pool_config' => $this->poolConfig,
                 'equipment' => $this->equipment,
+                'thermal_mass_rate' => $this->thermalMassRate,  // Debug: show actual value
                 'created_at' => date('Y-m-d H:i:s'),
             ],
             'hourly' => [],
