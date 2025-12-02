@@ -1,10 +1,10 @@
 # HeatAQ Development Handover Guide
 
-**Current Version:** V129 (December 2024)
+**Current Version:** V130 (December 2024)
 
 ## Recent Session Summary (Dec 2024)
 
-### Completed Work - V129
+### Completed Work - V129/V130
 
 #### Weather Station Management & Frost API Integration
 1. **Weather Station CRUD** - Add/Edit/Delete weather stations in Admin → Weather section
@@ -24,11 +24,14 @@
 11. **Summary Data API** - get_weather_stations returns date range/record count when station_id provided
 
 ### Key Files Modified
-- `assets/js/config.js` - Version V129
+- `assets/js/config.js` - Version V130
 - `assets/js/modules/admin.js` - Weather station management, showUpdateDataModal(), fetchWeatherDataForStation()
+- `assets/js/modules/calendar.js` - Green "+ New" button for date ranges
+- `assets/js/modules/schedules.js` - Green "+ Add Period", "+ New" buttons
 - `api/frost_api.php` - NEW: Frost API proxy with check_station, fetch_and_store_year actions
 - `api/heataq_api.php` - Weather station CRUD endpoints, summary data query
 - `index.html` - Weather Data card with inline editing, Update Data button, green Add buttons
+- `docs/DESIGN_GUIDE.md` - Updated button color convention
 
 ### Weather Station Architecture
 ```
@@ -105,7 +108,7 @@ HTML:
 ### App Version
 **Set in ONE place:** `assets/js/config.js`
 ```javascript
-APP_VERSION: 'V129',
+APP_VERSION: 'V130',
 ```
 
 This updates both:
