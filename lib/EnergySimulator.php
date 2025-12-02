@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.0';  // Predictive preheating with 4 cases (Python v3.6.0.3 parity)
+    const VERSION = '3.10.1';  // Fix: reactive control for open periods, cover losses during waiting
 
     private $db;
     private $siteId;
@@ -556,8 +556,9 @@ class EnergySimulator {
                         $effectiveTarget = $this->closedPlan['target_night'];
                         $isPreheat = ($currentWaterTemp < $effectiveTarget - 0.1);
                     } else {
-                        // Not yet time - let pool coast (just cover losses)
-                        $effectiveTarget = null; // No heating target
+                        // Not yet time - maintain current temperature (cover losses only)
+                        // Python lines 1267-1269: Q_hp = min(Q_demand, hp_capacity)
+                        $effectiveTarget = $currentWaterTemp;
                     }
                 }
 
@@ -565,25 +566,14 @@ class EnergySimulator {
             }
 
             // Determine heating
-            // In predictive mode during open periods, use planned rates instead of reactive control
-            if ($controlStrategy === 'predictive' && $targetTemp !== null && $this->openPlan !== null) {
-                // Open period with plan - use planned HP/boiler rates
-                $heating = $this->applyPlannedHeating(
-                    $this->openPlan,
-                    $netRequirement,
-                    (float) $hour['air_temperature'],
-                    $currentWaterTemp,
-                    $targetTemp
-                );
-            } else {
-                // Reactive control or closed period preheating
-                $heating = $this->calculateHeating(
-                    $netRequirement,
-                    (float) $hour['air_temperature'],
-                    $effectiveTarget,
-                    $currentWaterTemp
-                );
-            }
+            // Predictive mode: preheating happens during CLOSED periods
+            // During OPEN periods: use reactive control to maintain target
+            $heating = $this->calculateHeating(
+                $netRequirement,
+                (float) $hour['air_temperature'],
+                $effectiveTarget,
+                $currentWaterTemp
+            );
 
             // Update water temperature
             $heatBalance = $solarGain + $heating['total_heat'] - $losses['total'];
@@ -766,6 +756,9 @@ class EnergySimulator {
                 $results['summary'][$key] = round($value, 2);
             }
         }
+
+        // Add simulator version to results
+        $results['version'] = self::VERSION;
 
         return $results;
     }
