@@ -699,8 +699,9 @@ try {
                 $simulator->setPoolConfig($configSnapshot['pool_config']);
             }
 
-            // Run detailed debug calculation using stored/specified water temp
-            $debug = $simulator->debugSingleHour($date, $hour, $waterTemp);
+            // Run detailed debug calculation using stored/specified water temp and is_open
+            $storedIsOpen = (bool)$stored['is_open'];
+            $debug = $simulator->debugSingleHour($date, $hour, $waterTemp, $storedIsOpen);
 
             // Add stored values for comparison
             $debug['stored'] = [

@@ -1720,7 +1720,7 @@ const SimulationsModule = {
                         <tr style="background:#e3f2fd;"><td colspan="2"><strong>Open Period Plan</strong></td></tr>
                         <tr><td>Avg Demand</td><td><code>${openPlan.avg_demand} kW</code></td></tr>
                         <tr><td>Period Demand</td><td><code>${openPlan.period_demand} kWh</code></td></tr>
-                        <tr><td>Buffer</td><td><code>${openPlan.buffer_kwh} kWh (${openPlan.temp_excess}°C)</code></td></tr>
+                        <tr><td>Buffer</td><td><code>${openPlan.buffer_kwh} kWh (${openPlan.temp_diff}°C)</code></td></tr>
                         <tr><td>Planned HP</td><td><code>${openPlan.hp_rate} kW</code></td></tr>
                         <tr><td>Thermal Mass</td><td><code>${openPlan.thermal_mass} kWh/°C</code></td></tr>
                     `;
