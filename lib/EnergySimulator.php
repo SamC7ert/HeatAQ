@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.11';  // FIX: debug uses stored is_open, allow negative buffer
+    const VERSION = '3.10.12';  // Add heating_mode tracking (open_plan, closed_plan, reactive)
 
     private $db;
     private $siteId;
@@ -566,8 +566,10 @@ class EnergySimulator {
             }
 
             // Determine heating
+            $heatingMode = 'reactive';  // Track which mode was used
             if ($controlStrategy === 'predictive' && $targetTemp !== null && $this->openPlan !== null) {
                 // OPEN period with plan
+                $heatingMode = 'open_plan';
                 $heating = $this->applyOpenPeriodHeating(
                     $this->openPlan,
                     $netRequirement,
@@ -577,6 +579,9 @@ class EnergySimulator {
                 );
             } else {
                 // Closed period (with or without plan) or reactive mode
+                if ($controlStrategy === 'predictive' && $this->closedPlan !== null) {
+                    $heatingMode = 'closed_plan';
+                }
                 $heating = $this->calculateHeating(
                     $netRequirement,
                     (float) $hour['air_temperature'],
@@ -608,6 +613,7 @@ class EnergySimulator {
                     'water_temp' => round($currentWaterTemp, 2),
                     'is_open' => $targetTemp !== null,
                     'is_preheat' => $isPreheat,
+                    'heating_mode' => $heatingMode,  // Track: reactive, open_plan, closed_plan
                     'preheat_case' => $this->closedPlan['case'] ?? null,
                     'preheat_plan' => $this->closedPlan ? [
                         'case' => $this->closedPlan['case'] ?? null,
