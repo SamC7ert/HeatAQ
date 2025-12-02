@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.4';  // Fix: HP rate = avg demand (not demand-buffer), buffer is safety margin
+    const VERSION = '3.10.5';  // Add open_plan debug info, revert to buffer-based HP rate calc
 
     private $db;
     private $siteId;
@@ -616,6 +616,15 @@ class EnergySimulator {
                         'start_hp_in' => round($this->closedPlan['start_hp_in'] ?? 0, 1),
                         'hours_to_open' => $this->closedPlan['hours_to_open'] ?? 0,
                         'day_boiler_kw' => round($this->closedPlan['day_boiler_power'] ?? 0, 2),
+                    ] : null,
+                    'open_plan' => $this->openPlan ? [
+                        'case' => $this->openPlan['case'] ?? null,
+                        'hp_rate' => $this->openPlan['hp_rate'] ?? 0,
+                        'avg_demand' => $this->openPlan['avg_demand_rate'] ?? 0,
+                        'buffer_kwh' => $this->openPlan['energy_buffer'] ?? 0,
+                        'temp_excess' => $this->openPlan['temp_excess'] ?? 0,
+                        'period_demand' => $this->openPlan['period_demand'] ?? 0,
+                        'thermal_mass' => $this->openPlan['thermal_mass_rate'] ?? 0,
                     ] : null,
                 ],
                 'losses' => [
@@ -1533,19 +1542,21 @@ class EnergySimulator {
             $periodDemandTotal += $losses['total'];
         }
 
-        // Calculate average demand rate
-        $avgDemandRate = $periodDemandTotal / max(1, $periodDuration);
-
         // Calculate temperature buffer (excess temp above target)
         $tempExcess = max(0, $waterTemp - $targetTemp);
         $energyBuffer = $tempExcess * $this->thermalMassRate;
+        $avgDemandRate = $periodDemandTotal / max(1, $periodDuration);
+
+        // Available energy: buffer + HP over the period
+        $hpAvailable = $hpCapacity * $periodDuration;
+        $totalAvailable = $energyBuffer + $hpAvailable;
 
         // Determine HP and boiler rates
-        // HP should cover average demand rate; buffer handles peak hours
-        if ($avgDemandRate <= $hpCapacity) {
-            // Case 1: HP can cover average demand
-            // Run HP at average demand rate; buffer handles high-loss hours
-            $hpRate = $avgDemandRate;
+        if ($totalAvailable >= $periodDemandTotal) {
+            // Case 1: HP + buffer can cover demand
+            // HP rate = (demand - buffer) / hours → buffer reduces HP needed
+            $hpRate = ($periodDemandTotal - $energyBuffer) / max(1, $periodDuration);
+            $hpRate = max(0, min($hpRate, $hpCapacity));
             $boilerRate = 0;
             $case = 1;
         } else {
@@ -1558,12 +1569,17 @@ class EnergySimulator {
 
         return [
             'case' => $case,
-            'hp_rate' => $hpRate,
-            'boiler_rate' => $boilerRate,
+            'hp_rate' => round($hpRate, 1),
+            'boiler_rate' => round($boilerRate, 1),
             'period_duration' => $periodDuration,
-            'period_demand' => $periodDemandTotal,
-            'energy_buffer' => $energyBuffer,
-            'temp_start' => $waterTemp,
+            'period_demand' => round($periodDemandTotal, 1),
+            'avg_demand_rate' => round($avgDemandRate, 1),
+            'energy_buffer' => round($energyBuffer, 1),
+            'temp_excess' => round($tempExcess, 2),
+            'temp_start' => round($waterTemp, 2),
+            'target_temp' => $targetTemp,
+            'hp_capacity' => $hpCapacity,
+            'thermal_mass_rate' => round($this->thermalMassRate, 1),
         ];
     }
 

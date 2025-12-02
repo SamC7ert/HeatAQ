@@ -1711,17 +1711,36 @@ const SimulationsModule = {
             if (isPredictive) {
                 preheatCard.style.display = '';
                 const effectiveTarget = inp.pool?.target_temp;
+                const openPlan = data.pool?.open_plan;
+                const preheatPlan = data.pool?.preheat_plan;
+
+                let planInfo = '';
+                if (isOpen && openPlan) {
+                    planInfo = `
+                        <tr style="background:#e3f2fd;"><td colspan="2"><strong>Open Period Plan</strong></td></tr>
+                        <tr><td>Avg Demand</td><td><code>${openPlan.avg_demand} kW</code></td></tr>
+                        <tr><td>Period Demand</td><td><code>${openPlan.period_demand} kWh</code></td></tr>
+                        <tr><td>Buffer</td><td><code>${openPlan.buffer_kwh} kWh (${openPlan.temp_excess}°C)</code></td></tr>
+                        <tr><td>Planned HP</td><td><code>${openPlan.hp_rate} kW</code></td></tr>
+                        <tr><td>Thermal Mass</td><td><code>${openPlan.thermal_mass} kWh/°C</code></td></tr>
+                    `;
+                } else if (!isOpen && preheatPlan) {
+                    planInfo = `
+                        <tr style="background:#fff3e0;"><td colspan="2"><strong>Preheat Plan (Case ${preheatPlan.case})</strong></td></tr>
+                        <tr><td>Target Night</td><td><code>${preheatPlan.target_night}°C</code></td></tr>
+                        <tr><td>Forecast Demand</td><td><code>${preheatPlan.forecast_demand_kw} kW</code></td></tr>
+                        <tr><td>Start HP in</td><td><code>${preheatPlan.start_hp_in} hrs</code></td></tr>
+                    `;
+                }
+
                 setHtml('debug-preheat', `
                     <table class="data-table compact" style="font-size: 11px;">
                         <tr><td>Strategy</td><td><code style="color:#9c27b0;"><strong>PREDICTIVE</strong></code></td></tr>
                         <tr><td>Pool State</td><td><code>${isOpen ? 'OPEN' : 'CLOSED'}</code></td></tr>
                         <tr><td>Target</td><td><code>${effectiveTarget ?? 'none (coasting)'}</code></td></tr>
-                        <tr><td>Preheating?</td><td><code style="color:${isHeatingWhenClosed ? '#28a745' : '#666'};">${isHeatingWhenClosed ? 'YES - HP active' : 'No'}</code></td></tr>
                         <tr><td>HP Output</td><td><code>${stored.hp_heat_kw?.toFixed(1) || 0} kW</code></td></tr>
+                        ${planInfo}
                     </table>
-                    <div style="margin-top: 8px; font-size: 10px; color: #888;">
-                        Predictive mode heats closed pool to prepare for opening
-                    </div>
                 `);
             } else {
                 preheatCard.style.display = '';
