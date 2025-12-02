@@ -263,7 +263,7 @@ const SimulationsModule = {
             const now = new Date();
             const dateStr = now.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
             const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-            const version = data.version || 'unknown';
+            const version = data.simulator_version || 'unknown';
             if (statusEl) {
                 statusEl.textContent = `Simulation v${version} completed ${dateStr} - ${timeStr}`;
                 statusEl.style.color = '#28a745';
