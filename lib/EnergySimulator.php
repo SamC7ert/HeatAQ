@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.38';  // Add heating_result to debug_open_plans_by_date
+    const VERSION = '3.10.39';  // FIX: air_temp → air_temperature in planOpenPeriod
 
     private $db;
     private $siteId;
@@ -1664,7 +1664,7 @@ class EnergySimulator {
             $weather = $weatherData[$currentIdx + $i];
             $losses = $this->calculateHeatLosses(
                 $waterTemp,
-                $weather['air_temp'] ?? 15,
+                $weather['air_temperature'] ?? 15,  // Fixed: was 'air_temp'
                 $weather['wind_speed'] ?? 2,
                 $weather['humidity'] ?? 70,
                 true,  // is_open
