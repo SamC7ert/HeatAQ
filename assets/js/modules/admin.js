@@ -1318,6 +1318,71 @@ const AdminModule = {
             console.error('Archive migration failed:', err);
             if (resultEl) resultEl.innerHTML = `<p class="error">Archive failed: ${err.message}</p>`;
         }
+    },
+
+    // ========================================
+    // DEBUG MODE
+    // ========================================
+
+    /**
+     * Toggle debug mode - shows/hides Debug tab in Simulations
+     * Setting is stored in user preferences
+     */
+    toggleDebugMode: function(enabled) {
+        // Store in localStorage
+        localStorage.setItem('heataq_debug_mode', enabled ? '1' : '0');
+
+        // Update UI immediately
+        this.applyDebugMode(enabled);
+
+        // Sync to server preferences
+        SimControlModule.savePreference('debug_mode', enabled ? '1' : '0');
+
+        console.log('Debug mode:', enabled ? 'enabled' : 'disabled');
+    },
+
+    /**
+     * Apply debug mode visibility
+     */
+    applyDebugMode: function(enabled) {
+        const debugTabBtn = document.getElementById('sim-tab-debug-btn');
+        if (debugTabBtn) {
+            debugTabBtn.style.display = enabled ? '' : 'none';
+        }
+
+        // If debug tab is currently active and we're disabling, switch to Simulate
+        if (!enabled) {
+            const debugTab = document.getElementById('sim-tab-debug');
+            if (debugTab && debugTab.style.display !== 'none') {
+                if (typeof app !== 'undefined' && app.simcontrol) {
+                    app.simcontrol.switchTab('new');
+                }
+            }
+        }
+    },
+
+    /**
+     * Initialize debug mode on page load (called from app.js)
+     */
+    initDebugMode: function() {
+        // Only admins can use debug mode
+        if (!app.isAdmin()) {
+            this.applyDebugMode(false);
+            return;
+        }
+
+        // Check stored preference
+        const stored = localStorage.getItem('heataq_debug_mode');
+        const enabled = stored === '1';
+
+        // Update checkbox
+        const toggle = document.getElementById('debug-mode-toggle');
+        if (toggle) {
+            toggle.checked = enabled;
+        }
+
+        // Apply visibility
+        this.applyDebugMode(enabled);
     }
 };
 

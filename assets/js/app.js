@@ -14,6 +14,11 @@ const app = {
         // Check user role and show/hide admin section
         await this.checkUserRole();
 
+        // Initialize debug mode (after user role is known)
+        if (this.admin && this.admin.initDebugMode) {
+            this.admin.initDebugMode();
+        }
+
         // Initialize navigation (await to ensure ProjectModule loads first for SimControl)
         await this.navigation.init();
 

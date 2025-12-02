@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.42';  // Add evaporation/convection/radiation breakdown to debug
+    const VERSION = '3.10.43';  // Add cover breakdown to debug
 
     private $db;
     private $siteId;
@@ -1601,20 +1601,6 @@ class EnergySimulator {
     }
 
     /**
-     * Public wrapper for calculateOpenPlanRates - used by debug_week replay
-     */
-    public function calculateOpenPlanRatesPublic($waterTemp, $periodDemandTotal, $periodDuration) {
-        return $this->calculateOpenPlanRates($waterTemp, $periodDemandTotal, $periodDuration);
-    }
-
-    /**
-     * Public wrapper for calculateHeatLosses - used by debug_week replay
-     */
-    public function calculateHeatLossesPublic($waterTemp, $airTemp, $windSpeed, $humidity, $isOpen, $tunnelTemp = null) {
-        return $this->calculateHeatLosses($waterTemp, $airTemp, $windSpeed, $humidity, $isOpen, $tunnelTemp);
-    }
-
-    /**
      * Replay scheduling for stored hourly data - consolidates debug_week logic
      *
      * Takes stored hourly results and reconstructs the plan state for each hour,
@@ -2383,6 +2369,13 @@ class EnergySimulator {
                 'water_temp_k' => round($poolTemp + 273.15, 1),
                 'sky_temp_k' => round($airTemp - 10 + 273.15, 1),
                 'loss_kw' => round($radLossKW, 3),
+            ],
+            'cover' => [
+                'has_cover' => $hasCover,
+                'is_covered' => $isCovered,
+                'u_value' => $coverUValue,
+                'transmittance' => $coverTransmittance,
+                'loss_kw' => round($coverLossKW, 3),
             ],
             'solar_gain' => [
                 'source' => $solarSource,
