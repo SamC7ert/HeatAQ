@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.29';  // Added getThermalMassRate() and included in config_snapshot
+    const VERSION = '3.10.30';  // Fix: thermal_mass field mapping in debug_week cache
 
     private $db;
     private $siteId;
