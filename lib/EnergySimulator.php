@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.5';  // Add open_plan debug info, revert to buffer-based HP rate calc
+    const VERSION = '3.10.6';  // Fix open_plan debug in debugSingleHour for debug card display
 
     private $db;
     private $siteId;
@@ -2326,6 +2326,55 @@ class EnergySimulator {
                 'excel_wall_loss' => 0.909,
                 'excel_floor_loss' => 0.484,
             ],
+            'pool' => $this->calculateOpenPlanDebug($isOpen, $poolTemp, $totalLossKW, $targetTemp),
+        ];
+    }
+
+    /**
+     * Calculate open plan debug info for debugSingleHour
+     */
+    private function calculateOpenPlanDebug($isOpen, $waterTemp, $currentLossKW, $targetTemp) {
+        if (!$isOpen) {
+            return ['open_plan' => null];
+        }
+
+        $hpCapacity = $this->equipment['heat_pump']['capacity_kw'] ?? 200;
+        $targetTemp = $targetTemp ?? $this->poolConfig['target_temp'] ?? 28.0;
+        $periodDuration = 10; // Assume 10 hour open period
+
+        // Calculate buffer from excess temperature
+        $tempExcess = max(0, $waterTemp - $targetTemp);
+        $energyBuffer = $tempExcess * $this->thermalMassRate;
+
+        // Estimate period demand (current losses × hours)
+        $avgDemandRate = $currentLossKW;
+        $periodDemandTotal = $avgDemandRate * $periodDuration;
+
+        // Calculate HP rate using buffer
+        $hpAvailable = $hpCapacity * $periodDuration;
+        $totalAvailable = $energyBuffer + $hpAvailable;
+
+        if ($totalAvailable >= $periodDemandTotal) {
+            $hpRate = ($periodDemandTotal - $energyBuffer) / max(1, $periodDuration);
+            $hpRate = max(0, min($hpRate, $hpCapacity));
+            $case = 1;
+        } else {
+            $hpRate = $hpCapacity;
+            $case = 2;
+        }
+
+        return [
+            'open_plan' => [
+                'case' => $case,
+                'hp_rate' => round($hpRate, 1),
+                'avg_demand' => round($avgDemandRate, 1),
+                'buffer_kwh' => round($energyBuffer, 1),
+                'temp_excess' => round($tempExcess, 2),
+                'period_demand' => round($periodDemandTotal, 1),
+                'thermal_mass' => round($this->thermalMassRate, 1),
+                'hp_capacity' => $hpCapacity,
+                'target_temp' => $targetTemp,
+            ]
         ];
     }
 }
