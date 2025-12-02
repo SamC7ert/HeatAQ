@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.32';  // Debug thermalMassRate in debug_week response
+    const VERSION = '3.10.33';  // Debug first_open_plan in debug_week response
 
     private $db;
     private $siteId;
