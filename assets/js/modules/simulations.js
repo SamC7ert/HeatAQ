@@ -1806,7 +1806,7 @@ const SimulationsModule = {
         const comparisonCard = document.getElementById('debug-comparison');
         if (comparisonCard) {
             comparisonCard.innerHTML = `
-                <h4 style="margin: 0 0 8px 0; font-size: 12px;">Stored vs Calculated vs Planned</h4>
+                <h4 style="margin: 0 0 8px 0; font-size: 12px;">Stored vs Calculated vs Planned <span style="font-weight:normal;color:#666;">(Run #${stored.run_id || '?'} v${stored.simulator_version || '?'})</span></h4>
                 <table class="data-table compact" style="font-size: 11px; width: 100%;">
                     <tr style="background: #f5f5f5;">
                         <th></th>
