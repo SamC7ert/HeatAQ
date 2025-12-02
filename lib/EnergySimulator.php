@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.10';  // FIX: allow negative buffer (deficit) when temp below target
+    const VERSION = '3.10.11';  // FIX: debug uses stored is_open, allow negative buffer
 
     private $db;
     private $siteId;
@@ -1899,9 +1899,10 @@ class EnergySimulator {
      * @param string $date Date (YYYY-MM-DD)
      * @param int $hour Hour of day (0-23)
      * @param float|null $waterTemp Override water temperature (optional)
+     * @param bool|null $isOpenOverride Override is_open from stored data (optional)
      * @return array Detailed breakdown of all calculations
      */
-    public function debugSingleHour($date, $hour, $waterTemp = null) {
+    public function debugSingleHour($date, $hour, $waterTemp = null, $isOpenOverride = null) {
         // Get weather for this specific hour
         $timestamp = sprintf('%s %02d:00:00', $date, $hour);
 
@@ -1967,10 +1968,13 @@ class EnergySimulator {
             }
         }
 
-        // Get schedule info
+        // Get schedule info - use override if provided (from stored simulation)
         $isOpen = false;
         $targetTemp = null;
-        if ($this->scheduler) {
+        if ($isOpenOverride !== null) {
+            $isOpen = $isOpenOverride;
+            $targetTemp = $this->poolConfig['target_temp'] ?? 28;
+        } elseif ($this->scheduler) {
             $period = $this->scheduler->getCurrentPeriod(new DateTime($timestamp));
             if ($period) {
                 $isOpen = true;
