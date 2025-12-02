@@ -1863,7 +1863,8 @@ const SimulationsModule = {
                 <div style="font-size:10px;margin-top:6px;padding:4px;background:#f0f0f0;border-radius:3px;">
                     <strong>Sim mode:</strong> ${stored.heating_mode || '?'}
                     | <strong>Debug mode:</strong> ${hs.debug_mode || '?'}
-                    ${storedOpenPlan ? ' | plan hp_rate=' + (storedOpenPlan.hp_rate||0).toFixed(0) + ' (case ' + (storedOpenPlan.case||'?') + ')' : ''}
+                    ${storedOpenPlan ? ' | hp_rate=' + (storedOpenPlan.hp_rate||0).toFixed(0) + ' (case ' + (storedOpenPlan.case||'?') + ', buffer=' + (storedOpenPlan.buffer_kwh||storedOpenPlan.energy_buffer||0).toFixed(0) + 'kWh)' : ''}
+                    ${storedOpenPlan?.transition_water_temp ? '<br>OPEN transition temp: <strong>' + storedOpenPlan.transition_water_temp.toFixed(2) + '°C</strong>' : ''}
                     ${stored.cache_source === 'session' ? ' <span style="color:green;">✓cached</span>' : ' <span style="color:orange;">(reload week to cache)</span>'}
                 </div>
             `;

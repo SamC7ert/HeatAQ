@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.22';  // Session cache for open_plan in debug comparison
+    const VERSION = '3.10.23';  // Replay calculates losses at transition temp like simulation
 
     private $db;
     private $siteId;
@@ -1595,6 +1595,13 @@ class EnergySimulator {
      */
     public function calculateOpenPlanRatesPublic($waterTemp, $periodDemandTotal, $periodDuration) {
         return $this->calculateOpenPlanRates($waterTemp, $periodDemandTotal, $periodDuration);
+    }
+
+    /**
+     * Public wrapper for calculateHeatLosses - used by debug_week replay
+     */
+    public function calculateHeatLossesPublic($waterTemp, $airTemp, $windSpeed, $humidity, $isOpen, $tunnelTemp = null) {
+        return $this->calculateHeatLosses($waterTemp, $airTemp, $windSpeed, $humidity, $isOpen, $tunnelTemp);
     }
 
     /**
