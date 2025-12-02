@@ -12,6 +12,21 @@ const schedules = {
         // Load templates list first, then load the selected template
         await this.loadTemplatesSelector();
         await this.loadTemplate();
+        // Enable OHC controls after loading completes
+        this.enableOHCControls();
+    },
+
+    enableOHCControls() {
+        // Enable the OHC selector and buttons after data is loaded
+        const selector = document.getElementById('ohc-selector');
+        const btnNew = document.getElementById('ohc-btn-new');
+        const btnSave = document.getElementById('ohc-btn-save');
+        const btnDelete = document.getElementById('ohc-btn-delete');
+
+        if (selector) selector.disabled = false;
+        if (btnNew) btnNew.disabled = false;
+        if (btnSave) btnSave.disabled = false;
+        if (btnDelete) btnDelete.disabled = false;
     },
     
     async loadTemplate() {
