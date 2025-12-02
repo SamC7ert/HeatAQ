@@ -1781,11 +1781,13 @@ const SimulationsModule = {
         `);
 
         // Comparison Card: Stored vs Calculated vs Planned
-        const openPlanData = data.pool?.open_plan;
+        const openPlanData = data.pool?.open_plan;  // Recalculated by debug
+        const storedOpenPlan = stored.open_plan;    // From session cache (actual plan at OPEN transition)
         const storedCalc = stored.calc || {};  // New calc section from simulation
         const storedNet = storedCalc.net_requirement_kw ?? ((stored.total_loss_kw || 0) - (stored.solar_gain_kw || 0));
         const calcNet = sum.net_requirement_kw || 0;
-        const plannedHP = openPlanData?.hp_rate || null;
+        // Use STORED open_plan (from session cache) as the "planned" rate
+        const plannedHP = storedOpenPlan?.hp_rate ?? openPlanData?.hp_rate ?? null;
 
         // Compare intermediate values
         const storedWaterTemp = storedCalc.water_temp_start ?? stored.water_temp;
@@ -1859,9 +1861,10 @@ const SimulationsModule = {
                 ${diffHP && diffHP > 5 ? '<div style="color:red;font-size:10px;margin-top:6px;padding:4px;background:#fff0f0;border-radius:3px;"><strong>⚠ HP not using planned rate!</strong> Stored=' + (stored.hp_heat_kw||0).toFixed(0) + ' but Plan=' + plannedHP.toFixed(0) + '</div>' : ''}
                 ${diffNet > 5 ? '<div style="color:#996600;font-size:10px;margin-top:4px;padding:4px;background:#fff8e0;border-radius:3px;">Net demand differs by ' + diffNet.toFixed(1) + ' kW - check water temp and losses</div>' : ''}
                 <div style="font-size:10px;margin-top:6px;padding:4px;background:#f0f0f0;border-radius:3px;">
-                    <strong>Sim mode:</strong> ${stored.heating_mode || '?'}${stored.heating_mode_reason ? ' (' + stored.heating_mode_reason + ')' : ''}
+                    <strong>Sim mode:</strong> ${stored.heating_mode || '?'}
                     | <strong>Debug mode:</strong> ${hs.debug_mode || '?'}
-                    ${stored.open_plan ? ' | stored hp_rate=' + (stored.open_plan.hp_rate||0).toFixed(0) : ' | <span style="color:red;">NO open_plan stored</span>'}
+                    ${storedOpenPlan ? ' | plan hp_rate=' + (storedOpenPlan.hp_rate||0).toFixed(0) + ' (case ' + (storedOpenPlan.case||'?') + ')' : ''}
+                    ${stored.cache_source === 'session' ? ' <span style="color:green;">✓cached</span>' : ' <span style="color:orange;">(reload week to cache)</span>'}
                 </div>
             `;
             comparisonCard.style.display = 'block';
