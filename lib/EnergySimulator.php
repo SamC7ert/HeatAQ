@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.41';  // Consolidate debug/simulate scheduling replay
+    const VERSION = '3.10.42';  // Add evaporation/convection/radiation breakdown to debug
 
     private $db;
     private $siteId;
@@ -2364,6 +2364,25 @@ class EnergySimulator {
                 'floor_kw' => round($floorLossKW, 3),
                 'walls_kw' => round($wallLossKW, 3),
                 'total_kw' => round($totalLossKW, 3),
+            ],
+            // Detailed breakdown for debug cards (from lastEvapCalc/lastConvCalc)
+            'evaporation' => [
+                'p_water_pa' => round($this->lastEvapCalc['p_water_pa'] ?? 0, 1),
+                'p_air_pa' => round($this->lastEvapCalc['p_air_actual_pa'] ?? 0, 1),
+                'delta_p_pa' => round($this->lastEvapCalc['delta_p'] ?? 0, 1),
+                'v_eff_ms' => round($this->lastEvapCalc['v_eff'] ?? 0, 2),
+                'activity_factor' => $this->lastEvapCalc['activity_factor'] ?? 1.0,
+                'loss_kw' => round($evapLossKW, 3),
+            ],
+            'convection' => [
+                'temp_diff_k' => round($this->lastConvCalc['temp_diff_k'] ?? 0, 2),
+                'bowen_ratio' => round($this->lastConvCalc['bowen_ratio'] ?? 0, 3),
+                'loss_kw' => round($convLossKW, 3),
+            ],
+            'radiation' => [
+                'water_temp_k' => round($poolTemp + 273.15, 1),
+                'sky_temp_k' => round($airTemp - 10 + 273.15, 1),
+                'loss_kw' => round($radLossKW, 3),
             ],
             'solar_gain' => [
                 'source' => $solarSource,
