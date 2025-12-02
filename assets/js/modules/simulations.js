@@ -1713,6 +1713,7 @@ const SimulationsModule = {
                 const effectiveTarget = inp.pool?.target_temp;
                 const openPlan = data.pool?.open_plan;
                 const preheatPlan = data.pool?.preheat_plan;
+                const modeCheck = data.pool?.mode_check;
 
                 let planInfo = '';
                 if (isOpen && openPlan) {
@@ -1733,14 +1734,20 @@ const SimulationsModule = {
                     `;
                 }
 
+                // Check if actual HP matches planned
+                const actualHP = stored.hp_heat_kw || 0;
+                const plannedHP = openPlan?.hp_rate || 0;
+                const hpMismatch = isOpen && openPlan && Math.abs(actualHP - plannedHP) > 1;
+
                 setHtml('debug-preheat', `
                     <table class="data-table compact" style="font-size: 11px;">
                         <tr><td>Strategy</td><td><code style="color:#9c27b0;"><strong>PREDICTIVE</strong></code></td></tr>
                         <tr><td>Pool State</td><td><code>${isOpen ? 'OPEN' : 'CLOSED'}</code></td></tr>
-                        <tr><td>Target</td><td><code>${effectiveTarget ?? 'none (coasting)'}</code></td></tr>
-                        <tr><td>HP Output</td><td><code>${stored.hp_heat_kw?.toFixed(1) || 0} kW</code></td></tr>
+                        <tr><td>Expected Mode</td><td><code>${modeCheck?.expected_mode || '?'}</code></td></tr>
+                        <tr><td>HP Output</td><td><code>${actualHP.toFixed(1)} kW</code>${hpMismatch ? ' <span style="color:red;">≠ plan!</span>' : ''}</td></tr>
                         ${planInfo}
                     </table>
+                    ${hpMismatch ? '<div style="color:red;font-size:10px;margin-top:4px;">⚠ Actual HP (' + actualHP.toFixed(0) + ') ≠ Planned (' + plannedHP.toFixed(0) + ') - openPlan may be null during sim</div>' : ''}
                 `);
             } else {
                 preheatCard.style.display = '';

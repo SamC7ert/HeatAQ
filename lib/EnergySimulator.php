@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.13';  // Add heating_mode_reason to track why open_plan not used
+    const VERSION = '3.10.14';  // Add mode_check and HP mismatch warning in debug card
 
     private $db;
     private $siteId;
@@ -2381,6 +2381,20 @@ class EnergySimulator {
         // Use shared calculation
         $plan = $this->calculateOpenPlanRates($waterTemp, $periodDemandTotal, $periodDuration);
 
+        // Check what mode WOULD be used during simulation
+        $controlStrategy = $this->equipment['control_strategy'] ?? 'reactive';
+        $expectedMode = 'reactive';
+        $modeIssue = null;
+
+        if ($controlStrategy === 'predictive' && $isOpen) {
+            // During simulation, openPlan should exist for open periods
+            // If it doesn't, that's the bug
+            $expectedMode = 'open_plan';
+            $modeIssue = 'CHECK: Does simulation set openPlan at OPEN transition?';
+        } elseif ($controlStrategy === 'predictive' && !$isOpen) {
+            $expectedMode = 'closed_plan';
+        }
+
         return [
             'open_plan' => [
                 'case' => $plan['case'],
@@ -2392,6 +2406,11 @@ class EnergySimulator {
                 'thermal_mass' => $plan['thermal_mass_rate'],
                 'hp_capacity' => $plan['hp_capacity'],
                 'target_temp' => $plan['target_temp'],
+            ],
+            'mode_check' => [
+                'control_strategy' => $controlStrategy,
+                'expected_mode' => $expectedMode,
+                'issue' => $modeIssue,
             ]
         ];
     }
