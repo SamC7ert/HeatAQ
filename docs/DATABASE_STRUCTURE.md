@@ -260,3 +260,28 @@ Consider adding:
 - energy_consumption (actual vs simulated comparison)
 - maintenance_schedule
 - water_quality_parameters
+
+---
+
+## Simulation Storage Strategy
+
+### Data Volume Per Run (10 years)
+| Data Type | Rows | Est. Size |
+|-----------|------|-----------|
+| Hourly Results | ~87,672 | 7-10 MB |
+| Daily Results | ~3,653 | 100 KB |
+| Run Metadata | 1 | 2 KB |
+| **Total per run** | ~91,326 | **~10 MB** |
+
+### Current Strategy: Full Storage
+All hourly data stored in database for complete analysis access.
+
+### Retention Recommendations
+- **Recent runs (1-6)**: Full hourly + daily + summary
+- **Older runs (7-50)**: Consider monthly summaries only
+- **Very old (51+)**: Archive or delete based on policy
+
+### API Patterns
+- Pagination: `?action=get_results&run_id=123&limit=1000&offset=0`
+- Date filtering: `?action=get_results&run_id=123&date=2024-06-15`
+- Aggregation: `?action=get_daily_results&run_id=123`

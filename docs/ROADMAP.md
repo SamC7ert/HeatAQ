@@ -168,6 +168,14 @@ UI tabs implemented in SimControl: History, Compare, Details
 - Toggle for reduced eye strain
 - Respect system preference
 
+### Localization
+**Priority:** Low
+**Status:** Planned
+
+- Date format: English → Nordic (e.g., "Jan 6, 2024" → "6. jan 2024")
+- Number format: Use locale-appropriate decimal separator
+- Consider reading locale from browser/user settings
+
 ---
 
 ## Control Modes & Simulation
@@ -245,6 +253,8 @@ New control strategy to minimize cost using spot electricity prices:
 - [ ] Remove getSiteIdString() helper once no longer needed
 - [ ] Move target_heat and bathers from config_templates to pool level
 - [ ] Update EnergySimulator.setConfigFromUI() to ignore pool/cover/solar sections (defense in depth)
+- [ ] Automatic cache busting (JS files have manual ?v=N, should auto-increment on deploy)
+- [ ] Investigate: Planned HP rate may not apply during open periods (debug shows correct calculation but output differs)
 
 ### Development Principles
 - **No silent fallbacks** - Fail with clear error instead of defaulting to magic values
