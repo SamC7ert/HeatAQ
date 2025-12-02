@@ -2320,7 +2320,7 @@ class EnergySimulator {
                 'water_heating_kw' => round($waterHeatingKW, 3),
             ],
             'heat_pump' => [
-                'strategy' => $strategy,
+                'strategy' => $controlStrategy,
                 'type' => $this->equipment['heat_pump']['type'] ?? 'ground_source',
                 'capacity_kw' => $this->equipment['heat_pump']['capacity_kw'] ?? 125,
                 'enabled' => $this->equipment['heat_pump']['enabled'] ?? true,
