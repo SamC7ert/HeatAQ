@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.40';  // FIX: Closed period preheating uses planned HP/boiler rates
+    const VERSION = '3.10.41';  // Consolidate debug/simulate scheduling replay
 
     private $db;
     private $siteId;
@@ -1612,6 +1612,119 @@ class EnergySimulator {
      */
     public function calculateHeatLossesPublic($waterTemp, $airTemp, $windSpeed, $humidity, $isOpen, $tunnelTemp = null) {
         return $this->calculateHeatLosses($waterTemp, $airTemp, $windSpeed, $humidity, $isOpen, $tunnelTemp);
+    }
+
+    /**
+     * Replay scheduling for stored hourly data - consolidates debug_week logic
+     *
+     * Takes stored hourly results and reconstructs the plan state for each hour,
+     * using the same logic as run() but on historical data.
+     *
+     * @param array $rows Array of stored hourly results (from DB)
+     * @param string|null $focusDate Date to capture detailed debug info for (YYYY-MM-DD)
+     * @return array ['cache' => hour→plan mapping, 'debug_plan_call' => first plan on focusDate, 'open_plans_by_date' => date→plan]
+     */
+    public function replaySchedulingForData(array $rows, ?string $focusDate = null): array {
+        $cache = [];
+        $debugPlanCall = null;
+        $openPlansByDate = [];
+
+        $prevIsOpen = null;
+        $prevWaterTemp = null;
+        $currentOpenPlan = null;
+
+        foreach ($rows as $i => $row) {
+            $ts = $row['timestamp'];
+            $tsDate = substr($ts, 0, 10);  // Extract YYYY-MM-DD
+            $isOpen = (bool)$row['is_open'];
+            $waterTempEnd = (float)$row['water_temp'];  // End-of-hour temp
+
+            // For START-of-hour temp, use previous hour's END temp
+            $waterTempStart = ($i > 0 && $prevWaterTemp !== null) ? $prevWaterTemp : $waterTempEnd;
+
+            // Detect OPEN transition (same logic as run())
+            if ($prevIsOpen === false && $isOpen === true) {
+                $transitionWaterTemp = $waterTempStart;
+
+                // Calculate period duration (count consecutive open hours)
+                $periodDuration = 0;
+                for ($j = $i; $j < count($rows) && (bool)$rows[$j]['is_open']; $j++) {
+                    $periodDuration++;
+                }
+
+                // Calculate period demand using same constant waterTemp approach as run()
+                $periodDemandTotal = 0;
+                for ($j = $i; $j < $i + $periodDuration && $j < count($rows); $j++) {
+                    $hourRow = $rows[$j];
+                    $hourLosses = $this->calculateHeatLosses(
+                        $transitionWaterTemp,  // Use START temp for ALL hours (like run())
+                        (float)($hourRow['air_temp'] ?? 15),
+                        (float)($hourRow['wind_speed'] ?? 2),
+                        70,  // humidity estimate
+                        true,  // is_open
+                        null   // tunnel temp
+                    );
+                    $periodDemandTotal += $hourLosses['total'];
+                }
+
+                // Calculate plan using shared method
+                $planInputs = [
+                    'waterTemp' => $transitionWaterTemp,
+                    'periodDemandTotal' => $periodDemandTotal,
+                    'periodDuration' => $periodDuration,
+                    'thermalMassRate' => $this->thermalMassRate,
+                ];
+
+                $currentOpenPlan = $this->calculateOpenPlanRates($transitionWaterTemp, $periodDemandTotal, $periodDuration);
+                $currentOpenPlan['transition_water_temp'] = $transitionWaterTemp;
+                $currentOpenPlan['transition_hour'] = $ts;
+                $currentOpenPlan['thermal_mass'] = $currentOpenPlan['thermal_mass_rate'] ?? 0;
+
+                // Store first plan per date
+                if (!isset($openPlansByDate[$tsDate])) {
+                    $openPlansByDate[$tsDate] = [
+                        'timestamp' => $ts,
+                        'inputs' => $planInputs,
+                        'plan' => $currentOpenPlan,
+                    ];
+                }
+
+                // Capture debug info for focus date
+                if ($debugPlanCall === null && $tsDate === $focusDate) {
+                    $debugPlanCall = [
+                        'inputs' => $planInputs,
+                        'outputs' => [
+                            'thermal_mass_rate' => $currentOpenPlan['thermal_mass_rate'] ?? 'NOT SET',
+                            'hp_rate' => $currentOpenPlan['hp_rate'] ?? 'NOT SET',
+                            'energy_buffer' => $currentOpenPlan['energy_buffer'] ?? 'NOT SET',
+                            'temp_diff' => $currentOpenPlan['temp_diff'] ?? 'NOT SET',
+                        ],
+                        'timestamp' => $ts,
+                        'selected_date' => $focusDate,
+                    ];
+                }
+            }
+
+            // Detect CLOSE transition
+            if ($prevIsOpen === true && $isOpen === false) {
+                $currentOpenPlan = null;  // Clear plan when closed
+            }
+
+            // Cache current state for this hour
+            $cache[$ts] = [
+                'heating_mode' => $isOpen ? ($currentOpenPlan ? 'open_plan' : 'reactive') : 'closed',
+                'open_plan' => $currentOpenPlan,
+            ];
+
+            $prevIsOpen = $isOpen;
+            $prevWaterTemp = $waterTempEnd;
+        }
+
+        return [
+            'cache' => $cache,
+            'debug_plan_call' => $debugPlanCall,
+            'open_plans_by_date' => $openPlansByDate,
+        ];
     }
 
     /**
