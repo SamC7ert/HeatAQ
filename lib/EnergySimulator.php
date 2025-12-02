@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.2';  // Fix: waiting phase maintains TARGET temp, not current temp
+    const VERSION = '3.10.3';  // Fix: open period uses planned HP rate, case 2 adds reactive boiler
 
     private $db;
     private $siteId;
@@ -566,14 +566,24 @@ class EnergySimulator {
             }
 
             // Determine heating
-            // Predictive mode: preheating happens during CLOSED periods
-            // During OPEN periods: use reactive control to maintain target
-            $heating = $this->calculateHeating(
-                $netRequirement,
-                (float) $hour['air_temperature'],
-                $effectiveTarget,
-                $currentWaterTemp
-            );
+            if ($controlStrategy === 'predictive' && $targetTemp !== null && $this->openPlan !== null) {
+                // OPEN period with plan
+                $heating = $this->applyOpenPeriodHeating(
+                    $this->openPlan,
+                    $netRequirement,
+                    (float) $hour['air_temperature'],
+                    $currentWaterTemp,
+                    $targetTemp
+                );
+            } else {
+                // Closed period (with or without plan) or reactive mode
+                $heating = $this->calculateHeating(
+                    $netRequirement,
+                    (float) $hour['air_temperature'],
+                    $effectiveTarget,
+                    $currentWaterTemp
+                );
+            }
 
             // Update water temperature
             $heatBalance = $solarGain + $heating['total_heat'] - $losses['total'];
@@ -1557,12 +1567,13 @@ class EnergySimulator {
     }
 
     /**
-     * Apply planned heating rates during open periods
+     * Apply heating during open periods based on plan
      *
-     * Uses the pre-calculated HP and boiler rates from planOpenPeriod()
-     * instead of reactive control based on temperature difference.
+     * Algorithm:
+     * - Case 1 (HP enough): Run HP at planned rate for whole period
+     * - Case 2 (HP not enough): HP at full capacity + boiler reactive to maintain target
      */
-    private function applyPlannedHeating($plan, $netRequirement, $airTemp, $currentWaterTemp, $targetTemp) {
+    private function applyOpenPeriodHeating($plan, $netRequirement, $airTemp, $currentWaterTemp, $targetTemp) {
         $result = [
             'hp_heat' => 0,
             'hp_electricity' => 0,
@@ -1573,25 +1584,44 @@ class EnergySimulator {
             'cost' => 0,
         ];
 
-        // Use planned rates from open period plan
+        $hpCapacity = $this->equipment['heat_pump']['capacity_kw'] ?? 200;
         $plannedHpRate = $plan['hp_rate'] ?? 0;
-        $plannedBoilerRate = $plan['boiler_rate'] ?? 0;
+        $planCase = $plan['case'] ?? 1;
 
-        // Apply HP at planned rate (or capacity if plan rate exceeds)
-        if ($plannedHpRate > 0) {
-            $hpResult = $this->applyHeatPump($plannedHpRate, $airTemp);
+        if ($planCase === 1) {
+            // Case 1: HP is enough - run at planned rate for whole period
+            if ($plannedHpRate > 0) {
+                $hpResult = $this->applyHeatPump($plannedHpRate, $airTemp);
+                $result['hp_heat'] = $hpResult['heat'];
+                $result['hp_electricity'] = $hpResult['electricity'];
+                $result['hp_cop'] = $hpResult['cop'];
+                $result['cost'] += $hpResult['cost'];
+            }
+        } else {
+            // Case 2: HP not enough - HP at full + boiler reactive to maintain target
+            // Always run HP at full capacity
+            $hpResult = $this->applyHeatPump($hpCapacity, $airTemp);
             $result['hp_heat'] = $hpResult['heat'];
             $result['hp_electricity'] = $hpResult['electricity'];
             $result['hp_cop'] = $hpResult['cop'];
             $result['cost'] += $hpResult['cost'];
-        }
 
-        // Apply boiler at planned rate
-        if ($plannedBoilerRate > 0 && $this->equipment['boiler']['enabled']) {
-            $boilerResult = $this->applyBoiler($plannedBoilerRate);
-            $result['boiler_heat'] = $boilerResult['heat'];
-            $result['boiler_fuel'] = $boilerResult['fuel'];
-            $result['cost'] += $boilerResult['cost'];
+            // Calculate remaining heat needed to maintain target
+            $tempDiff = $targetTemp - $currentWaterTemp;
+            $heatToMaintain = $netRequirement; // Cover losses
+            if ($tempDiff > 0) {
+                // Below target - need extra heat to recover
+                $heatToMaintain += $this->calculateHeatForTempRise($tempDiff, 1.0);
+            }
+
+            // Boiler covers shortfall after HP
+            $remainingNeed = max(0, $heatToMaintain - $result['hp_heat']);
+            if ($remainingNeed > 0 && $this->equipment['boiler']['enabled']) {
+                $boilerResult = $this->applyBoiler($remainingNeed);
+                $result['boiler_heat'] = $boilerResult['heat'];
+                $result['boiler_fuel'] = $boilerResult['fuel'];
+                $result['cost'] += $boilerResult['cost'];
+            }
         }
 
         $result['total_heat'] = $result['hp_heat'] + $result['boiler_heat'];
