@@ -1361,38 +1361,28 @@ class HeatAQAPI {
             // Query all relevant columns including new fields
             $stmt = $this->db->query("
                 SELECT station_id, station_name as name, latitude, longitude, elevation_m as elevation,
-                       measurement_height_wind, measurement_height_temp, terrain_roughness
+                       wind_height_m as measurement_height_wind, terrain_roughness
                 FROM weather_stations
                 ORDER BY station_name
             ");
             $stations = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
-            // Fallback: try without new columns if migration not run yet
+            // Fallback: basic columns only
             try {
                 $stmt = $this->db->query("
                     SELECT station_id, station_name as name, latitude, longitude, elevation_m as elevation,
-                           measurement_height_wind, measurement_height_temp
+                           wind_height_m as measurement_height_wind
                     FROM weather_stations
                     ORDER BY station_name
                 ");
                 $stations = $stmt->fetchAll(PDO::FETCH_ASSOC);
             } catch (PDOException $e2) {
-                // Final fallback: basic columns only
-                try {
-                    $stmt = $this->db->query("
-                        SELECT station_id, station_name as name, latitude, longitude
-                        FROM weather_stations
-                        ORDER BY station_name
-                    ");
-                    $stations = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                } catch (PDOException $e3) {
-                    $this->sendResponse([
-                        'stations' => [],
-                        'summary' => [],
-                        'error' => $e3->getMessage()
-                    ]);
-                    return;
-                }
+                $this->sendResponse([
+                    'stations' => [],
+                    'summary' => [],
+                    'error' => $e2->getMessage()
+                ]);
+                return;
             }
         }
 
@@ -1504,7 +1494,7 @@ class HeatAQAPI {
 
         $stmt = $this->db->prepare("
             INSERT INTO weather_stations
-            (station_id, station_name, latitude, longitude, elevation_m, measurement_height_wind, terrain_roughness)
+            (station_id, station_name, latitude, longitude, elevation_m, wind_height_m, terrain_roughness)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ");
 
@@ -1536,7 +1526,7 @@ class HeatAQAPI {
                 latitude = ?,
                 longitude = ?,
                 elevation_m = ?,
-                measurement_height_wind = COALESCE(?, measurement_height_wind),
+                wind_height_m = COALESCE(?, wind_height_m),
                 terrain_roughness = COALESCE(?, terrain_roughness)
             WHERE station_id = ?
         ");
