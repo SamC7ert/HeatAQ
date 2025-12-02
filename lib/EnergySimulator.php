@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.20';  // Debug endpoint uses same calculateHeatLosses() as simulation
+    const VERSION = '3.10.21';  // Increase water temp decimals for comparison debugging
 
     private $db;
     private $siteId;
@@ -667,7 +667,7 @@ class EnergySimulator {
                 'cost' => round($heating['cost'], 2),
                 // Store intermediate calculation values for debugging
                 'calc' => [
-                    'water_temp_start' => round($waterTempStart, 2),
+                    'water_temp_start' => round($waterTempStart, 4),
                     'net_requirement_kw' => round($netRequirement, 2),
                     'losses_total_kw' => round($losses['total'], 2),
                     'solar_gain_kw' => round($solarGain, 2),
@@ -2122,7 +2122,7 @@ class EnergySimulator {
                     'tunnel_temp_c' => $tunnelTemp,
                 ],
                 'pool' => [
-                    'water_temp_c' => round($poolTemp, 2),
+                    'water_temp_c' => round($poolTemp, 4),
                     'area_m2' => $area,
                     'volume_m3' => $volume,
                     'depth_m' => $depth,
