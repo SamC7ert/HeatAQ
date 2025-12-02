@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.3';  // Fix: open period uses planned HP rate, case 2 adds reactive boiler
+    const VERSION = '3.10.4';  // Fix: HP rate = avg demand (not demand-buffer), buffer is safety margin
 
     private $db;
     private $siteId;
@@ -1533,26 +1533,27 @@ class EnergySimulator {
             $periodDemandTotal += $losses['total'];
         }
 
-        // Calculate available energy: temperature buffer + HP capacity
+        // Calculate average demand rate
+        $avgDemandRate = $periodDemandTotal / max(1, $periodDuration);
+
+        // Calculate temperature buffer (excess temp above target)
         $tempExcess = max(0, $waterTemp - $targetTemp);
         $energyBuffer = $tempExcess * $this->thermalMassRate;
 
-        $hpAvailable = $hpCapacity * $periodDuration;
-        $totalAvailable = $energyBuffer + $hpAvailable;
-
         // Determine HP and boiler rates
-        if ($totalAvailable >= $periodDemandTotal) {
-            // We have enough capacity - spread HP evenly, use buffer
-            $hpRate = ($periodDemandTotal - $energyBuffer) / max(1, $periodDuration);
-            $hpRate = max(0, min($hpRate, $hpCapacity));
+        // HP should cover average demand rate; buffer handles peak hours
+        if ($avgDemandRate <= $hpCapacity) {
+            // Case 1: HP can cover average demand
+            // Run HP at average demand rate; buffer handles high-loss hours
+            $hpRate = $avgDemandRate;
             $boilerRate = 0;
             $case = 1;
         } else {
-            // Need HP at max and possibly boiler
+            // Case 2: HP not enough - run HP at full, boiler covers shortfall
             $hpRate = $hpCapacity;
-            $energyShortfall = $periodDemandTotal - $totalAvailable;
-            $boilerRate = min($energyShortfall / max(1, $periodDuration), $boilerCapacity);
-            $case = ($boilerRate > 0) ? 2 : 1;
+            $shortfallRate = $avgDemandRate - $hpCapacity;
+            $boilerRate = min($shortfallRate, $boilerCapacity);
+            $case = 2;
         }
 
         return [

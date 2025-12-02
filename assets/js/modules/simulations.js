@@ -224,8 +224,17 @@ const SimulationsModule = {
         const statusEl = document.getElementById('simulation-status');
         btn.disabled = true;
         btn.textContent = 'Running...';
+
+        // Get simulator version to display
+        let simVersion = 'unknown';
+        try {
+            const versionRes = await fetch('/api/simulation_api.php?action=get_version');
+            const versionData = await versionRes.json();
+            simVersion = versionData.simulator_version || 'unknown';
+        } catch (e) { /* ignore */ }
+
         if (statusEl) {
-            statusEl.textContent = 'Starting simulation...';
+            statusEl.textContent = `Starting simulation v${simVersion}...`;
             statusEl.style.color = '#666';
         }
 
@@ -2457,7 +2466,7 @@ const SimulationsModule = {
                 const completed = new Date(lastRun.completed_at);
                 const dateStr = completed.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
                 const timeStr = completed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                const version = lastRun.simulator_version || lastRun.meta?.simulator_version || 'unknown';
+                const version = lastRun.config?.simulator_version || 'unknown';
                 statusEl.textContent = `Last run v${version}: ${dateStr} - ${timeStr}`;
                 statusEl.style.color = '#28a745';
             }
