@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.5';  // Add open_plan debug info, revert to buffer-based HP rate calc
+    const VERSION = '3.10.8';  // FIX: wrong param order in planOpenPeriod - was passing solar_ghi as isOpen!
 
     private $db;
     private $siteId;
@@ -1515,32 +1515,13 @@ class EnergySimulator {
     }
 
     /**
-     * Plan open period heating - Python v3.6.0.3 plan_period_opening()
-     *
-     * At OPEN transition, calculates optimal HP/boiler rates for the period.
-     * Uses excess temperature as energy buffer and forecasts demand.
+     * Core calculation for open period HP/boiler rates
+     * Called by both planOpenPeriod() and debugSingleHour()
      */
-    private function planOpenPeriod($timestamp, $waterTemp, $weatherData, $currentIdx, $periodDuration) {
+    private function calculateOpenPlanRates($waterTemp, $periodDemandTotal, $periodDuration) {
         $hpCapacity = $this->equipment['heat_pump']['capacity_kw'] ?? 200;
         $boilerCapacity = $this->equipment['boiler']['capacity_kw'] ?? 200;
         $targetTemp = $this->poolConfig['target_temp'] ?? 28.0;
-
-        // Calculate total demand for the open period
-        $periodDemandTotal = 0;
-        for ($i = 0; $i < $periodDuration; $i++) {
-            if ($currentIdx + $i >= count($weatherData)) break;
-
-            $weather = $weatherData[$currentIdx + $i];
-            $losses = $this->calculateHeatLosses(
-                $waterTemp,
-                $weather['air_temp'] ?? 15,
-                $weather['wind_speed'] ?? 2,
-                $weather['humidity'] ?? 70,
-                $weather['solar_ghi'] ?? 0,
-                true  // is_open
-            );
-            $periodDemandTotal += $losses['total'];
-        }
 
         // Calculate temperature buffer (excess temp above target)
         $tempExcess = max(0, $waterTemp - $targetTemp);
@@ -1576,11 +1557,43 @@ class EnergySimulator {
             'avg_demand_rate' => round($avgDemandRate, 1),
             'energy_buffer' => round($energyBuffer, 1),
             'temp_excess' => round($tempExcess, 2),
-            'temp_start' => round($waterTemp, 2),
-            'target_temp' => $targetTemp,
-            'hp_capacity' => $hpCapacity,
             'thermal_mass_rate' => round($this->thermalMassRate, 1),
+            'hp_capacity' => $hpCapacity,
+            'target_temp' => $targetTemp,
         ];
+    }
+
+    /**
+     * Plan open period heating - Python v3.6.0.3 plan_period_opening()
+     *
+     * At OPEN transition, calculates optimal HP/boiler rates for the period.
+     * Uses excess temperature as energy buffer and forecasts demand.
+     */
+    private function planOpenPeriod($timestamp, $waterTemp, $weatherData, $currentIdx, $periodDuration) {
+        // Calculate total demand for the open period
+        $periodDemandTotal = 0;
+        for ($i = 0; $i < $periodDuration; $i++) {
+            if ($currentIdx + $i >= count($weatherData)) break;
+
+            $weather = $weatherData[$currentIdx + $i];
+            $losses = $this->calculateHeatLosses(
+                $waterTemp,
+                $weather['air_temp'] ?? 15,
+                $weather['wind_speed'] ?? 2,
+                $weather['humidity'] ?? 70,
+                true,  // is_open
+                null   // tunnelTemp
+            );
+            $periodDemandTotal += $losses['total'];
+        }
+
+        // Use shared calculation
+        $plan = $this->calculateOpenPlanRates($waterTemp, $periodDemandTotal, $periodDuration);
+
+        // Add temp_start for compatibility
+        $plan['temp_start'] = round($waterTemp, 2);
+
+        return $plan;
     }
 
     /**
@@ -2326,6 +2339,37 @@ class EnergySimulator {
                 'excel_wall_loss' => 0.909,
                 'excel_floor_loss' => 0.484,
             ],
+            'pool' => $this->calculateOpenPlanDebug($isOpen, $poolTemp, $totalLossKW, $targetTemp),
+        ];
+    }
+
+    /**
+     * Calculate open plan debug info for debugSingleHour
+     * Uses same calculation as planOpenPeriod but with estimated demand
+     */
+    private function calculateOpenPlanDebug($isOpen, $waterTemp, $currentLossKW, $targetTemp) {
+        if (!$isOpen) {
+            return ['open_plan' => null];
+        }
+
+        $periodDuration = 10; // Assume 10 hour open period
+        $periodDemandTotal = $currentLossKW * $periodDuration; // Estimate
+
+        // Use shared calculation
+        $plan = $this->calculateOpenPlanRates($waterTemp, $periodDemandTotal, $periodDuration);
+
+        return [
+            'open_plan' => [
+                'case' => $plan['case'],
+                'hp_rate' => $plan['hp_rate'],
+                'avg_demand' => $plan['avg_demand_rate'],
+                'buffer_kwh' => $plan['energy_buffer'],
+                'temp_excess' => $plan['temp_excess'],
+                'period_demand' => $plan['period_demand'],
+                'thermal_mass' => $plan['thermal_mass_rate'],
+                'hp_capacity' => $plan['hp_capacity'],
+                'target_temp' => $plan['target_temp'],
+            ]
         ];
     }
 }
