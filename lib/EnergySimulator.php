@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.14';  // Add mode_check and HP mismatch warning in debug card
+    const VERSION = '3.10.15';  // Add comparison card: Stored vs Calculated vs Planned
 
     private $db;
     private $siteId;

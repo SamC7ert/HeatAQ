@@ -1780,6 +1780,54 @@ const SimulationsModule = {
             </div>
         `);
 
+        // Comparison Card: Stored vs Calculated vs Planned
+        const openPlanData = data.pool?.open_plan;
+        const storedNet = (stored.total_loss_kw || 0) - (stored.solar_gain_kw || 0);
+        const calcNet = sum.net_requirement_kw || 0;
+        const plannedHP = openPlanData?.hp_rate || null;
+
+        const diffNet = Math.abs(storedNet - calcNet);
+        const diffHP = plannedHP ? Math.abs((stored.hp_heat_kw || 0) - plannedHP) : null;
+
+        const comparisonCard = document.getElementById('debug-comparison');
+        if (comparisonCard) {
+            comparisonCard.innerHTML = `
+                <h4 style="margin: 0 0 8px 0; font-size: 12px;">Stored vs Calculated vs Planned</h4>
+                <table class="data-table compact" style="font-size: 11px; width: 100%;">
+                    <tr style="background: #f5f5f5;">
+                        <th></th>
+                        <th>Stored (Sim)</th>
+                        <th>Calculated</th>
+                        <th>Planned</th>
+                        <th>Issue?</th>
+                    </tr>
+                    <tr>
+                        <td>Net Demand</td>
+                        <td><code>${storedNet.toFixed(1)} kW</code></td>
+                        <td><code>${calcNet.toFixed(1)} kW</code></td>
+                        <td>-</td>
+                        <td>${diffNet > 5 ? '<span style="color:orange;">Δ' + diffNet.toFixed(1) + '</span>' : '✓'}</td>
+                    </tr>
+                    <tr>
+                        <td>HP Output</td>
+                        <td><code>${(stored.hp_heat_kw || 0).toFixed(1)} kW</code></td>
+                        <td><code>${(hs.hp_output_kw || 0).toFixed(1)} kW</code></td>
+                        <td><code>${plannedHP ? plannedHP.toFixed(1) + ' kW' : '-'}</code></td>
+                        <td>${diffHP && diffHP > 5 ? '<span style="color:red;font-weight:bold;">Δ' + diffHP.toFixed(0) + ' ⚠</span>' : (plannedHP ? '✓' : '-')}</td>
+                    </tr>
+                    <tr>
+                        <td>Boiler</td>
+                        <td><code>${(stored.boiler_heat_kw || 0).toFixed(1)} kW</code></td>
+                        <td><code>${(hs.boiler_output_kw || 0).toFixed(1)} kW</code></td>
+                        <td>-</td>
+                        <td>-</td>
+                    </tr>
+                </table>
+                ${diffHP && diffHP > 5 ? '<div style="color:red;font-size:10px;margin-top:6px;padding:4px;background:#fff0f0;border-radius:3px;"><strong>⚠ HP not using planned rate!</strong> Stored=' + (stored.hp_heat_kw||0).toFixed(0) + ' but Plan=' + plannedHP.toFixed(0) + '. Likely openPlan=null during simulation.</div>' : ''}
+            `;
+            comparisonCard.style.display = 'block';
+        }
+
         // Show results
         const resultsDiv = document.getElementById('debug-results');
         if (resultsDiv) resultsDiv.style.display = 'block';
