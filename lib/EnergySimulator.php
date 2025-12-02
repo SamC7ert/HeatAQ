@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.9';  // FIX: null check for thermalMassRate in calculateOpenPlanRates
+    const VERSION = '3.10.10';  // FIX: allow negative buffer (deficit) when temp below target
 
     private $db;
     private $siteId;
@@ -622,7 +622,7 @@ class EnergySimulator {
                         'hp_rate' => $this->openPlan['hp_rate'] ?? 0,
                         'avg_demand' => $this->openPlan['avg_demand_rate'] ?? 0,
                         'buffer_kwh' => $this->openPlan['energy_buffer'] ?? 0,
-                        'temp_excess' => $this->openPlan['temp_excess'] ?? 0,
+                        'temp_diff' => $this->openPlan['temp_diff'] ?? 0,
                         'period_demand' => $this->openPlan['period_demand'] ?? 0,
                         'thermal_mass' => $this->openPlan['thermal_mass_rate'] ?? 0,
                     ] : null,
@@ -1524,9 +1524,10 @@ class EnergySimulator {
         $targetTemp = $this->poolConfig['target_temp'] ?? 28.0;
         $thermalMassRate = $this->thermalMassRate ?? 0;
 
-        // Calculate temperature buffer (excess temp above target)
-        $tempExcess = max(0, $waterTemp - $targetTemp);
-        $energyBuffer = $tempExcess * $thermalMassRate;
+        // Calculate temperature difference from target
+        // Positive = buffer (excess above target), Negative = deficit (below target)
+        $tempDiff = $waterTemp - $targetTemp;
+        $energyBuffer = $tempDiff * $thermalMassRate;  // Can be negative (deficit)
         $avgDemandRate = $periodDemandTotal / max(1, $periodDuration);
 
         // Available energy: buffer + HP over the period
@@ -1557,7 +1558,7 @@ class EnergySimulator {
             'period_demand' => round($periodDemandTotal, 1),
             'avg_demand_rate' => round($avgDemandRate, 1),
             'energy_buffer' => round($energyBuffer, 1),
-            'temp_excess' => round($tempExcess, 2),
+            'temp_diff' => round($tempDiff, 2),
             'thermal_mass_rate' => round($thermalMassRate, 1),
             'hp_capacity' => $hpCapacity,
             'target_temp' => $targetTemp,
@@ -2365,7 +2366,7 @@ class EnergySimulator {
                 'hp_rate' => $plan['hp_rate'],
                 'avg_demand' => $plan['avg_demand_rate'],
                 'buffer_kwh' => $plan['energy_buffer'],
-                'temp_excess' => $plan['temp_excess'],
+                'temp_diff' => $plan['temp_diff'],
                 'period_demand' => $plan['period_demand'],
                 'thermal_mass' => $plan['thermal_mass_rate'],
                 'hp_capacity' => $plan['hp_capacity'],
