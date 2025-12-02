@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.42';  // Add evaporation/convection/radiation breakdown to debug
+    const VERSION = '3.10.43';  // Add cover breakdown to debug
 
     private $db;
     private $siteId;
@@ -2383,6 +2383,13 @@ class EnergySimulator {
                 'water_temp_k' => round($poolTemp + 273.15, 1),
                 'sky_temp_k' => round($airTemp - 10 + 273.15, 1),
                 'loss_kw' => round($radLossKW, 3),
+            ],
+            'cover' => [
+                'has_cover' => $hasCover,
+                'is_covered' => $isCovered,
+                'u_value' => $coverUValue,
+                'transmittance' => $coverTransmittance,
+                'loss_kw' => round($coverLossKW, 3),
             ],
             'solar_gain' => [
                 'source' => $solarSource,
