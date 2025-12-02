@@ -152,12 +152,12 @@
                     <div class="ohc-selector card">
                         <div class="ohc-header">
                             <label for="ohc-selector">Open Hours Calendar:</label>
-                            <select id="ohc-selector" onchange="app.schedules.loadOHC()">
-                                <option value="1">Hisøy Swim Club - Standard Hours</option>
+                            <select id="ohc-selector" onchange="app.schedules.loadOHC()" disabled>
+                                <option value="">Loading...</option>
                             </select>
-                            <button class="btn btn-primary btn-sm" onclick="app.schedules.toggleNewOHCForm()">+ New</button>
-                            <button class="btn btn-primary btn-sm" onclick="app.schedules.saveOHC()">Save</button>
-                            <button class="btn btn-danger btn-sm" onclick="app.schedules.deleteOHC()">Delete</button>
+                            <button id="ohc-btn-new" class="btn btn-primary btn-sm" onclick="app.schedules.toggleNewOHCForm()" disabled>+ New</button>
+                            <button id="ohc-btn-save" class="btn btn-primary btn-sm" onclick="app.schedules.saveOHC()" disabled>Save</button>
+                            <button id="ohc-btn-delete" class="btn btn-danger btn-sm" onclick="app.schedules.deleteOHC()" disabled>Delete</button>
                         </div>
                         <div id="ohc-description" class="ohc-description">
                             Norwegian holidays, seasonal variations, standard pool opening hours
