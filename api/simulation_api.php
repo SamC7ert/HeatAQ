@@ -937,6 +937,8 @@ try {
                     $currentOpenPlan = $simulator->calculateOpenPlanRatesPublic($transitionWaterTemp, $periodDemandTotal, $periodDuration);
                     $currentOpenPlan['transition_water_temp'] = $transitionWaterTemp;  // Store for debugging
                     $currentOpenPlan['transition_hour'] = $ts;
+                    // Map thermal_mass_rate to thermal_mass (consistent with simulation hourly output)
+                    $currentOpenPlan['thermal_mass'] = $currentOpenPlan['thermal_mass_rate'] ?? 0;
                 }
 
                 // Clear plan on CLOSE transition
