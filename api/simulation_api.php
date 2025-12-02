@@ -16,11 +16,6 @@
  * - GET ?action=get_version - Get simulator version
  */
 
-// Start session for debug cache (if not already started by auth.php)
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
 // Enable error output for debugging
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
@@ -721,6 +716,10 @@ try {
             ];
 
             // Check session cache for open_plan/heating_mode (populated by debug_week)
+            // Ensure session is started (auth.php may or may not have started it)
+            if (session_status() === PHP_SESSION_NONE) {
+                session_start();
+            }
             if (isset($_SESSION['debug_cache'][$runId][$timestamp])) {
                 $cached = $_SESSION['debug_cache'][$runId][$timestamp];
                 $debug['stored']['heating_mode'] = $cached['heating_mode'] ?? null;
@@ -928,6 +927,10 @@ try {
             }
 
             // Store in session keyed by run_id
+            // Ensure session is started (auth.php may or may not have started it)
+            if (session_status() === PHP_SESSION_NONE) {
+                session_start();
+            }
             $_SESSION['debug_cache'][$runId] = $debugCache;
 
             sendResponse([
