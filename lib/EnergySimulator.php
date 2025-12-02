@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.8';  // FIX: wrong param order in planOpenPeriod - was passing solar_ghi as isOpen!
+    const VERSION = '3.10.9';  // FIX: null check for thermalMassRate in calculateOpenPlanRates
 
     private $db;
     private $siteId;
@@ -1522,10 +1522,11 @@ class EnergySimulator {
         $hpCapacity = $this->equipment['heat_pump']['capacity_kw'] ?? 200;
         $boilerCapacity = $this->equipment['boiler']['capacity_kw'] ?? 200;
         $targetTemp = $this->poolConfig['target_temp'] ?? 28.0;
+        $thermalMassRate = $this->thermalMassRate ?? 0;
 
         // Calculate temperature buffer (excess temp above target)
         $tempExcess = max(0, $waterTemp - $targetTemp);
-        $energyBuffer = $tempExcess * $this->thermalMassRate;
+        $energyBuffer = $tempExcess * $thermalMassRate;
         $avgDemandRate = $periodDemandTotal / max(1, $periodDuration);
 
         // Available energy: buffer + HP over the period
@@ -1557,7 +1558,7 @@ class EnergySimulator {
             'avg_demand_rate' => round($avgDemandRate, 1),
             'energy_buffer' => round($energyBuffer, 1),
             'temp_excess' => round($tempExcess, 2),
-            'thermal_mass_rate' => round($this->thermalMassRate, 1),
+            'thermal_mass_rate' => round($thermalMassRate, 1),
             'hp_capacity' => $hpCapacity,
             'target_temp' => $targetTemp,
         ];
