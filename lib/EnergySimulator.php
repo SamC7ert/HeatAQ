@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.34';  // Debug first_open_plan in ACTUAL simulation (meta)
+    const VERSION = '3.10.35';  // debug_plan_call now captures SELECTED date transition
 
     private $db;
     private $siteId;
