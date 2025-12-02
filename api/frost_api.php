@@ -7,24 +7,51 @@
 
 header('Content-Type: application/json');
 
-// Load configuration
-$configPath = dirname(__DIR__, 2) . '/config_heataq/database.env';
-$config = [];
-if (file_exists($configPath)) {
-    $lines = file($configPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        if (strpos($line, ';') === 0) continue; // Skip comments
-        if (strpos($line, '=') !== false) {
-            list($key, $value) = explode('=', $line, 2);
-            $config[trim($key)] = trim($value);
+// Include configuration loader (same as heataq_api.php)
+require_once __DIR__ . '/../config.php';
+
+// Get FROST_CLIENT_ID - try Config class first, then fallback to direct file read
+$frostClientId = null;
+
+// Method 1: Try Config class if it has a get method
+if (method_exists('Config', 'get')) {
+    $frostClientId = Config::get('FROST_CLIENT_ID');
+}
+
+// Method 2: Try Config class getEnvConfig if available
+if (!$frostClientId && method_exists('Config', 'getEnvConfig')) {
+    $envConfig = Config::getEnvConfig();
+    $frostClientId = $envConfig['FROST_CLIENT_ID'] ?? null;
+}
+
+// Method 3: Fallback - read database.env directly (same location Config class uses)
+if (!$frostClientId) {
+    $configPaths = [
+        dirname(__DIR__, 2) . '/config_heataq/database.env',  // /config_heataq/database.env
+        '/config_heataq/database.env',                          // Absolute path
+        dirname(__DIR__) . '/database.env',                     // HeatAQ/database.env
+    ];
+
+    foreach ($configPaths as $configPath) {
+        if (file_exists($configPath)) {
+            $lines = file($configPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            foreach ($lines as $line) {
+                if (strpos($line, ';') === 0) continue; // Skip comments
+                if (strpos($line, 'FROST_CLIENT_ID') !== false && strpos($line, '=') !== false) {
+                    list($key, $value) = explode('=', $line, 2);
+                    if (trim($key) === 'FROST_CLIENT_ID') {
+                        $frostClientId = trim($value);
+                        break 2;
+                    }
+                }
+            }
         }
     }
 }
 
-$frostClientId = $config['FROST_CLIENT_ID'] ?? null;
 if (!$frostClientId) {
     http_response_code(500);
-    echo json_encode(['error' => 'FROST_CLIENT_ID not configured']);
+    echo json_encode(['error' => 'FROST_CLIENT_ID not configured', 'debug' => 'Checked Config class and database.env paths']);
     exit;
 }
 
