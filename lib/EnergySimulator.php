@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.28';  // Added thermal_mass_rate to meta for debugging
+    const VERSION = '3.10.29';  // Added getThermalMassRate() and included in config_snapshot
 
     private $db;
     private $siteId;
@@ -380,6 +380,14 @@ class EnergySimulator {
      */
     public function getEquipment() {
         return $this->equipment;
+    }
+
+    /**
+     * Get thermal mass rate (kWh/°C)
+     * Used for debugging to verify calculation in config_snapshot
+     */
+    public function getThermalMassRate() {
+        return $this->thermalMassRate;
     }
 
     /**
