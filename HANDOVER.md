@@ -2,6 +2,44 @@
 
 **Current Version:** V122 (December 2024)
 
+## Recent Session Summary (Dec 2024)
+
+### Completed Work
+1. **Debug Mode Toggle** - Admin-only toggle in System section controls visibility of detail cards in Details tab
+2. **Details Tab** (renamed from Debug) - Top section (graph, hour selector, main results) always visible; only detail cards are toggled
+3. **Cover Heat Loss Breakdown** - Debug output now shows evaporation/convection/radiation saved by pool cover
+4. **Memory Limit** - Increased to 512M for long simulations
+5. **CSS Fix** - Added `!important` to `.debug-only` rules to prevent inline style overrides
+
+### Key Files Modified
+- `assets/js/config.js` - Version V122
+- `assets/css/main.css` - Debug mode CSS with `!important`
+- `assets/js/modules/admin.js` - `toggleDebugMode()`, `applyDebugMode()`, `initDebugMode()`
+- `assets/js/modules/simulations.js` - Removed inline `display:block` overrides
+- `lib/EnergySimulator.php` - Cover breakdown in debug output (v3.10.43)
+- `index.html` - Debug tab renamed to Details, HTML restructuring
+
+### Debug Mode Architecture
+```
+CSS:
+  .debug-only { display: none !important; }
+  body.debug-mode-on .debug-only { display: block !important; }
+
+JavaScript (admin.js):
+  toggleDebugMode(enabled) → saves to localStorage + server
+  applyDebugMode(enabled) → adds/removes body.debug-mode-on class
+  initDebugMode() → called on page load, checks admin status
+
+HTML:
+  <div id="debug-results" class="debug-only"> <!-- controlled by debug mode -->
+```
+
+### Ongoing Issues
+- `save_preference` API returns 400 for debug_mode (localStorage fallback works)
+- Predictive preheating algorithm needs testing (HP rate showing 59 kW instead of 125 kW)
+
+---
+
 ## Before Starting
 
 1. Read the key documentation:
@@ -59,6 +97,11 @@ The System tab (Admin only) provides three cards in order:
 ### 3. Database Schema Export
 - **Export & Push to Git**: Exports `schema.json` + `schema.md`, commits to `db-schema-update` branch, merges to master, pushes
 
+### 4. Debug Mode Toggle (NEW)
+- Admin-only toggle switch
+- Controls visibility of detail cards in Details tab
+- Stored in localStorage (`heataq_debug_mode`) with server sync fallback
+
 Both Archive and Export use **branch-then-merge** pattern for clean git history.
 
 ## Database Migration Workflow (Simplified)
@@ -95,24 +138,26 @@ Both Archive and Export use **branch-then-merge** pattern for clean git history.
 | Mode | Description | Status |
 |------|-------------|--------|
 | **Reactive** | Maintains target temp 24/7, ignores schedule | Testing |
-| **Predictive** | Follows schedule, uses setback temp when closed | Not started |
+| **Predictive** | Follows schedule, uses setback temp when closed | In Progress |
 | **Optimizing** | Minimizes cost using spot electricity prices | Planned |
 
 ### Simulation Config Flow
 1. User selects config template in Simulate tab
 2. `run_simulation` API loads config from `config_templates` table
 3. Config stored in `simulation_runs.config_snapshot` as JSON
-4. Debug tab loads this stored config for recalculation
+4. Details tab loads this stored config for recalculation
 
 ### Key Files
 | File | Purpose |
 |------|---------|
 | `assets/js/config.js` | App version and configuration |
-| `lib/EnergySimulator.php` | Core simulation logic |
+| `lib/EnergySimulator.php` | Core simulation logic (v3.10.43) |
 | `api/simulation_api.php` | Simulation endpoints |
 | `api/heataq_api.php` | General API (configs, users, projects) |
 | `assets/js/modules/simulations.js` | Simulation UI |
 | `assets/js/modules/simcontrol.js` | Tab control, dropdowns |
+| `assets/js/modules/admin.js` | Admin functions, debug mode toggle |
+| `assets/css/main.css` | Main styles including debug mode CSS |
 
 ### Common Issues & Fixes
 | Issue | Cause | Fix |
@@ -125,6 +170,7 @@ Both Archive and Export use **branch-then-merge** pattern for clean git history.
 | Password reset button disabled | Recursive validation bug | Fixed V113 - separated validation functions |
 | Stale branches in dropdown | Deleted remote refs cached | Fixed V112 - uses `git fetch --prune` |
 | Wrong site in SimControl | Hardcoded default 'arendal_aquatic' | Fixed - now reads from cookie, validates in DB |
+| Debug cards always visible | Inline styles overriding CSS | Fixed V122 - removed inline styles, added !important |
 
 ### Password Reset Flow
 The password reset form (`reset_password.html`) includes:
@@ -153,16 +199,17 @@ After changes, verify:
 1. Login works on both desktop and mobile browsers
 2. Simulate tab loads last run
 3. Config dropdown populates
-4. Debug tab shows correct config name
+4. Details tab shows correct config name
 5. Run simulation completes without errors
 6. Charts render properly
+7. **Debug mode toggle** works (admin only) - detail cards show/hide
 
 ## Known Issues (see `docs/ROADMAP.md`)
 
 - Site selector may not load correct site
 - History tab only loads partial data
 - Analysis tab does not show data
-- Debug tab open/close may differ from main simulation
+- Predictive mode: HP rate calculation needs verification
 
 ## Documentation Index
 
@@ -171,6 +218,12 @@ After changes, verify:
 | `README.md` | Project overview and setup |
 | `docs/SYSTEM_ARCHITECTURE.md` | Full module documentation |
 | `docs/DATABASE_STRUCTURE.md` | Database tables and relationships |
-| `docs/HEATING_ALGORITHM.md` | Control mode logic |
+| `docs/HEATING_ALGORITHM.md` | Control mode logic, cover factors |
 | `docs/ROADMAP.md` | Priorities, known issues, planned features |
 | `docs/DESIGN_GUIDE.md` | UI/UX guidelines |
+
+## Next Priority Tasks
+
+1. **Predictive Preheating** - Debug why HP shows 59 kW instead of 125 kW capacity
+2. **Batch Data Storage** - For simulations longer than current memory allows
+3. **save_preference API** - Fix 400 error for debug_mode preference
