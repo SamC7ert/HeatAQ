@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.30';  // Fix: thermal_mass field mapping in debug_week cache
+    const VERSION = '3.10.31';  // Debug logging for thermalMassRate
 
     private $db;
     private $siteId;
@@ -371,6 +371,9 @@ class EnergySimulator {
             if (isset($this->poolConfig['volume_m3']) && $this->poolConfig['volume_m3'] > 0) {
                 $poolMass = $this->poolConfig['volume_m3'] * self::WATER_DENSITY; // kg
                 $this->thermalMassRate = $poolMass * self::WATER_SPECIFIC_HEAT / 3600000; // kWh/°C
+                error_log("[setPoolConfig] volume={$this->poolConfig['volume_m3']}, thermalMassRate={$this->thermalMassRate}");
+            } else {
+                error_log("[setPoolConfig] volume NOT SET: " . json_encode($poolConfig));
             }
         }
     }
@@ -1572,6 +1575,8 @@ class EnergySimulator {
         $boilerCapacity = $this->equipment['boiler']['capacity_kw'] ?? 200;
         $targetTemp = $this->poolConfig['target_temp'] ?? 28.0;
         $thermalMassRate = $this->thermalMassRate ?? 0;
+
+        error_log("[calculateOpenPlanRates] thermalMassRate={$thermalMassRate}, waterTemp={$waterTemp}, target={$targetTemp}");
 
         // Calculate temperature difference from target
         // Positive = buffer (excess above target), Negative = deficit (below target)
