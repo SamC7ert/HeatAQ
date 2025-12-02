@@ -612,8 +612,15 @@ const ProjectModule = {
     // Load pool data from database (with localStorage fallback)
     async loadPoolData() {
         try {
+            // Build URL with site_id if available
+            let url = './api/heataq_api.php?action=get_pools';
+            if (this.currentSite?.site_id) {
+                url += `&site_id=${encodeURIComponent(this.currentSite.site_id)}`;
+            }
+            console.log('[Project] Fetching pools from:', url);
+
             // Try to load from database first
-            const response = await fetch('./api/heataq_api.php?action=get_pools');
+            const response = await fetch(url);
             const data = await response.json();
             console.log('[Project] get_pools response:', data);
 
