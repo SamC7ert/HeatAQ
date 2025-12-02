@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.18';  // Open period: safety check if below target, use planned boiler rate
+    const VERSION = '3.10.19';  // Simplified applyOpenPeriodHeating - just apply planned rates
 
     private $db;
     private $siteId;
@@ -1626,10 +1626,9 @@ class EnergySimulator {
     /**
      * Apply heating during open periods based on plan
      *
-     * Algorithm:
-     * - Case 1 (HP enough): Run HP at planned rate for whole period
-     * - Case 2 (HP not enough): HP at full capacity + boiler at planned rate
-     * - Safety: If below target, ensure we at least cover current losses
+     * Simple: just apply the planned rates
+     * - Case 1: HP at planned rate, no boiler
+     * - Case 2: HP at full capacity + boiler at planned rate
      */
     private function applyOpenPeriodHeating($plan, $netRequirement, $airTemp, $currentWaterTemp, $targetTemp) {
         $result = [
@@ -1647,48 +1646,25 @@ class EnergySimulator {
         $plannedBoilerRate = $plan['boiler_rate'] ?? 0;
         $planCase = $plan['case'] ?? 1;
 
-        // Safety check: if below target, ensure we cover at least current losses
-        $belowTarget = $currentWaterTemp < $targetTemp - 0.1;
-        $effectiveHpRate = $plannedHpRate;
-
-        if ($belowTarget) {
-            // Below target - use max of planned rate or current demand (up to capacity)
-            $effectiveHpRate = min($hpCapacity, max($plannedHpRate, $netRequirement));
-        }
-
         if ($planCase === 1) {
-            // Case 1: HP is enough - run at planned rate (or higher if below target)
-            if ($effectiveHpRate > 0) {
-                $hpResult = $this->applyHeatPump($effectiveHpRate, $airTemp);
+            // Case 1: HP at planned rate, no boiler
+            if ($plannedHpRate > 0) {
+                $hpResult = $this->applyHeatPump($plannedHpRate, $airTemp);
                 $result['hp_heat'] = $hpResult['heat'];
                 $result['hp_electricity'] = $hpResult['electricity'];
                 $result['hp_cop'] = $hpResult['cop'];
                 $result['cost'] += $hpResult['cost'];
             }
-
-            // If still below target and HP not covering losses, use boiler
-            if ($belowTarget && $result['hp_heat'] < $netRequirement && $this->equipment['boiler']['enabled']) {
-                $shortfall = $netRequirement - $result['hp_heat'];
-                $boilerResult = $this->applyBoiler($shortfall);
-                $result['boiler_heat'] = $boilerResult['heat'];
-                $result['boiler_fuel'] = $boilerResult['fuel'];
-                $result['cost'] += $boilerResult['cost'];
-            }
         } else {
-            // Case 2: HP not enough - HP at full + boiler at planned rate
+            // Case 2: HP at full capacity + boiler at planned rate
             $hpResult = $this->applyHeatPump($hpCapacity, $airTemp);
             $result['hp_heat'] = $hpResult['heat'];
             $result['hp_electricity'] = $hpResult['electricity'];
             $result['hp_cop'] = $hpResult['cop'];
             $result['cost'] += $hpResult['cost'];
 
-            // Boiler runs at planned rate (or reactive if below target)
-            $boilerNeed = $belowTarget
-                ? max($plannedBoilerRate, $netRequirement - $result['hp_heat'])
-                : $plannedBoilerRate;
-
-            if ($boilerNeed > 0 && $this->equipment['boiler']['enabled']) {
-                $boilerResult = $this->applyBoiler($boilerNeed);
+            if ($plannedBoilerRate > 0 && $this->equipment['boiler']['enabled']) {
+                $boilerResult = $this->applyBoiler($plannedBoilerRate);
                 $result['boiler_heat'] = $boilerResult['heat'];
                 $result['boiler_fuel'] = $boilerResult['fuel'];
                 $result['cost'] += $boilerResult['cost'];
