@@ -1782,12 +1782,24 @@ const SimulationsModule = {
 
         // Comparison Card: Stored vs Calculated vs Planned
         const openPlanData = data.pool?.open_plan;
-        const storedNet = (stored.total_loss_kw || 0) - (stored.solar_gain_kw || 0);
+        const storedCalc = stored.calc || {};  // New calc section from simulation
+        const storedNet = storedCalc.net_requirement_kw ?? ((stored.total_loss_kw || 0) - (stored.solar_gain_kw || 0));
         const calcNet = sum.net_requirement_kw || 0;
         const plannedHP = openPlanData?.hp_rate || null;
 
+        // Compare intermediate values
+        const storedWaterTemp = storedCalc.water_temp_start ?? stored.water_temp;
+        const calcWaterTemp = data.pool?.water_temp || 0;
+        const storedLosses = storedCalc.losses_total_kw ?? stored.total_loss_kw ?? 0;
+        const calcLosses = sum.total_loss_kw || 0;
+        const storedSolar = storedCalc.solar_gain_kw ?? stored.solar_gain_kw ?? 0;
+        const calcSolar = sum.solar_gain_kw || 0;
+
         const diffNet = Math.abs(storedNet - calcNet);
         const diffHP = plannedHP ? Math.abs((stored.hp_heat_kw || 0) - plannedHP) : null;
+        const diffWaterTemp = Math.abs(storedWaterTemp - calcWaterTemp);
+        const diffLosses = Math.abs(storedLosses - calcLosses);
+        const diffSolar = Math.abs(storedSolar - calcSolar);
 
         const comparisonCard = document.getElementById('debug-comparison');
         if (comparisonCard) {
@@ -1797,23 +1809,44 @@ const SimulationsModule = {
                     <tr style="background: #f5f5f5;">
                         <th></th>
                         <th>Stored (Sim)</th>
-                        <th>Calculated</th>
+                        <th>Calculated (Debug)</th>
                         <th>Planned</th>
-                        <th>Issue?</th>
+                        <th>Δ</th>
                     </tr>
                     <tr>
-                        <td>Net Demand</td>
-                        <td><code>${storedNet.toFixed(1)} kW</code></td>
-                        <td><code>${calcNet.toFixed(1)} kW</code></td>
+                        <td>Water Temp Start</td>
+                        <td><code>${storedWaterTemp?.toFixed(2) || '?'}°C</code></td>
+                        <td><code>${calcWaterTemp?.toFixed(2) || '?'}°C</code></td>
                         <td>-</td>
-                        <td>${diffNet > 5 ? '<span style="color:orange;">Δ' + diffNet.toFixed(1) + '</span>' : '✓'}</td>
+                        <td>${diffWaterTemp > 0.1 ? '<span style="color:orange;">' + diffWaterTemp.toFixed(2) + '</span>' : '✓'}</td>
                     </tr>
                     <tr>
-                        <td>HP Output</td>
-                        <td><code>${(stored.hp_heat_kw || 0).toFixed(1)} kW</code></td>
-                        <td><code>${(hs.hp_output_kw || 0).toFixed(1)} kW</code></td>
+                        <td>Total Losses</td>
+                        <td><code>${storedLosses.toFixed(1)} kW</code></td>
+                        <td><code>${calcLosses.toFixed(1)} kW</code></td>
+                        <td>-</td>
+                        <td>${diffLosses > 2 ? '<span style="color:orange;">' + diffLosses.toFixed(1) + '</span>' : '✓'}</td>
+                    </tr>
+                    <tr>
+                        <td>Solar Gain</td>
+                        <td><code>${storedSolar.toFixed(1)} kW</code></td>
+                        <td><code>${calcSolar.toFixed(1)} kW</code></td>
+                        <td>-</td>
+                        <td>${diffSolar > 1 ? '<span style="color:orange;">' + diffSolar.toFixed(1) + '</span>' : '✓'}</td>
+                    </tr>
+                    <tr style="background: #f9f9f9;">
+                        <td><strong>Net Demand</strong></td>
+                        <td><code><strong>${storedNet.toFixed(1)} kW</strong></code></td>
+                        <td><code><strong>${calcNet.toFixed(1)} kW</strong></code></td>
+                        <td>-</td>
+                        <td>${diffNet > 5 ? '<span style="color:orange;font-weight:bold;">' + diffNet.toFixed(1) + '</span>' : '✓'}</td>
+                    </tr>
+                    <tr style="background: #f0f8ff;">
+                        <td><strong>HP Output</strong></td>
+                        <td><code><strong>${(stored.hp_heat_kw || 0).toFixed(1)} kW</strong></code></td>
+                        <td><code><strong>${(hs.hp_output_kw || 0).toFixed(1)} kW</strong></code></td>
                         <td><code>${plannedHP ? plannedHP.toFixed(1) + ' kW' : '-'}</code></td>
-                        <td>${diffHP && diffHP > 5 ? '<span style="color:red;font-weight:bold;">Δ' + diffHP.toFixed(0) + ' ⚠</span>' : (plannedHP ? '✓' : '-')}</td>
+                        <td>${diffHP && diffHP > 5 ? '<span style="color:red;font-weight:bold;">' + diffHP.toFixed(0) + ' ⚠</span>' : (plannedHP ? '✓' : '-')}</td>
                     </tr>
                     <tr>
                         <td>Boiler</td>
@@ -1823,7 +1856,8 @@ const SimulationsModule = {
                         <td>-</td>
                     </tr>
                 </table>
-                ${diffHP && diffHP > 5 ? '<div style="color:red;font-size:10px;margin-top:6px;padding:4px;background:#fff0f0;border-radius:3px;"><strong>⚠ HP not using planned rate!</strong> Stored=' + (stored.hp_heat_kw||0).toFixed(0) + ' but Plan=' + plannedHP.toFixed(0) + '. Likely openPlan=null during simulation.</div>' : ''}
+                ${diffHP && diffHP > 5 ? '<div style="color:red;font-size:10px;margin-top:6px;padding:4px;background:#fff0f0;border-radius:3px;"><strong>⚠ HP not using planned rate!</strong> Stored=' + (stored.hp_heat_kw||0).toFixed(0) + ' but Plan=' + plannedHP.toFixed(0) + '</div>' : ''}
+                ${diffNet > 5 ? '<div style="color:#996600;font-size:10px;margin-top:4px;padding:4px;background:#fff8e0;border-radius:3px;">Net demand differs by ' + diffNet.toFixed(1) + ' kW - check water temp and losses</div>' : ''}
             `;
             comparisonCard.style.display = 'block';
         }
