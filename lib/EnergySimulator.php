@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.37';  // Capture open plan per day (debug_open_plans_by_date)
+    const VERSION = '3.10.38';  // Add heating_result to debug_open_plans_by_date
 
     private $db;
     private $siteId;
@@ -608,6 +608,18 @@ class EnergySimulator {
                     $currentWaterTemp,
                     $targetTemp
                 );
+
+                // Debug: capture heating result for this day's first open hour
+                $dateKey = $currentTimestamp->format('Y-m-d');
+                if (isset($this->debugOpenPlansByDate[$dateKey]) && !isset($this->debugOpenPlansByDate[$dateKey]['heating_result'])) {
+                    $this->debugOpenPlansByDate[$dateKey]['heating_result'] = [
+                        'mode' => $heatingMode,
+                        'hp_heat' => $heating['hp_heat'],
+                        'boiler_heat' => $heating['boiler_heat'],
+                        'plan_case' => $this->openPlan['case'],
+                        'plan_hp_rate' => $this->openPlan['hp_rate'],
+                    ];
+                }
             } else {
                 // Track why open_plan wasn't used
                 if ($controlStrategy !== 'predictive') {
