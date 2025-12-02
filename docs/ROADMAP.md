@@ -38,6 +38,8 @@ Long-term architectural improvements and technical debt items.
 - [x] Sidebar logo (V103)
 - [ ] Migration result display improvements
 - [ ] Better error feedback for users
+- [ ] **Progress reporting for multi-year simulations** - Show progress bar when simulation spans more than one year
+- [ ] **Norwegian date format** - Date fields currently show English format, should be Norwegian (dd.mm.yyyy). Investigate where locale is set - possibly per-user preference?
 
 ### 2. Security & Permissions
 **Priority:** High
