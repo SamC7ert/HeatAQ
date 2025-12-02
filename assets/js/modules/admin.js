@@ -1343,17 +1343,11 @@ const AdminModule = {
 
     /**
      * Apply debug mode visibility
-     * Shows/hides debug-only sections within Details tab
-     * Simulation Report is always visible, debug cards only when enabled
+     * Only detail cards (debug-only-bottom) are toggled
+     * Top section (parameters, chart) and Simulation Report always visible
      */
     applyDebugMode: function(enabled) {
-        // Toggle top debug section (parameters, heat balance, chart)
-        const debugTop = document.getElementById('debug-only-content');
-        if (debugTop) {
-            debugTop.style.display = enabled ? '' : 'none';
-        }
-
-        // Toggle bottom debug section (detail cards)
+        // Toggle detail cards section only
         const debugBottom = document.getElementById('debug-only-bottom');
         if (debugBottom) {
             debugBottom.style.display = enabled ? '' : 'none';
