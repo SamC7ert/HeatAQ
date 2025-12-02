@@ -16,6 +16,14 @@
 - Investigate why planned HP rate (from predictive control) may not be applied during open periods
 - Debug shows planned rate correctly calculated but simulation output differs
 
+## Deployment
+
+### Automatic Cache Busting
+- JS files have manual version query strings (e.g., `?v=98`)
+- Should auto-increment on deploy or use content hash
+- Consider adding cache clear to deploy process
+- Current workaround: manually bump version in index.html and call /api/clear_cache.php
+
 ## Performance
 
 (Add items as needed)
