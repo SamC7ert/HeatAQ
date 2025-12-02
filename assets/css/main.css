@@ -839,8 +839,8 @@ input[type="date"].inline-edit {
 }
 /* Debug Mode - hide detail cards when debug mode is off */
 .debug-only {
-    display: none;
+    display: none !important;
 }
 body.debug-mode-on .debug-only {
-    display: block;
+    display: block !important;
 }
