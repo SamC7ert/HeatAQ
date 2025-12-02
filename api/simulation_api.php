@@ -883,14 +883,22 @@ try {
             $prevIsOpen = null;
             $currentOpenPlan = null;
 
+            $prevWaterTemp = null;  // Track previous hour's END temp = this hour's START temp
+
             foreach ($rows as $i => $row) {
                 $ts = $row['timestamp'];
                 $isOpen = (bool)$row['is_open'];
-                $waterTemp = (float)$row['water_temp'];
+                $waterTempEnd = (float)$row['water_temp'];  // This is END-of-hour temp
                 $totalLoss = (float)$row['total_loss_kw'];
+
+                // For START-of-hour temp, use previous hour's END temp (or current if first hour)
+                $waterTempStart = ($i > 0 && $prevWaterTemp !== null) ? $prevWaterTemp : $waterTempEnd;
 
                 // Detect OPEN transition
                 if ($prevIsOpen === false && $isOpen === true) {
+                    // Use START temp (previous hour's END) - this is what simulation used for plan
+                    $transitionWaterTemp = $waterTempStart;
+
                     // Calculate period duration
                     $periodDuration = 0;
                     for ($j = $i; $j < count($rows) && (bool)$rows[$j]['is_open']; $j++) {
@@ -904,7 +912,7 @@ try {
                         $hourRow = $rows[$j];
                         // Recalculate losses at transition waterTemp (like simulation does)
                         $hourLosses = $simulator->calculateHeatLossesPublic(
-                            $waterTemp,  // Use OPEN transition temp for ALL hours
+                            $transitionWaterTemp,  // Use START temp for ALL hours
                             (float)($hourRow['air_temp'] ?? 15),
                             (float)($hourRow['wind_speed'] ?? 2),
                             70,  // humidity estimate
@@ -914,9 +922,9 @@ try {
                         $periodDemandTotal += $hourLosses['total'];
                     }
 
-                    // Now calculate plan with same logic as simulation
-                    $currentOpenPlan = $simulator->calculateOpenPlanRatesPublic($waterTemp, $periodDemandTotal, $periodDuration);
-                    $currentOpenPlan['transition_water_temp'] = $waterTemp;  // Store for debugging
+                    // Now calculate plan with same logic as simulation (using START temp)
+                    $currentOpenPlan = $simulator->calculateOpenPlanRatesPublic($transitionWaterTemp, $periodDemandTotal, $periodDuration);
+                    $currentOpenPlan['transition_water_temp'] = $transitionWaterTemp;  // Store for debugging
                     $currentOpenPlan['transition_hour'] = $ts;
                 }
 
@@ -942,6 +950,7 @@ try {
                 ];
 
                 $prevIsOpen = $isOpen;
+                $prevWaterTemp = $waterTempEnd;  // Track for next iteration
             }
 
             // Store in session keyed by run_id

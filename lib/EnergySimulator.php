@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.24';  // Fix: setPoolConfig now calculates thermalMassRate
+    const VERSION = '3.10.26';  // setConfigFromUI now calculates thermalMassRate from volume_m3
 
     private $db;
     private $siteId;
@@ -198,6 +198,12 @@ class EnergySimulator {
             if (isset($uiConfig['pool']['solar_absorption'])) {
                 $absorb = (float) $uiConfig['pool']['solar_absorption'];
                 $this->poolConfig['solar_absorption'] = $absorb > 1 ? $absorb / 100 : $absorb;
+            }
+
+            // Recalculate thermal mass rate if volume is set
+            if (isset($this->poolConfig['volume_m3']) && $this->poolConfig['volume_m3'] > 0) {
+                $poolMass = $this->poolConfig['volume_m3'] * self::WATER_DENSITY;
+                $this->thermalMassRate = $poolMass * self::WATER_SPECIFIC_HEAT / 3600000;
             }
         }
 
