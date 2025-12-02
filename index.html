@@ -82,7 +82,7 @@
         <div class="user-info">
             <span class="project-name" id="current-project"></span>
             <span class="user-name" id="current-user"></span>
-            <span class="version-badge" id="header-version">V124</span>
+            <span class="version-badge" id="header-version">V125</span>
             <button onclick="logout()" class="btn-logout">Logout</button>
         </div>
         
@@ -1185,21 +1185,46 @@
                         <div id="weather-stations-list">
                             <p class="loading">Loading...</p>
                         </div>
-                        <button class="btn btn-primary btn-sm" onclick="app.admin.addWeatherStation()">+ Add Station</button>
+                        <button class="btn btn-primary btn-sm" onclick="app.admin.addWeatherStation()" style="margin-top: 10px;">+ Add Station</button>
                     </div>
 
                     <div class="card">
                         <h3>Weather Data</h3>
-                        <div class="config-header" style="margin-bottom: 15px;">
+                        <div class="config-header" style="margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
                             <label>Select Station:</label>
                             <select id="weather-station-select" class="form-control" style="width: 250px;" onchange="app.admin.onStationChange()">
-                                <option value="">-- All Stations --</option>
+                                <option value="">-- Select Station --</option>
                             </select>
                         </div>
-                        <table class="data-table compact" style="max-width: 400px;">
-                            <tr><td>Date Range</td><td id="weather-date-range">-</td></tr>
-                            <tr><td>Total Records</td><td id="weather-record-count">-</td></tr>
-                        </table>
+
+                        <!-- Station details (shown when station selected) -->
+                        <div id="station-details" style="display: none;">
+                            <table class="data-table compact" style="max-width: 500px;">
+                                <tr><td style="width: 140px;">Date Range</td><td id="weather-date-range">-</td></tr>
+                                <tr><td>Total Records</td><td id="weather-record-count">-</td></tr>
+                                <tr><td>Location</td><td id="station-location">-</td></tr>
+                                <tr>
+                                    <td>Wind Height (m)</td>
+                                    <td><input type="number" id="station-wind-height" class="form-control inline-edit" style="width: 80px;" step="0.1" value="10"></td>
+                                </tr>
+                                <tr>
+                                    <td>Roughness (z₀)</td>
+                                    <td>
+                                        <input type="number" id="station-roughness" class="form-control inline-edit" style="width: 80px;" step="0.001" value="0.03">
+                                        <small class="text-muted" style="margin-left: 8px;">0.03=open, 0.1=suburban</small>
+                                    </td>
+                                </tr>
+                            </table>
+                            <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end;">
+                                <button class="btn btn-danger btn-sm" onclick="app.admin.deleteSelectedStation()">Delete</button>
+                                <button class="btn btn-primary btn-sm" onclick="app.admin.saveStationInline()">Save</button>
+                            </div>
+                        </div>
+
+                        <!-- No station selected message -->
+                        <div id="no-station-message">
+                            <p class="text-muted">Select a station to view data and edit parameters</p>
+                        </div>
                     </div>
 
                     <div class="admin-grid">
@@ -1289,7 +1314,7 @@
                     <div class="card">
                         <h3>System Info</h3>
                         <table class="data-table compact">
-                            <tr><td><strong>App Version</strong></td><td id="sys-app-version">V124</td></tr>
+                            <tr><td><strong>App Version</strong></td><td id="sys-app-version">V125</td></tr>
                             <tr><td><strong>Simulator</strong></td><td id="sys-simulator-ver">-</td></tr>
                             <tr><td><strong>PHP</strong></td><td id="sys-php-ver">-</td></tr>
                         </table>
@@ -1534,15 +1559,15 @@
     <!-- Core configuration -->
     <script src="./assets/js/config.js"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=124"></script>
-    <script src="./assets/js/modules/navigation.js?v=124"></script>
-    <script src="./assets/js/modules/schedules.js?v=124"></script>
-    <script src="./assets/js/modules/calendar.js?v=124"></script>
-    <script src="./assets/js/modules/simulations.js?v=124"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=124"></script>
-    <script src="./assets/js/modules/configuration.js?v=124"></script>
-    <script src="./assets/js/modules/admin.js?v=124"></script>
-    <script src="./assets/js/modules/project.js?v=124"></script>
-    <script src="./assets/js/app.js?v=124"></script>
+    <script src="./assets/js/modules/api.js?v=125"></script>
+    <script src="./assets/js/modules/navigation.js?v=125"></script>
+    <script src="./assets/js/modules/schedules.js?v=125"></script>
+    <script src="./assets/js/modules/calendar.js?v=125"></script>
+    <script src="./assets/js/modules/simulations.js?v=125"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=125"></script>
+    <script src="./assets/js/modules/configuration.js?v=125"></script>
+    <script src="./assets/js/modules/admin.js?v=125"></script>
+    <script src="./assets/js/modules/project.js?v=125"></script>
+    <script src="./assets/js/app.js?v=125"></script>
 </body>
 </html>
