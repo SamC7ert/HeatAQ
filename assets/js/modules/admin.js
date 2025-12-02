@@ -397,11 +397,13 @@ const AdminModule = {
 
         const detailsDiv = document.getElementById('station-details');
         const noStationMsg = document.getElementById('no-station-message');
+        const updateDataBtn = document.getElementById('update-data-btn');
 
         if (this.selectedStationId) {
-            // Show station details
+            // Show station details and update data button
             if (detailsDiv) detailsDiv.style.display = 'block';
             if (noStationMsg) noStationMsg.style.display = 'none';
+            if (updateDataBtn) updateDataBtn.style.display = 'inline-block';
 
             // Populate fields from station data
             const station = this.weatherStations.find(s => s.station_id === this.selectedStationId);
@@ -421,9 +423,10 @@ const AdminModule = {
                 if (roughnessEl) roughnessEl.value = station.terrain_roughness || 0.03;
             }
         } else {
-            // Hide details when no station selected
+            // Hide details and button when no station selected
             if (detailsDiv) detailsDiv.style.display = 'none';
             if (noStationMsg) noStationMsg.style.display = 'block';
+            if (updateDataBtn) updateDataBtn.style.display = 'none';
         }
 
         await this.loadWeatherData();
@@ -761,6 +764,113 @@ const AdminModule = {
         } catch (err) {
             alert('Error saving station: ' + err.message);
         }
+    },
+
+    // Show modal to update/fetch weather data for selected station
+    showUpdateDataModal: async function() {
+        if (!this.selectedStationId) {
+            alert('No station selected');
+            return;
+        }
+
+        const station = this.weatherStations.find(s => s.station_id === this.selectedStationId);
+        if (!station) return;
+
+        // Create modal with loading state
+        let html = `
+            <div class="modal-overlay" onclick="app.admin.closeStationModal()">
+                <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 500px;">
+                    <h3>Update Weather Data - ${station.name}</h3>
+                    <div id="update-data-content">
+                        <p class="text-muted">Checking available data from Frost API...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        let modalContainer = document.getElementById('station-modal-container');
+        if (!modalContainer) {
+            modalContainer = document.createElement('div');
+            modalContainer.id = 'station-modal-container';
+            document.body.appendChild(modalContainer);
+        }
+        modalContainer.innerHTML = html;
+
+        // Query Frost API for available data
+        try {
+            const response = await fetch(`./api/frost_api.php?action=check_station&station_id=${encodeURIComponent(this.selectedStationId)}`);
+            const frostData = await response.json();
+
+            const contentDiv = document.getElementById('update-data-content');
+            if (!contentDiv) return;
+
+            if (!frostData.found) {
+                contentDiv.innerHTML = `
+                    <p style="color: var(--danger);">Station not found in Frost API</p>
+                    <button class="btn btn-secondary" onclick="app.admin.closeStationModal()">Close</button>
+                `;
+                return;
+            }
+
+            // Get current data info from the displayed values
+            const currentDateRange = document.getElementById('weather-date-range')?.textContent || '-';
+            const currentRecordCount = document.getElementById('weather-record-count')?.textContent || '0';
+
+            // Determine date range
+            const frostDateRange = frostData.data_range || {};
+            const today = new Date().toISOString().split('T')[0];
+            const frostStart = frostDateRange.from ? frostDateRange.from.split('T')[0] : '2015-01-01';
+            const frostEnd = frostDateRange.to ? frostDateRange.to.split('T')[0] : today;
+
+            // Default to fetching from 2015 or station start (whichever is later) to today
+            const defaultStart = frostStart > '2015-01-01' ? frostStart : '2015-01-01';
+            const defaultEnd = frostEnd > today ? today : frostEnd;
+
+            contentDiv.innerHTML = `
+                <table class="data-table compact" style="font-size: 13px; margin-bottom: 15px;">
+                    <tr><td style="width: 140px;">Current Data</td><td>${currentDateRange} (${currentRecordCount})</td></tr>
+                    <tr><td>Frost API Range</td><td>${frostStart} → ${frostEnd}</td></tr>
+                </table>
+                <div class="form-row" style="margin-bottom: 15px;">
+                    <div class="form-group">
+                        <label>Fetch From</label>
+                        <input type="date" id="update-fetch-start" class="form-control" value="${defaultStart}">
+                    </div>
+                    <div class="form-group">
+                        <label>To</label>
+                        <input type="date" id="update-fetch-end" class="form-control" value="${defaultEnd}">
+                    </div>
+                </div>
+                <p class="text-muted" style="font-size: 12px; margin-bottom: 15px;">
+                    Existing records will be skipped (no duplicates created).
+                </p>
+                <div class="form-actions">
+                    <button class="btn btn-secondary" onclick="app.admin.closeStationModal()">Cancel</button>
+                    <button class="btn btn-primary" onclick="app.admin.startUpdateDataFetch()">Fetch Data</button>
+                </div>
+            `;
+        } catch (err) {
+            const contentDiv = document.getElementById('update-data-content');
+            if (contentDiv) {
+                contentDiv.innerHTML = `
+                    <p style="color: var(--danger);">Error checking Frost API: ${err.message}</p>
+                    <button class="btn btn-secondary" onclick="app.admin.closeStationModal()">Close</button>
+                `;
+            }
+        }
+    },
+
+    // Start fetching data from the update modal
+    startUpdateDataFetch: async function() {
+        const startDate = document.getElementById('update-fetch-start')?.value;
+        const endDate = document.getElementById('update-fetch-end')?.value;
+
+        if (!startDate || !endDate) {
+            alert('Please select a date range');
+            return;
+        }
+
+        await this.fetchWeatherDataForStation(this.selectedStationId, startDate, endDate);
     },
 
     // Fetch weather data year by year with progress
