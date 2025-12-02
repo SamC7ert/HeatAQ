@@ -67,6 +67,9 @@ switch ($action) {
     case 'fetch_data':
         fetchWeatherData($frostClientId);
         break;
+    case 'fetch_and_store_year':
+        fetchAndStoreYear($frostClientId);
+        break;
     default:
         http_response_code(400);
         echo json_encode(['error' => 'Invalid action']);
@@ -351,4 +354,172 @@ function fetchWeatherData($clientId) {
         'record_count' => count($records),
         'data' => $records
     ]);
+}
+
+/**
+ * Fetch one year of weather data from Frost API and store in database
+ */
+function fetchAndStoreYear($clientId) {
+    $stationId = $_GET['station_id'] ?? '';
+    $year = $_GET['year'] ?? '';
+
+    if (!$stationId || !$year) {
+        http_response_code(400);
+        echo json_encode(['error' => 'station_id and year required']);
+        return;
+    }
+
+    // Normalize station ID
+    if (is_numeric($stationId)) {
+        $stationId = 'SN' . $stationId;
+    } elseif (!preg_match('/^SN/i', $stationId)) {
+        $stationId = 'SN' . $stationId;
+    }
+    $stationId = strtoupper($stationId);
+
+    $startDate = $year . '-01-01';
+    $endDate = $year . '-12-31';
+
+    // Don't fetch future dates
+    $today = date('Y-m-d');
+    if ($endDate > $today) {
+        $endDate = $today;
+    }
+    if ($startDate > $today) {
+        echo json_encode(['success' => true, 'inserted' => 0, 'skipped' => 0, 'message' => 'Year is in the future']);
+        return;
+    }
+
+    $elements = [
+        'air_temperature',
+        'wind_speed',
+        'wind_from_direction',
+        'relative_humidity',
+        'surface_downwelling_shortwave_flux_in_air'
+    ];
+
+    $params = [
+        'sources' => $stationId,
+        'elements' => implode(',', $elements),
+        'referencetime' => $startDate . '/' . $endDate,
+        'timeresolutions' => 'PT1H'
+    ];
+
+    $url = 'https://frost.met.no/observations/v0.jsonld?' . http_build_query($params);
+
+    $ch = curl_init();
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_USERPWD => $clientId . ':',
+        CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
+        CURLOPT_TIMEOUT => 120  // Longer timeout for yearly fetch
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($httpCode !== 200) {
+        echo json_encode([
+            'error' => 'Frost API error',
+            'http_code' => $httpCode,
+            'curl_error' => $curlError
+        ]);
+        return;
+    }
+
+    // Parse the data
+    $data = json_decode($response, true);
+    $records = [];
+
+    if (isset($data['data'])) {
+        foreach ($data['data'] as $item) {
+            $time = $item['referenceTime'] ?? null;
+            if (!$time) continue;
+
+            $record = [
+                'timestamp' => $time,
+                'temperature' => null,
+                'wind_speed' => null,
+                'wind_direction' => null,
+                'humidity' => null,
+                'solar_radiation' => null
+            ];
+
+            foreach ($item['observations'] ?? [] as $obs) {
+                $elementId = $obs['elementId'] ?? '';
+                $value = $obs['value'] ?? null;
+
+                switch ($elementId) {
+                    case 'air_temperature':
+                        $record['temperature'] = $value;
+                        break;
+                    case 'wind_speed':
+                        $record['wind_speed'] = $value;
+                        break;
+                    case 'wind_from_direction':
+                        $record['wind_direction'] = $value;
+                        break;
+                    case 'relative_humidity':
+                        $record['humidity'] = $value;
+                        break;
+                    case 'surface_downwelling_shortwave_flux_in_air':
+                        $record['solar_radiation'] = $value;
+                        break;
+                }
+            }
+
+            $records[] = $record;
+        }
+    }
+
+    // Store in database
+    try {
+        $db = Config::getDatabase();
+
+        // Use INSERT IGNORE to skip duplicates
+        $stmt = $db->prepare("
+            INSERT IGNORE INTO weather_data
+            (station_id, timestamp, temperature, wind_speed, wind_direction, humidity, solar_radiation)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ");
+
+        $inserted = 0;
+        $skipped = 0;
+
+        foreach ($records as $record) {
+            $stmt->execute([
+                $stationId,
+                $record['timestamp'],
+                $record['temperature'],
+                $record['wind_speed'],
+                $record['wind_direction'],
+                $record['humidity'],
+                $record['solar_radiation']
+            ]);
+
+            if ($stmt->rowCount() > 0) {
+                $inserted++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        echo json_encode([
+            'success' => true,
+            'year' => $year,
+            'station_id' => $stationId,
+            'fetched' => count($records),
+            'inserted' => $inserted,
+            'skipped' => $skipped
+        ]);
+
+    } catch (PDOException $e) {
+        echo json_encode([
+            'error' => 'Database error: ' . $e->getMessage(),
+            'fetched' => count($records)
+        ]);
+    }
 }

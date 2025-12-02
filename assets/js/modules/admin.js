@@ -370,14 +370,8 @@ const AdminModule = {
                 this.weatherStations = stationsData.stations;
                 this.renderWeatherStations();
                 this.populateStationDropdown();
-
-                if (stationsData.summary) {
-                    this.renderWeatherSummary(stationsData.summary);
-                }
+                // Don't load data until station is selected
             }
-
-            // Load yearly and monthly data
-            await this.loadWeatherData();
         } catch (err) {
             console.error('Failed to load weather stations:', err);
             const container = document.getElementById('weather-stations-list');
@@ -436,7 +430,16 @@ const AdminModule = {
     },
 
     loadWeatherData: async function() {
-        const stationParam = this.selectedStationId ? `&station_id=${this.selectedStationId}` : '';
+        // Only load data if a station is selected
+        if (!this.selectedStationId) {
+            // Clear the data displays
+            this.renderWeatherSummary({});
+            this.renderYearlyAverages([]);
+            this.renderMonthlyAverages([]);
+            return;
+        }
+
+        const stationParam = `&station_id=${this.selectedStationId}`;
 
         try {
             const [summaryRes, yearlyRes, monthlyRes] = await Promise.all([
@@ -540,6 +543,7 @@ const AdminModule = {
     showStationModal: function(existingStation) {
         const isEdit = !!existingStation;
         const title = isEdit ? 'Edit Weather Station' : 'Add Weather Station';
+        const today = new Date().toISOString().split('T')[0];
 
         let html = `
             <div class="modal-overlay" onclick="app.admin.closeStationModal()">
@@ -590,6 +594,24 @@ const AdminModule = {
                             <small class="text-muted">0.03=open, 0.1=suburban</small>
                         </div>
                     </div>
+                    ${!isEdit ? `
+                    <div class="form-row" id="fetch-data-section" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--neutral-200);">
+                        <div class="form-group">
+                            <label>Fetch Data From</label>
+                            <input type="date" id="station-fetch-start" class="form-control" value="2015-01-01">
+                        </div>
+                        <div class="form-group">
+                            <label>To</label>
+                            <input type="date" id="station-fetch-end" class="form-control" value="${today}">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="station-fetch-data" checked style="width: 16px; height: 16px;">
+                            <span>Fetch weather data after adding station</span>
+                        </label>
+                    </div>
+                    ` : ''}
                     <div class="form-actions">
                         <button class="btn btn-secondary" onclick="app.admin.closeStationModal()">Cancel</button>
                         ${isEdit ? `<button class="btn btn-danger" onclick="app.admin.deleteWeatherStation('${existingStation.station_id}')" style="margin-right: auto;">Delete</button>` : ''}
@@ -649,6 +671,18 @@ const AdminModule = {
                 const windLevels = data.wind_levels || [];
                 const dateRange = data.data_range || {};
 
+                // Set fetch date range - use 2015-01-01 or station start date (whichever is later)
+                const defaultStart = '2015-01-01';
+                const stationStart = dateRange.from ? dateRange.from.split('T')[0] : null;
+                const fetchStart = stationStart && stationStart > defaultStart ? stationStart : defaultStart;
+                const today = new Date().toISOString().split('T')[0];
+                const fetchEnd = dateRange.to ? dateRange.to.split('T')[0] : today;
+
+                const fetchStartEl = document.getElementById('station-fetch-start');
+                const fetchEndEl = document.getElementById('station-fetch-end');
+                if (fetchStartEl) fetchStartEl.value = fetchStart;
+                if (fetchEndEl) fetchEndEl.value = fetchEnd > today ? today : fetchEnd;
+
                 resultDiv.innerHTML = `
                     <div style="color: var(--success); font-weight: 500; margin-bottom: 8px;">✓ Station Found: ${data.name}</div>
                     <table class="data-table compact" style="font-size: 12px;">
@@ -682,10 +716,17 @@ const AdminModule = {
         const windHeight = document.getElementById('station-wind-height-input')?.value || '10';
         const roughness = document.getElementById('station-roughness-input')?.value || '0.03';
 
+        // Get fetch options (only for new stations)
+        const shouldFetch = !isEdit && document.getElementById('station-fetch-data')?.checked;
+        const fetchStart = document.getElementById('station-fetch-start')?.value;
+        const fetchEnd = document.getElementById('station-fetch-end')?.value;
+
         if (!stationId || !name) {
             alert('Station ID and Name are required');
             return;
         }
+
+        const normalizedStationId = stationId.toUpperCase().startsWith('SN') ? stationId.toUpperCase() : 'SN' + stationId;
 
         try {
             const response = await fetch('./api/heataq_api.php', {
@@ -693,7 +734,7 @@ const AdminModule = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: isEdit ? 'update_weather_station' : 'add_weather_station',
-                    station_id: stationId.toUpperCase().startsWith('SN') ? stationId.toUpperCase() : 'SN' + stationId,
+                    station_id: normalizedStationId,
                     station_name: name,
                     latitude: latitude || null,
                     longitude: longitude || null,
@@ -707,13 +748,103 @@ const AdminModule = {
             if (data.error) {
                 alert('Error: ' + data.error);
             } else {
-                this.closeStationModal();
                 await this.loadWeatherStations();
                 api.utils.showSuccess(isEdit ? 'Station updated' : 'Station added');
+
+                // Fetch weather data if requested (new stations only)
+                if (shouldFetch && fetchStart && fetchEnd) {
+                    await this.fetchWeatherDataForStation(normalizedStationId, fetchStart, fetchEnd);
+                } else {
+                    this.closeStationModal();
+                }
             }
         } catch (err) {
             alert('Error saving station: ' + err.message);
         }
+    },
+
+    // Fetch weather data year by year with progress
+    fetchWeatherDataForStation: async function(stationId, startDate, endDate) {
+        const startYear = parseInt(startDate.split('-')[0]);
+        const endYear = parseInt(endDate.split('-')[0]);
+        const years = [];
+        for (let y = startYear; y <= endYear; y++) {
+            years.push(y);
+        }
+
+        // Update modal to show progress
+        const modalContent = document.querySelector('#station-modal-container .modal-content');
+        if (modalContent) {
+            modalContent.innerHTML = `
+                <h3>Fetching Weather Data</h3>
+                <div style="margin: 20px 0;">
+                    <p id="fetch-status">Preparing to fetch ${years.length} years of data...</p>
+                    <div style="background: var(--neutral-200); border-radius: 4px; height: 20px; margin-top: 10px;">
+                        <div id="fetch-progress-bar" style="background: var(--primary); height: 100%; border-radius: 4px; width: 0%; transition: width 0.3s;"></div>
+                    </div>
+                    <p id="fetch-details" class="text-muted" style="font-size: 12px; margin-top: 8px;">Starting...</p>
+                </div>
+            `;
+        }
+
+        const statusEl = document.getElementById('fetch-status');
+        const progressBar = document.getElementById('fetch-progress-bar');
+        const detailsEl = document.getElementById('fetch-details');
+
+        let totalInserted = 0;
+        let totalSkipped = 0;
+        let errors = [];
+
+        for (let i = 0; i < years.length; i++) {
+            const year = years[i];
+            const progress = Math.round(((i) / years.length) * 100);
+
+            if (statusEl) statusEl.textContent = `Fetching ${year}... (${i + 1}/${years.length})`;
+            if (progressBar) progressBar.style.width = progress + '%';
+
+            try {
+                const response = await fetch(`./api/frost_api.php?action=fetch_and_store_year&station_id=${encodeURIComponent(stationId)}&year=${year}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    errors.push(`${year}: ${data.error}`);
+                    if (detailsEl) detailsEl.textContent = `${year}: Error - ${data.error}`;
+                } else {
+                    totalInserted += data.inserted || 0;
+                    totalSkipped += data.skipped || 0;
+                    if (detailsEl) detailsEl.textContent = `${year}: ${data.inserted || 0} inserted, ${data.skipped || 0} skipped`;
+                }
+            } catch (err) {
+                errors.push(`${year}: ${err.message}`);
+                if (detailsEl) detailsEl.textContent = `${year}: Error - ${err.message}`;
+            }
+        }
+
+        // Show completion
+        if (progressBar) progressBar.style.width = '100%';
+        if (statusEl) {
+            if (errors.length > 0) {
+                statusEl.innerHTML = `<span style="color: var(--warning);">Completed with ${errors.length} error(s)</span>`;
+            } else {
+                statusEl.innerHTML = `<span style="color: var(--success);">✓ Completed successfully!</span>`;
+            }
+        }
+        if (detailsEl) {
+            detailsEl.textContent = `Total: ${totalInserted.toLocaleString()} records inserted, ${totalSkipped.toLocaleString()} skipped`;
+        }
+
+        // Add close button
+        if (modalContent) {
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'btn btn-primary';
+            closeBtn.textContent = 'Close';
+            closeBtn.style.marginTop = '15px';
+            closeBtn.onclick = () => this.closeStationModal();
+            modalContent.appendChild(closeBtn);
+        }
+
+        // Reload weather stations to update counts
+        await this.loadWeatherStations();
     },
 
     deleteWeatherStation: async function(stationId) {
