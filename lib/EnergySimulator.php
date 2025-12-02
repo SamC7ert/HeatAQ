@@ -566,25 +566,14 @@ class EnergySimulator {
             }
 
             // Determine heating
-            // In predictive mode during open periods, use planned rates instead of reactive control
-            if ($controlStrategy === 'predictive' && $targetTemp !== null && $this->openPlan !== null) {
-                // Open period with plan - use planned HP/boiler rates
-                $heating = $this->applyPlannedHeating(
-                    $this->openPlan,
-                    $netRequirement,
-                    (float) $hour['air_temperature'],
-                    $currentWaterTemp,
-                    $targetTemp
-                );
-            } else {
-                // Reactive control or closed period preheating
-                $heating = $this->calculateHeating(
-                    $netRequirement,
-                    (float) $hour['air_temperature'],
-                    $effectiveTarget,
-                    $currentWaterTemp
-                );
-            }
+            // Predictive mode: preheating happens during CLOSED periods
+            // During OPEN periods: use reactive control to maintain target
+            $heating = $this->calculateHeating(
+                $netRequirement,
+                (float) $hour['air_temperature'],
+                $effectiveTarget,
+                $currentWaterTemp
+            );
 
             // Update water temperature
             $heatBalance = $solarGain + $heating['total_heat'] - $losses['total'];
