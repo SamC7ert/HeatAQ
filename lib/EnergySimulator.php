@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.15';  // Add comparison card: Stored vs Calculated vs Planned
+    const VERSION = '3.10.16';  // Store intermediate calc values for debug comparison
 
     private $db;
     private $siteId;
@@ -469,6 +469,7 @@ class EnergySimulator {
             $hourlySolar = $this->getSolarForHour($solarData, $date, $hourOfDay);
 
             // Calculate heat losses
+            $waterTempStart = $currentWaterTemp;  // Store before any changes
             $tunnelTemp = isset($hour['tunnel_temperature']) ? (float) $hour['tunnel_temperature'] : null;
             $losses = $this->calculateHeatLosses(
                 $currentWaterTemp,
@@ -664,6 +665,13 @@ class EnergySimulator {
                     'hp_cop' => round($heating['hp_cop'], 2),
                 ],
                 'cost' => round($heating['cost'], 2),
+                // Store intermediate calculation values for debugging
+                'calc' => [
+                    'water_temp_start' => round($waterTempStart, 2),
+                    'net_requirement_kw' => round($netRequirement, 2),
+                    'losses_total_kw' => round($losses['total'], 2),
+                    'solar_gain_kw' => round($solarGain, 2),
+                ],
             ];
 
             $results['hourly'][] = $hourlyResult;
