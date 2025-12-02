@@ -545,7 +545,7 @@
                         <button class="sim-tab active" onclick="app.simcontrol.switchTab('new')">Simulate</button>
                         <button class="sim-tab" onclick="app.simcontrol.switchTab('history')">History</button>
                         <button class="sim-tab" onclick="app.simcontrol.switchTab('compare')">Analyse</button>
-                        <button class="sim-tab" onclick="app.simcontrol.switchTab('debug')">🔍 Debug</button>
+                        <button id="sim-tab-debug-btn" class="sim-tab" onclick="app.simcontrol.switchTab('debug')" style="display: none;">🔍 Debug</button>
                     </div>
 
                     <!-- New Run Tab Content -->
@@ -1293,6 +1293,18 @@
                             <tr><td><strong>Simulator</strong></td><td id="sys-simulator-ver">-</td></tr>
                             <tr><td><strong>PHP</strong></td><td id="sys-php-ver">-</td></tr>
                         </table>
+                    </div>
+
+                    <div class="card">
+                        <h3>Debug Mode</h3>
+                        <p class="text-muted">Enable detailed simulator debugging in Simulations section</p>
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="debug-mode-toggle" onchange="app.admin.toggleDebugMode(this.checked)">
+                            <span>Enable Debug Mode</span>
+                        </label>
+                        <p class="text-muted" style="margin-top: 8px; font-size: 12px;">
+                            When enabled, shows Debug tab with detailed loss breakdowns, plan calculations, and hourly comparisons.
+                        </p>
                     </div>
                 </section>
             </div>
