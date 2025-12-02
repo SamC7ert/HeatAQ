@@ -1360,7 +1360,7 @@ class HeatAQAPI {
         try {
             // Query all relevant columns including new fields
             $stmt = $this->db->query("
-                SELECT station_id, station_name as name, latitude, longitude, elevation,
+                SELECT station_id, station_name as name, latitude, longitude, elevation_m as elevation,
                        measurement_height_wind, measurement_height_temp, terrain_roughness
                 FROM weather_stations
                 ORDER BY station_name
@@ -1370,7 +1370,7 @@ class HeatAQAPI {
             // Fallback: try without new columns if migration not run yet
             try {
                 $stmt = $this->db->query("
-                    SELECT station_id, station_name as name, latitude, longitude, elevation,
+                    SELECT station_id, station_name as name, latitude, longitude, elevation_m as elevation,
                            measurement_height_wind, measurement_height_temp
                     FROM weather_stations
                     ORDER BY station_name
@@ -1504,7 +1504,7 @@ class HeatAQAPI {
 
         $stmt = $this->db->prepare("
             INSERT INTO weather_stations
-            (station_id, station_name, latitude, longitude, elevation, measurement_height_wind, terrain_roughness)
+            (station_id, station_name, latitude, longitude, elevation_m, measurement_height_wind, terrain_roughness)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ");
 
@@ -1535,7 +1535,7 @@ class HeatAQAPI {
                 station_name = COALESCE(?, station_name),
                 latitude = ?,
                 longitude = ?,
-                elevation = ?,
+                elevation_m = ?,
                 measurement_height_wind = COALESCE(?, measurement_height_wind),
                 terrain_roughness = COALESCE(?, terrain_roughness)
             WHERE station_id = ?
