@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.7';  // Refactor: single calculateOpenPlanRates() used by both sim and debug
+    const VERSION = '3.10.8';  // FIX: wrong param order in planOpenPeriod - was passing solar_ghi as isOpen!
 
     private $db;
     private $siteId;
@@ -1581,8 +1581,8 @@ class EnergySimulator {
                 $weather['air_temp'] ?? 15,
                 $weather['wind_speed'] ?? 2,
                 $weather['humidity'] ?? 70,
-                $weather['solar_ghi'] ?? 0,
-                true  // is_open
+                true,  // is_open
+                null   // tunnelTemp
             );
             $periodDemandTotal += $losses['total'];
         }
