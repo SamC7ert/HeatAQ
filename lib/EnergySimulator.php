@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.26';  // setConfigFromUI now calculates thermalMassRate from volume_m3
+    const VERSION = '3.10.27';  // Added debug logging for thermalMassRate
 
     private $db;
     private $siteId;
@@ -204,6 +204,9 @@ class EnergySimulator {
             if (isset($this->poolConfig['volume_m3']) && $this->poolConfig['volume_m3'] > 0) {
                 $poolMass = $this->poolConfig['volume_m3'] * self::WATER_DENSITY;
                 $this->thermalMassRate = $poolMass * self::WATER_SPECIFIC_HEAT / 3600000;
+                error_log("[EnergySimulator] setConfigFromUI: volume={$this->poolConfig['volume_m3']}, thermalMassRate={$this->thermalMassRate}");
+            } else {
+                error_log("[EnergySimulator] setConfigFromUI: volume NOT SET or 0, poolConfig=" . json_encode($this->poolConfig));
             }
         }
 
