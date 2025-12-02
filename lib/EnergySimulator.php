@@ -1601,20 +1601,6 @@ class EnergySimulator {
     }
 
     /**
-     * Public wrapper for calculateOpenPlanRates - used by debug_week replay
-     */
-    public function calculateOpenPlanRatesPublic($waterTemp, $periodDemandTotal, $periodDuration) {
-        return $this->calculateOpenPlanRates($waterTemp, $periodDemandTotal, $periodDuration);
-    }
-
-    /**
-     * Public wrapper for calculateHeatLosses - used by debug_week replay
-     */
-    public function calculateHeatLossesPublic($waterTemp, $airTemp, $windSpeed, $humidity, $isOpen, $tunnelTemp = null) {
-        return $this->calculateHeatLosses($waterTemp, $airTemp, $windSpeed, $humidity, $isOpen, $tunnelTemp);
-    }
-
-    /**
      * Replay scheduling for stored hourly data - consolidates debug_week logic
      *
      * Takes stored hourly results and reconstructs the plan state for each hour,
