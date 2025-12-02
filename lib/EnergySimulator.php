@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.24';  // Fix: setPoolConfig now calculates thermalMassRate
+    const VERSION = '3.10.25';  // Replay uses START temp (prev hour's END) for plan calculation
 
     private $db;
     private $siteId;
