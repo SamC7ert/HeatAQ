@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.1';  // Fix: reactive control for open periods, cover losses during waiting
+    const VERSION = '3.10.2';  // Fix: waiting phase maintains TARGET temp, not current temp
 
     private $db;
     private $siteId;
@@ -550,15 +550,15 @@ class EnergySimulator {
                     $hoursSincePlan = ($currentTimestamp->getTimestamp() - $this->closedPlanTimestamp->getTimestamp()) / 3600;
                     $hoursRemaining = max(0, $this->closedPlan['hours_to_open'] - $hoursSincePlan);
 
-                    // Check if HP should be active (time to start preheating)
+                    // Check if HP should be active (time to start preheating to target_night)
                     if ($hoursSincePlan >= $this->closedPlan['start_hp_in']) {
-                        // Time to preheat - use plan's target night temperature
+                        // Preheat phase - heat to target_night (may be above normal target)
                         $effectiveTarget = $this->closedPlan['target_night'];
                         $isPreheat = ($currentWaterTemp < $effectiveTarget - 0.1);
                     } else {
-                        // Not yet time - maintain current temperature (cover losses only)
-                        // Python lines 1267-1269: Q_hp = min(Q_demand, hp_capacity)
-                        $effectiveTarget = $currentWaterTemp;
+                        // Waiting phase - maintain at normal target temperature
+                        // User algorithm: "maintain target temp during closed"
+                        $effectiveTarget = $this->poolConfig['target_temp'] ?? 28.0;
                     }
                 }
 
