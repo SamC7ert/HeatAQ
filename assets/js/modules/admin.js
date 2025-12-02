@@ -1349,8 +1349,10 @@ const AdminModule = {
     applyDebugMode: function(enabled) {
         // Toggle detail cards section only
         const debugBottom = document.getElementById('debug-only-bottom');
+        console.log('applyDebugMode:', enabled, 'element found:', !!debugBottom);
         if (debugBottom) {
-            debugBottom.style.display = enabled ? '' : 'none';
+            debugBottom.style.display = enabled ? 'block' : 'none';
+            console.log('debug-only-bottom display set to:', debugBottom.style.display);
         }
     },
 
@@ -1358,6 +1360,8 @@ const AdminModule = {
      * Initialize debug mode on page load (called from app.js)
      */
     initDebugMode: function() {
+        console.log('initDebugMode called, isAdmin:', app.isAdmin());
+
         // Only admins can use debug mode
         if (!app.isAdmin()) {
             this.applyDebugMode(false);
@@ -1367,6 +1371,7 @@ const AdminModule = {
         // Check stored preference
         const stored = localStorage.getItem('heataq_debug_mode');
         const enabled = stored === '1';
+        console.log('Debug mode stored value:', stored, 'enabled:', enabled);
 
         // Update checkbox
         const toggle = document.getElementById('debug-mode-toggle');
