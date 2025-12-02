@@ -28,6 +28,7 @@ Long-term architectural improvements and technical debt items.
 - [x] Force password change on first login (admin sets initial password)
 - [x] Password history prevents reuse of last 5 passwords
 - [x] Similar password detection (prevents MyPassword → MyPassword1)
+- [x] Debug mode toggle (admin-only) in System section
 
 ### 3. Documentation
 **Priority:** High
@@ -125,7 +126,7 @@ Allow multiple weather data sources per project, not just one station.
 - Import actual energy consumption data
 - Calculate model accuracy
 
-UI tabs implemented in SimControl: History, Compare, Debug
+UI tabs implemented in SimControl: History, Compare, Details
 
 ---
 
@@ -182,17 +183,26 @@ New control strategy to minimize cost using spot electricity prices:
 - [ ] Site selector does not load correct site (may show non-existent site)
 - [ ] History tab only loads partial data
 - [ ] Analysis tab does not show analysis data
-- [ ] Debug tab sometimes does not follow main simulation for open/close status
+- [x] Debug tab renamed to Details - always visible; debug mode controls detail cards only
 
 ### Login
 - [ ] Add option to view password in login form
 
 ---
 
+## Recent Completions (Dec 2024)
+
+- [x] Cover heat loss breakdown in debug output (evaporation/convection/radiation saved)
+- [x] Debug mode toggle (admin-only) - controls detail card visibility
+- [x] Details tab (renamed from Debug) - top section always visible
+- [x] Memory limit increased to 512M for long simulations
+
+---
+
 ## New Features Planned
 
-### Debug graph interaction
-- [ ] Click on graph in Debug tab to see hourly details
+### Details tab graph interaction
+- [ ] Click on graph in Details tab to see hourly details
 
 ### Project templates
 - [ ] Create new projects from template
