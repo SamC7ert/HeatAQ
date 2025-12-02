@@ -1,6 +1,6 @@
 # HeatAQ Development Handover Guide
 
-**Current Version:** V115 (November 2024)
+**Current Version:** V122 (December 2024)
 
 ## Before Starting
 
@@ -16,18 +16,30 @@
 
 ## Version Management
 
-**Version is set in ONE place:** `assets/js/config.js`
+### App Version
+**Set in ONE place:** `assets/js/config.js`
 ```javascript
-APP_VERSION: 'V115',
+APP_VERSION: 'V122',
 ```
 
 This updates both:
 - Header badge (via JavaScript)
 - System tab info panel
 
-**Always bump version** with each change set (e.g., V114 → V115)
+**Always bump version** with each change set (e.g., V121 → V122)
 
-Note: The V85 values in `index.html` are just fallback HTML - they get overwritten by JavaScript on load.
+Note: The fallback values in `index.html` should match the config.js version (for cache-bust params and HTML fallbacks).
+
+### Simulator Version
+**Set in:** `lib/EnergySimulator.php`
+```php
+const VERSION = '3.10.43';
+```
+
+Update the simulator version when calculation logic changes. This version is:
+- Stored with each simulation run in `simulation_runs.config_snapshot`
+- Displayed in the UI when viewing simulation results
+- Used to track which algorithm version produced which results
 
 ## System Tab Workflow
 
