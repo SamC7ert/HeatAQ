@@ -899,6 +899,7 @@ try {
             $debugCache = [];
             $prevIsOpen = null;
             $currentOpenPlan = null;
+            $debugPlanCall = null;  // Debug: first plan call inputs/outputs
 
             $prevWaterTemp = null;  // Track previous hour's END temp = this hour's START temp
 
@@ -940,7 +941,27 @@ try {
                     }
 
                     // Now calculate plan with same logic as simulation (using START temp)
+                    // Debug: capture inputs
+                    $planInputs = [
+                        'waterTemp' => $transitionWaterTemp,
+                        'periodDemandTotal' => $periodDemandTotal,
+                        'periodDuration' => $periodDuration,
+                        'thermalMassRate_before' => $simulator->getThermalMassRate(),
+                    ];
+
                     $currentOpenPlan = $simulator->calculateOpenPlanRatesPublic($transitionWaterTemp, $periodDemandTotal, $periodDuration);
+
+                    // Debug: capture outputs (only first call)
+                    if ($debugPlanCall === null) {
+                        $planOutputs = [
+                            'thermal_mass_rate' => $currentOpenPlan['thermal_mass_rate'] ?? 'NOT SET',
+                            'hp_rate' => $currentOpenPlan['hp_rate'] ?? 'NOT SET',
+                            'energy_buffer' => $currentOpenPlan['energy_buffer'] ?? 'NOT SET',
+                            'temp_diff' => $currentOpenPlan['temp_diff'] ?? 'NOT SET',
+                        ];
+                        $debugPlanCall = ['inputs' => $planInputs, 'outputs' => $planOutputs, 'timestamp' => $ts];
+                    }
+
                     $currentOpenPlan['transition_water_temp'] = $transitionWaterTemp;  // Store for debugging
                     $currentOpenPlan['transition_hour'] = $ts;
                     // Map thermal_mass_rate to thermal_mass (consistent with simulation hourly output)
@@ -979,6 +1000,15 @@ try {
             }
             $_SESSION['debug_cache'][$runId] = $debugCache;
 
+            // Find first cached open_plan to debug
+            $firstOpenPlan = null;
+            foreach ($debugCache as $ts => $cached) {
+                if (!empty($cached['open_plan'])) {
+                    $firstOpenPlan = ['timestamp' => $ts, 'plan' => $cached['open_plan']];
+                    break;
+                }
+            }
+
             sendResponse([
                 'run_id' => (int)$runId,
                 'source' => 'stored', // Indicates data comes from DB, not recalculated
@@ -989,6 +1019,7 @@ try {
                 'data' => $hourlyData,
                 'debug_cache_size' => count($debugCache),  // For verification
                 'debug_thermal_mass' => $debugThermalMass,  // Debug: verify thermalMassRate
+                'debug_plan_call' => $debugPlanCall,  // Debug: inputs/outputs of first plan calculation
             ]);
             break;
 
