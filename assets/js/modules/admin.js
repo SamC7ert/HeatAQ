@@ -540,6 +540,7 @@ const AdminModule = {
     showStationModal: function(existingStation) {
         const isEdit = !!existingStation;
         const title = isEdit ? 'Edit Weather Station' : 'Add Weather Station';
+        const today = new Date().toISOString().split('T')[0];
 
         let html = `
             <div class="modal-overlay" onclick="app.admin.closeStationModal()">
@@ -590,6 +591,24 @@ const AdminModule = {
                             <small class="text-muted">0.03=open, 0.1=suburban</small>
                         </div>
                     </div>
+                    ${!isEdit ? `
+                    <div class="form-row" id="fetch-data-section" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--neutral-200);">
+                        <div class="form-group">
+                            <label>Fetch Data From</label>
+                            <input type="date" id="station-fetch-start" class="form-control" value="2015-01-01">
+                        </div>
+                        <div class="form-group">
+                            <label>To</label>
+                            <input type="date" id="station-fetch-end" class="form-control" value="${today}">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="station-fetch-data" checked style="width: 16px; height: 16px;">
+                            <span>Fetch weather data after adding station</span>
+                        </label>
+                    </div>
+                    ` : ''}
                     <div class="form-actions">
                         <button class="btn btn-secondary" onclick="app.admin.closeStationModal()">Cancel</button>
                         ${isEdit ? `<button class="btn btn-danger" onclick="app.admin.deleteWeatherStation('${existingStation.station_id}')" style="margin-right: auto;">Delete</button>` : ''}
@@ -648,6 +667,18 @@ const AdminModule = {
                 const elements = data.available_elements || {};
                 const windLevels = data.wind_levels || [];
                 const dateRange = data.data_range || {};
+
+                // Set fetch date range - use 2015-01-01 or station start date (whichever is later)
+                const defaultStart = '2015-01-01';
+                const stationStart = dateRange.from ? dateRange.from.split('T')[0] : null;
+                const fetchStart = stationStart && stationStart > defaultStart ? stationStart : defaultStart;
+                const today = new Date().toISOString().split('T')[0];
+                const fetchEnd = dateRange.to ? dateRange.to.split('T')[0] : today;
+
+                const fetchStartEl = document.getElementById('station-fetch-start');
+                const fetchEndEl = document.getElementById('station-fetch-end');
+                if (fetchStartEl) fetchStartEl.value = fetchStart;
+                if (fetchEndEl) fetchEndEl.value = fetchEnd > today ? today : fetchEnd;
 
                 resultDiv.innerHTML = `
                     <div style="color: var(--success); font-weight: 500; margin-bottom: 8px;">✓ Station Found: ${data.name}</div>
