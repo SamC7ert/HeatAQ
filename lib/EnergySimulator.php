@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.11';  // FIX: debug uses stored is_open, allow negative buffer
+    const VERSION = '3.10.13';  // Add heating_mode_reason to track why open_plan not used
 
     private $db;
     private $siteId;
@@ -566,8 +566,12 @@ class EnergySimulator {
             }
 
             // Determine heating
+            $heatingMode = 'reactive';  // Track which mode was used
+            $heatingModeReason = null;  // Track why
+
             if ($controlStrategy === 'predictive' && $targetTemp !== null && $this->openPlan !== null) {
-                // OPEN period with plan
+                // OPEN period with plan - use planned HP rate
+                $heatingMode = 'open_plan';
                 $heating = $this->applyOpenPeriodHeating(
                     $this->openPlan,
                     $netRequirement,
@@ -576,7 +580,18 @@ class EnergySimulator {
                     $targetTemp
                 );
             } else {
-                // Closed period (with or without plan) or reactive mode
+                // Track why open_plan wasn't used
+                if ($controlStrategy !== 'predictive') {
+                    $heatingModeReason = 'not_predictive';
+                } elseif ($targetTemp === null) {
+                    $heatingModeReason = 'closed_period';
+                    if ($this->closedPlan !== null) {
+                        $heatingMode = 'closed_plan';
+                    }
+                } elseif ($this->openPlan === null) {
+                    $heatingModeReason = 'NO_OPEN_PLAN';  // BUG indicator
+                }
+
                 $heating = $this->calculateHeating(
                     $netRequirement,
                     (float) $hour['air_temperature'],
@@ -608,6 +623,8 @@ class EnergySimulator {
                     'water_temp' => round($currentWaterTemp, 2),
                     'is_open' => $targetTemp !== null,
                     'is_preheat' => $isPreheat,
+                    'heating_mode' => $heatingMode,  // Track: reactive, open_plan, closed_plan
+                    'heating_mode_reason' => $heatingModeReason,  // Why this mode (null = correct)
                     'preheat_case' => $this->closedPlan['case'] ?? null,
                     'preheat_plan' => $this->closedPlan ? [
                         'case' => $this->closedPlan['case'] ?? null,
