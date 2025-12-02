@@ -837,3 +837,10 @@ input[type="date"].inline-edit {
         grid-template-columns: 1fr;
     }
 }
+/* Debug Mode - hide detail cards when debug mode is off */
+.debug-only {
+    display: none;
+}
+body.debug-mode-on .debug-only {
+    display: block;
+}

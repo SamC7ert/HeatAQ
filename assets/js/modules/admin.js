@@ -1343,16 +1343,14 @@ const AdminModule = {
 
     /**
      * Apply debug mode visibility
-     * Only detail cards (debug-only-bottom) are toggled
-     * Top section (parameters, chart) and Simulation Report always visible
+     * Toggles body class to show/hide .debug-only elements via CSS
      */
     applyDebugMode: function(enabled) {
-        // Toggle detail cards section only
-        const debugBottom = document.getElementById('debug-only-bottom');
-        console.log('applyDebugMode:', enabled, 'element found:', !!debugBottom);
-        if (debugBottom) {
-            debugBottom.style.display = enabled ? 'block' : 'none';
-            console.log('debug-only-bottom display set to:', debugBottom.style.display);
+        console.log('applyDebugMode:', enabled);
+        if (enabled) {
+            document.body.classList.add('debug-mode-on');
+        } else {
+            document.body.classList.remove('debug-mode-on');
         }
     },
 
