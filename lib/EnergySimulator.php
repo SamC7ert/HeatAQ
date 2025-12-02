@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.36';  // Show simulator version in debug comparison table
+    const VERSION = '3.10.37';  // Capture open plan per day (debug_open_plans_by_date)
 
     private $db;
     private $siteId;
@@ -53,7 +53,7 @@ class EnergySimulator {
     private $openPlan = null;            // Current plan for open period
     private $openPlanTimestamp = null;   // When open plan was created
     private $lastPreheatCalc = [];       // Debug info for preheating
-    private $debugFirstOpenPlan = null;  // Debug: capture first open plan calculation
+    private $debugOpenPlansByDate = [];  // Debug: capture first open plan per day
 
     // Physical constants
     const WATER_DENSITY = 1000;      // kg/m³
@@ -832,8 +832,8 @@ class EnergySimulator {
         // Add simulator version to results
         $results['version'] = self::VERSION;
 
-        // Add debug info for first open plan calculation
-        $results['meta']['debug_first_open_plan'] = $this->debugFirstOpenPlan;
+        // Add debug info for open plan calculations (keyed by date)
+        $results['meta']['debug_open_plans_by_date'] = $this->debugOpenPlansByDate;
 
         return $results;
     }
@@ -1664,12 +1664,13 @@ class EnergySimulator {
         // Use shared calculation
         $plan = $this->calculateOpenPlanRates($waterTemp, $periodDemandTotal, $periodDuration);
 
-        // Debug: capture first open plan calculation
-        if ($this->debugFirstOpenPlan === null) {
-            $this->debugFirstOpenPlan = [
-                'timestamp' => $timestamp,
+        // Debug: capture first open plan per day (keyed by date)
+        $dateKey = $timestamp->format('Y-m-d');
+        if (!isset($this->debugOpenPlansByDate[$dateKey])) {
+            $this->debugOpenPlansByDate[$dateKey] = [
+                'timestamp' => $timestamp->format('Y-m-d H:i:s'),
                 'inputs' => [
-                    'waterTemp' => $waterTemp,
+                    'waterTemp' => round($waterTemp, 4),
                     'periodDemandTotal' => round($periodDemandTotal, 2),
                     'periodDuration' => $periodDuration,
                     'thermalMassRate' => $this->thermalMassRate,
