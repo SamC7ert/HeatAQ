@@ -326,6 +326,7 @@ try {
                     'simulator_version' => EnergySimulator::getVersion(),
                     'pool_config' => $simulator->getPoolConfig(),
                     'equipment' => $simulator->getEquipment(),
+                    'thermal_mass_rate' => $simulator->getThermalMassRate(),  // Debug: verify calculation
                     'pool_id' => $poolId,
                     'config_template_id' => $configId,
                     'config_template_name' => $configTemplateName,
