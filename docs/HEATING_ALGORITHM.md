@@ -1,7 +1,7 @@
 # HeatAQ Heating Control Algorithm
 
-**Version:** V103
-**Last Updated:** November 2024
+**Version:** V104
+**Last Updated:** December 2024
 
 ---
 
@@ -119,6 +119,24 @@ Q_conv = h × A × (T_water - T_air)
 Q_rad = ε × σ × A × (T_water⁴ - T_sky⁴)
 ```
 
+### Cover Heat Loss Reduction
+
+Pool covers significantly reduce heat losses. The simulator calculates reduction factors for each loss type:
+
+| Cover Type | Evaporation | Convection | Radiation | Conduction |
+|------------|-------------|------------|-----------|------------|
+| None | 0% | 0% | 0% | 0% |
+| Bubble | 95% | 50% | 40% | 30% |
+| Foam | 98% | 70% | 60% | 50% |
+| Automatic | 90% | 60% | 50% | 40% |
+| Liquid | 40% | 10% | 5% | 0% |
+
+The cover breakdown is shown in the Details tab when debug mode is enabled:
+- **Evaporation saved**: Heat retained by reducing evaporation
+- **Convection saved**: Heat retained by reducing convective transfer
+- **Radiation saved**: Heat retained by reducing radiative losses
+- **Total saved**: Sum of all cover savings (subtracted from gross losses)
+
 ---
 
 ## Equipment
@@ -171,6 +189,7 @@ Boiler only runs when HP capacity exceeded.
 
 | Version | Changes |
 |---------|---------|
+| V104 | Added cover heat loss breakdown documentation |
 | V103 | Simplified: removed deadband, only reactive/predictive, always HP first |
 | V102 | Aggressive recovery: full deficit in 1 hour |
 | V101 | Initial documentation |
