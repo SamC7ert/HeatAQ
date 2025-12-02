@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.19';  // Simplified applyOpenPeriodHeating - just apply planned rates
+    const VERSION = '3.10.20';  // Debug endpoint uses same calculateHeatLosses() as simulation
 
     private $db;
     private $siteId;
@@ -2026,137 +2026,39 @@ class EnergySimulator {
         $wallArea = $perimeter * $depth;
         $floorArea = $area;
 
-        // ========== EVAPORATION CALCULATION (Inan & Atayilmaz 2022) ==========
-        // Magnus formula for saturation vapor pressure (Pa)
-        // P = 611.2 * exp(17.67 * T / (T + 243.5))
-        $pWaterPa = 611.2 * exp(17.67 * $poolTemp / ($poolTemp + 243.5));
-        $pAirSatPa = 611.2 * exp(17.67 * $airTemp / ($airTemp + 243.5));
+        // ========== USE SAME FUNCTIONS AS SIMULATION ==========
+        // Call the SAME calculateHeatLosses() that simulation uses
+        $losses = $this->calculateHeatLosses($poolTemp, $airTemp, $windSpeed, $humidity, $isOpen, $tunnelTemp);
 
-        // Actual vapor pressure in air (Pa)
-        $pAirActualPa = $pAirSatPa * ($humidity / 100);
+        $evapLossKW = $losses['evaporation'];
+        $convLossKW = $losses['convection'];
+        $radLossKW = $losses['radiation'];
+        $coverLossKW = $losses['cover'];
+        $floorLossKW = $losses['floor'];
+        $wallLossKW = $losses['walls'];
+        $totalLossKW = $losses['total'];
 
-        // Vapor pressure difference (Pa)
-        $vpDiff = $pWaterPa - $pAirActualPa;
+        // Call the SAME calculateSolarGain() that simulation uses
+        $solarGainKW = $this->calculateSolarGain($hourlySolar, $isOpen);
 
-        // Effective wind speed (m/s)
+        // Net requirement - SAME calculation as simulation
+        $netRequirementKW = $totalLossKW - $solarGainKW;
+
+        // Effective wind speed for display
         $effectWindSpeed = $windSpeed * $windFactor;
 
-        // Inan & Atayilmaz (2022) evaporation formula
-        // E_per_m2 = (0.28 + 0.784 * v_eff) * (ΔP^0.695) / L_v  [kg/(m²·s)]
-        $windCoeff = 0.28 + 0.784 * $effectWindSpeed;
-        $evapPerUnitArea = $windCoeff * pow(max(0, $vpDiff), 0.695) / self::LATENT_HEAT_VAPORIZATION;
-
-        // Activity factor - from config (required when pool is open)
-        $configActivityFactor = $this->equipment['bathers']['activity_factor'] ?? null;
-        $activityFactor = $isOpen ? ($configActivityFactor ?? 1.0) : 1.0;
-        $evapPerUnitArea *= $activityFactor;
-
-        // Total evaporation rate (kg/s)
-        $evapRateKgPerS = $evapPerUnitArea * $area;
-
-        // Heat loss from evaporation (kW)
-        $evapLossKW = $evapRateKgPerS * self::LATENT_HEAT_VAPORIZATION / 1000;
-
-        // ========== CONVECTION CALCULATION (Bowen Ratio Method) ==========
-        // Bo = (c_p * P_atm) / (0.622 * L_v) * ΔT / ΔP
-        $tempDiff = $poolTemp - $airTemp; // K (same as °C difference)
-
-        // Prevent division by zero
-        $deltaPForBowen = $vpDiff;
-        if (abs($deltaPForBowen) < 1.0) {
-            $deltaPForBowen = $deltaPForBowen >= 0 ? 1.0 : -1.0;
-        }
-
-        // Bowen ratio (thermodynamic derivation)
-        $bowenNumerator = self::AIR_SPECIFIC_HEAT * self::ATM_PRESSURE * $tempDiff;
-        $bowenDenominator = self::MOLECULAR_RATIO * self::LATENT_HEAT_VAPORIZATION * $deltaPForBowen;
-        $bowenRatio = $bowenDenominator != 0 ? $bowenNumerator / $bowenDenominator : 0;
-
-        // Convection loss (kW) = Bowen ratio * Evaporation
-        $convLossKW = $bowenRatio * $evapLossKW;
-
-        // ========== RADIATION CALCULATION ==========
-        $tWaterK = $poolTemp + 273.15;
-        $tSkyK = $this->estimateSkyTemperature($airTemp) + 273.15;
-        $tWater4 = pow($tWaterK, 4);
-        $tSky4 = pow($tSkyK, 4);
-        $radDiff = $tWater4 - $tSky4;
-
-        // Radiation loss (kW)
-        $radLossKW = self::STEFAN_BOLTZMANN * self::WATER_EMISSIVITY * $area * $radDiff / 1000;
-
-        // ========== SOLAR GAIN CALCULATION ==========
-        // Solar irradiance in kW/m² for this calculation
-        $solarKWm2 = $hourlySolar; // Already in kWh/m² for this hour = kW/m² average
-
-        $solarGainKW = 0;
-        if ($hasCover && !$isOpen) {
-            $solarGainKW = $solarKWm2 * $area * $solarAbsorption * $coverTransmittance;
-        } else {
-            $solarGainKW = $solarKWm2 * $area * $solarAbsorption;
-        }
-
-        // ========== STRUCTURAL LOSSES (Python v3.6.0.3) ==========
-        $groundFactor = $this->getGroundThermalFactor($yearsOperating);
-
-        // FLOOR: Flux-based model with temperature scaling
-        // Python: losses['floor'] = q_pool * area * (T_water - 5) / (28 - 5) / 1000
-        $qPoolFlux = self::Q_POOL_FLUX * $groundFactor; // Adjusted for years operating
-        $tempScale = ($poolTemp - self::T_REF_LOW) / (self::T_REF_HIGH - self::T_REF_LOW);
-        $floorLossKW = $qPoolFlux * $floorArea * $tempScale / 1000;
-
-        // WALLS: U-value model against tunnel temperature
-        // Python: losses['walls'] = u_walls * wall_area * (T_water - T_tunnel) / 1000
-        $tunnelRef = $tunnelTemp ?? 15.0; // Default if no tunnel data
-        $wallLossKW = self::U_WALLS * $wallArea * ($poolTemp - $tunnelRef) / 1000;
-
-        // Total structural losses
-        $condLossKW = max(0, $floorLossKW) + max(0, $wallLossKW);
-
-        // ========== WATER HEATING (bather makeup) ==========
-        // Values from configuration - NO DEFAULTS
+        // Water heating - get from config for display
         $bathersPerDay = $this->equipment['bathers']['per_day'] ?? null;
         $kwhPerVisit = $this->equipment['bathers']['kwh_per_visit'] ?? null;
         $openHours = $this->equipment['bathers']['open_hours'] ?? null;
-
-        // Calculate water heating only if all bather values are configured
         $waterHeatingKW = 0;
         if ($bathersPerDay !== null && $kwhPerVisit !== null && $openHours !== null && $openHours > 0) {
             $waterHeatingKW = ($bathersPerDay * $kwhPerVisit) / $openHours;
         }
 
-        // ========== COVER CALCULATION (U-value method) ==========
+        // Cover variables for display
         $isCovered = $hasCover && !$isOpen;
-        $coverLossKW = 0;
-        $coverUEffective = 0;
-        $coverHNatural = 7.0;  // W/(m²·K)
-        $coverHWind = 5.7 + 3.8 * $effectWindSpeed;
-
-        if ($isCovered) {
-            // Cover blocks evap/conv/rad, replaces with U-value heat transfer
-            $evapLossKW = 0;
-            $convLossKW = 0;
-            $radLossKW = 0;
-
-            // Calculate effective U-value with wind correction
-            $uRated = $coverUValue ?? 5.0;
-            if ($uRated > 0 && $coverHNatural > 0 && $coverHWind > 0) {
-                $rTotal = 1.0 / $uRated - 1.0 / $coverHNatural + 1.0 / $coverHWind;
-                if ($rTotal > 0) {
-                    $coverUEffective = 1.0 / $rTotal;
-                }
-            }
-            $coverUEffective = max($coverUEffective, $uRated);
-
-            // Cover heat loss: Q = U_eff × A × ΔT
-            $coverTempDiff = $poolTemp - $airTemp;
-            $coverLossKW = $coverUEffective * $area * $coverTempDiff / 1000;
-            $coverLossKW = max(0, $coverLossKW);
-        }
-
-        // ========== TOTALS ==========
-        $totalLossKW = $evapLossKW + $convLossKW + $radLossKW + $coverLossKW + $condLossKW + $waterHeatingKW;
-        $netRequirementKW = $totalLossKW - $solarGainKW;
+        $condLossKW = $floorLossKW + $wallLossKW;
 
         // ========== HEATING OUTPUT (using SAME functions as simulation) ==========
         $controlStrategy = $this->equipment['control_strategy'] ?? 'reactive';
@@ -2231,87 +2133,32 @@ class EnergySimulator {
                 'config' => [
                     'wind_factor' => $windFactor,
                     'years_operating' => $yearsOperating,
-                    'ground_thermal_factor' => $groundFactor,
                     'has_cover' => $hasCover,
                     'cover_u_value' => $coverUValue,
                     'solar_absorption' => $solarAbsorption,
-                    'cover_transmittance' => $coverTransmittance,
                     'is_open' => $isOpen,
                     'target_temp' => $targetTemp,
                 ],
             ],
-            'evaporation' => [
-                'formula' => 'Inan & Atayilmaz (2022)',
-                'p_water_sat_pa' => round($pWaterPa, 1),
-                'p_air_sat_pa' => round($pAirSatPa, 1),
-                'p_air_actual_pa' => round($pAirActualPa, 1),
-                'vapor_diff_pa' => round($vpDiff, 1),
-                'effect_wind_speed_ms' => round($effectWindSpeed, 3),
-                'wind_coeff' => round($windCoeff, 2),
-                'evap_per_unit_area_kgm2s' => sprintf('%.6f', $evapPerUnitArea / $activityFactor), // Before activity
-                'evap_per_unit_area_with_activity' => sprintf('%.6f', $evapPerUnitArea),
-                'evap_rate_kgs' => sprintf('%.4f', $evapRateKgPerS),
-                'activity_factor' => $activityFactor,
-                'evap_loss_kw' => round($evapLossKW, 3),
-            ],
-            'convection' => [
-                'formula' => 'Bowen Ratio Method',
-                'temp_diff_k' => round($tempDiff, 2),
-                'bowen_numerator' => round($bowenNumerator, 0),
-                'bowen_denominator' => round($bowenDenominator, 0),
-                'bowen_ratio' => round($bowenRatio, 3),
-                'conv_loss_kw' => round($convLossKW, 3),
-            ],
-            'radiation' => [
-                't_water_k' => round($tWaterK, 2),
-                't_water_4' => sprintf('%.0f', $tWater4),
-                't_sky_k' => round($tSkyK, 2),
-                't_sky_4' => sprintf('%.0f', $tSky4),
-                'diff_t4' => sprintf('%.0f', $radDiff),
-                'rad_loss_kw' => round($radLossKW, 3),
-            ],
-            'cover' => [
-                'formula' => 'U-value Method (Python v3.6.0.3)',
-                'is_covered' => $isCovered,
-                'u_rated' => $coverUValue ?? 5.0,
-                'v_eff_ms' => round($effectWindSpeed, 3),
-                'h_natural' => $coverHNatural,
-                'h_wind' => round($coverHWind, 2),
-                'u_effective' => round($coverUEffective, 3),
-                'temp_diff_k' => $isCovered ? round($poolTemp - $airTemp, 2) : null,
-                'cover_loss_kw' => round($coverLossKW, 3),
+            // Loss breakdown (from calculateHeatLosses - same as simulation)
+            'losses' => [
+                'evaporation_kw' => round($evapLossKW, 3),
+                'convection_kw' => round($convLossKW, 3),
+                'radiation_kw' => round($radLossKW, 3),
+                'cover_kw' => round($coverLossKW, 3),
+                'floor_kw' => round($floorLossKW, 3),
+                'walls_kw' => round($wallLossKW, 3),
+                'total_kw' => round($totalLossKW, 3),
             ],
             'solar_gain' => [
-                'source' => $solarSource, // 'hourly' = pre-calculated, 'daily' = legacy bell curve
-                'daily_total_kwh_m2' => round($dailySolar, 3),
+                'source' => $solarSource,
                 'hourly_kwh_m2' => round($hourlySolar, 4),
-                'solar_absorption' => $solarAbsorption,
-                'cover_transmittance' => $hasCover && !$isOpen ? $coverTransmittance : 1.0,
                 'solar_gain_kw' => round($solarGainKW, 3),
             ],
             'structural' => [
-                'formula' => 'Python v3.6.0.3 structural model',
-                'years_operating' => $yearsOperating,
-                'ground_factor' => round($groundFactor, 2),
-                'floor' => [
-                    'method' => 'Flux-based with temperature scaling',
-                    'q_pool_flux_base' => self::Q_POOL_FLUX,
-                    'q_pool_flux_adjusted' => round($qPoolFlux, 3),
-                    'floor_area_m2' => $floorArea,
-                    't_ref_low_c' => self::T_REF_LOW,
-                    't_ref_high_c' => self::T_REF_HIGH,
-                    'temp_scale' => round($tempScale, 3),
-                    'floor_loss_kw' => round(max(0, $floorLossKW), 3),
-                ],
-                'walls' => [
-                    'method' => 'U-value against tunnel temp',
-                    'u_walls' => self::U_WALLS,
-                    'wall_area_m2' => round($wallArea, 1),
-                    'tunnel_temp_c' => round($tunnelRef, 1),
-                    'delta_t_k' => round($poolTemp - $tunnelRef, 1),
-                    'wall_loss_kw' => round(max(0, $wallLossKW), 3),
-                ],
-                'total_structural_kw' => round($condLossKW, 3),
+                'floor_kw' => round($floorLossKW, 3),
+                'walls_kw' => round($wallLossKW, 3),
+                'total_kw' => round($condLossKW, 3),
             ],
             'water_heating' => [
                 'bathers_per_day' => $bathersPerDay,
