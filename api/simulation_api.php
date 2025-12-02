@@ -891,15 +891,33 @@ try {
 
                 // Detect OPEN transition
                 if ($prevIsOpen === false && $isOpen === true) {
-                    // Calculate period duration and sum actual losses (like simulation does)
+                    // Calculate period duration
                     $periodDuration = 0;
-                    $periodDemandTotal = 0;
                     for ($j = $i; $j < count($rows) && (bool)$rows[$j]['is_open']; $j++) {
                         $periodDuration++;
-                        $periodDemandTotal += (float)$rows[$j]['total_loss_kw'];
                     }
-                    // Use simulator's calculateOpenPlanRates with actual summed losses
+
+                    // Calculate demand like simulation does: use SAME waterTemp for all hours
+                    // (simulation calls calculateHeatLosses with constant waterTemp)
+                    $periodDemandTotal = 0;
+                    for ($j = $i; $j < $i + $periodDuration && $j < count($rows); $j++) {
+                        $hourRow = $rows[$j];
+                        // Recalculate losses at transition waterTemp (like simulation does)
+                        $hourLosses = $simulator->calculateHeatLossesPublic(
+                            $waterTemp,  // Use OPEN transition temp for ALL hours
+                            (float)($hourRow['air_temp'] ?? 15),
+                            (float)($hourRow['wind_speed'] ?? 2),
+                            70,  // humidity estimate
+                            true,  // is_open
+                            null   // tunnel temp
+                        );
+                        $periodDemandTotal += $hourLosses['total'];
+                    }
+
+                    // Now calculate plan with same logic as simulation
                     $currentOpenPlan = $simulator->calculateOpenPlanRatesPublic($waterTemp, $periodDemandTotal, $periodDuration);
+                    $currentOpenPlan['transition_water_temp'] = $waterTemp;  // Store for debugging
+                    $currentOpenPlan['transition_hour'] = $ts;
                 }
 
                 // Clear plan on CLOSE transition
