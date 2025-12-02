@@ -1858,6 +1858,11 @@ const SimulationsModule = {
                 </table>
                 ${diffHP && diffHP > 5 ? '<div style="color:red;font-size:10px;margin-top:6px;padding:4px;background:#fff0f0;border-radius:3px;"><strong>⚠ HP not using planned rate!</strong> Stored=' + (stored.hp_heat_kw||0).toFixed(0) + ' but Plan=' + plannedHP.toFixed(0) + '</div>' : ''}
                 ${diffNet > 5 ? '<div style="color:#996600;font-size:10px;margin-top:4px;padding:4px;background:#fff8e0;border-radius:3px;">Net demand differs by ' + diffNet.toFixed(1) + ' kW - check water temp and losses</div>' : ''}
+                <div style="font-size:10px;margin-top:6px;padding:4px;background:#f0f0f0;border-radius:3px;">
+                    <strong>Sim heating_mode:</strong> ${stored.heating_mode || '?'}
+                    ${stored.heating_mode_reason ? '(' + stored.heating_mode_reason + ')' : ''}
+                    ${stored.open_plan ? ' | open_plan.hp_rate=' + (stored.open_plan.hp_rate||0).toFixed(0) : ' | <span style="color:red;">NO open_plan stored</span>'}
+                </div>
             `;
             comparisonCard.style.display = 'block';
         }
