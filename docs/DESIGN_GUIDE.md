@@ -164,13 +164,30 @@ Card variants:
 
 ### Buttons
 
-| Type | Usage | Hover Effect |
-|------|-------|--------------|
-| Primary | Main actions (Save, Run) | Darkens + shadow |
-| Secondary | Alternative actions | Darkens |
-| Danger | Destructive actions | Darkens |
-| btn-sm | Inline actions | Same as parent |
-| btn-lg | Prominent CTAs | Same as parent |
+#### Button Types & Colors
+| Type | Label | Color | Hex | Usage |
+|------|-------|-------|-----|-------|
+| Primary | + New | Blue | `#006494` | Create new items |
+| Primary | Save | Blue | `#006494` | Save changes |
+| Danger | Delete | Red | `#d62828` | Destructive actions |
+| Secondary | Cancel | Gray | `#6c757d` | Cancel/close dialogs |
+
+#### Button Placement Convention
+```
+Action buttons (right-aligned):        [Save] [Delete]
+Inline create (with input):            [Name___________] [+ New]
+```
+
+- **Save** and **Delete** are always grouped together, right-aligned
+- **+ New** appears next to input fields for inline creation
+- Destructive button (Delete) always rightmost in group
+
+#### Button Sizing
+| Class | Usage |
+|-------|-------|
+| btn-sm | Inline actions, table rows |
+| (default) | Standard forms |
+| btn-lg | Prominent CTAs |
 
 Button press effect: `transform: translateY(1px)` on `:active`
 

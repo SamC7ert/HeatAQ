@@ -70,10 +70,10 @@ const schedules = {
             <div id="day-schedule-editor" style="display: none;">
                 <h4 id="day-schedule-title">Schedule Periods</h4>
                 <div id="periods-container" style="overflow-x: auto;"></div>
-                <div style="margin-top: 10px; display: flex; gap: 5px; flex-wrap: wrap;">
-                    <button class="btn btn-primary btn-sm" onclick="app.schedules.addPeriod()">+ Add Period</button>
-                    <button class="btn btn-success btn-sm" onclick="app.schedules.saveDaySchedule()">Save</button>
-                    <button class="btn btn-danger btn-sm" onclick="app.schedules.deleteDaySchedule()" style="margin-left: auto;">Delete Schedule</button>
+                <div style="margin-top: 10px; display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end;">
+                    <button class="btn btn-secondary btn-sm" onclick="app.schedules.addPeriod()" style="margin-right: auto;">+ Add Period</button>
+                    <button class="btn btn-primary btn-sm" onclick="app.schedules.saveDaySchedule()">Save</button>
+                    <button class="btn btn-danger btn-sm" onclick="app.schedules.deleteDaySchedule()">Delete</button>
                 </div>
             </div>
 
@@ -82,7 +82,7 @@ const schedules = {
                 <label class="form-label text-small">Create New Day Schedule:</label>
                 <div style="display: flex; gap: 5px;">
                     <input type="text" id="new-day-schedule-name" class="form-control form-control-sm" placeholder="Name" style="flex: 1;" />
-                    <button class="btn btn-primary btn-sm" onclick="app.schedules.createDaySchedule()">Create</button>
+                    <button class="btn btn-primary btn-sm" onclick="app.schedules.createDaySchedule()">+ New</button>
                 </div>
             </div>
         `;
@@ -370,9 +370,9 @@ const schedules = {
                     <tbody id="week-schedule-tbody">
                     </tbody>
                 </table>
-                <div style="margin-top: 10px; display: flex; gap: 5px;">
-                    <button class="btn btn-success btn-sm" onclick="app.schedules.saveWeekSchedule()">Save</button>
-                    <button class="btn btn-danger btn-sm" onclick="app.schedules.deleteWeekSchedule()" style="margin-left: auto;">Delete</button>
+                <div style="margin-top: 10px; display: flex; gap: 5px; justify-content: flex-end;">
+                    <button class="btn btn-primary btn-sm" onclick="app.schedules.saveWeekSchedule()">Save</button>
+                    <button class="btn btn-danger btn-sm" onclick="app.schedules.deleteWeekSchedule()">Delete</button>
                 </div>
             </div>
 
@@ -381,7 +381,7 @@ const schedules = {
                 <label class="form-label text-small">Create New Week Schedule:</label>
                 <div style="display: flex; gap: 5px;">
                     <input type="text" id="new-week-schedule-name" class="form-control form-control-sm" placeholder="Name" style="flex: 1;" />
-                    <button class="btn btn-primary btn-sm" onclick="app.schedules.createWeekSchedule()">Create</button>
+                    <button class="btn btn-primary btn-sm" onclick="app.schedules.createWeekSchedule()">+ New</button>
                 </div>
             </div>
         `;
