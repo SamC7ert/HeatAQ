@@ -40,6 +40,7 @@ Long-term architectural improvements and technical debt items.
 - [ ] Better error feedback for users
 - [ ] **Progress reporting for multi-year simulations** - Show progress bar when simulation spans more than one year
 - [ ] **Norwegian date format** - Date fields currently show English format, should be Norwegian (dd.mm.yyyy). Investigate where locale is set - possibly per-user preference?
+- [ ] **Station search/browse feature** - Add ability to search/browse nearby weather stations instead of typing IDs manually. Use Frost API `/sources/v0.jsonld` endpoint with geometry parameter for location-based search. Docs: https://frost.met.no/api.html
 
 ### 2. Security & Permissions
 **Priority:** High
