@@ -1867,6 +1867,10 @@ const SimulationsModule = {
                     ${storedOpenPlan?.transition_water_temp ? '<br>OPEN transition temp: <strong>' + storedOpenPlan.transition_water_temp.toFixed(2) + '°C</strong>' : ''}
                     ${stored.cache_source === 'session' ? ' <span style="color:green;">✓cached</span>' : ' <span style="color:orange;">(reload week to cache)</span>'}
                 </div>
+                <div style="font-size:10px;margin-top:4px;padding:4px;background:#e8f4e8;border-radius:3px;">
+                    <strong>Thermal Mass:</strong> Stored=${(storedOpenPlan?.thermal_mass||0).toFixed(0)} | Calc=${(openPlanData?.thermal_mass||0).toFixed(0)} kWh/°C
+                    ${storedOpenPlan?.thermal_mass && openPlanData?.thermal_mass && Math.abs(storedOpenPlan.thermal_mass - openPlanData.thermal_mass) > 10 ? ' <span style="color:red;font-weight:bold;">⚠ MISMATCH!</span>' : ''}
+                </div>
             `;
             comparisonCard.style.display = 'block';
         }
