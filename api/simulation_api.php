@@ -717,6 +717,7 @@ try {
             // Add stored values for comparison
             $debug['stored'] = [
                 'run_id' => (int)$runId,
+                'simulator_version' => $configSnapshot['simulator_version'] ?? 'unknown',
                 'water_temp' => (float)$stored['water_temp'],
                 'is_open' => (bool)$stored['is_open'],
                 'total_loss_kw' => (float)$stored['total_loss_kw'],

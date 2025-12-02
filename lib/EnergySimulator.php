@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.35';  // debug_plan_call now captures SELECTED date transition
+    const VERSION = '3.10.36';  // Show simulator version in debug comparison table
 
     private $db;
     private $siteId;
