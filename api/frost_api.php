@@ -480,10 +480,11 @@ function fetchAndStoreYear($clientId) {
         $db = Config::getDatabase();
 
         // Use INSERT IGNORE to skip duplicates
+        // Note: solar_radiation not stored - weather_data table doesn't have this column
         $stmt = $db->prepare("
             INSERT IGNORE INTO weather_data
-            (station_id, timestamp, temperature, wind_speed, wind_direction, humidity, solar_radiation)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            (station_id, timestamp, temperature, wind_speed, wind_direction, humidity)
+            VALUES (?, ?, ?, ?, ?, ?)
         ");
 
         $inserted = 0;
@@ -496,8 +497,7 @@ function fetchAndStoreYear($clientId) {
                 $record['temperature'],
                 $record['wind_speed'],
                 $record['wind_direction'],
-                $record['humidity'],
-                $record['solar_radiation']
+                $record['humidity']
             ]);
 
             if ($stmt->rowCount() > 0) {
