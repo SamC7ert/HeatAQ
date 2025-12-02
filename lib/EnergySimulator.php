@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.23';  // Replay calculates losses at transition temp like simulation
+    const VERSION = '3.10.24';  // Fix: setPoolConfig now calculates thermalMassRate
 
     private $db;
     private $siteId;
@@ -357,6 +357,12 @@ class EnergySimulator {
     public function setPoolConfig($poolConfig) {
         if (is_array($poolConfig)) {
             $this->poolConfig = array_merge($this->poolConfig, $poolConfig);
+
+            // Recalculate thermal mass rate if volume is available
+            if (isset($this->poolConfig['volume_m3']) && $this->poolConfig['volume_m3'] > 0) {
+                $poolMass = $this->poolConfig['volume_m3'] * self::WATER_DENSITY; // kg
+                $this->thermalMassRate = $poolMass * self::WATER_SPECIFIC_HEAT / 3600000; // kWh/°C
+            }
         }
     }
 
