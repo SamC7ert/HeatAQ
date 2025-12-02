@@ -16,8 +16,10 @@
  * - GET ?action=get_version - Get simulator version
  */
 
-// Start session for debug cache
-session_start();
+// Start session for debug cache (if not already started by auth.php)
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 // Enable error output for debugging
 ini_set('display_errors', 0);
