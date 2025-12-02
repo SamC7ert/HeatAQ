@@ -1343,21 +1343,22 @@ const AdminModule = {
 
     /**
      * Apply debug mode visibility
+     * Shows/hides debug-only sections within Details tab
+     * Simulation Report is always visible, debug cards only when enabled
      */
     applyDebugMode: function(enabled) {
-        const debugTabBtn = document.getElementById('sim-tab-debug-btn');
-        if (debugTabBtn) {
-            debugTabBtn.style.display = enabled ? '' : 'none';
+        // Toggle top debug section (parameters, heat balance, chart)
+        const debugTop = document.getElementById('debug-only-top');
+        if (debugTop) {
+            debugTop.style.display = enabled ? '' : 'none';
         }
 
-        // If debug tab is currently active and we're disabling, switch to Simulate
-        if (!enabled) {
-            const debugTab = document.getElementById('sim-tab-debug');
-            if (debugTab && debugTab.style.display !== 'none') {
-                if (typeof app !== 'undefined' && app.simcontrol) {
-                    app.simcontrol.switchTab('new');
-                }
-            }
+        // Toggle bottom debug section (detail cards) - only if it's currently shown
+        // debug-results has its own visibility toggle via debugHour()
+        // When debug mode is off, we hide it; when on, we don't force it visible
+        const debugResults = document.getElementById('debug-results');
+        if (debugResults && !enabled) {
+            debugResults.style.display = 'none';
         }
     },
 
