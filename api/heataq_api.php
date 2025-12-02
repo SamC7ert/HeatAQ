@@ -1386,10 +1386,28 @@ class HeatAQAPI {
             }
         }
 
-        // Return stations only - skip slow summary query
-        $this->sendResponse([
-            'stations' => $stations
-        ]);
+        $response = ['stations' => $stations];
+
+        // If station_id provided, also return summary data for that station
+        if ($stationId) {
+            try {
+                $stmt = $this->db->prepare("
+                    SELECT
+                        MIN(DATE(timestamp)) as min_date,
+                        MAX(DATE(timestamp)) as max_date,
+                        COUNT(*) as record_count
+                    FROM weather_data
+                    WHERE station_id = ?
+                ");
+                $stmt->execute([$stationId]);
+                $summary = $stmt->fetch(PDO::FETCH_ASSOC);
+                $response['summary'] = $summary ?: ['min_date' => null, 'max_date' => null, 'record_count' => 0];
+            } catch (PDOException $e) {
+                $response['summary'] = ['min_date' => null, 'max_date' => null, 'record_count' => 0];
+            }
+        }
+
+        $this->sendResponse($response);
     }
 
     private function getWeatherYearlyAverages() {
