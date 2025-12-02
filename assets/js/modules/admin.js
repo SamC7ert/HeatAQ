@@ -953,8 +953,13 @@ const AdminModule = {
             modalContent.appendChild(closeBtn);
         }
 
-        // Reload weather stations to update counts
+        // Reload weather stations and refresh data display
         await this.loadWeatherStations();
+        // Re-select the station and refresh data tables
+        const select = document.getElementById('weather-station-select');
+        if (select) select.value = stationId;
+        this.selectedStationId = stationId;
+        await this.loadWeatherData();
     },
 
     deleteWeatherStation: async function(stationId) {
