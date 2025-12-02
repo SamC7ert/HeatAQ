@@ -370,14 +370,8 @@ const AdminModule = {
                 this.weatherStations = stationsData.stations;
                 this.renderWeatherStations();
                 this.populateStationDropdown();
-
-                if (stationsData.summary) {
-                    this.renderWeatherSummary(stationsData.summary);
-                }
+                // Don't load data until station is selected
             }
-
-            // Load yearly and monthly data
-            await this.loadWeatherData();
         } catch (err) {
             console.error('Failed to load weather stations:', err);
             const container = document.getElementById('weather-stations-list');
@@ -436,7 +430,16 @@ const AdminModule = {
     },
 
     loadWeatherData: async function() {
-        const stationParam = this.selectedStationId ? `&station_id=${this.selectedStationId}` : '';
+        // Only load data if a station is selected
+        if (!this.selectedStationId) {
+            // Clear the data displays
+            this.renderWeatherSummary({});
+            this.renderYearlyAverages([]);
+            this.renderMonthlyAverages([]);
+            return;
+        }
+
+        const stationParam = `&station_id=${this.selectedStationId}`;
 
         try {
             const [summaryRes, yearlyRes, monthlyRes] = await Promise.all([
