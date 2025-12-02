@@ -889,6 +889,12 @@ try {
                 $simulator->setPoolConfig($configSnapshot['pool_config']);
             }
 
+            // Capture debug info about thermalMassRate
+            $debugThermalMass = [
+                'pool_config_volume' => $configSnapshot['pool_config']['volume_m3'] ?? 'NOT SET',
+                'thermal_mass_rate_after_setPoolConfig' => $simulator->getThermalMassRate(),
+            ];
+
             // Replay scheduling decisions for the week
             $debugCache = [];
             $prevIsOpen = null;
@@ -982,6 +988,7 @@ try {
                 'hours' => count($hourlyData),
                 'data' => $hourlyData,
                 'debug_cache_size' => count($debugCache),  // For verification
+                'debug_thermal_mass' => $debugThermalMass,  // Debug: verify thermalMassRate
             ]);
             break;
 
