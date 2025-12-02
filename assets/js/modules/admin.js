@@ -391,7 +391,7 @@ const AdminModule = {
         const select = document.getElementById('weather-station-select');
         if (!select) return;
 
-        select.innerHTML = '<option value="">-- All Stations --</option>' +
+        select.innerHTML = '<option value="">-- Select Station --</option>' +
             this.weatherStations.map(s =>
                 `<option value="${s.station_id}">${s.name}</option>`
             ).join('');
@@ -400,6 +400,38 @@ const AdminModule = {
     onStationChange: async function() {
         const select = document.getElementById('weather-station-select');
         this.selectedStationId = select ? select.value : '';
+
+        const detailsDiv = document.getElementById('station-details');
+        const noStationMsg = document.getElementById('no-station-message');
+
+        if (this.selectedStationId) {
+            // Show station details
+            if (detailsDiv) detailsDiv.style.display = 'block';
+            if (noStationMsg) noStationMsg.style.display = 'none';
+
+            // Populate fields from station data
+            const station = this.weatherStations.find(s => s.station_id === this.selectedStationId);
+            if (station) {
+                // Location with Google Maps link
+                const locationEl = document.getElementById('station-location');
+                if (locationEl && station.latitude && station.longitude) {
+                    locationEl.innerHTML = `<a href="#" onclick="app.admin.openGoogleMaps(${station.latitude}, ${station.longitude}); return false;" style="color: var(--primary);">📍 ${parseFloat(station.latitude).toFixed(4)}, ${parseFloat(station.longitude).toFixed(4)}</a>`;
+                } else if (locationEl) {
+                    locationEl.textContent = '-';
+                }
+
+                // Editable fields
+                const windHeightEl = document.getElementById('station-wind-height');
+                const roughnessEl = document.getElementById('station-roughness');
+                if (windHeightEl) windHeightEl.value = station.measurement_height_wind || 10;
+                if (roughnessEl) roughnessEl.value = station.terrain_roughness || 0.03;
+            }
+        } else {
+            // Hide details when no station selected
+            if (detailsDiv) detailsDiv.style.display = 'none';
+            if (noStationMsg) noStationMsg.style.display = 'block';
+        }
+
         await this.loadWeatherData();
     },
 
@@ -510,13 +542,9 @@ const AdminModule = {
         const title = isEdit ? 'Edit Weather Station' : 'Add Weather Station';
 
         let html = `
-            <div class="modal-backdrop" onclick="app.admin.closeStationModal()"></div>
-            <div class="modal" style="max-width: 600px;">
-                <div class="modal-header">
+            <div class="modal-overlay" onclick="app.admin.closeStationModal()">
+                <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 600px;">
                     <h3>${title}</h3>
-                    <button class="modal-close" onclick="app.admin.closeStationModal()">&times;</button>
-                </div>
-                <div class="modal-body">
                     ${!isEdit ? `
                     <div class="form-group">
                         <label>Station ID</label>
@@ -537,7 +565,7 @@ const AdminModule = {
                         <label>Station Name</label>
                         <input type="text" id="station-name-input" class="form-control" value="${existingStation?.name || ''}" placeholder="Station name">
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-row">
                         <div class="form-group">
                             <label>Latitude</label>
                             <input type="number" id="station-lat-input" class="form-control" value="${existingStation?.latitude || ''}" step="0.0001" placeholder="58.3397">
@@ -547,7 +575,7 @@ const AdminModule = {
                             <input type="number" id="station-lon-input" class="form-control" value="${existingStation?.longitude || ''}" step="0.0001" placeholder="8.5194">
                         </div>
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                    <div class="form-row">
                         <div class="form-group">
                             <label>Elevation (m)</label>
                             <input type="number" id="station-elevation-input" class="form-control" value="${existingStation?.elevation || ''}" placeholder="7">
@@ -562,11 +590,11 @@ const AdminModule = {
                             <small class="text-muted">0.03=open, 0.1=suburban</small>
                         </div>
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" onclick="app.admin.closeStationModal()">Cancel</button>
-                    ${isEdit ? `<button class="btn btn-danger" onclick="app.admin.deleteWeatherStation('${existingStation.station_id}')" style="margin-right: auto;">Delete</button>` : ''}
-                    <button class="btn btn-primary" onclick="app.admin.saveStation('${existingStation?.station_id || ''}')">${isEdit ? 'Save' : '+ Add Station'}</button>
+                    <div class="form-actions">
+                        <button class="btn btn-secondary" onclick="app.admin.closeStationModal()">Cancel</button>
+                        ${isEdit ? `<button class="btn btn-danger" onclick="app.admin.deleteWeatherStation('${existingStation.station_id}')" style="margin-right: auto;">Delete</button>` : ''}
+                        <button class="btn btn-primary" onclick="app.admin.saveStation('${existingStation?.station_id || ''}')">${isEdit ? 'Save' : '+ Add Station'}</button>
+                    </div>
                 </div>
             </div>
         `;
@@ -579,14 +607,12 @@ const AdminModule = {
             document.body.appendChild(modalContainer);
         }
         modalContainer.innerHTML = html;
-        modalContainer.style.display = 'block';
     },
 
     closeStationModal: function() {
         const container = document.getElementById('station-modal-container');
         if (container) {
-            container.style.display = 'none';
-            container.innerHTML = '';
+            container.remove();
         }
     },
 
@@ -716,6 +742,65 @@ const AdminModule = {
         } catch (err) {
             alert('Error deleting station: ' + err.message);
         }
+    },
+
+    // Save station inline (from Weather Data card)
+    saveStationInline: async function() {
+        if (!this.selectedStationId) {
+            alert('No station selected');
+            return;
+        }
+
+        const station = this.weatherStations.find(s => s.station_id === this.selectedStationId);
+        if (!station) return;
+
+        const windHeight = document.getElementById('station-wind-height')?.value || '10';
+        const roughness = document.getElementById('station-roughness')?.value || '0.03';
+
+        try {
+            const response = await fetch('./api/heataq_api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'update_weather_station',
+                    station_id: this.selectedStationId,
+                    station_name: station.name,
+                    latitude: station.latitude,
+                    longitude: station.longitude,
+                    elevation: station.elevation,
+                    measurement_height_wind: windHeight,
+                    terrain_roughness: roughness
+                })
+            });
+
+            const data = await response.json();
+            if (data.error) {
+                alert('Error: ' + data.error);
+            } else {
+                await this.loadWeatherStations();
+                // Re-select the station to refresh the dropdown selection
+                const select = document.getElementById('weather-station-select');
+                if (select) select.value = this.selectedStationId;
+                await this.onStationChange();
+                api.utils.showSuccess('Station updated');
+            }
+        } catch (err) {
+            alert('Error saving station: ' + err.message);
+        }
+    },
+
+    // Delete selected station from Weather Data card
+    deleteSelectedStation: async function() {
+        if (!this.selectedStationId) {
+            alert('No station selected');
+            return;
+        }
+        await this.deleteWeatherStation(this.selectedStationId);
+        // Reset selection
+        this.selectedStationId = '';
+        const select = document.getElementById('weather-station-select');
+        if (select) select.value = '';
+        await this.onStationChange();
     },
 
     renderYearlyAverages: function(data) {
