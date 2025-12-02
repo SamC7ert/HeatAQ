@@ -20,6 +20,9 @@
 ini_set('display_errors', 0);
 error_reporting(E_ALL);
 
+// Increase memory limit for long simulations (10+ years)
+ini_set('memory_limit', '512M');
+
 // Custom error handler to return JSON errors
 set_error_handler(function($severity, $message, $file, $line) {
     throw new ErrorException($message, 0, $severity, $file, $line);
