@@ -26,14 +26,14 @@ const ProjectModule = {
             // Load site data
             await this.loadSiteData();
 
-            // Load pool data
-            this.loadPoolData();
+            // Load pool data (must await before updatePoolCard)
+            await this.loadPoolData();
 
             // Load project summary
             await this.loadSummary();
 
             // Update pool card
-            this.updatePoolCard();
+            await this.updatePoolCard();
 
             // Load projects list
             await this.loadProjectsList();
