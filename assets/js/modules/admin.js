@@ -443,22 +443,39 @@ const AdminModule = {
         }
 
         let html = '<table class="data-table compact"><thead><tr>' +
-            '<th>Name</th><th>Station ID</th><th>Location</th><th>Actions</th>' +
+            '<th>Name</th><th>Station ID</th><th>Location</th><th>Wind Height</th><th>Roughness</th><th>Actions</th>' +
             '</tr></thead><tbody>';
 
         this.weatherStations.forEach(station => {
+            const lat = station.latitude;
+            const lon = station.longitude;
+            const hasLocation = lat && lon;
+            const locationHtml = hasLocation
+                ? `<a href="#" onclick="app.admin.openGoogleMaps(${lat}, ${lon}); return false;" title="Open in Google Maps" style="color: var(--primary);">📍 ${parseFloat(lat).toFixed(4)}, ${parseFloat(lon).toFixed(4)}</a>`
+                : '-';
+
+            const windHeight = station.measurement_height_wind ? `${station.measurement_height_wind}m` : '10m';
+            const roughness = station.terrain_roughness ?? '0.03';
+
             html += `<tr>
                 <td>${station.name}</td>
-                <td>${station.station_id}</td>
-                <td>${station.latitude || '-'}, ${station.longitude || '-'}</td>
+                <td><code>${station.station_id}</code></td>
+                <td>${locationHtml}</td>
+                <td>${windHeight}</td>
+                <td>${roughness}</td>
                 <td>
-                    <button class="btn btn-xs btn-secondary" onclick="app.admin.editWeatherStation('${station.station_id}')">Edit</button>
+                    <button class="btn btn-xs btn-primary" onclick="app.admin.editWeatherStation('${station.station_id}')">Edit</button>
                 </td>
             </tr>`;
         });
 
         html += '</tbody></table>';
         container.innerHTML = html;
+    },
+
+    openGoogleMaps: function(lat, lon) {
+        const url = `https://www.google.com/maps?q=${lat},${lon}&z=14`;
+        window.open(url, '_blank');
     },
 
     renderWeatherSummary: function(summary) {
@@ -478,11 +495,227 @@ const AdminModule = {
     },
 
     addWeatherStation: function() {
-        alert('Weather station import not yet implemented.\nWeather data is typically imported via batch process.');
+        this.showStationModal(null);
     },
 
     editWeatherStation: function(stationId) {
-        alert('Weather station editing not yet implemented.');
+        const station = this.weatherStations.find(s => s.station_id === stationId);
+        if (station) {
+            this.showStationModal(station);
+        }
+    },
+
+    showStationModal: function(existingStation) {
+        const isEdit = !!existingStation;
+        const title = isEdit ? 'Edit Weather Station' : 'Add Weather Station';
+
+        let html = `
+            <div class="modal-backdrop" onclick="app.admin.closeStationModal()"></div>
+            <div class="modal" style="max-width: 600px;">
+                <div class="modal-header">
+                    <h3>${title}</h3>
+                    <button class="modal-close" onclick="app.admin.closeStationModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    ${!isEdit ? `
+                    <div class="form-group">
+                        <label>Station ID</label>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="station-id-input" class="form-control" placeholder="e.g. SN38140 or 38140" style="flex: 1;">
+                            <button class="btn btn-secondary" onclick="app.admin.checkStation()">Check</button>
+                        </div>
+                    </div>
+                    <div id="station-check-result" style="display: none; margin-bottom: 15px; padding: 12px; background: var(--neutral-100); border-radius: 4px;">
+                    </div>
+                    ` : `
+                    <div class="form-group">
+                        <label>Station ID</label>
+                        <input type="text" class="form-control" value="${existingStation.station_id}" disabled>
+                    </div>
+                    `}
+                    <div class="form-group">
+                        <label>Station Name</label>
+                        <input type="text" id="station-name-input" class="form-control" value="${existingStation?.name || ''}" placeholder="Station name">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <label>Latitude</label>
+                            <input type="number" id="station-lat-input" class="form-control" value="${existingStation?.latitude || ''}" step="0.0001" placeholder="58.3397">
+                        </div>
+                        <div class="form-group">
+                            <label>Longitude</label>
+                            <input type="number" id="station-lon-input" class="form-control" value="${existingStation?.longitude || ''}" step="0.0001" placeholder="8.5194">
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <label>Elevation (m)</label>
+                            <input type="number" id="station-elevation-input" class="form-control" value="${existingStation?.elevation || ''}" placeholder="7">
+                        </div>
+                        <div class="form-group">
+                            <label>Wind Height (m)</label>
+                            <input type="number" id="station-wind-height-input" class="form-control" value="${existingStation?.measurement_height_wind || '10'}" step="0.1" placeholder="10">
+                        </div>
+                        <div class="form-group">
+                            <label>Roughness (z₀)</label>
+                            <input type="number" id="station-roughness-input" class="form-control" value="${existingStation?.terrain_roughness || '0.03'}" step="0.001" placeholder="0.03">
+                            <small class="text-muted">0.03=open, 0.1=suburban</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="app.admin.closeStationModal()">Cancel</button>
+                    ${isEdit ? `<button class="btn btn-danger" onclick="app.admin.deleteWeatherStation('${existingStation.station_id}')" style="margin-right: auto;">Delete</button>` : ''}
+                    <button class="btn btn-primary" onclick="app.admin.saveStation('${existingStation?.station_id || ''}')">${isEdit ? 'Save' : '+ Add Station'}</button>
+                </div>
+            </div>
+        `;
+
+        // Create modal container
+        let modalContainer = document.getElementById('station-modal-container');
+        if (!modalContainer) {
+            modalContainer = document.createElement('div');
+            modalContainer.id = 'station-modal-container';
+            document.body.appendChild(modalContainer);
+        }
+        modalContainer.innerHTML = html;
+        modalContainer.style.display = 'block';
+    },
+
+    closeStationModal: function() {
+        const container = document.getElementById('station-modal-container');
+        if (container) {
+            container.style.display = 'none';
+            container.innerHTML = '';
+        }
+    },
+
+    checkStation: async function() {
+        const input = document.getElementById('station-id-input');
+        const resultDiv = document.getElementById('station-check-result');
+        if (!input || !resultDiv) return;
+
+        const stationId = input.value.trim();
+        if (!stationId) {
+            alert('Please enter a station ID');
+            return;
+        }
+
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = '<p>Checking station...</p>';
+
+        try {
+            const response = await fetch(`./api/frost_api.php?action=check_station&station_id=${encodeURIComponent(stationId)}`);
+            const data = await response.json();
+
+            if (data.found) {
+                // Fill in the form fields
+                document.getElementById('station-name-input').value = data.name || '';
+                document.getElementById('station-lat-input').value = data.latitude || '';
+                document.getElementById('station-lon-input').value = data.longitude || '';
+                document.getElementById('station-elevation-input').value = data.elevation || '';
+                if (data.recommended_wind_height) {
+                    document.getElementById('station-wind-height-input').value = data.recommended_wind_height;
+                }
+
+                // Show result
+                const elements = data.available_elements || {};
+                const windLevels = data.wind_levels || [];
+                const dateRange = data.data_range || {};
+
+                resultDiv.innerHTML = `
+                    <div style="color: var(--success); font-weight: 500; margin-bottom: 8px;">✓ Station Found: ${data.name}</div>
+                    <table class="data-table compact" style="font-size: 12px;">
+                        <tr><td>Location</td><td>${data.latitude?.toFixed(4) || '-'}°N, ${data.longitude?.toFixed(4) || '-'}°E, ${data.elevation || '-'}m</td></tr>
+                        <tr><td>Municipality</td><td>${data.municipality || '-'}, ${data.county || '-'}</td></tr>
+                        <tr><td>Data Range</td><td>${dateRange.from || '?'} → ${dateRange.to || 'now'}</td></tr>
+                        <tr><td>Elements</td><td>
+                            temp ${elements.air_temperature ? '✓' : '✗'} |
+                            wind ${elements.wind_speed ? '✓' : '✗'} |
+                            humidity ${elements.relative_humidity ? '✓' : '✗'} |
+                            solar ${elements.solar ? '✓' : '✗'}
+                        </td></tr>
+                        ${windLevels.length > 0 ? `<tr><td>Wind Levels</td><td>${windLevels.map(l => l + 'm').join(', ')}</td></tr>` : ''}
+                    </table>
+                `;
+            } else {
+                resultDiv.innerHTML = `<div style="color: var(--danger);">✗ Station not found: ${data.error || 'Unknown error'}</div>`;
+            }
+        } catch (err) {
+            resultDiv.innerHTML = `<div style="color: var(--danger);">✗ Error checking station: ${err.message}</div>`;
+        }
+    },
+
+    saveStation: async function(existingId) {
+        const isEdit = !!existingId;
+        const stationId = isEdit ? existingId : document.getElementById('station-id-input')?.value.trim();
+        const name = document.getElementById('station-name-input')?.value.trim();
+        const latitude = document.getElementById('station-lat-input')?.value;
+        const longitude = document.getElementById('station-lon-input')?.value;
+        const elevation = document.getElementById('station-elevation-input')?.value;
+        const windHeight = document.getElementById('station-wind-height-input')?.value || '10';
+        const roughness = document.getElementById('station-roughness-input')?.value || '0.03';
+
+        if (!stationId || !name) {
+            alert('Station ID and Name are required');
+            return;
+        }
+
+        try {
+            const response = await fetch('./api/heataq_api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: isEdit ? 'update_weather_station' : 'add_weather_station',
+                    station_id: stationId.toUpperCase().startsWith('SN') ? stationId.toUpperCase() : 'SN' + stationId,
+                    station_name: name,
+                    latitude: latitude || null,
+                    longitude: longitude || null,
+                    elevation: elevation || null,
+                    measurement_height_wind: windHeight,
+                    terrain_roughness: roughness
+                })
+            });
+
+            const data = await response.json();
+            if (data.error) {
+                alert('Error: ' + data.error);
+            } else {
+                this.closeStationModal();
+                await this.loadWeatherStations();
+                api.utils.showSuccess(isEdit ? 'Station updated' : 'Station added');
+            }
+        } catch (err) {
+            alert('Error saving station: ' + err.message);
+        }
+    },
+
+    deleteWeatherStation: async function(stationId) {
+        if (!confirm(`Delete weather station ${stationId}?\n\nThis will NOT delete the weather data.`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch('./api/heataq_api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'delete_weather_station',
+                    station_id: stationId
+                })
+            });
+
+            const data = await response.json();
+            if (data.error) {
+                alert('Error: ' + data.error);
+            } else {
+                this.closeStationModal();
+                await this.loadWeatherStations();
+                api.utils.showSuccess('Station deleted');
+            }
+        } catch (err) {
+            alert('Error deleting station: ' + err.message);
+        }
     },
 
     renderYearlyAverages: function(data) {

@@ -338,6 +338,27 @@ class HeatAQAPI {
                     $this->getWeatherMonthlyAverages();
                     break;
 
+                case 'add_weather_station':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied - admin only', 403);
+                    }
+                    $this->addWeatherStation();
+                    break;
+
+                case 'update_weather_station':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied - admin only', 403);
+                    }
+                    $this->updateWeatherStation();
+                    break;
+
+                case 'delete_weather_station':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied - admin only', 403);
+                    }
+                    $this->deleteWeatherStation();
+                    break;
+
                 // ADMIN: Users (admin-only operations)
                 case 'get_users':
                     if (!$this->canDelete()) {
@@ -1337,29 +1358,41 @@ class HeatAQAPI {
         $stationId = $_GET['station_id'] ?? null;
 
         try {
-            // Query only basic columns that are guaranteed to exist
+            // Query all relevant columns including new fields
             $stmt = $this->db->query("
-                SELECT station_id, station_name as name, latitude, longitude
+                SELECT station_id, station_name as name, latitude, longitude, elevation,
+                       measurement_height_wind, measurement_height_temp, terrain_roughness
                 FROM weather_stations
                 ORDER BY station_name
             ");
             $stations = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
-            // Try alternative column name
+            // Fallback: try without new columns if migration not run yet
             try {
                 $stmt = $this->db->query("
-                    SELECT station_id, name, latitude, longitude
+                    SELECT station_id, station_name as name, latitude, longitude, elevation,
+                           measurement_height_wind, measurement_height_temp
                     FROM weather_stations
-                    ORDER BY name
+                    ORDER BY station_name
                 ");
                 $stations = $stmt->fetchAll(PDO::FETCH_ASSOC);
             } catch (PDOException $e2) {
-                $this->sendResponse([
-                    'stations' => [],
-                    'summary' => [],
-                    'error' => $e2->getMessage()
-                ]);
-                return;
+                // Final fallback: basic columns only
+                try {
+                    $stmt = $this->db->query("
+                        SELECT station_id, station_name as name, latitude, longitude
+                        FROM weather_stations
+                        ORDER BY station_name
+                    ");
+                    $stations = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                } catch (PDOException $e3) {
+                    $this->sendResponse([
+                        'stations' => [],
+                        'summary' => [],
+                        'error' => $e3->getMessage()
+                    ]);
+                    return;
+                }
             }
         }
 
@@ -1438,6 +1471,113 @@ class HeatAQAPI {
         $this->sendResponse([
             'monthly_averages' => $monthly
         ]);
+    }
+
+    // ====================================
+    // ADMIN: WEATHER STATIONS
+    // ====================================
+
+    private function addWeatherStation() {
+        $data = $this->postInput;
+
+        $stationId = $data['station_id'] ?? '';
+        $stationName = $data['station_name'] ?? '';
+
+        if (empty($stationId) || empty($stationName)) {
+            $this->sendError('station_id and station_name are required');
+            return;
+        }
+
+        // Normalize station ID
+        $stationId = strtoupper($stationId);
+        if (!preg_match('/^SN/', $stationId)) {
+            $stationId = 'SN' . $stationId;
+        }
+
+        // Check if station already exists
+        $stmt = $this->db->prepare("SELECT station_id FROM weather_stations WHERE station_id = ?");
+        $stmt->execute([$stationId]);
+        if ($stmt->fetch()) {
+            $this->sendError('Station already exists');
+            return;
+        }
+
+        $stmt = $this->db->prepare("
+            INSERT INTO weather_stations
+            (station_id, station_name, latitude, longitude, elevation, measurement_height_wind, terrain_roughness)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ");
+
+        $stmt->execute([
+            $stationId,
+            $stationName,
+            $data['latitude'] ?? null,
+            $data['longitude'] ?? null,
+            $data['elevation'] ?? null,
+            $data['measurement_height_wind'] ?? 10,
+            $data['terrain_roughness'] ?? 0.03
+        ]);
+
+        $this->sendResponse(['success' => true, 'station_id' => $stationId]);
+    }
+
+    private function updateWeatherStation() {
+        $data = $this->postInput;
+
+        $stationId = $data['station_id'] ?? '';
+        if (empty($stationId)) {
+            $this->sendError('station_id is required');
+            return;
+        }
+
+        $stmt = $this->db->prepare("
+            UPDATE weather_stations SET
+                station_name = COALESCE(?, station_name),
+                latitude = ?,
+                longitude = ?,
+                elevation = ?,
+                measurement_height_wind = COALESCE(?, measurement_height_wind),
+                terrain_roughness = COALESCE(?, terrain_roughness)
+            WHERE station_id = ?
+        ");
+
+        $stmt->execute([
+            $data['station_name'] ?? null,
+            $data['latitude'] ?? null,
+            $data['longitude'] ?? null,
+            $data['elevation'] ?? null,
+            $data['measurement_height_wind'] ?? null,
+            $data['terrain_roughness'] ?? null,
+            $stationId
+        ]);
+
+        if ($stmt->rowCount() === 0) {
+            $this->sendError('Station not found');
+            return;
+        }
+
+        $this->sendResponse(['success' => true]);
+    }
+
+    private function deleteWeatherStation() {
+        $data = $this->postInput;
+
+        $stationId = $data['station_id'] ?? '';
+        if (empty($stationId)) {
+            $this->sendError('station_id is required');
+            return;
+        }
+
+        // Delete the station (but keep the weather_data)
+        $stmt = $this->db->prepare("DELETE FROM weather_stations WHERE station_id = ?");
+        $stmt->execute([$stationId]);
+
+        if ($stmt->rowCount() === 0) {
+            $this->sendError('Station not found');
+            return;
+        }
+
+        $this->sendResponse(['success' => true]);
     }
 
     // ====================================
