@@ -155,7 +155,7 @@
                             <select id="ohc-selector" onchange="app.schedules.loadOHC()" disabled>
                                 <option value="">Loading...</option>
                             </select>
-                            <button id="ohc-btn-new" class="btn btn-primary btn-sm" onclick="app.schedules.toggleNewOHCForm()" disabled>+ New</button>
+                            <button id="ohc-btn-new" class="btn btn-sm" style="background: #90EE90; color: #000;" onclick="app.schedules.toggleNewOHCForm()" disabled>+ New</button>
                             <button id="ohc-btn-save" class="btn btn-primary btn-sm" onclick="app.schedules.saveOHC()" disabled>Save</button>
                             <button id="ohc-btn-delete" class="btn btn-danger btn-sm" onclick="app.schedules.deleteOHC()" disabled>Delete</button>
                         </div>
@@ -185,7 +185,7 @@
                                 <div id="date-ranges-container">
                                     <!-- Date ranges will be loaded here -->
                                 </div>
-                                <button class="btn btn-sm btn-primary" onclick="app.calendar.addDateRange()">+ Add Range</button>
+                                <button class="btn btn-sm" style="background: #90EE90; color: #000;" onclick="app.calendar.addDateRange()">+ Add Range</button>
                             </div>
 
                             <!-- Exception Days -->
@@ -231,7 +231,7 @@
                                 </div>
                                 <p id="project-display-desc" class="text-muted" style="margin: 0; cursor: pointer;" onclick="app.project.editDescription()" title="Click to edit">Loading description...</p>
                             </div>
-                            <button class="btn btn-primary btn-sm" onclick="app.project.showNewProjectModal()">+ New Project</button>
+                            <button class="btn btn-sm" style="background: #90EE90; color: #000;" onclick="app.project.showNewProjectModal()">+ New Project</button>
                         </div>
                         <!-- Edit forms (hidden by default) -->
                         <div id="project-edit-name-form" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
@@ -381,7 +381,7 @@
                             <select id="config-selector" onchange="app.configuration.loadSelected()">
                                 <option value="">-- Select Configuration --</option>
                             </select>
-                            <button class="btn btn-secondary btn-sm" onclick="app.configuration.toggleNewForm()">+ New</button>
+                            <button class="btn btn-sm" style="background: #90EE90; color: #000;" onclick="app.configuration.toggleNewForm()">+ New</button>
                             <button class="btn btn-primary btn-sm" onclick="app.configuration.save()">Save</button>
                             <button class="btn btn-danger btn-sm" onclick="app.configuration.deleteConfig()">Delete</button>
                         </div>
@@ -1163,7 +1163,7 @@
                             <div id="holiday-definitions-list">
                                 <p class="loading">Loading...</p>
                             </div>
-                            <button class="btn btn-secondary btn-sm" onclick="app.admin.addHolidayDefinition()">+ Add Exception Day</button>
+                            <button class="btn btn-sm" style="background: #90EE90; color: #000;" onclick="app.admin.addHolidayDefinition()">+ Add Exception Day</button>
                         </div>
 
                         <div class="card">
@@ -1255,7 +1255,7 @@
                         <div id="active-users-list">
                             <p class="loading">Loading...</p>
                         </div>
-                        <button class="btn btn-secondary btn-sm" onclick="app.admin.addUser()">+ Add User</button>
+                        <button class="btn btn-sm" style="background: #90EE90; color: #000;" onclick="app.admin.addUser()">+ Add User</button>
                     </div>
 
                     <div class="card">

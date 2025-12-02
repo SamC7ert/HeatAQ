@@ -5,6 +5,17 @@
  * and keep API credentials server-side
  */
 
+// Increase limits for large data fetches
+set_time_limit(300);  // 5 minutes
+ini_set('memory_limit', '512M');
+
+// Catch all errors and return as JSON
+set_error_handler(function($severity, $message, $file, $line) {
+    throw new ErrorException($message, 0, $severity, $file, $line);
+});
+
+try {
+
 header('Content-Type: application/json');
 
 // Include configuration loader (same as heataq_api.php)
@@ -522,4 +533,19 @@ function fetchAndStoreYear($clientId) {
             'fetched' => count($records)
         ]);
     }
+}
+
+} catch (Exception $e) {
+    // Global error handler
+    echo json_encode([
+        'error' => 'Server error: ' . $e->getMessage(),
+        'file' => basename($e->getFile()),
+        'line' => $e->getLine()
+    ]);
+} catch (Error $e) {
+    echo json_encode([
+        'error' => 'Fatal error: ' . $e->getMessage(),
+        'file' => basename($e->getFile()),
+        'line' => $e->getLine()
+    ]);
 }
