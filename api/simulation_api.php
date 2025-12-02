@@ -240,6 +240,16 @@ try {
                 if ($configRow) {
                     $config = json_decode($configRow['json_config'] ?? '{}', true) ?: [];
 
+                    // IMPORTANT: Pool dimensions come ONLY from pools table (loaded above)
+                    // Remove any pool dimension overrides from config template
+                    if (isset($config['pool'])) {
+                        unset($config['pool']['length_m']);
+                        unset($config['pool']['width_m']);
+                        unset($config['pool']['depth_m']);
+                        unset($config['pool']['area_m2']);
+                        unset($config['pool']['volume_m3']);
+                    }
+
                     // Ensure nested arrays exist
                     if (!isset($config['equipment'])) $config['equipment'] = [];
                     if (!isset($config['control'])) $config['control'] = [];

@@ -615,10 +615,12 @@ const ProjectModule = {
             // Try to load from database first
             const response = await fetch('./api/heataq_api.php?action=get_pools');
             const data = await response.json();
+            console.log('[Project] get_pools response:', data);
 
             if (data.pools && data.pools.length > 0) {
                 // Use first pool (or could allow selection)
                 const dbPool = data.pools[0];
+                console.log('[Project] Loading pool from DB:', dbPool);
                 this.currentPoolId = dbPool.pool_id;
                 this.currentPool = {
                     pool_id: dbPool.pool_id,
@@ -636,8 +638,10 @@ const ProjectModule = {
                     has_tunnel: dbPool.has_tunnel == 1,
                     floor_insulated: dbPool.floor_insulated == 1
                 };
-                console.log('[Project] Pool loaded from database:', this.currentPool.name);
+                console.log('[Project] Pool loaded from database:', this.currentPool);
                 return;
+            } else {
+                console.warn('[Project] No pools returned from API for site_id:', data.site_id);
             }
         } catch (err) {
             console.warn('[Project] Failed to load pool from database, using localStorage:', err);
@@ -647,8 +651,10 @@ const ProjectModule = {
         const poolData = localStorage.getItem('heataq_pool');
         if (poolData) {
             this.currentPool = JSON.parse(poolData);
+            console.warn('[Project] Using localStorage pool (NOT from DB):', this.currentPool);
         } else {
             // Default pool matching benchmark
+            console.warn('[Project] Using HARDCODED DEFAULT pool (NOT from DB!)');
             this.currentPool = {
                 name: 'Main Pool',
                 length: 25,
