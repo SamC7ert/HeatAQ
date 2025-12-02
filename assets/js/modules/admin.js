@@ -955,11 +955,10 @@ const AdminModule = {
 
         // Reload weather stations and refresh data display
         await this.loadWeatherStations();
-        // Re-select the station and refresh data tables
+        // Re-select the station and refresh UI state + data tables
         const select = document.getElementById('weather-station-select');
         if (select) select.value = stationId;
-        this.selectedStationId = stationId;
-        await this.loadWeatherData();
+        await this.onStationChange();
     },
 
     deleteWeatherStation: async function(stationId) {
