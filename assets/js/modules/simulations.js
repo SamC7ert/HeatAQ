@@ -259,12 +259,13 @@ const SimulationsModule = {
                 throw new Error(data.error);
             }
 
-            // Show success with date/time
+            // Show success with date/time and version
             const now = new Date();
             const dateStr = now.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
             const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            const version = data.version || 'unknown';
             if (statusEl) {
-                statusEl.textContent = `Simulation completed ${dateStr} - ${timeStr}`;
+                statusEl.textContent = `Simulation v${version} completed ${dateStr} - ${timeStr}`;
                 statusEl.style.color = '#28a745';
             }
 
@@ -2450,13 +2451,14 @@ const SimulationsModule = {
             // Load and render yearly chart
             await this.loadYearlyChart(lastRun.run_id);
 
-            // Show last run completion time in status
+            // Show last run completion time in status with version
             const statusEl = document.getElementById('simulation-status');
             if (statusEl && lastRun.completed_at) {
                 const completed = new Date(lastRun.completed_at);
                 const dateStr = completed.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
                 const timeStr = completed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-                statusEl.textContent = `Last run: ${dateStr} - ${timeStr}`;
+                const version = lastRun.simulator_version || lastRun.meta?.simulator_version || 'unknown';
+                statusEl.textContent = `Last run v${version}: ${dateStr} - ${timeStr}`;
                 statusEl.style.color = '#28a745';
             }
 

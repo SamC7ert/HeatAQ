@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.0';  // Predictive preheating with 4 cases (Python v3.6.0.3 parity)
+    const VERSION = '3.10.1';  // Fix: reactive control for open periods, cover losses during waiting
 
     private $db;
     private $siteId;
@@ -756,6 +756,9 @@ class EnergySimulator {
                 $results['summary'][$key] = round($value, 2);
             }
         }
+
+        // Add simulator version to results
+        $results['version'] = self::VERSION;
 
         return $results;
     }
