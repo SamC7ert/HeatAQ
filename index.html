@@ -545,7 +545,7 @@
                         <button class="sim-tab active" onclick="app.simcontrol.switchTab('new')">Simulate</button>
                         <button class="sim-tab" onclick="app.simcontrol.switchTab('history')">History</button>
                         <button class="sim-tab" onclick="app.simcontrol.switchTab('compare')">Analyse</button>
-                        <button id="sim-tab-debug-btn" class="sim-tab" onclick="app.simcontrol.switchTab('debug')" style="display: none;">🔍 Debug</button>
+                        <button class="sim-tab" onclick="app.simcontrol.switchTab('debug')">Details</button>
                     </div>
 
                     <!-- New Run Tab Content -->
@@ -923,8 +923,10 @@
                         </div>
                     </div>
 
-                    <!-- Debug Tab Content -->
+                    <!-- Details Tab Content (renamed from Debug) -->
                     <div id="sim-tab-debug" class="sim-tab-content" style="display: none;">
+                        <!-- Debug-only: top section (hidden unless debug mode enabled) -->
+                        <div id="debug-only-top" style="display: none;">
                         <!-- Top row: Inputs (left) + Heat Output (right) -->
                         <div style="display: grid; grid-template-columns: 280px 1fr; gap: 15px; margin-bottom: 15px;">
                             <!-- Compact Inputs -->
@@ -1036,7 +1038,9 @@
                             </div>
                         </div>
 
-                        <!-- Simulation Report (Debug tab - below graph) -->
+                        </div><!-- end debug-only-top -->
+
+                        <!-- Simulation Report (Details tab - always visible) -->
                         <div id="benchmark-report-debug" class="benchmark-report card" style="display: none; margin-bottom: 15px;">
                             <h4 style="margin: 0 0 15px 0;">Simulation Report</h4>
                             <div class="benchmark-config" id="bench-config-summary-debug" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 5px 20px; margin-bottom: 15px; font-size: 13px; line-height: 1.6;">
