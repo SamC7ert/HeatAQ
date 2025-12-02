@@ -324,6 +324,11 @@ const SimControlModule = {
                 }
                 break;
             case 'debug':
+                // Re-apply debug mode visibility when switching to Details tab
+                if (typeof AdminModule !== 'undefined' && AdminModule.applyDebugMode) {
+                    const debugEnabled = localStorage.getItem('heataq_debug_mode') === '1';
+                    AdminModule.applyDebugMode(debugEnabled);
+                }
                 if (typeof SimulationsModule !== 'undefined') {
                     SimulationsModule.initDebug();
                 }
