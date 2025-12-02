@@ -1411,8 +1411,8 @@ const SimulationsModule = {
         // Store current debug timestamp for chart highlighting (no seconds to match chart data format)
         this.debugTimestamp = `${date} ${hour.padStart(2, '0')}:00`;
 
-        // Show results section without destroying card structure
-        resultsDiv.style.display = 'block';
+        // Visibility is controlled by CSS based on debug mode (body.debug-mode-on .debug-only)
+        // Don't set inline style - it overrides the CSS class-based visibility
 
         // Clear individual card contents to show loading state
         ['debug-input', 'debug-evaporation', 'debug-convection', 'debug-radiation',
@@ -1875,9 +1875,7 @@ const SimulationsModule = {
             comparisonCard.style.display = 'block';
         }
 
-        // Show results
-        const resultsDiv = document.getElementById('debug-results');
-        if (resultsDiv) resultsDiv.style.display = 'block';
+        // Visibility of debug-results is controlled by CSS (body.debug-mode-on .debug-only)
     },
 
     // Weekly chart instances (for cleanup)
