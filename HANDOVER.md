@@ -1,8 +1,71 @@
 # HeatAQ Development Handover Guide
 
-**Current Version:** V122 (December 2024)
+**Current Version:** V130 (December 2024)
 
 ## Recent Session Summary (Dec 2024)
+
+### Completed Work - V129/V130
+
+#### Weather Station Management & Frost API Integration
+1. **Weather Station CRUD** - Add/Edit/Delete weather stations in Admin → Weather section
+2. **Frost API Integration** - Fetch weather data from Norwegian Meteorological Institute (frost.met.no)
+3. **Update Data Button** - Yellow button to fetch weather data for selected station
+4. **Add Station Modal** - Check button queries Frost API for station metadata
+5. **Date Range Fetch** - Yearly batch processing with progress bar
+6. **Station Parameters** - Wind height (m) and terrain roughness (z₀) editable inline
+
+#### UI Improvements
+7. **Button Color Convention** - All "+ Add/New" buttons are light green (#90EE90), "Update Data" is yellow (#FFD700)
+8. **Station Details Card** - Shows date range, record count, location (clickable Google Maps link)
+9. **Delete/Save Button Layout** - Delete left, Save right, aligned with form width
+
+#### Technical Improvements
+10. **PHP Error Handling** - frost_api.php has 5-min timeout, 512M memory, global try-catch
+11. **Summary Data API** - get_weather_stations returns date range/record count when station_id provided
+
+### Key Files Modified
+- `assets/js/config.js` - Version V130
+- `assets/js/modules/admin.js` - Weather station management, showUpdateDataModal(), fetchWeatherDataForStation()
+- `assets/js/modules/calendar.js` - Green "+ New" button for date ranges
+- `assets/js/modules/schedules.js` - Green "+ Add Period", "+ New" buttons
+- `api/frost_api.php` - NEW: Frost API proxy with check_station, fetch_and_store_year actions
+- `api/heataq_api.php` - Weather station CRUD endpoints, summary data query
+- `index.html` - Weather Data card with inline editing, Update Data button, green Add buttons
+- `docs/DESIGN_GUIDE.md` - Updated button color convention
+
+### Weather Station Architecture
+```
+Frontend (admin.js):
+  loadWeatherStations() → populates dropdown
+  onStationChange() → shows details, loads data
+  showUpdateDataModal() → queries Frost API, shows date picker
+  fetchWeatherDataForStation() → yearly batches with progress
+
+API (frost_api.php):
+  check_station → validates station exists, returns metadata + data range
+  fetch_and_store_year → fetches one year, stores in weather_data table
+
+Database:
+  weather_stations: station_id, station_name, latitude, longitude, elevation_m, wind_height_m, terrain_roughness
+  weather_data: station_id, timestamp, temperature, wind_speed, wind_direction, humidity
+```
+
+### Button Color Convention (V129)
+| Button Type | Color | Hex | Usage |
+|-------------|-------|-----|-------|
+| Add/New | Light Green | `#90EE90` | + Add Station, + New, + Add Range, etc. |
+| Update/Fetch | Yellow | `#FFD700` | Update Data |
+| Save | Blue | `#006494` | Save changes |
+| Delete | Red | `#d62828` | Delete actions |
+| Cancel | Gray | `#6c757d` | Cancel/Close |
+
+### Ongoing Issues
+- `save_preference` API returns 400 for debug_mode (localStorage fallback works)
+- Predictive preheating algorithm needs testing (HP rate showing 59 kW instead of 125 kW)
+
+---
+
+## Previous Session (V122)
 
 ### Completed Work
 1. **Debug Mode Toggle** - Admin-only toggle in System section controls visibility of detail cards in Details tab
@@ -10,14 +73,6 @@
 3. **Cover Heat Loss Breakdown** - Debug output now shows evaporation/convection/radiation saved by pool cover
 4. **Memory Limit** - Increased to 512M for long simulations
 5. **CSS Fix** - Added `!important` to `.debug-only` rules to prevent inline style overrides
-
-### Key Files Modified
-- `assets/js/config.js` - Version V122
-- `assets/css/main.css` - Debug mode CSS with `!important`
-- `assets/js/modules/admin.js` - `toggleDebugMode()`, `applyDebugMode()`, `initDebugMode()`
-- `assets/js/modules/simulations.js` - Removed inline `display:block` overrides
-- `lib/EnergySimulator.php` - Cover breakdown in debug output (v3.10.43)
-- `index.html` - Debug tab renamed to Details, HTML restructuring
 
 ### Debug Mode Architecture
 ```
@@ -33,10 +88,6 @@ JavaScript (admin.js):
 HTML:
   <div id="debug-results" class="debug-only"> <!-- controlled by debug mode -->
 ```
-
-### Ongoing Issues
-- `save_preference` API returns 400 for debug_mode (localStorage fallback works)
-- Predictive preheating algorithm needs testing (HP rate showing 59 kW instead of 125 kW)
 
 ---
 
@@ -57,7 +108,7 @@ HTML:
 ### App Version
 **Set in ONE place:** `assets/js/config.js`
 ```javascript
-APP_VERSION: 'V122',
+APP_VERSION: 'V130',
 ```
 
 This updates both:

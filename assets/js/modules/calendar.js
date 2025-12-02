@@ -115,7 +115,7 @@ const calendar = {
                             `<option value="${ws.week_schedule_id}">${ws.name}</option>`
                         ).join('')}
                     </select>
-                    <button class="btn btn-primary btn-sm" onclick="app.calendar.addDateRange()">+ New</button>
+                    <button class="btn btn-sm" style="background: #90EE90; color: #000;" onclick="app.calendar.addDateRange()">+ New</button>
                 </div>
             </div>
         `;
