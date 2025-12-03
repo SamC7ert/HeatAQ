@@ -28,13 +28,9 @@ const EnergyAnalysis = {
         });
 
         // Load dropdowns
-        console.log('[EnergyAnalysis] About to call loadSites, loadConfigs, loadSchedules');
         this.loadSites();
-        console.log('[EnergyAnalysis] loadSites called, now calling loadConfigs');
         this.loadConfigs();
-        console.log('[EnergyAnalysis] loadConfigs called, now calling loadSchedules');
         this.loadSchedules();
-        console.log('[EnergyAnalysis] All loaders called');
 
         // Initial preview
         this.updatePreview();
@@ -135,23 +131,16 @@ const EnergyAnalysis = {
      * Load configurations into dropdown
      */
     loadConfigs: async function() {
-        console.log('[EnergyAnalysis] loadConfigs called');
         const select = document.getElementById('ea-config-select');
-        console.log('[EnergyAnalysis] ea-config-select element:', select);
-        if (!select) {
-            console.warn('[EnergyAnalysis] ea-config-select element not found');
-            return;
-        }
+        if (!select) return;
 
         const previousValue = select.value;
 
         try {
             const response = await fetch('./api/heataq_api.php?action=get_project_configs');
             const data = await response.json();
-            console.log('[EnergyAnalysis] Config response:', data);
 
             if (data.configs && data.configs.length > 0) {
-                console.log('[EnergyAnalysis] Configs:', data.configs.map(c => ({ id: c.template_id, name: c.name })));
                 select.innerHTML = data.configs.map(c =>
                     `<option value="${c.template_id}">${c.name}</option>`
                 ).join('');
