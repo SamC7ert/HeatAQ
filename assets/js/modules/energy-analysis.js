@@ -176,6 +176,15 @@ const EnergyAnalysis = {
         const storeHourly = document.getElementById('ea-store-hourly')?.checked || false;
         const poolId = typeof SimControlModule !== 'undefined' ? SimControlModule.currentPoolId : null;
 
+        // Get config_id from Simulate tab's config selector
+        const configId = document.getElementById('sim-config-select')?.value || null;
+        if (!configId) {
+            alert('Please select a Config in the Simulate tab first');
+            this.isRunning = false;
+            if (runBtn) runBtn.disabled = false;
+            return;
+        }
+
         // Load investment costs from current site
         await this.loadInvestmentCosts();
 
@@ -201,6 +210,7 @@ const EnergyAnalysis = {
                     boiler_capacity: scenario.boiler,
                     strategy: strategy,
                     schedule_id: scheduleId,
+                    config_id: configId,
                     start_date: startDate,
                     end_date: endDate,
                     pool_id: poolId,
@@ -250,6 +260,8 @@ const EnergyAnalysis = {
                 start_date: params.start_date,
                 end_date: params.end_date,
                 pool_id: params.pool_id,
+                config_id: params.config_id,
+                template_id: params.schedule_id,
                 store_hourly: params.store_hourly,
                 config_override: {
                     equipment: {
@@ -259,8 +271,7 @@ const EnergyAnalysis = {
                     control: {
                         strategy: params.strategy
                     }
-                },
-                schedule_id: params.schedule_id
+                }
             })
         });
 
@@ -368,21 +379,21 @@ const EnergyAnalysis = {
             this.results.map(r => r.success ? ((r.summary?.hp_thermal_kwh || 0) + (r.summary?.boiler_thermal_kwh || 0)) / 1000 : '-'),
             true, false));
 
-        // HP Electric
+        // HP Electric (API uses total_hp_energy_kwh)
         rows.push(this.buildRow('HP Electric', 'MWh/yr',
-            this.results.map(r => r.success ? (r.summary?.hp_electric_kwh || r.summary?.total_hp_kwh || 0) / 1000 : '-'),
+            this.results.map(r => r.success ? (r.summary?.total_hp_energy_kwh || 0) / 1000 : '-'),
             true, false));
 
-        // Boiler Electric
+        // Boiler Electric (API uses total_boiler_energy_kwh)
         rows.push(this.buildRow('Boiler Electric', 'MWh/yr',
-            this.results.map(r => r.success ? (r.summary?.boiler_electric_kwh || r.summary?.total_boiler_kwh || 0) / 1000 : '-'),
+            this.results.map(r => r.success ? (r.summary?.total_boiler_energy_kwh || 0) / 1000 : '-'),
             true, false));
 
         // Total Electric
         const totalElec = this.results.map(r => {
             if (!r.success) return null;
-            const hp = r.summary?.hp_electric_kwh || r.summary?.total_hp_kwh || 0;
-            const boiler = r.summary?.boiler_electric_kwh || r.summary?.total_boiler_kwh || 0;
+            const hp = r.summary?.total_hp_energy_kwh || 0;
+            const boiler = r.summary?.total_boiler_energy_kwh || 0;
             return (hp + boiler) / 1000;
         });
         rows.push(this.buildRow('Total Electric', 'MWh/yr', totalElec, true, false));
