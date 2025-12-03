@@ -1,0 +1,4 @@
+2025-12-03 11:48:10 - Running migration: 028_add_investment_cost_fields.sql
+Executing: ALTER TABLE pool_sites
+    ADD COLUMN hp_base_cost_nok DECIMAL(10,2) DEFAULT NUL...
+Executed 1 statements
