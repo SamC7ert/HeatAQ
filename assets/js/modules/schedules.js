@@ -317,7 +317,11 @@ const schedules = {
             `;
 
             periods.forEach((period, index) => {
-                const target = period.target_temp_c || period.target_temp || 28;
+                // Don't default - show actual value from database (warn if missing)
+                const target = period.target_temp_c || period.target_temp || '';
+                if (!target) {
+                    console.warn(`Period ${index + 1} missing target_temp`);
+                }
                 // Format time as HH:MM (remove seconds if present)
                 const startTime = (period.start_time || '10:00').substring(0, 5);
                 const endTime = (period.end_time || '20:00').substring(0, 5);
@@ -635,7 +639,12 @@ const schedules = {
             const targetInput = row.querySelector('.period-target');
 
             if (startInput && endInput && targetInput) {
-                const target = parseFloat(targetInput.value) || 28.0;
+                const target = parseFloat(targetInput.value);
+                // Validate - don't silently default to 28
+                if (isNaN(target) || target < 20 || target > 35) {
+                    console.error(`Period ${index + 1}: Invalid target_temp value "${targetInput.value}"`);
+                    throw new Error(`Period ${index + 1} requires a valid target temperature (20-35°C)`);
+                }
                 periods.push({
                     start_time: startInput.value,
                     end_time: endInput.value,

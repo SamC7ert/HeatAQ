@@ -2,18 +2,19 @@
 
 const config = {
     // App version - update this when releasing new versions
-    APP_VERSION: 'V130',
+    APP_VERSION: 'V131',
 
     API_BASE_URL: '/api/heataq_api.php',
-    
+
     // Template descriptions
     templateDescriptions: {
         1: "Complex schedule with Norwegian holidays and seasonal variations",
         2: "Simple baseline: 10:00-20:00 every day, no holidays",
         3: "Algorithm test: 10:00-13:00 & 14:00-20:00 with lunch break"
     },
-    
-    // Default values
+
+    // UI form defaults - these are for pre-populating NEW forms only
+    // Backend validates and rejects missing values, these are just UI convenience
     defaults: {
         targetTemp: 28.0,
         minTemp: 27.0,

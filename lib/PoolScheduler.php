@@ -28,10 +28,14 @@ class PoolScheduler {
      * Initialize scheduler from database
      *
      * @param PDO $db Database connection
-     * @param int $poolSiteId Integer pool_site_id (references pool_sites.id)
+     * @param int $poolSiteId Integer pool_site_id (references pool_sites.id) - REQUIRED
      * @param int|null $templateId Optional specific template ID
+     * @throws InvalidArgumentException if poolSiteId is not provided
      */
-    public function __construct($db, $poolSiteId = 1, $templateId = null) {
+    public function __construct($db, $poolSiteId, $templateId = null) {
+        if (!$poolSiteId) {
+            throw new InvalidArgumentException('PoolScheduler requires poolSiteId - no default allowed');
+        }
         $this->db = $db;
         $this->poolSiteId = (int)$poolSiteId;
         $this->siteId = null; // Deprecated - kept for compatibility
@@ -50,6 +54,7 @@ class PoolScheduler {
 
     /**
      * Load schedule template from database
+     * @param int|null $templateId Template ID - if null, uses first available template (with warning)
      */
     private function loadTemplate($templateId = null) {
         if ($templateId) {
@@ -59,19 +64,20 @@ class PoolScheduler {
             ");
             $stmt->execute([$templateId]);
         } else {
-            // Use default template (template_id = 1)
+            // No template_id provided - get first available (not silent default to ID 1)
             $stmt = $this->db->prepare("
                 SELECT * FROM schedule_templates
-                WHERE template_id = 1
+                ORDER BY template_id ASC
                 LIMIT 1
             ");
             $stmt->execute();
+            error_log("PoolScheduler: No template_id provided, using first available template");
         }
 
         $result = $stmt->fetch();
 
         if (!$result) {
-            throw new Exception("No schedule template found");
+            throw new Exception("No schedule template found" . ($templateId ? " for template_id: {$templateId}" : ""));
         }
 
         return $result;

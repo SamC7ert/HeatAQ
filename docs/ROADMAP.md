@@ -246,15 +246,17 @@ New control strategy to minimize cost using spot electricity prices:
 ## Technical Debt
 
 ### Code cleanup
-- [ ] Remove deprecated PHP endpoints
+- [x] Remove deprecated PHP endpoints (diagnose_site_ids, fix_site_ids) - Dec 2024
 - [ ] Consolidate duplicate JavaScript modules
 - [ ] Add TypeScript types for better IDE support
-- [x] Remove VARCHAR site_id columns (completed Dec 2024)
-- [ ] Remove getSiteIdString() helper once no longer needed
+- [x] Remove VARCHAR site_id columns from schedule_templates (completed Dec 2024)
+- [x] Remove getSiteIdString() helper (removed Dec 2024)
+- [x] Drop site_id from day_schedules and week_schedules (migration 026 created Dec 2024)
 - [ ] Move target_heat and bathers from config_templates to pool level
 - [ ] Update EnergySimulator.setConfigFromUI() to ignore pool/cover/solar sections (defense in depth)
 - [ ] Automatic cache busting (JS files have manual ?v=N, should auto-increment on deploy)
 - [ ] Investigate: Planned HP rate may not apply during open periods (debug shows correct calculation but output differs)
+- [x] Remove silent defaults - validation added to EnergySimulator (Dec 2024)
 
 ### Development Principles
 - **No silent fallbacks** - Fail with clear error instead of defaulting to magic values

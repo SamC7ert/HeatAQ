@@ -1,8 +1,49 @@
 # HeatAQ Development Handover Guide
 
-**Current Version:** V130 (December 2024)
+**Current Version:** V131 (December 2024)
 
 ## Recent Session Summary (Dec 2024)
+
+### V131 - Code Cleanup & Energy Analysis Preparation
+
+#### Remove Silent Defaults - "No Magic Values" Policy
+1. **API pool_site_id** - APIs now require explicit pool_site_id via cookie (dev mode) or auth (prod)
+   - No more `pool_site_id = 1` fallback in heataq_api.php, simulation_api.php, scheduler_api.php
+   - Clear error message: "Missing pool_site_id: Set heataq_pool_site_id cookie or enable authentication"
+
+2. **EnergySimulator validation** - `validateConfigForSimulation()` added
+   - Validates pool config (area_m2, volume_m3, depth_m) before running
+   - Validates equipment config (heat_pump.capacity_kw, boiler.capacity_kw)
+   - Validates weather data structure at simulation start
+   - Throws clear errors instead of silently defaulting
+
+3. **PoolScheduler** - Constructor now requires explicit poolSiteId parameter
+   - No more `$poolSiteId = 1` default
+
+4. **JavaScript validation** - Target temperature validation in schedules.js
+   - Throws error if period target_temp is missing or invalid (20-35°C range)
+   - Shows warning in UI for missing config values
+
+#### Database site_id Cleanup
+5. **Migration 026 created** - `db/migrations/026_drop_site_id_from_day_week_schedules.sql`
+   - Drops `site_id` VARCHAR from day_schedules and week_schedules
+   - Drops `pool_site_id` from week_schedules (uses project_id instead)
+   - Creates new unique constraints on (name, project_id)
+
+6. **Deprecated functions removed**:
+   - `getSiteIdString()` - no longer needed
+   - `diagnoseSiteIds()` - migration tool, no longer needed
+   - `fixSiteIds()` - migration tool, no longer needed
+
+7. **getPools()** updated to use pool_site_id (INT) instead of VARCHAR site_id filtering
+
+#### Current Database State
+| Table | site_id Status | Notes |
+|-------|---------------|-------|
+| schedule_templates | ✅ CLEAN | Uses project_id |
+| day_schedules | ❌ Needs migration 026 | Has site_id VARCHAR |
+| week_schedules | ❌ Needs migration 026 | Has site_id VARCHAR + pool_site_id |
+| pool_sites | ✅ KEEP site_id | Display name column |
 
 ### Completed Work - V129/V130
 

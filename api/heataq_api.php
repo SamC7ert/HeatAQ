@@ -27,7 +27,7 @@ if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
         $currentPoolSiteId = (int)$auth['project']['pool_site_id'];
     }
 } else {
-    // Development mode - get pool_site_id from cookie or use default
+    // Development mode - get pool_site_id from cookie (required)
     $currentPoolSiteId = null;
 
     // Try to get from cookie (set by frontend)
@@ -35,25 +35,33 @@ if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
         $currentPoolSiteId = (int)$_COOKIE['heataq_pool_site_id'];
     }
 
-    // Validate pool_site_id exists in database if we have one
+    // Validate pool_site_id exists in database
     if ($currentPoolSiteId) {
         try {
             $db = Config::getDatabase();
             $stmt = $db->prepare("SELECT id FROM pool_sites WHERE id = ? LIMIT 1");
             $stmt->execute([$currentPoolSiteId]);
             if (!$stmt->fetch()) {
-                // Site not found in DB, clear it
-                $currentPoolSiteId = null;
+                // Site not found in DB - fail with clear error
+                header('Content-Type: application/json');
+                http_response_code(400);
+                echo json_encode(['error' => "Invalid pool_site_id: {$currentPoolSiteId} not found in database"]);
+                exit;
             }
         } catch (Exception $e) {
-            // DB error, continue without site
-            $currentPoolSiteId = null;
+            header('Content-Type: application/json');
+            http_response_code(500);
+            echo json_encode(['error' => 'Database error validating pool_site_id: ' . $e->getMessage()]);
+            exit;
         }
     }
 
-    // Development mode default: use pool_site_id = 1
+    // No default - require explicit pool_site_id
     if (!$currentPoolSiteId) {
-        $currentPoolSiteId = 1;
+        header('Content-Type: application/json');
+        http_response_code(400);
+        echo json_encode(['error' => 'Missing pool_site_id: Set heataq_pool_site_id cookie or enable authentication']);
+        exit;
     }
 }
 
@@ -160,19 +168,7 @@ class HeatAQAPI {
         }
     }
 
-    /**
-     * Get the VARCHAR site_id from pool_sites table using the INT poolSiteId
-     * Used for schedule tables that still use VARCHAR site_id
-     */
-    private function getSiteIdString() {
-        if (!$this->poolSiteId) {
-            return null;
-        }
-        $stmt = $this->db->prepare("SELECT site_id FROM pool_sites WHERE id = ? LIMIT 1");
-        $stmt->execute([$this->poolSiteId]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $row ? $row['site_id'] : null;
-    }
+    // REMOVED: getSiteIdString() - no longer needed after site_id cleanup from schedule tables
 
     // ====================================
     // MAIN HANDLER
@@ -209,10 +205,16 @@ class HeatAQAPI {
                     $this->getWeekSchedules();
                     break;
                 case 'get_calendar_rules':
-                    $this->getCalendarRules($_GET['template_id'] ?? 1);
+                    if (!isset($_GET['template_id'])) {
+                        $this->sendError('template_id is required');
+                    }
+                    $this->getCalendarRules((int)$_GET['template_id']);
                     break;
                 case 'get_exception_days':
-                    $this->getExceptionDays($_GET['template_id'] ?? 1);
+                    if (!isset($_GET['template_id'])) {
+                        $this->sendError('template_id is required');
+                    }
+                    $this->getExceptionDays((int)$_GET['template_id']);
                     break;
                 case 'get_reference_days':
                     $this->getReferenceDays();
@@ -220,15 +222,7 @@ class HeatAQAPI {
                 case 'test_resolution':
                     $this->testResolution();
                     break;
-                case 'diagnose_site_ids':
-                    $this->diagnoseSiteIds();
-                    break;
-                case 'fix_site_ids':
-                    if (!$this->canEdit()) {
-                        $this->sendError('Permission denied', 403);
-                    }
-                    $this->fixSiteIds();
-                    break;
+                // REMOVED: diagnose_site_ids, fix_site_ids - no longer needed after site_id cleanup
 
                 // WRITE operations
                 case 'save_template':
@@ -733,8 +727,11 @@ class HeatAQAPI {
     }
     
     private function testResolution() {
+        if (!isset($_GET['template_id'])) {
+            $this->sendError('template_id is required');
+        }
         $date = $_GET['date'] ?? date('Y-m-d');
-        $templateId = $_GET['template_id'] ?? 1;
+        $templateId = (int)$_GET['template_id'];
 
         // Get template info
         $stmt = $this->db->prepare("
@@ -802,79 +799,7 @@ class HeatAQAPI {
         ]);
     }
 
-    /**
-     * Diagnose site_id mismatches between auth and schedule tables
-     */
-    private function diagnoseSiteIds() {
-        $currentSiteId = $this->getSiteIdString();
-
-        // Get all unique site_ids from schedule tables
-        $tables = [
-            'schedule_templates' => 'site_id',
-            'day_schedules' => 'site_id',
-            'week_schedules' => 'site_id',
-        ];
-
-        $results = [
-            'current_site_id' => $currentSiteId,
-            'tables' => []
-        ];
-
-        foreach ($tables as $table => $column) {
-            $stmt = $this->db->query("SELECT DISTINCT $column as site_id, COUNT(*) as count FROM $table GROUP BY $column");
-            $rows = $stmt->fetchAll();
-            $results['tables'][$table] = $rows;
-        }
-
-        // Check for mismatches
-        $mismatches = [];
-        foreach ($results['tables'] as $table => $siteIds) {
-            foreach ($siteIds as $row) {
-                if ($row['site_id'] !== $currentSiteId) {
-                    $mismatches[] = [
-                        'table' => $table,
-                        'has_site_id' => $row['site_id'],
-                        'expected_site_id' => $currentSiteId,
-                        'record_count' => $row['count']
-                    ];
-                }
-            }
-        }
-
-        $results['mismatches'] = $mismatches;
-        $results['has_mismatches'] = !empty($mismatches);
-
-        $this->sendResponse($results);
-    }
-
-    /**
-     * Fix site_id mismatches - update old site_id to current
-     */
-    private function fixSiteIds() {
-        $input = $this->getPostInput();
-        $oldSiteId = $input['old_site_id'] ?? null;
-        $newSiteId = $input['new_site_id'] ?? $this->getSiteIdString();
-
-        if (!$oldSiteId) {
-            $this->sendError('old_site_id is required');
-        }
-
-        $tables = ['schedule_templates', 'day_schedules', 'week_schedules'];
-        $results = [];
-
-        foreach ($tables as $table) {
-            $stmt = $this->db->prepare("UPDATE $table SET site_id = ? WHERE site_id = ?");
-            $stmt->execute([$newSiteId, $oldSiteId]);
-            $results[$table] = $stmt->rowCount();
-        }
-
-        $this->sendResponse([
-            'success' => true,
-            'old_site_id' => $oldSiteId,
-            'new_site_id' => $newSiteId,
-            'updated_rows' => $results
-        ]);
-    }
+    // REMOVED: diagnoseSiteIds() and fixSiteIds() - no longer needed after site_id cleanup
 
     private function saveTemplate() {
         $input = $this->getPostInput();
@@ -1052,7 +977,10 @@ class HeatAQAPI {
         $input = $this->getPostInput();
 
         $rangeId = $input['range_id'] ?? null;
-        $templateId = $input['template_id'] ?? 1;
+        if (!isset($input['template_id'])) {
+            $this->sendError('template_id is required');
+        }
+        $templateId = (int)$input['template_id'];
         $weekScheduleId = $input['week_schedule_id'] ?? null;
         $startDate = $input['start_date'] ?? null;
         $endDate = $input['end_date'] ?? null;
@@ -2242,8 +2170,12 @@ class HeatAQAPI {
             return;
         }
 
-        // Get project_id from auth context or default to 1
-        $projectId = $this->projectId ?? 1;
+        // Get project_id from auth context - required for authenticated users
+        if (!$this->projectId) {
+            $this->sendError('project_id required in auth context', 400);
+            return;
+        }
+        $projectId = $this->projectId;
 
         try {
             // Check if table exists
@@ -2289,8 +2221,12 @@ class HeatAQAPI {
             return;
         }
 
-        // Get project_id from auth context or default to 1
-        $projectId = $this->projectId ?? 1;
+        // Get project_id from auth context - required
+        if (!$this->projectId) {
+            $this->sendError('project_id required in auth context', 400);
+            return;
+        }
+        $projectId = $this->projectId;
 
         $input = $this->getPostInput();
         $key = $input['key'] ?? null;
@@ -3041,24 +2977,25 @@ class HeatAQAPI {
      * Get all sites (pool_sites) accessible to user
      */
     /**
-     * Get the current project's site_id for SimControl to use
+     * Get the current project's site info for SimControl to use
+     * Returns pool_site_id (INT) and site name
      */
     private function getProjectSite() {
         // Return the pool_site_id (INT) associated with the current project
         if ($this->poolSiteId) {
-            // Also look up the VARCHAR site_id for compatibility
-            $siteIdString = $this->getSiteIdString();
+            // Look up site name instead of deprecated VARCHAR site_id
+            $stmt = $this->db->prepare("SELECT site_id, name FROM pool_sites WHERE id = ? LIMIT 1");
+            $stmt->execute([$this->poolSiteId]);
+            $site = $stmt->fetch(PDO::FETCH_ASSOC);
+
             $this->sendResponse([
                 'pool_site_id' => $this->poolSiteId,
-                'site_id' => $siteIdString,  // VARCHAR for compatibility
+                'site_id' => $site ? $site['site_id'] : null,  // VARCHAR display name from pool_sites
+                'site_name' => $site ? $site['name'] : null,
                 'project_id' => $this->projectId
             ]);
         } else {
-            $this->sendResponse([
-                'pool_site_id' => null,
-                'site_id' => null,
-                'error' => 'No site associated with current session'
-            ]);
+            $this->sendError('No site associated with current session - pool_site_id required');
         }
     }
 
@@ -3107,11 +3044,17 @@ class HeatAQAPI {
         $input = $this->getPostInput();
 
         $siteId = $input['site_id'] ?? null;
-        $name = $input['name'] ?? 'Main Site';
+        $name = $input['name'] ?? null;
+        if (!$name) {
+            $this->sendError('name is required for site');
+        }
         $latitude = $input['latitude'] ?? null;
         $longitude = $input['longitude'] ?? null;
         $weatherStationId = $input['weather_station_id'] ?? null;
-        $projectId = $input['project_id'] ?? $this->projectId ?? 1;
+        $projectId = $input['project_id'] ?? $this->projectId ?? null;
+        if (!$projectId) {
+            $this->sendError('project_id is required');
+        }
 
         if (!$siteId && $name) {
             // Generate site_id from name
@@ -3162,9 +3105,15 @@ class HeatAQAPI {
 
     /**
      * Get pools for a site (or all pools for current user's site)
+     * Uses pool_site_id (INT) - no more VARCHAR site_id filtering
      */
     private function getPools() {
-        $siteId = $_GET['site_id'] ?? $this->getSiteIdString();
+        // Prefer pool_site_id (INT), fall back to context
+        $poolSiteId = isset($_GET['pool_site_id']) ? (int)$_GET['pool_site_id'] : $this->poolSiteId;
+        if (!$poolSiteId) {
+            $this->sendError('pool_site_id is required');
+            return;
+        }
 
         // Check if pools table exists
         $tableCheck = $this->db->query("SHOW TABLES LIKE 'pools'");
@@ -3202,13 +3151,13 @@ class HeatAQAPI {
                 ps.name as site_name
             FROM pools p
             JOIN pool_sites ps ON p.pool_site_id = ps.id
-            WHERE ps.site_id = ? AND p.is_active = 1
+            WHERE p.pool_site_id = ? AND p.is_active = 1
             ORDER BY p.name
         ");
-        $stmt->execute([$siteId]);
+        $stmt->execute([$poolSiteId]);
         $pools = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $this->sendResponse(['pools' => $pools, 'site_id' => $siteId]);
+        $this->sendResponse(['pools' => $pools, 'pool_site_id' => $poolSiteId]);
     }
 
     /**
