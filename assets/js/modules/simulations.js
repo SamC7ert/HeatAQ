@@ -245,6 +245,9 @@ const SimulationsModule = {
             // Get pool_id from SimControl selection
             const poolId = typeof SimControlModule !== 'undefined' ? SimControlModule.currentPoolId : null;
 
+            // Get store_hourly option
+            const storeHourly = document.getElementById('sim-store-hourly')?.checked ?? true;
+
             const response = await fetch('/api/simulation_api.php?action=run_simulation', {
                 method: 'POST',
                 headers: {
@@ -258,7 +261,8 @@ const SimulationsModule = {
                     config_id: configId,
                     template_id: ohcId,
                     pool_id: poolId,
-                    config_override: configOverride
+                    config_override: configOverride,
+                    store_hourly: storeHourly
                 })
             });
 
