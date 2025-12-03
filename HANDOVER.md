@@ -30,20 +30,30 @@
    - Drops `pool_site_id` from week_schedules (uses project_id instead)
    - Creates new unique constraints on (name, project_id)
 
-6. **Deprecated functions removed**:
+6. **Migration 027 created** - `db/migrations/027_drop_pool_sites_site_id.sql`
+   - Drops `site_id` VARCHAR from pool_sites (was confusing - looked like a FK)
+   - pool_sites now uses only `id` (INT PK) and `name` for display
+   - All code updated to use `id` instead of `site_id`
+
+7. **Deprecated functions removed**:
    - `getSiteIdString()` - no longer needed
    - `diagnoseSiteIds()` - migration tool, no longer needed
    - `fixSiteIds()` - migration tool, no longer needed
 
-7. **getPools()** updated to use pool_site_id (INT) instead of VARCHAR site_id filtering
+8. **getPools()** and all APIs updated to use pool_site_id (INT) instead of VARCHAR site_id
 
-#### Current Database State
+#### Current Database State (After Migrations 026 & 027)
 | Table | site_id Status | Notes |
 |-------|---------------|-------|
 | schedule_templates | ✅ CLEAN | Uses project_id |
 | day_schedules | ❌ Needs migration 026 | Has site_id VARCHAR |
 | week_schedules | ❌ Needs migration 026 | Has site_id VARCHAR + pool_site_id |
-| pool_sites | ✅ KEEP site_id | Display name column |
+| pool_sites | ❌ Needs migration 027 | Has site_id VARCHAR (to be removed) |
+
+#### After All Migrations Complete
+- **No more VARCHAR site_id columns** in any table
+- All foreign key references use INT `pool_site_id` (references `pool_sites.id`)
+- Schedule tables use INT `project_id` for access control
 
 ### Completed Work - V129/V130
 

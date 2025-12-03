@@ -72,15 +72,15 @@ const SimControlModule = {
         }
 
         try {
-            // Get project's site_id from localStorage (Project module stores it there)
+            // Get project's pool_site_id (INT) from localStorage (Project module stores it there)
             // This is the source of truth for which site the user is working with
             let projectSiteId = null;
             const siteData = localStorage.getItem('heataq_site');
             if (siteData) {
                 try {
                     const site = JSON.parse(siteData);
-                    projectSiteId = site.site_id;
-                    console.log('[SimControl] Site from localStorage:', projectSiteId);
+                    projectSiteId = site.id;  // Use INT id, not VARCHAR site_id
+                    console.log('[SimControl] Site id from localStorage:', projectSiteId);
                 } catch (e) {
                     console.warn('[SimControl] Failed to parse localStorage site data');
                 }
@@ -90,16 +90,16 @@ const SimControlModule = {
             if (!projectSiteId) {
                 const projResponse = await fetch('./api/heataq_api.php?action=get_project_site');
                 const projData = await projResponse.json();
-                projectSiteId = projData.site_id;
-                console.log('[SimControl] Site from API fallback:', projectSiteId);
+                projectSiteId = projData.id || projData.pool_site_id;  // Use INT id
+                console.log('[SimControl] Site id from API fallback:', projectSiteId);
             }
 
             if (!projectSiteId) {
-                console.error('[SimControl] No site_id configured for project');
+                console.error('[SimControl] No pool_site_id configured for project');
                 select.innerHTML = '<option value="">ERROR: No site configured for project</option>';
                 return;
             }
-            console.log('[SimControl] Project site_id:', projectSiteId);
+            console.log('[SimControl] Project pool_site_id:', projectSiteId);
 
             // Get all sites
             const response = await fetch('./api/heataq_api.php?action=get_sites');
@@ -114,26 +114,26 @@ const SimControlModule = {
             console.log('[SimControl] Sites from API:', data.sites.length);
             this.sites = data.sites;
 
-            // Find the project's site - must exist
-            const projectSite = data.sites.find(s => s.site_id === projectSiteId);
+            // Find the project's site by INT id - must exist
+            const projectSite = data.sites.find(s => s.id === projectSiteId);
             if (!projectSite) {
-                console.error('[SimControl] Project site not found:', projectSiteId);
-                select.innerHTML = `<option value="">ERROR: Site "${projectSiteId}" not in database</option>`;
+                console.error('[SimControl] Project site not found for id:', projectSiteId);
+                select.innerHTML = `<option value="">ERROR: Site id ${projectSiteId} not in database</option>`;
                 return;
             }
 
             // Populate dropdown with all sites, select project's site
+            // Use INT id as value
             select.innerHTML = data.sites.map(site =>
-                `<option value="${site.site_id}" ${site.site_id === projectSiteId ? 'selected' : ''}>${site.name}</option>`
+                `<option value="${site.id}" ${site.id === projectSiteId ? 'selected' : ''}>${site.name}</option>`
             ).join('');
 
-            this.currentSiteId = projectSiteId;
-            console.log('[SimControl] Selected site:', projectSite.name);
+            this.currentSiteId = projectSiteId;  // INT id
+            console.log('[SimControl] Selected site:', projectSite.name, 'id:', projectSiteId);
 
             // Set cookie for backend API to read (expires in 1 year)
-            // Use pool_site_id (INT) - look up from site data
-            const poolSiteId = projectSite.id;  // pool_sites.id
-            document.cookie = `heataq_pool_site_id=${poolSiteId}; path=/; max-age=31536000`;
+            // Use pool_site_id (INT)
+            document.cookie = `heataq_pool_site_id=${projectSiteId}; path=/; max-age=31536000`;
 
             await this.loadPools(this.currentSiteId);
 
@@ -154,7 +154,8 @@ const SimControlModule = {
         }
 
         try {
-            const response = await fetch(`./api/heataq_api.php?action=get_pools&site_id=${encodeURIComponent(siteId)}`);
+            // Use pool_site_id (INT) for API call
+            const response = await fetch(`./api/heataq_api.php?action=get_pools&pool_site_id=${encodeURIComponent(siteId)}`);
             const data = await response.json();
 
             if (data.notice) {
@@ -214,14 +215,12 @@ const SimControlModule = {
         const select = document.getElementById('sim-site-select');
         if (!select) return;
 
-        this.currentSiteId = select.value;
+        // Value is now INT id
+        this.currentSiteId = parseInt(select.value, 10);
 
-        // Find selected site to get pool_site_id (INT)
-        const site = this.sites.find(s => s.site_id === this.currentSiteId);
-        if (site) {
-            // Set cookie for backend API to read (expires in 1 year)
-            document.cookie = `heataq_pool_site_id=${site.id}; path=/; max-age=31536000`;
-        }
+        // Set cookie for backend API to read (expires in 1 year)
+        // currentSiteId is already the INT pool_site_id
+        document.cookie = `heataq_pool_site_id=${this.currentSiteId}; path=/; max-age=31536000`;
 
         await this.loadPools(this.currentSiteId);
     },

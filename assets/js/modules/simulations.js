@@ -720,7 +720,7 @@ const SimulationsModule = {
             const poolNameEl = document.getElementById('analyse-pool-name');
 
             if (siteNameEl && ProjectModule.currentSite) {
-                siteNameEl.textContent = ProjectModule.currentSite.name || ProjectModule.currentSite.site_id || '-';
+                siteNameEl.textContent = ProjectModule.currentSite.name || '-';
             }
             if (poolNameEl && ProjectModule.currentPool) {
                 poolNameEl.textContent = ProjectModule.currentPool.name || '-';
