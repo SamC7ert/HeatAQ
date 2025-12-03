@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.43';  // Add cover breakdown to debug
+    const VERSION = '3.10.44';  // Fix heating bug when solar surplus exceeds temp rise requirement
 
     private $db;
     private $siteId;
@@ -2026,7 +2026,26 @@ class EnergySimulator {
             // BELOW TARGET: Need extra heat to raise temperature
             // Required = losses + heat to raise temp to target in 1 hour
             $heatToRaise = $this->calculateHeatForTempRise($tempDiff, 1.0);
-            $requiredHeat = $netRequirement + $heatToRaise;
+
+            // V3.10.44: Fix bug where solar surplus could produce negative requiredHeat
+            // When solar > losses, the pool warms naturally from solar. But if we're
+            // below target, we should still heat to accelerate warming.
+            if ($netRequirement < 0) {
+                // Solar surplus case: solar is warming pool naturally
+                // When significantly below target (>3°C), heat aggressively to recover
+                if ($tempDiff > 3.0) {
+                    // Far below target: heat at least heatToRaise, let capacity limit it
+                    // Solar contributes to warming, so reduce by a portion of surplus
+                    $solarContribution = min(abs($netRequirement) * 0.5, $heatToRaise * 0.5);
+                    $requiredHeat = max($heatToRaise * 0.5, $heatToRaise - $solarContribution);
+                } else {
+                    // Close to target: solar surplus may be enough
+                    $requiredHeat = max(0, $heatToRaise + $netRequirement);
+                }
+            } else {
+                // Normal case: losses exceed solar, need full heating
+                $requiredHeat = $netRequirement + $heatToRaise;
+            }
         } else {
             // AT OR ABOVE TARGET: Excess temp reduces heat demand
             // The thermal energy stored in excess temp offsets some losses
