@@ -52,13 +52,19 @@ const EnergyAnalysis = {
             const select = document.getElementById('ea-site-select');
             if (!select) return;
 
+            const previousValue = select.value;
+
             if (data.sites && data.sites.length > 0) {
                 this.sites = data.sites;
                 select.innerHTML = data.sites.map(s =>
                     `<option value="${s.id}">${s.name}</option>`
                 ).join('');
-                // Load pools for first site
-                this.loadPools(data.sites[0].id);
+
+                // Restore previous value or use first site
+                if (previousValue && data.sites.some(s => s.id == previousValue)) {
+                    select.value = previousValue;
+                }
+                this.loadPools(select.value);
             } else {
                 select.innerHTML = '<option value="">No sites found</option>';
             }
@@ -89,6 +95,8 @@ const EnergyAnalysis = {
             return;
         }
 
+        const previousValue = select.value;
+
         try {
             const response = await fetch(`/api/heataq_api.php?action=get_pools&pool_site_id=${encodeURIComponent(siteId)}`);
             const data = await response.json();
@@ -97,6 +105,11 @@ const EnergyAnalysis = {
                 select.innerHTML = data.pools.map(p =>
                     `<option value="${p.pool_id}">${p.name}</option>`
                 ).join('');
+
+                // Restore previous value if it exists
+                if (previousValue && data.pools.some(p => p.pool_id == previousValue)) {
+                    select.value = previousValue;
+                }
             } else {
                 select.innerHTML = '<option value="">No pools found</option>';
             }
@@ -110,17 +123,24 @@ const EnergyAnalysis = {
      * Load configurations into dropdown
      */
     loadConfigs: async function() {
+        const select = document.getElementById('ea-config-select');
+        if (!select) return;
+
+        const previousValue = select.value;
+
         try {
             const response = await fetch('/api/heataq_api.php?action=get_project_configs');
             const data = await response.json();
-
-            const select = document.getElementById('ea-config-select');
-            if (!select) return;
 
             if (data.configs && data.configs.length > 0) {
                 select.innerHTML = data.configs.map(c =>
                     `<option value="${c.template_id}">${c.name}</option>`
                 ).join('');
+
+                // Restore previous value if it exists
+                if (previousValue && data.configs.some(c => c.template_id == previousValue)) {
+                    select.value = previousValue;
+                }
             } else {
                 select.innerHTML = '<option value="">No configs found</option>';
             }
@@ -142,17 +162,24 @@ const EnergyAnalysis = {
      * Load schedule templates into dropdown
      */
     loadSchedules: async function() {
+        const select = document.getElementById('ea-schedule');
+        if (!select) return;
+
+        const previousValue = select.value;
+
         try {
             const response = await fetch('/api/heataq_api.php?action=get_templates');
             const data = await response.json();
-
-            const select = document.getElementById('ea-schedule');
-            if (!select) return;
 
             if (data.templates && data.templates.length > 0) {
                 select.innerHTML = data.templates.map(t =>
                     `<option value="${t.template_id}">${t.name}</option>`
                 ).join('');
+
+                // Restore previous value if it exists
+                if (previousValue && data.templates.some(t => t.template_id == previousValue)) {
+                    select.value = previousValue;
+                }
             } else {
                 select.innerHTML = '<option value="">No schedules found</option>';
             }
