@@ -2,13 +2,24 @@
 /**
  * HeatAQ API - Schedule Management System
  * Version: 3.0 - With secure configuration
- * 
+ *
  * Security improvements:
  * - Database credentials in external config
  * - Optional authentication support
  * - Input validation
  * - Prepared statements throughout
  */
+
+// Enable error reporting for debugging (outputs to error log)
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
+// Global error handler to return JSON on fatal errors
+set_error_handler(function($errno, $errstr, $errfile, $errline) {
+    error_log("PHP Error: [$errno] $errstr in $errfile:$errline");
+    return false; // Let PHP handle it normally
+});
 
 // Include configuration loader
 require_once __DIR__ . '/../config.php';
