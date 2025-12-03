@@ -1,5 +1,5 @@
 {
-    "generated_at": "2025-12-01 16:10:06",
+    "generated_at": "2025-12-03 09:28:25",
     "database": "heataq_pool-353130302dd2",
     "tables": {
         "audit_log": {
@@ -124,7 +124,7 @@
                     ]
                 }
             ],
-            "row_count": 5695
+            "row_count": 9368
         },
         "calendar_date_ranges": {
             "name": "calendar_date_ranges",
@@ -256,7 +256,7 @@
                     ]
                 }
             ],
-            "row_count": 2
+            "row_count": 3
         },
         "calendar_exception_days": {
             "name": "calendar_exception_days",
@@ -702,7 +702,7 @@
                     ]
                 }
             ],
-            "row_count": 3
+            "row_count": 4
         },
         "day_schedule_periods": {
             "name": "day_schedule_periods",
@@ -797,7 +797,7 @@
                     ]
                 }
             ],
-            "row_count": 6
+            "row_count": 8
         },
         "day_schedules": {
             "name": "day_schedules",
@@ -809,14 +809,6 @@
                     "key": "PRI",
                     "default": null,
                     "extra": "auto_increment"
-                },
-                {
-                    "name": "pool_site_id",
-                    "type": "int(11)",
-                    "null": "YES",
-                    "key": "",
-                    "default": null,
-                    "extra": ""
                 },
                 {
                     "name": "name",
@@ -865,6 +857,14 @@
                     "key": "",
                     "default": "0",
                     "extra": ""
+                },
+                {
+                    "name": "project_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
                 }
             ],
             "indexes": [
@@ -891,7 +891,93 @@
                     ]
                 }
             ],
-            "row_count": 11
+            "row_count": 12
+        },
+        "exception_days": {
+            "name": "exception_days",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "name",
+                    "type": "varchar(100)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "is_fixed",
+                    "type": "tinyint(1)",
+                    "null": "NO",
+                    "key": "",
+                    "default": "1",
+                    "extra": ""
+                },
+                {
+                    "name": "fixed_month",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "fixed_day",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "reference_day_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "offset_days",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "id"
+                    ]
+                },
+                {
+                    "name": "fk_ed_reference",
+                    "unique": false,
+                    "columns": [
+                        "reference_day_id"
+                    ]
+                }
+            ],
+            "row_count": 20
         },
         "ground_thermal_lookup": {
             "name": "ground_thermal_lookup",
@@ -1032,7 +1118,7 @@
                     ]
                 }
             ],
-            "row_count": 21
+            "row_count": 20
         },
         "holiday_reference_days": {
             "name": "holiday_reference_days",
@@ -1699,6 +1785,185 @@
             ],
             "row_count": 1
         },
+        "reference_day_dates": {
+            "name": "reference_day_dates",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "reference_day_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "year",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "date",
+                    "type": "date",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "id"
+                    ]
+                },
+                {
+                    "name": "unique_ref_year",
+                    "unique": true,
+                    "columns": [
+                        "reference_day_id",
+                        "year"
+                    ]
+                }
+            ],
+            "row_count": 0
+        },
+        "reference_days": {
+            "name": "reference_days",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "name",
+                    "type": "varchar(100)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "description",
+                    "type": "varchar(255)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "id"
+                    ]
+                }
+            ],
+            "row_count": 1
+        },
+        "schedule_template_exceptions": {
+            "name": "schedule_template_exceptions",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "template_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "exception_day_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "day_schedule_id",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "null": "YES",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "id"
+                    ]
+                },
+                {
+                    "name": "unique_template_exception",
+                    "unique": true,
+                    "columns": [
+                        "template_id",
+                        "exception_day_id"
+                    ]
+                },
+                {
+                    "name": "fk_ste_exception",
+                    "unique": false,
+                    "columns": [
+                        "exception_day_id"
+                    ]
+                },
+                {
+                    "name": "fk_ste_day_schedule",
+                    "unique": false,
+                    "columns": [
+                        "day_schedule_id"
+                    ]
+                }
+            ],
+            "row_count": 0
+        },
         "schedule_templates": {
             "name": "schedule_templates",
             "columns": [
@@ -1709,14 +1974,6 @@
                     "key": "PRI",
                     "default": null,
                     "extra": "auto_increment"
-                },
-                {
-                    "name": "pool_site_id",
-                    "type": "int(11)",
-                    "null": "YES",
-                    "key": "",
-                    "default": null,
-                    "extra": ""
                 },
                 {
                     "name": "name",
@@ -1732,14 +1989,6 @@
                     "null": "YES",
                     "key": "",
                     "default": "v1.0",
-                    "extra": ""
-                },
-                {
-                    "name": "site_id",
-                    "type": "varchar(50)",
-                    "null": "YES",
-                    "key": "MUL",
-                    "default": null,
                     "extra": ""
                 },
                 {
@@ -1773,6 +2022,14 @@
                     "key": "",
                     "default": null,
                     "extra": ""
+                },
+                {
+                    "name": "project_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
                 }
             ],
             "indexes": [
@@ -1792,13 +2049,6 @@
                     ]
                 },
                 {
-                    "name": "site_id",
-                    "unique": false,
-                    "columns": [
-                        "site_id"
-                    ]
-                },
-                {
                     "name": "base_week_schedule_id",
                     "unique": false,
                     "columns": [
@@ -1806,7 +2056,7 @@
                     ]
                 }
             ],
-            "row_count": 3
+            "row_count": 4
         },
         "simulation_daily_results": {
             "name": "simulation_daily_results",
@@ -1939,7 +2189,7 @@
                     ]
                 }
             ],
-            "row_count": 49771
+            "row_count": 87368
         },
         "simulation_hourly_results": {
             "name": "simulation_hourly_results",
@@ -2120,7 +2370,7 @@
                     ]
                 }
             ],
-            "row_count": 1192733
+            "row_count": 2093771
         },
         "simulation_runs": {
             "name": "simulation_runs",
@@ -2260,7 +2510,7 @@
                     ]
                 }
             ],
-            "row_count": 175
+            "row_count": 270
         },
         "site_solar_daily": {
             "name": "site_solar_daily",
@@ -2552,7 +2802,7 @@
                     ]
                 }
             ],
-            "row_count": 4
+            "row_count": 8
         },
         "user_projects": {
             "name": "user_projects",
@@ -2729,7 +2979,7 @@
                     ]
                 }
             ],
-            "row_count": 20
+            "row_count": 25
         },
         "users": {
             "name": "users",
@@ -2917,7 +3167,7 @@
                     ]
                 }
             ],
-            "row_count": 87545
+            "row_count": 191146
         },
         "weather_stations": {
             "name": "weather_stations",
@@ -3017,6 +3267,14 @@
                     "key": "",
                     "default": "current_timestamp()",
                     "extra": ""
+                },
+                {
+                    "name": "terrain_roughness",
+                    "type": "decimal(5,3)",
+                    "null": "YES",
+                    "key": "",
+                    "default": "0.030",
+                    "extra": ""
                 }
             ],
             "indexes": [
@@ -3028,7 +3286,7 @@
                     ]
                 }
             ],
-            "row_count": 1
+            "row_count": 2
         },
         "week_schedules": {
             "name": "week_schedules",
@@ -3136,6 +3394,14 @@
                     "key": "",
                     "default": "current_timestamp()",
                     "extra": ""
+                },
+                {
+                    "name": "project_id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
                 }
             ],
             "indexes": [
@@ -3211,7 +3477,7 @@
                     ]
                 }
             ],
-            "row_count": 5
+            "row_count": 6
         }
     }
 }

@@ -1,12 +1,12 @@
 # Database Schema
 
-Generated: 2025-12-01 16:10:06
+Generated: 2025-12-03 09:28:25
 
 Database: heataq_pool-353130302dd2
 
 ## audit_log
 
-Rows: 5695
+Rows: 9368
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -30,7 +30,7 @@ Rows: 5695
 
 ## calendar_date_ranges
 
-Rows: 2
+Rows: 3
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -108,7 +108,7 @@ Rows: 11
 
 ## config_templates
 
-Rows: 3
+Rows: 4
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -136,7 +136,7 @@ Rows: 3
 
 ## day_schedule_periods
 
-Rows: 6
+Rows: 8
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -156,23 +156,42 @@ Rows: 6
 
 ## day_schedules
 
-Rows: 11
+Rows: 12
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
 | day_schedule_id | int(11) | NO | PRI | NULL | auto_increment |
-| pool_site_id | int(11) | YES |  | NULL |  |
 | name | varchar(100) | NO | MUL | NULL |  |
 | site_id | varchar(50) | YES | MUL | NULL |  |
 | description | text | YES |  | NULL |  |
 | is_operating | tinyint(1) | YES |  | 1 |  |
 | created_at | timestamp | YES |  | current_timestamp() |  |
 | is_closed | tinyint(1) | YES |  | 0 |  |
+| project_id | int(11) | NO |  | NULL |  |
 
 **Indexes:**
 - UNIQUE `PRIMARY` (day_schedule_id)
 - UNIQUE `unique_name_site` (name, site_id)
 - `site_id` (site_id)
+
+## exception_days
+
+Rows: 20
+
+| Column | Type | Null | Key | Default | Extra |
+|--------|------|------|-----|---------|-------|
+| id | int(11) | NO | PRI | NULL | auto_increment |
+| name | varchar(100) | NO |  | NULL |  |
+| is_fixed | tinyint(1) | NO |  | 1 |  |
+| fixed_month | int(11) | YES |  | NULL |  |
+| fixed_day | int(11) | YES |  | NULL |  |
+| reference_day_id | int(11) | YES | MUL | NULL |  |
+| offset_days | int(11) | YES |  | NULL |  |
+| created_at | timestamp | YES |  | current_timestamp() |  |
+
+**Indexes:**
+- UNIQUE `PRIMARY` (id)
+- `fk_ed_reference` (reference_day_id)
 
 ## ground_thermal_lookup
 
@@ -202,7 +221,7 @@ Rows: 0
 
 ## holiday_definitions
 
-Rows: 21
+Rows: 20
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -349,31 +368,76 @@ Rows: 1
 **Indexes:**
 - UNIQUE `PRIMARY` (project_id)
 
+## reference_day_dates
+
+Rows: 0
+
+| Column | Type | Null | Key | Default | Extra |
+|--------|------|------|-----|---------|-------|
+| id | int(11) | NO | PRI | NULL | auto_increment |
+| reference_day_id | int(11) | NO | MUL | NULL |  |
+| year | int(11) | NO |  | NULL |  |
+| date | date | NO |  | NULL |  |
+
+**Indexes:**
+- UNIQUE `PRIMARY` (id)
+- UNIQUE `unique_ref_year` (reference_day_id, year)
+
+## reference_days
+
+Rows: 1
+
+| Column | Type | Null | Key | Default | Extra |
+|--------|------|------|-----|---------|-------|
+| id | int(11) | NO | PRI | NULL | auto_increment |
+| name | varchar(100) | NO |  | NULL |  |
+| description | varchar(255) | YES |  | NULL |  |
+| created_at | timestamp | YES |  | current_timestamp() |  |
+
+**Indexes:**
+- UNIQUE `PRIMARY` (id)
+
+## schedule_template_exceptions
+
+Rows: 0
+
+| Column | Type | Null | Key | Default | Extra |
+|--------|------|------|-----|---------|-------|
+| id | int(11) | NO | PRI | NULL | auto_increment |
+| template_id | int(11) | NO | MUL | NULL |  |
+| exception_day_id | int(11) | NO | MUL | NULL |  |
+| day_schedule_id | int(11) | YES | MUL | NULL |  |
+| created_at | timestamp | YES |  | current_timestamp() |  |
+
+**Indexes:**
+- UNIQUE `PRIMARY` (id)
+- UNIQUE `unique_template_exception` (template_id, exception_day_id)
+- `fk_ste_exception` (exception_day_id)
+- `fk_ste_day_schedule` (day_schedule_id)
+
 ## schedule_templates
 
-Rows: 3
+Rows: 4
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
 | template_id | int(11) | NO | PRI | NULL | auto_increment |
-| pool_site_id | int(11) | YES |  | NULL |  |
 | name | varchar(100) | NO | MUL | NULL |  |
 | version | varchar(20) | YES |  | v1.0 |  |
-| site_id | varchar(50) | YES | MUL | NULL |  |
 | base_week_schedule_id | int(11) | YES | MUL | NULL |  |
 | description | text | YES |  | NULL |  |
 | created_at | timestamp | YES |  | current_timestamp() |  |
 | created_by | varchar(100) | YES |  | NULL |  |
+| project_id | int(11) | NO |  | NULL |  |
 
 **Indexes:**
 - UNIQUE `PRIMARY` (template_id)
 - UNIQUE `unique_name_version` (name, version)
-- `site_id` (site_id)
 - `base_week_schedule_id` (base_week_schedule_id)
 
 ## simulation_daily_results
 
-Rows: 49771
+Rows: 87368
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -398,7 +462,7 @@ Rows: 49771
 
 ## simulation_hourly_results
 
-Rows: 1192733
+Rows: 2093771
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -429,7 +493,7 @@ Rows: 1192733
 
 ## simulation_runs
 
-Rows: 175
+Rows: 270
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -516,7 +580,7 @@ Rows: 50
 
 ## user_preferences
 
-Rows: 4
+Rows: 8
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -550,7 +614,7 @@ Rows: 5
 
 ## user_sessions
 
-Rows: 20
+Rows: 25
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -593,7 +657,7 @@ Rows: 5
 
 ## weather_data
 
-Rows: 87545
+Rows: 191146
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -611,7 +675,7 @@ Rows: 87545
 
 ## weather_stations
 
-Rows: 1
+Rows: 2
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -627,13 +691,14 @@ Rows: 1
 | active_to | date | YES |  | NULL |  |
 | notes | text | YES |  | NULL |  |
 | created_at | timestamp | YES |  | current_timestamp() |  |
+| terrain_roughness | decimal(5,3) | YES |  | 0.030 |  |
 
 **Indexes:**
 - UNIQUE `PRIMARY` (station_id)
 
 ## week_schedules
 
-Rows: 5
+Rows: 6
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -650,6 +715,7 @@ Rows: 5
 | saturday_schedule_id | int(11) | YES | MUL | NULL |  |
 | sunday_schedule_id | int(11) | YES | MUL | NULL |  |
 | created_at | timestamp | YES |  | current_timestamp() |  |
+| project_id | int(11) | NO |  | NULL |  |
 
 **Indexes:**
 - UNIQUE `PRIMARY` (week_schedule_id)
