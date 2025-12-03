@@ -32,6 +32,9 @@ const EnergyAnalysis = {
         this.loadConfigs();
         this.loadSchedules();
 
+        // Load investment costs (for debugging)
+        this.loadInvestmentCosts();
+
         // Initial preview
         this.updatePreview();
 
