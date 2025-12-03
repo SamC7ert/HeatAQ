@@ -458,6 +458,7 @@ const EnergyAnalysis = {
         try {
             const response = await fetch('./api/heataq_api.php?action=get_project_site');
             const data = await response.json();
+            console.log('[EnergyAnalysis] get_project_site response:', data);
 
             if (data.error) {
                 console.warn('[EnergyAnalysis] get_project_site returned error:', data.error);
