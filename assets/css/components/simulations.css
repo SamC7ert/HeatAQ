@@ -1203,3 +1203,14 @@ p.loading {
         grid-template-columns: 1fr;
     }
 }
+
+/* Energy Analysis results table - don't spread columns */
+#ea-results-table {
+    width: auto;
+}
+
+#ea-results-table th,
+#ea-results-table td {
+    min-width: 80px;
+    white-space: nowrap;
+}

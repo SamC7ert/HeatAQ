@@ -10,27 +10,118 @@ const EnergyAnalysis = {
     startTime: null,
     investmentCosts: null,
 
+    // localStorage key for state persistence
+    STORAGE_KEY: 'heataq_energy_analysis_state',
+
+    /**
+     * Save current state to localStorage
+     */
+    saveState: function() {
+        const state = {
+            mode: document.getElementById('analysis-mode-hp')?.checked ? 'hp' : 'total',
+            // Total Capacity inputs
+            totalStart: document.getElementById('ea-total-start')?.value,
+            totalStep: document.getElementById('ea-total-step')?.value,
+            fixedHp: document.getElementById('ea-fixed-hp')?.value,
+            totalCases: document.getElementById('ea-total-cases')?.value,
+            // HP Capacity inputs
+            hpStart: document.getElementById('ea-hp-start')?.value,
+            hpStep: document.getElementById('ea-hp-step')?.value,
+            fixedTotal: document.getElementById('ea-fixed-total')?.value,
+            hpCases: document.getElementById('ea-hp-cases')?.value,
+            // Common settings
+            strategy: document.getElementById('ea-strategy')?.value,
+            startDate: document.getElementById('ea-start-date')?.value,
+            endDate: document.getElementById('ea-end-date')?.value,
+            storeHourly: document.getElementById('ea-store-hourly')?.checked,
+            // Selections (saved after dropdowns load)
+            site: document.getElementById('ea-site-select')?.value,
+            pool: document.getElementById('ea-pool-select')?.value,
+            config: document.getElementById('ea-config-select')?.value,
+            schedule: document.getElementById('ea-schedule')?.value
+        };
+        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(state));
+    },
+
+    /**
+     * Restore state from localStorage
+     */
+    restoreState: function() {
+        try {
+            const saved = localStorage.getItem(this.STORAGE_KEY);
+            if (!saved) return null;
+            return JSON.parse(saved);
+        } catch (e) {
+            console.warn('[EnergyAnalysis] Failed to restore state:', e);
+            return null;
+        }
+    },
+
+    /**
+     * Apply saved state to form elements
+     */
+    applyState: function(state) {
+        if (!state) return;
+
+        // Mode
+        if (state.mode === 'hp') {
+            const hpRadio = document.getElementById('analysis-mode-hp');
+            if (hpRadio) hpRadio.checked = true;
+        }
+
+        // Total Capacity inputs
+        if (state.totalStart) document.getElementById('ea-total-start').value = state.totalStart;
+        if (state.totalStep) document.getElementById('ea-total-step').value = state.totalStep;
+        if (state.fixedHp) document.getElementById('ea-fixed-hp').value = state.fixedHp;
+        if (state.totalCases) document.getElementById('ea-total-cases').value = state.totalCases;
+
+        // HP Capacity inputs
+        if (state.hpStart) document.getElementById('ea-hp-start').value = state.hpStart;
+        if (state.hpStep) document.getElementById('ea-hp-step').value = state.hpStep;
+        if (state.fixedTotal) document.getElementById('ea-fixed-total').value = state.fixedTotal;
+        if (state.hpCases) document.getElementById('ea-hp-cases').value = state.hpCases;
+
+        // Common settings
+        if (state.strategy) document.getElementById('ea-strategy').value = state.strategy;
+        if (state.startDate) document.getElementById('ea-start-date').value = state.startDate;
+        if (state.endDate) document.getElementById('ea-end-date').value = state.endDate;
+        if (state.storeHourly !== undefined) document.getElementById('ea-store-hourly').checked = state.storeHourly;
+    },
+
     /**
      * Initialize the module
      */
     init: function() {
-        // Add event listeners for input changes to update preview
+        // Restore saved state
+        const savedState = this.restoreState();
+        if (savedState) {
+            this.applyState(savedState);
+        }
+
+        // Add event listeners for input changes to update preview and save state
         const inputs = [
             'ea-fixed-hp', 'ea-total-start', 'ea-total-step', 'ea-total-cases',
-            'ea-fixed-total', 'ea-hp-start', 'ea-hp-step', 'ea-hp-cases'
+            'ea-fixed-total', 'ea-hp-start', 'ea-hp-step', 'ea-hp-cases',
+            'ea-strategy', 'ea-start-date', 'ea-end-date'
         ];
         inputs.forEach(id => {
             const el = document.getElementById(id);
             if (el) {
-                el.addEventListener('input', () => this.updatePreview());
-                el.addEventListener('change', () => this.updatePreview());
+                el.addEventListener('input', () => { this.updatePreview(); this.saveState(); });
+                el.addEventListener('change', () => { this.updatePreview(); this.saveState(); });
             }
         });
 
+        // Save state on checkbox change
+        const storeHourly = document.getElementById('ea-store-hourly');
+        if (storeHourly) {
+            storeHourly.addEventListener('change', () => this.saveState());
+        }
+
         // Load dropdowns (loadSites will also load investment costs after setting cookie)
-        this.loadSites();
-        this.loadConfigs();
-        this.loadSchedules();
+        this.loadSites(savedState);
+        this.loadConfigs(savedState);
+        this.loadSchedules(savedState);
 
         // Initial preview
         this.updatePreview();
@@ -44,7 +135,7 @@ const EnergyAnalysis = {
     /**
      * Load sites into dropdown
      */
-    loadSites: async function() {
+    loadSites: async function(savedState) {
         try {
             const response = await fetch('./api/heataq_api.php?action=get_sites');
             const data = await response.json();
@@ -52,17 +143,15 @@ const EnergyAnalysis = {
             const select = document.getElementById('ea-site-select');
             if (!select) return;
 
-            const previousValue = select.value;
-
             if (data.sites && data.sites.length > 0) {
                 this.sites = data.sites;
                 select.innerHTML = data.sites.map(s =>
                     `<option value="${s.id}">${s.name}</option>`
                 ).join('');
 
-                // Restore previous value or use first site
-                if (previousValue && data.sites.some(s => s.id == previousValue)) {
-                    select.value = previousValue;
+                // Restore saved value if exists
+                if (savedState?.site && data.sites.some(s => s.id == savedState.site)) {
+                    select.value = savedState.site;
                 }
                 // Set cookie for backend API
                 if (select.value) {
@@ -70,7 +159,10 @@ const EnergyAnalysis = {
                     // Load investment costs with site ID
                     this.loadInvestmentCosts(select.value);
                 }
-                this.loadPools(select.value);
+                this.loadPools(select.value, savedState);
+
+                // Save state on change
+                select.addEventListener('change', () => this.saveState());
             } else {
                 select.innerHTML = '<option value="">No sites found</option>';
             }
@@ -98,7 +190,7 @@ const EnergyAnalysis = {
     /**
      * Load pools into dropdown
      */
-    loadPools: async function(siteId) {
+    loadPools: async function(siteId, savedState) {
         const select = document.getElementById('ea-pool-select');
         if (!select) return;
 
@@ -106,8 +198,6 @@ const EnergyAnalysis = {
             select.innerHTML = '<option value="">Select a site first</option>';
             return;
         }
-
-        const previousValue = select.value;
 
         try {
             const response = await fetch(`./api/heataq_api.php?action=get_pools&pool_site_id=${encodeURIComponent(siteId)}`);
@@ -118,9 +208,15 @@ const EnergyAnalysis = {
                     `<option value="${p.pool_id}">${p.name}</option>`
                 ).join('');
 
-                // Restore previous value if it exists
-                if (previousValue && data.pools.some(p => p.pool_id == previousValue)) {
-                    select.value = previousValue;
+                // Restore saved value if exists
+                if (savedState?.pool && data.pools.some(p => p.pool_id == savedState.pool)) {
+                    select.value = savedState.pool;
+                }
+
+                // Save state on change (add once)
+                if (!select.dataset.listenerAdded) {
+                    select.addEventListener('change', () => this.saveState());
+                    select.dataset.listenerAdded = 'true';
                 }
             } else {
                 select.innerHTML = '<option value="">No pools found</option>';
@@ -134,11 +230,9 @@ const EnergyAnalysis = {
     /**
      * Load configurations into dropdown
      */
-    loadConfigs: async function() {
+    loadConfigs: async function(savedState) {
         const select = document.getElementById('ea-config-select');
         if (!select) return;
-
-        const previousValue = select.value;
 
         try {
             const response = await fetch('./api/heataq_api.php?action=get_project_configs');
@@ -149,10 +243,13 @@ const EnergyAnalysis = {
                     `<option value="${c.template_id}">${c.name}</option>`
                 ).join('');
 
-                // Restore previous value if it exists
-                if (previousValue && data.configs.some(c => c.template_id == previousValue)) {
-                    select.value = previousValue;
+                // Restore saved value if exists
+                if (savedState?.config && data.configs.some(c => c.template_id == savedState.config)) {
+                    select.value = savedState.config;
                 }
+
+                // Save state on change
+                select.addEventListener('change', () => this.saveState());
             } else {
                 console.warn('[EnergyAnalysis] No configs in response');
                 select.innerHTML = '<option value="">No configs found</option>';
@@ -174,11 +271,9 @@ const EnergyAnalysis = {
     /**
      * Load schedule templates into dropdown
      */
-    loadSchedules: async function() {
+    loadSchedules: async function(savedState) {
         const select = document.getElementById('ea-schedule');
         if (!select) return;
-
-        const previousValue = select.value;
 
         try {
             const response = await fetch('./api/heataq_api.php?action=get_templates');
@@ -189,10 +284,13 @@ const EnergyAnalysis = {
                     `<option value="${t.template_id}">${t.name}</option>`
                 ).join('');
 
-                // Restore previous value if it exists
-                if (previousValue && data.templates.some(t => t.template_id == previousValue)) {
-                    select.value = previousValue;
+                // Restore saved value if exists
+                if (savedState?.schedule && data.templates.some(t => t.template_id == savedState.schedule)) {
+                    select.value = savedState.schedule;
                 }
+
+                // Save state on change
+                select.addEventListener('change', () => this.saveState());
             } else {
                 select.innerHTML = '<option value="">No schedules found</option>';
             }
@@ -238,6 +336,7 @@ const EnergyAnalysis = {
         }
 
         this.updatePreview();
+        this.saveState();
     },
 
     /**
@@ -596,9 +695,13 @@ const EnergyAnalysis = {
             const invDiffs = this.calcDiffsVsPrev(investments.map(v => v !== null ? v / 1000 : null));
             rows.push(this.buildDiffRow('Diff vs prev', 'kNOK', invDiffs, false));
 
-            // Payback vs Prev - light blue background, not bold
+            // Payback vs Prev - highlight only in HP Capacity mode
             const paybacks = this.calcPaybackVsPrev(investments, energyCosts);
-            rows.push(this.buildPaybackRowStyled('Payback vs prev', 'years', paybacks));
+            if (isTotalMode) {
+                rows.push(this.buildPaybackRow('Payback vs prev', 'years', paybacks));
+            } else {
+                rows.push(this.buildPaybackRowStyled('Payback vs prev', 'years', paybacks));
+            }
         } catch (err) {
             console.error('[EnergyAnalysis] Error calculating investment rows:', err);
             rows.push('<tr><td colspan="7" style="color: red;">Error calculating investment</td></tr>');
@@ -612,15 +715,27 @@ const EnergyAnalysis = {
             this.results.map(r => r.success ? (r.summary?.min_water_temp?.toFixed(2) || '-') : '-'),
             false, false));
 
-        // Days < 27°C
-        rows.push(this.buildRow('Days < 27°C', 'days',
-            this.results.map(r => r.success ? (r.summary?.days_below_27 || 0) : '-'),
-            false, false));
+        // Days < 27°C - highlight in Total Capacity mode
+        if (isTotalMode) {
+            rows.push(this.buildRowStyled('Days < 27°C', 'days',
+                this.results.map(r => r.success ? (r.summary?.days_below_27 || 0) : '-'),
+                false, { background: '#e3f2fd' }));
+        } else {
+            rows.push(this.buildRow('Days < 27°C', 'days',
+                this.results.map(r => r.success ? (r.summary?.days_below_27 || 0) : '-'),
+                false, false));
+        }
 
-        // Days < 26°C
-        rows.push(this.buildRow('Days < 26°C', 'days',
-            this.results.map(r => r.success ? (r.summary?.days_below_26 || 0) : '-'),
-            false, false));
+        // Days < 26°C - highlight in Total Capacity mode
+        if (isTotalMode) {
+            rows.push(this.buildRowStyled('Days < 26°C', 'days',
+                this.results.map(r => r.success ? (r.summary?.days_below_26 || 0) : '-'),
+                false, { background: '#e3f2fd' }));
+        } else {
+            rows.push(this.buildRow('Days < 26°C', 'days',
+                this.results.map(r => r.success ? (r.summary?.days_below_26 || 0) : '-'),
+                false, false));
+        }
 
         tbody.innerHTML = rows.join('');
         resultsCard.style.display = 'block';
