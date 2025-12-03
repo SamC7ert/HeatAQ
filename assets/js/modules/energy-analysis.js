@@ -27,13 +27,10 @@ const EnergyAnalysis = {
             }
         });
 
-        // Load dropdowns
+        // Load dropdowns (loadSites will also load investment costs after setting cookie)
         this.loadSites();
         this.loadConfigs();
         this.loadSchedules();
-
-        // Load investment costs (for debugging)
-        this.loadInvestmentCosts();
 
         // Initial preview
         this.updatePreview();
@@ -70,6 +67,8 @@ const EnergyAnalysis = {
                 // Set cookie for backend API
                 if (select.value) {
                     document.cookie = `heataq_pool_site_id=${select.value}; path=/; max-age=31536000`;
+                    // Load investment costs now that cookie is set
+                    this.loadInvestmentCosts();
                 }
                 this.loadPools(select.value);
             } else {
@@ -90,6 +89,8 @@ const EnergyAnalysis = {
         // Set cookie for backend API
         if (siteId) {
             document.cookie = `heataq_pool_site_id=${siteId}; path=/; max-age=31536000`;
+            // Reload investment costs for new site
+            this.loadInvestmentCosts();
         }
         this.loadPools(siteId);
     },
