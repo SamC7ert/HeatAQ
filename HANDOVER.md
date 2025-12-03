@@ -42,6 +42,11 @@
 
 8. **getPools()** and all APIs updated to use pool_site_id (INT) instead of VARCHAR site_id
 
+9. **Backward compatibility** - Code works before AND after migrations run
+   - `saveSiteData()` checks if site_id column exists before INSERT
+   - Pre-migration: generates slug and includes site_id
+   - Post-migration: inserts without site_id column
+
 #### Current Database State (After Migrations 026 & 027)
 | Table | site_id Status | Notes |
 |-------|---------------|-------|

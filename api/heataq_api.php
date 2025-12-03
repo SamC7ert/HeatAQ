@@ -3074,11 +3074,31 @@ class HeatAQAPI {
                 ]);
             } else {
                 // Insert new site with project_id link
-                $stmt = $this->db->prepare("
-                    INSERT INTO pool_sites (name, latitude, longitude, weather_station_id, project_id)
-                    VALUES (?, ?, ?, ?, ?)
-                ");
-                $stmt->execute([$name, $latitude, $longitude, $weatherStationId, $projectId]);
+                // Check if site_id column still exists (backward compatibility for pre-migration 027)
+                $hasSiteIdColumn = false;
+                try {
+                    $cols = $this->db->query("SHOW COLUMNS FROM pool_sites LIKE 'site_id'")->fetchAll();
+                    $hasSiteIdColumn = count($cols) > 0;
+                } catch (PDOException $e) {
+                    // Ignore - assume column doesn't exist
+                }
+
+                if ($hasSiteIdColumn) {
+                    // Pre-migration: generate site_id slug from name
+                    $siteIdSlug = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '_', $name));
+                    $stmt = $this->db->prepare("
+                        INSERT INTO pool_sites (site_id, name, latitude, longitude, weather_station_id, project_id)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ");
+                    $stmt->execute([$siteIdSlug, $name, $latitude, $longitude, $weatherStationId, $projectId]);
+                } else {
+                    // Post-migration: no site_id column
+                    $stmt = $this->db->prepare("
+                        INSERT INTO pool_sites (name, latitude, longitude, weather_station_id, project_id)
+                        VALUES (?, ?, ?, ?, ?)
+                    ");
+                    $stmt->execute([$name, $latitude, $longitude, $weatherStationId, $projectId]);
+                }
                 $newId = $this->db->lastInsertId();
 
                 $this->sendResponse([
