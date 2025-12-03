@@ -155,7 +155,7 @@ All schedule tables connect **ONLY through project_id**. This provides clean acc
 
 #### schedule_templates (3 records)
 - Links to base week schedule
-- Site-specific templates
+- Project-specific templates (via project_id)
 
 #### day_schedules (11 records)
 Types include:
@@ -173,7 +173,7 @@ Types include:
 #### week_schedules (5 records)
 - Weekly patterns
 - Maps each day to a day_schedule
-- Site-specific
+- Project-specific (via project_id)
 
 #### calendar_date_ranges (2 records)
 - Date range rules with priorities
@@ -209,7 +209,7 @@ Norwegian holidays defined:
 
 #### simulation_runs (95 records)
 - Simulation execution metadata
-- Fields: run_id, site_id, pool_id, scenario_name, start_date, end_date
+- Fields: run_id, pool_site_id, pool_id, scenario_name, start_date, end_date
 - Status: pending, running, completed, failed
 - Stores config_snapshot (JSON) and summary_json
 
@@ -260,10 +260,12 @@ Norwegian holidays defined:
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ SITE & POOL HIERARCHY                                                    │
 │                                                                         │
-│   projects ──► pool_sites ──► pools                                     │
+│   projects ──► pool_sites (id) ──► pools (pool_site_id FK)              │
 │                    │                                                    │
-│                    └──► simulation_runs ──► simulation_hourly_results   │
-│                                        └──► simulation_daily_results    │
+│                    └──► simulation_runs (pool_site_id FK)               │
+│                              │                                          │
+│                              ├──► simulation_hourly_results (run_id)    │
+│                              └──► simulation_daily_results (run_id)     │
 └─────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────┐
