@@ -1,5 +1,5 @@
 # HeatAQ Database Structure Documentation
-Generated: 2025-12-03 (V131)
+Generated: 2025-12-03 (V132)
 Database: heataq_pool-353130302dd2
 
 ## Overview
@@ -61,10 +61,15 @@ All schedule tables connect **ONLY through project_id**. This provides clean acc
 - `schedule_templates` → `project_id` (direct)
 - Calendar tables → `schedule_template_id` → `project_id` (indirect via schedule_templates)
 
-**Removed in V131 (Migration 026):**
-- `day_schedules.site_id` VARCHAR - removed
-- `week_schedules.site_id` VARCHAR - removed
-- `week_schedules.pool_site_id` INT - removed (redundant with project_id)
+**Removed in V131-V132 (Migrations 026-027):**
+- `day_schedules.site_id` VARCHAR - removed (Migration 026)
+- `week_schedules.site_id` VARCHAR - removed (Migration 026)
+- `week_schedules.pool_site_id` INT - removed (Migration 026, redundant with project_id)
+- `pool_sites.site_id` VARCHAR - removed (Migration 027)
+
+**Current Identifiers (V132+):**
+- `pool_sites.id` INT - primary key (use pool_site_id as FK in other tables)
+- `project_id` INT - used in all schedule tables for access control
 
 ## Database Systems
 
@@ -83,7 +88,7 @@ All schedule tables connect **ONLY through project_id**. This provides clean acc
 #### projects (1 record)
 - Project management for multi-site support
 - Current: Arendal Aquatic Center Project
-- Links to: pool_sites via site_id
+- Links to: pool_sites via project_id (INT FK)
 
 #### user_projects (4 records)
 - Maps users to projects with roles
@@ -100,9 +105,10 @@ All schedule tables connect **ONLY through project_id**. This provides clean acc
 ### 2. POOL SITE CONFIGURATION
 
 #### pool_sites (1 record)
-- Site: arendal_aquatic
+- Primary key: id (INT auto-increment)
 - Core site information: name, latitude, longitude, elevation
-- Links to weather station
+- Links to weather station via weather_station_id
+- Links to project via project_id (INT FK)
 
 #### pools (1 record)
 - Physical pool specifications with detailed properties
