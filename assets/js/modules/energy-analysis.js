@@ -131,7 +131,9 @@ const EnergyAnalysis = {
      * Load configurations into dropdown
      */
     loadConfigs: async function() {
+        console.log('[EnergyAnalysis] loadConfigs called');
         const select = document.getElementById('ea-config-select');
+        console.log('[EnergyAnalysis] ea-config-select element:', select);
         if (!select) {
             console.warn('[EnergyAnalysis] ea-config-select element not found');
             return;
