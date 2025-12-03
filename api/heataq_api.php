@@ -2435,6 +2435,20 @@ class HeatAQAPI {
         }
         $log[] = "App version: $appVersion";
 
+        // Clear PHP OPcache if available
+        if (function_exists('opcache_reset')) {
+            opcache_reset();
+            $log[] = "✓ PHP OPcache cleared";
+        }
+
+        // Clear APCu cache if available
+        if (function_exists('apcu_clear_cache')) {
+            apcu_clear_cache();
+            $log[] = "✓ APCu cache cleared";
+        }
+
+        $log[] = "⚠ Browser: Hard refresh (Ctrl+Shift+R) to load new code";
+
         chdir($oldDir);
         $this->sendResponse([
             'success' => true,
@@ -2501,7 +2515,21 @@ class HeatAQAPI {
             // Push to origin
             $log[] = "Pushing to origin...";
             $log[] = trim(shell_exec('git push origin master 2>&1'));
+
+            // Clear PHP OPcache if available
+            if (function_exists('opcache_reset')) {
+                opcache_reset();
+                $log[] = "✓ PHP OPcache cleared";
+            }
+
+            // Clear APCu cache if available
+            if (function_exists('apcu_clear_cache')) {
+                apcu_clear_cache();
+                $log[] = "✓ APCu cache cleared";
+            }
+
             $log[] = "✓ Merge complete!";
+            $log[] = "⚠ Browser: Hard refresh (Ctrl+Shift+R) to load new code";
         } else {
             // Abort the merge
             $log[] = "Merge failed, aborting...";
