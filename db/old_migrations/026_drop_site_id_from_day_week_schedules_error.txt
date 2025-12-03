@@ -1,0 +1,13 @@
+2025-12-03 10:14:21 - Running migration: 026_drop_site_id_from_day_week_schedules.sql
+Executing: ALTER TABLE day_schedules DROP INDEX IF EXISTS unique_name_site
+Executing: ALTER TABLE day_schedules DROP INDEX IF EXISTS site_id
+Executing: ALTER TABLE week_schedules DROP INDEX IF EXISTS unique_name_site
+Executing: ALTER TABLE week_schedules DROP INDEX IF EXISTS site_id
+Executing: ALTER TABLE day_schedules DROP COLUMN IF EXISTS site_id
+Executing: ALTER TABLE week_schedules DROP COLUMN IF EXISTS site_id
+Executing: ALTER TABLE week_schedules DROP COLUMN IF EXISTS pool_site_id
+Executing: ALTER TABLE day_schedules ADD CONSTRAINT unique_name_project UNIQUE (name, proje...
+Executing: ALTER TABLE week_schedules ADD CONSTRAINT unique_name_project UNIQUE (name, proj...
+Executing: SELECT 'day_schedules columns after migration:' as info
+Executing: SHOW COLUMNS FROM day_schedules
+ERROR: SQLSTATE[HY000]: General error: 2014 Cannot execute queries while other unbuffered queries are active.  Consider using PDOStatement::fetchAll().  Alternatively, if your code is only ever going to run against mysql, you may enable query buffering by setting the PDO::MYSQL_ATTR_USE_BUFFERED_QUERY attribute.
