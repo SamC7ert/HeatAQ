@@ -3023,17 +3023,26 @@ class HeatAQAPI {
     private function getProjectSite() {
         // Return the pool_site_id (INT) associated with the current project
         if ($this->poolSiteId) {
-            $stmt = $this->db->prepare("SELECT id, name FROM pool_sites WHERE id = ? LIMIT 1");
+            $stmt = $this->db->prepare("
+                SELECT id, name, latitude, longitude, weather_station_id, description,
+                       hp_base_cost_nok, hp_marginal_cost_per_kw,
+                       boiler_base_cost_nok, boiler_marginal_cost_per_kw
+                FROM pool_sites WHERE id = ? LIMIT 1
+            ");
             $stmt->execute([$this->poolSiteId]);
             $site = $stmt->fetch(PDO::FETCH_ASSOC);
 
-            $this->sendResponse([
+            $response = [
                 'pool_site_id' => $this->poolSiteId,
                 'id' => $this->poolSiteId,  // INT primary key
-                'site_name' => $site ? $site['name'] : null,
-                'name' => $site ? $site['name'] : null,
                 'project_id' => $this->projectId
-            ]);
+            ];
+
+            if ($site) {
+                $response = array_merge($response, $site);
+            }
+
+            $this->sendResponse($response);
         } else {
             $this->sendError('No site associated with current session - pool_site_id required');
         }
@@ -3052,6 +3061,11 @@ class HeatAQAPI {
                     ps.latitude,
                     ps.longitude,
                     ps.description,
+                    ps.weather_station_id,
+                    ps.hp_base_cost_nok,
+                    ps.hp_marginal_cost_per_kw,
+                    ps.boiler_base_cost_nok,
+                    ps.boiler_marginal_cost_per_kw,
                     (SELECT COUNT(*) FROM pools p WHERE p.pool_site_id = ps.id AND p.is_active = 1) as pool_count
                 FROM pool_sites ps
                 ORDER BY ps.name
@@ -3064,6 +3078,11 @@ class HeatAQAPI {
                     ps.latitude,
                     ps.longitude,
                     ps.description,
+                    ps.weather_station_id,
+                    ps.hp_base_cost_nok,
+                    ps.hp_marginal_cost_per_kw,
+                    ps.boiler_base_cost_nok,
+                    ps.boiler_marginal_cost_per_kw,
                     0 as pool_count
                 FROM pool_sites ps
                 ORDER BY ps.name
@@ -3095,16 +3114,32 @@ class HeatAQAPI {
             $this->sendError('project_id is required');
         }
 
+        // Investment cost fields (for Energy Analysis)
+        $hpBaseCost = isset($input['hp_base_cost_nok']) && $input['hp_base_cost_nok'] !== ''
+            ? (float)$input['hp_base_cost_nok'] : null;
+        $hpMarginalCost = isset($input['hp_marginal_cost_per_kw']) && $input['hp_marginal_cost_per_kw'] !== ''
+            ? (float)$input['hp_marginal_cost_per_kw'] : null;
+        $boilerBaseCost = isset($input['boiler_base_cost_nok']) && $input['boiler_base_cost_nok'] !== ''
+            ? (float)$input['boiler_base_cost_nok'] : null;
+        $boilerMarginalCost = isset($input['boiler_marginal_cost_per_kw']) && $input['boiler_marginal_cost_per_kw'] !== ''
+            ? (float)$input['boiler_marginal_cost_per_kw'] : null;
+
         try {
             if ($poolSiteId) {
                 // Update existing site by id
                 $stmt = $this->db->prepare("
                     UPDATE pool_sites
                     SET name = ?, latitude = ?, longitude = ?, weather_station_id = ?,
-                        project_id = COALESCE(project_id, ?)
+                        project_id = COALESCE(project_id, ?),
+                        hp_base_cost_nok = ?, hp_marginal_cost_per_kw = ?,
+                        boiler_base_cost_nok = ?, boiler_marginal_cost_per_kw = ?
                     WHERE id = ?
                 ");
-                $stmt->execute([$name, $latitude, $longitude, $weatherStationId, $projectId, $poolSiteId]);
+                $stmt->execute([
+                    $name, $latitude, $longitude, $weatherStationId, $projectId,
+                    $hpBaseCost, $hpMarginalCost, $boilerBaseCost, $boilerMarginalCost,
+                    $poolSiteId
+                ]);
 
                 $this->sendResponse([
                     'success' => true,
@@ -3112,32 +3147,16 @@ class HeatAQAPI {
                     'message' => 'Site updated'
                 ]);
             } else {
-                // Insert new site with project_id link
-                // Check if site_id column still exists (backward compatibility for pre-migration 027)
-                $hasSiteIdColumn = false;
-                try {
-                    $cols = $this->db->query("SHOW COLUMNS FROM pool_sites LIKE 'site_id'")->fetchAll();
-                    $hasSiteIdColumn = count($cols) > 0;
-                } catch (PDOException $e) {
-                    // Ignore - assume column doesn't exist
-                }
-
-                if ($hasSiteIdColumn) {
-                    // Pre-migration: generate site_id slug from name
-                    $siteIdSlug = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '_', $name));
-                    $stmt = $this->db->prepare("
-                        INSERT INTO pool_sites (site_id, name, latitude, longitude, weather_station_id, project_id)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    ");
-                    $stmt->execute([$siteIdSlug, $name, $latitude, $longitude, $weatherStationId, $projectId]);
-                } else {
-                    // Post-migration: no site_id column
-                    $stmt = $this->db->prepare("
-                        INSERT INTO pool_sites (name, latitude, longitude, weather_station_id, project_id)
-                        VALUES (?, ?, ?, ?, ?)
-                    ");
-                    $stmt->execute([$name, $latitude, $longitude, $weatherStationId, $projectId]);
-                }
+                // Insert new site - post-migration 027 (no site_id column)
+                $stmt = $this->db->prepare("
+                    INSERT INTO pool_sites (name, latitude, longitude, weather_station_id, project_id,
+                        hp_base_cost_nok, hp_marginal_cost_per_kw, boiler_base_cost_nok, boiler_marginal_cost_per_kw)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ");
+                $stmt->execute([
+                    $name, $latitude, $longitude, $weatherStationId, $projectId,
+                    $hpBaseCost, $hpMarginalCost, $boilerBaseCost, $boilerMarginalCost
+                ]);
                 $newId = $this->db->lastInsertId();
 
                 $this->sendResponse([

@@ -373,6 +373,16 @@ const ProjectModule = {
             newLngEl.oninput = () => this.onCoordinateChange();
         }
 
+        // Populate investment cost fields
+        const hpBaseEl = document.getElementById('edit-site-hp-base');
+        const hpMarginalEl = document.getElementById('edit-site-hp-marginal');
+        const boilerBaseEl = document.getElementById('edit-site-boiler-base');
+        const boilerMarginalEl = document.getElementById('edit-site-boiler-marginal');
+        if (hpBaseEl) hpBaseEl.value = site.hp_base_cost_nok || '';
+        if (hpMarginalEl) hpMarginalEl.value = site.hp_marginal_cost_per_kw || '';
+        if (boilerBaseEl) boilerBaseEl.value = site.boiler_base_cost_nok || '';
+        if (boilerMarginalEl) boilerMarginalEl.value = site.boiler_marginal_cost_per_kw || '';
+
         modal.style.display = 'flex';
     },
 
@@ -456,6 +466,10 @@ const ProjectModule = {
         const latEl = document.getElementById('edit-site-lat');
         const lngEl = document.getElementById('edit-site-lng');
         const wsEl = document.getElementById('edit-site-weather');
+        const hpBaseEl = document.getElementById('edit-site-hp-base');
+        const hpMarginalEl = document.getElementById('edit-site-hp-marginal');
+        const boilerBaseEl = document.getElementById('edit-site-boiler-base');
+        const boilerMarginalEl = document.getElementById('edit-site-boiler-marginal');
 
         const name = nameEl?.value?.trim() || '';
         const latRaw = latEl?.value;
@@ -463,6 +477,10 @@ const ProjectModule = {
         const lat = latRaw ? parseFloat(latRaw) : null;
         const lng = lngRaw ? parseFloat(lngRaw) : null;
         const wsId = wsEl?.value || null;
+        const hpBase = hpBaseEl?.value ? parseFloat(hpBaseEl.value) : null;
+        const hpMarginal = hpMarginalEl?.value ? parseFloat(hpMarginalEl.value) : null;
+        const boilerBase = boilerBaseEl?.value ? parseFloat(boilerBaseEl.value) : null;
+        const boilerMarginal = boilerMarginalEl?.value ? parseFloat(boilerMarginalEl.value) : null;
 
         // Check if coordinates changed
         const oldLat = this.currentSite?.latitude;
@@ -485,7 +503,11 @@ const ProjectModule = {
             latitude: lat,
             longitude: lng,
             weather_station_id: wsId,
-            weather_station_name: wsName
+            weather_station_name: wsName,
+            hp_base_cost_nok: hpBase,
+            hp_marginal_cost_per_kw: hpMarginal,
+            boiler_base_cost_nok: boilerBase,
+            boiler_marginal_cost_per_kw: boilerMarginal
         };
 
         // Save to database via API - uses INT id
@@ -498,7 +520,11 @@ const ProjectModule = {
                     name: name,
                     latitude: lat,
                     longitude: lng,
-                    weather_station_id: wsId
+                    weather_station_id: wsId,
+                    hp_base_cost_nok: hpBase,
+                    hp_marginal_cost_per_kw: hpMarginal,
+                    boiler_base_cost_nok: boilerBase,
+                    boiler_marginal_cost_per_kw: boilerMarginal
                 })
             });
             const result = await response.json();
