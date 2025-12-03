@@ -1,8 +1,64 @@
 # HeatAQ Development Handover Guide
 
-**Current Version:** V130 (December 2024)
+**Current Version:** V131 (December 2024)
 
 ## Recent Session Summary (Dec 2024)
+
+### V131 - Code Cleanup & Energy Analysis Preparation
+
+#### Remove Silent Defaults - "No Magic Values" Policy
+1. **API pool_site_id** - APIs now require explicit pool_site_id via cookie (dev mode) or auth (prod)
+   - No more `pool_site_id = 1` fallback in heataq_api.php, simulation_api.php, scheduler_api.php
+   - Clear error message: "Missing pool_site_id: Set heataq_pool_site_id cookie or enable authentication"
+
+2. **EnergySimulator validation** - `validateConfigForSimulation()` added
+   - Validates pool config (area_m2, volume_m3, depth_m) before running
+   - Validates equipment config (heat_pump.capacity_kw, boiler.capacity_kw)
+   - Validates weather data structure at simulation start
+   - Throws clear errors instead of silently defaulting
+
+3. **PoolScheduler** - Constructor now requires explicit poolSiteId parameter
+   - No more `$poolSiteId = 1` default
+
+4. **JavaScript validation** - Target temperature validation in schedules.js
+   - Throws error if period target_temp is missing or invalid (20-35°C range)
+   - Shows warning in UI for missing config values
+
+#### Database site_id Cleanup
+5. **Migration 026 created** - `db/migrations/026_drop_site_id_from_day_week_schedules.sql`
+   - Drops `site_id` VARCHAR from day_schedules and week_schedules
+   - Drops `pool_site_id` from week_schedules (uses project_id instead)
+   - Creates new unique constraints on (name, project_id)
+
+6. **Migration 027 created** - `db/migrations/027_drop_pool_sites_site_id.sql`
+   - Drops `site_id` VARCHAR from pool_sites (was confusing - looked like a FK)
+   - pool_sites now uses only `id` (INT PK) and `name` for display
+   - All code updated to use `id` instead of `site_id`
+
+7. **Deprecated functions removed**:
+   - `getSiteIdString()` - no longer needed
+   - `diagnoseSiteIds()` - migration tool, no longer needed
+   - `fixSiteIds()` - migration tool, no longer needed
+
+8. **getPools()** and all APIs updated to use pool_site_id (INT) instead of VARCHAR site_id
+
+9. **Backward compatibility** - Code works before AND after migrations run
+   - `saveSiteData()` checks if site_id column exists before INSERT
+   - Pre-migration: generates slug and includes site_id
+   - Post-migration: inserts without site_id column
+
+#### Current Database State (After Migrations 026 & 027)
+| Table | site_id Status | Notes |
+|-------|---------------|-------|
+| schedule_templates | ✅ CLEAN | Uses project_id |
+| day_schedules | ❌ Needs migration 026 | Has site_id VARCHAR |
+| week_schedules | ❌ Needs migration 026 | Has site_id VARCHAR + pool_site_id |
+| pool_sites | ❌ Needs migration 027 | Has site_id VARCHAR (to be removed) |
+
+#### After All Migrations Complete
+- **No more VARCHAR site_id columns** in any table
+- All foreign key references use INT `pool_site_id` (references `pool_sites.id`)
+- Schedule tables use INT `project_id` for access control
 
 ### Completed Work - V129/V130
 
@@ -155,13 +211,25 @@ The System tab (Admin only) provides three cards in order:
 
 Both Archive and Export use **branch-then-merge** pattern for clean git history.
 
-## Database Migration Workflow (Simplified)
+## Database Migration Workflow (Safe Deployment)
+
+**Key principle**: Code must work BEFORE and AFTER migration runs.
 
 1. **Create migration** in `db/migrations/NNN_description.sql`
-2. **Merge & Deploy** to get code on server
-3. **Run** migration via System tab → verify green button + log
-4. **Archive** → automatically exports schema, commits, merges to master, pushes
-5. Done! GitHub is in sync.
+2. **Make code backward-compatible** - check if column/table exists before using
+   ```php
+   // Example: Check if column exists before INSERT
+   $cols = $db->query("SHOW COLUMNS FROM table LIKE 'old_column'")->fetchAll();
+   if (count($cols) > 0) {
+       // Pre-migration: include old_column
+   } else {
+       // Post-migration: skip old_column
+   }
+   ```
+3. **Deploy** code (works with current schema)
+4. **Run** migration via System tab → verify green button + log
+5. **Archive** → exports schema, commits, merges to master, pushes
+6. **Next version**: Remove backward-compatibility code (optional cleanup)
 
 ## Design Principles
 

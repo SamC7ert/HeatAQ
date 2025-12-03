@@ -1,5 +1,5 @@
 # HeatAQ Database Structure Documentation
-Generated: 2025-11-30 (V104)
+Generated: 2025-12-03 (V131)
 Database: heataq_pool-353130302dd2
 
 ## Overview
@@ -8,6 +8,63 @@ Database: heataq_pool-353130302dd2
 - **Primary Systems**: Simulation (813K+ records), Weather (87,545 records), Solar (3,653 records), Scheduling, Authentication
 
 > **Note**: For full schema details with all columns and indexes, see `db/schema.md` (auto-generated)
+
+## Schedule Access Control Model (V131)
+
+All schedule tables connect **ONLY through project_id**. This provides clean access control:
+- Anyone with project access can access all schedules for that project
+- Anyone without project access cannot see any schedules
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         ACCESS CONTROL BOUNDARY                              │
+│                                                                             │
+│    users ───► user_projects ───► projects                                   │
+│                                      │                                      │
+│                                      │ project_id (INT FK)                  │
+│                                      ▼                                      │
+│    ┌─────────────────────────────────────────────────────────────────┐     │
+│    │                    SCHEDULE TABLES                               │     │
+│    │                                                                  │     │
+│    │   schedule_templates ◄──────────────────────────────────────────│     │
+│    │         │                                                        │     │
+│    │         │ base_week_schedule_id                                  │     │
+│    │         ▼                                                        │     │
+│    │   week_schedules ◄───────── project_id                          │     │
+│    │         │                                                        │     │
+│    │         │ day_schedule_id (mon-sun)                              │     │
+│    │         ▼                                                        │     │
+│    │   day_schedules ◄────────── project_id                          │     │
+│    │         │                                                        │     │
+│    │         │ day_schedule_id                                        │     │
+│    │         ▼                                                        │     │
+│    │   day_schedule_periods                                           │     │
+│    │                                                                  │     │
+│    └─────────────────────────────────────────────────────────────────┘     │
+│                                                                             │
+│    ┌─────────────────────────────────────────────────────────────────┐     │
+│    │                    CALENDAR TABLES                               │     │
+│    │                  (connect via schedule_template_id)              │     │
+│    │                                                                  │     │
+│    │   calendar_date_ranges ────► schedule_template_id ────► project │     │
+│    │   calendar_exception_days ─► schedule_template_id ────► project │     │
+│    │   calendar_rules ──────────► template_id ─────────────► project │     │
+│    │                                                                  │     │
+│    └─────────────────────────────────────────────────────────────────┘     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Points:**
+- `day_schedules` → `project_id` (direct)
+- `week_schedules` → `project_id` (direct)
+- `schedule_templates` → `project_id` (direct)
+- Calendar tables → `schedule_template_id` → `project_id` (indirect via schedule_templates)
+
+**Removed in V131 (Migration 026):**
+- `day_schedules.site_id` VARCHAR - removed
+- `week_schedules.site_id` VARCHAR - removed
+- `week_schedules.pool_site_id` INT - removed (redundant with project_id)
 
 ## Database Systems
 
@@ -98,7 +155,7 @@ Database: heataq_pool-353130302dd2
 
 #### schedule_templates (3 records)
 - Links to base week schedule
-- Site-specific templates
+- Project-specific templates (via project_id)
 
 #### day_schedules (11 records)
 Types include:
@@ -116,7 +173,7 @@ Types include:
 #### week_schedules (5 records)
 - Weekly patterns
 - Maps each day to a day_schedule
-- Site-specific
+- Project-specific (via project_id)
 
 #### calendar_date_ranges (2 records)
 - Date range rules with priorities
@@ -152,7 +209,7 @@ Norwegian holidays defined:
 
 #### simulation_runs (95 records)
 - Simulation execution metadata
-- Fields: run_id, site_id, pool_id, scenario_name, start_date, end_date
+- Fields: run_id, pool_site_id, pool_id, scenario_name, start_date, end_date
 - Status: pending, running, completed, failed
 - Stores config_snapshot (JSON) and summary_json
 
@@ -179,36 +236,66 @@ Norwegian holidays defined:
 ## Key Relationships
 
 ```
-pool_sites (1)
-├── pools (1) [via site_id]
-├── pool_configurations (1) [via site_id]
-├── projects (1) [via site_id]
-├── day_schedules (11) [via site_id]
-├── week_schedules (5) [via site_id]
-├── schedule_templates (3) [via site_id]
-└── weather_stations (1) [via default_weather_station]
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ACCESS CONTROL HIERARCHY                                                 │
+│                                                                         │
+│   users ──► user_projects ──► projects                                  │
+│                                    │                                    │
+│                                    ├──► schedule_templates ──┐          │
+│                                    │         │               │          │
+│                                    │    base_week_schedule_id│          │
+│                                    │         ▼               │          │
+│                                    ├──► week_schedules       │          │
+│                                    │                         │          │
+│                                    └──► day_schedules        │          │
+│                                              │               │          │
+│                                    day_schedule_periods      │          │
+│                                                              │          │
+│   Calendar tables connect via schedule_template_id: ◄────────┘          │
+│   • calendar_date_ranges                                                │
+│   • calendar_exception_days                                             │
+│   • calendar_rules                                                      │
+└─────────────────────────────────────────────────────────────────────────┘
 
-weather_stations (1)
-└── weather_data (87,545) [via station_id]
+┌─────────────────────────────────────────────────────────────────────────┐
+│ SITE & POOL HIERARCHY                                                    │
+│                                                                         │
+│   projects ──► pool_sites (id) ──► pools (pool_site_id FK)              │
+│                    │                                                    │
+│                    └──► simulation_runs (pool_site_id FK)               │
+│                              │                                          │
+│                              ├──► simulation_hourly_results (run_id)    │
+│                              └──► simulation_daily_results (run_id)     │
+└─────────────────────────────────────────────────────────────────────────┘
 
-schedule_templates (3)
-├── calendar_date_ranges (2) [via schedule_template_id]
-├── calendar_exception_days (18) [via schedule_template_id]
-└── week_schedules [via base_week_schedule_id]
-
-day_schedules (11)
-└── day_schedule_periods (6) [via day_schedule_id]
-
-simulation_runs (95)
-├── simulation_hourly_results (780,809) [via run_id]
-└── simulation_daily_results (32,582) [via run_id]
-
-users (4)
-├── user_sessions (4) [via user_id]
-├── user_projects (4) [via user_id]
-├── user_preferences (3) [via user_id]
-└── audit_log (3,316) [via user_id]
+┌─────────────────────────────────────────────────────────────────────────┐
+│ WEATHER DATA                                                             │
+│                                                                         │
+│   weather_stations ──► weather_data (87,545 records)                    │
+│   pool_sites.default_weather_station ──► weather_stations               │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Detailed Relationships
+
+| Parent Table | Child Table | Foreign Key | Notes |
+|--------------|-------------|-------------|-------|
+| projects | schedule_templates | project_id | Direct |
+| projects | day_schedules | project_id | Direct |
+| projects | week_schedules | project_id | Direct |
+| schedule_templates | calendar_date_ranges | schedule_template_id | Indirect access |
+| schedule_templates | calendar_exception_days | schedule_template_id | Indirect access |
+| schedule_templates | calendar_rules | template_id | Indirect access |
+| schedule_templates | week_schedules | base_week_schedule_id | Links template to base week |
+| week_schedules | day_schedules | mon-sun_schedule_id | 7 FKs for each day |
+| day_schedules | day_schedule_periods | day_schedule_id | Time periods within day |
+| pool_sites | pools | pool_site_id | Physical pool data |
+| pool_sites | simulation_runs | pool_site_id | Simulation history |
+| simulation_runs | simulation_hourly_results | run_id | Detailed results |
+| simulation_runs | simulation_daily_results | run_id | Aggregated results |
+| weather_stations | weather_data | station_id | Weather history |
+| users | user_projects | user_id | Project membership |
+| projects | user_projects | project_id | Project membership |
 
 ## Data Volume Summary
 
@@ -249,9 +336,10 @@ Output tables:
 
 ### For Multi-Site Expansion
 Structure supports multiple sites via:
-- site_id foreign keys throughout
-- Project-based authentication
-- Template system for schedules
+- Project-based access control (users → user_projects → projects)
+- Schedule tables use project_id (INT FK) - no VARCHAR site_id
+- Pool sites linked to projects (projects → pool_sites → pools)
+- Template system for schedules within each project
 - Separate weather stations per site
 
 ### Future Enhancements

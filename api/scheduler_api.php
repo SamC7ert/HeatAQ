@@ -31,8 +31,20 @@ if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
         $currentPoolSiteId = (int)$auth['project']['pool_site_id'];
     }
 } else {
-    // Development mode - use pool_site_id directly
-    $currentPoolSiteId = 1;
+    // Development mode - get pool_site_id from cookie (required)
+    $currentPoolSiteId = null;
+
+    if (isset($_COOKIE['heataq_pool_site_id']) && !empty($_COOKIE['heataq_pool_site_id'])) {
+        $currentPoolSiteId = (int)$_COOKIE['heataq_pool_site_id'];
+    }
+
+    // No default - require explicit pool_site_id
+    if (!$currentPoolSiteId) {
+        header('Content-Type: application/json');
+        http_response_code(400);
+        echo json_encode(['error' => 'Missing pool_site_id: Set heataq_pool_site_id cookie or enable authentication']);
+        exit;
+    }
 }
 
 // Include scheduler

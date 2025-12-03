@@ -330,9 +330,20 @@ const ConfigurationModule = {
 
     // Update calculated temperature range display
     updateTempRange: function() {
-        const target = parseFloat(this.getVal('cfg-target-temp')) || 28;
+        const targetStr = this.getVal('cfg-target-temp');
+        const target = parseFloat(targetStr);
         const upperTol = parseFloat(this.getVal('cfg-upper-tolerance')) || 1;
         const lowerTol = parseFloat(this.getVal('cfg-lower-tolerance')) || 2;
+
+        // Don't silently default - show warning if target not set
+        if (!targetStr || isNaN(target)) {
+            const rangeEl = document.getElementById('cfg-temp-range');
+            if (rangeEl) {
+                rangeEl.textContent = '-- - --°C (target required)';
+                rangeEl.style.color = 'red';
+            }
+            return;
+        }
 
         const minTemp = target - lowerTol;
         const maxTemp = target + upperTol;

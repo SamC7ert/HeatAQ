@@ -75,10 +75,14 @@ class EnergySimulator {
      * Initialize simulator
      *
      * @param PDO $db Database connection
-     * @param int $poolSiteId Integer pool_site_id (references pool_sites.id)
+     * @param int $poolSiteId Integer pool_site_id (references pool_sites.id) - REQUIRED
      * @param PoolScheduler $scheduler Scheduler instance
+     * @throws InvalidArgumentException if poolSiteId is not provided
      */
-    public function __construct($db, $poolSiteId = 1, $scheduler = null) {
+    public function __construct($db, $poolSiteId, $scheduler = null) {
+        if (!$poolSiteId) {
+            throw new InvalidArgumentException('EnergySimulator requires poolSiteId - no default allowed');
+        }
         $this->db = $db;
         $this->poolSiteId = (int)$poolSiteId;
         $this->siteId = null; // Deprecated - kept for compatibility
@@ -117,9 +121,10 @@ class EnergySimulator {
 
     /**
      * Load equipment configuration from database
+     * NOTE: No defaults - validation will fail if equipment not configured
      */
     private function loadEquipmentConfig() {
-        // Try to load from config_templates (may not exist yet)
+        // Try to load from config_templates
         try {
             $stmt = $this->db->prepare("
                 SELECT config_json FROM config_templates
@@ -132,32 +137,34 @@ class EnergySimulator {
             if ($row && $row['config_json']) {
                 $config = json_decode($row['config_json'], true);
                 if ($config) {
+                    error_log("[EnergySimulator] Loaded equipment config from database for pool_site_id={$this->poolSiteId}");
                     return $config;
                 }
             }
         } catch (\PDOException $e) {
-            // Table or column doesn't exist yet, use defaults
+            error_log("[EnergySimulator] Could not load equipment config: " . $e->getMessage());
         }
 
-        // Default equipment configuration
+        // Return empty structure - will fail validation if setConfigFromUI not called
+        error_log("[EnergySimulator] WARNING: No equipment config found in database - must be set via setConfigFromUI()");
         return [
             'heat_pump' => [
-                'enabled' => true,
-                'type' => 'ground_source',   // 'air_source' or 'ground_source' (borehole)
-                'capacity_kw' => 125,        // Nominal heating capacity
-                'cop_nominal' => 4.6,        // COP (constant for ground source)
-                'min_operating_temp' => -20, // °C (only applies to air_source)
-                'max_operating_temp' => 35,  // °C (only applies to air_source)
+                'enabled' => null,
+                'type' => null,
+                'capacity_kw' => null,
+                'cop_nominal' => null,
+                'min_operating_temp' => null,
+                'max_operating_temp' => null,
             ],
             'boiler' => [
-                'enabled' => true,
-                'capacity_kw' => 200,        // Backup boiler capacity
-                'efficiency' => 0.92,        // 92% efficiency
-                'fuel_type' => 'natural_gas',
-                'fuel_cost_per_kwh' => 0.08, // NOK per kWh
+                'enabled' => null,
+                'capacity_kw' => null,
+                'efficiency' => null,
+                'fuel_type' => null,
+                'fuel_cost_per_kwh' => null,
             ],
-            'electricity_cost_per_kwh' => 1.20, // NOK per kWh
-            'control_strategy' => 'hp_priority', // hp_priority, boiler_priority, cost_optimal
+            'electricity_cost_per_kwh' => null,
+            'control_strategy' => null,
         ];
     }
 
@@ -395,6 +402,85 @@ class EnergySimulator {
     }
 
     /**
+     * Validate configuration before running simulation
+     * Throws exception if required values are missing - NO silent defaults
+     *
+     * @throws InvalidArgumentException if required config is missing
+     */
+    private function validateConfigForSimulation() {
+        $errors = [];
+
+        // Pool config validation
+        if (!isset($this->poolConfig['area_m2']) || $this->poolConfig['area_m2'] === null) {
+            $errors[] = 'pool.area_m2 is required';
+        }
+        if (!isset($this->poolConfig['volume_m3']) || $this->poolConfig['volume_m3'] === null) {
+            $errors[] = 'pool.volume_m3 is required';
+        }
+        if (!isset($this->poolConfig['depth_m']) || $this->poolConfig['depth_m'] === null) {
+            $errors[] = 'pool.depth_m is required';
+        }
+
+        // Equipment validation
+        if (!isset($this->equipment['heat_pump']['capacity_kw']) || $this->equipment['heat_pump']['capacity_kw'] === null) {
+            $errors[] = 'equipment.heat_pump.capacity_kw is required';
+        }
+        if (!isset($this->equipment['boiler']['capacity_kw']) || $this->equipment['boiler']['capacity_kw'] === null) {
+            $errors[] = 'equipment.boiler.capacity_kw is required';
+        }
+
+        // Thermal mass rate (calculated from volume)
+        if ($this->thermalMassRate === null || $this->thermalMassRate <= 0) {
+            $errors[] = 'thermal_mass_rate not calculated (check volume_m3)';
+        }
+
+        if (!empty($errors)) {
+            throw new InvalidArgumentException(
+                'Simulation config validation failed - no defaults allowed: ' . implode('; ', $errors)
+            );
+        }
+    }
+
+    /**
+     * Validate weather data has required fields
+     *
+     * @param array $weatherData Weather data array
+     * @throws InvalidArgumentException if required weather fields are missing
+     */
+    private function validateWeatherData($weatherData) {
+        if (empty($weatherData)) {
+            throw new InvalidArgumentException('No weather data available for simulation period');
+        }
+
+        // Sample first few records to validate structure
+        $missingFields = [];
+        $sampleSize = min(24, count($weatherData));
+        $windMissing = 0;
+        $humidityMissing = 0;
+
+        for ($i = 0; $i < $sampleSize; $i++) {
+            $hour = $weatherData[$i];
+            if (!isset($hour['air_temperature'])) {
+                throw new InvalidArgumentException('Weather data missing air_temperature field');
+            }
+            if (!isset($hour['wind_speed']) || $hour['wind_speed'] === null) {
+                $windMissing++;
+            }
+            if (!isset($hour['humidity']) || $hour['humidity'] === null) {
+                $humidityMissing++;
+            }
+        }
+
+        // Warn about missing optional fields (but don't fail)
+        if ($windMissing > 0) {
+            error_log("[EnergySimulator] WARNING: {$windMissing}/{$sampleSize} weather records missing wind_speed - using 2.0 m/s fallback");
+        }
+        if ($humidityMissing > 0) {
+            error_log("[EnergySimulator] WARNING: {$humidityMissing}/{$sampleSize} weather records missing humidity - using 70% fallback");
+        }
+    }
+
+    /**
      * Run simulation for a date range
      *
      * @param string $startDate Start date (YYYY-MM-DD)
@@ -403,11 +489,17 @@ class EnergySimulator {
      * @return array Simulation results
      */
     public function runSimulation($startDate, $endDate, $options = []) {
+        // Validate configuration before running - no silent defaults allowed
+        $this->validateConfigForSimulation();
+
         $start = new DateTime($startDate);
         $end = new DateTime($endDate);
 
         // Get weather data for period
         $weatherData = $this->getWeatherData($startDate, $endDate);
+
+        // Validate weather data structure
+        $this->validateWeatherData($weatherData);
 
         // Get solar data for period
         $solarData = $this->getSolarData($startDate, $endDate);

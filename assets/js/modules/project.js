@@ -51,8 +51,8 @@ const ProjectModule = {
                 this.currentSite = JSON.parse(siteData);
             }
 
-            // If no site_id in localStorage, fetch from API to get the actual site_id
-            if (!this.currentSite?.site_id) {
+            // If no id in localStorage, fetch from API to get the actual pool_site_id (INT)
+            if (!this.currentSite?.id) {
                 try {
                     const response = await fetch(`${config.API_BASE_URL}?action=get_sites`);
                     const result = await response.json();
@@ -61,14 +61,14 @@ const ProjectModule = {
                         const dbSite = result.sites[0];
                         this.currentSite = {
                             ...this.currentSite,
-                            site_id: dbSite.site_id,
+                            id: dbSite.id,  // INT pool_site_id
                             name: dbSite.name,
                             latitude: parseFloat(dbSite.latitude) || null,
                             longitude: parseFloat(dbSite.longitude) || null,
                             weather_station_id: dbSite.default_weather_station || dbSite.weather_station_id,
                         };
-                        console.log('[Project] Loaded site from DB:', this.currentSite.site_id);
-                        // Save to localStorage with site_id
+                        console.log('[Project] Loaded site from DB, id:', this.currentSite.id);
+                        // Save to localStorage with id
                         localStorage.setItem('heataq_site', JSON.stringify(this.currentSite));
                     }
                 } catch (err) {
@@ -478,19 +478,9 @@ const ProjectModule = {
             if (ws) wsName = ws.name || ws.station_name;
         }
 
-        // Generate site_id from name if not exists (slug format)
-        let siteId = this.currentSite?.site_id;
-        if (!siteId && name) {
-            siteId = name.toLowerCase()
-                .replace(/[æ]/g, 'ae').replace(/[ø]/g, 'o').replace(/[å]/g, 'a')
-                .replace(/[^a-z0-9]+/g, '_')
-                .replace(/^_+|_+$/g, '');
-        }
-
-        // Update site object
+        // Update site object - use INT id
         this.currentSite = {
             ...this.currentSite,
-            site_id: siteId,
             name: name || 'Main Site',
             latitude: lat,
             longitude: lng,
@@ -498,13 +488,13 @@ const ProjectModule = {
             weather_station_name: wsName
         };
 
-        // Save to database via API
+        // Save to database via API - uses INT id
         try {
             const response = await fetch(`${config.API_BASE_URL}?action=save_site`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    site_id: siteId,
+                    id: this.currentSite.id || null,  // INT pool_site_id, null for new
                     name: name,
                     latitude: lat,
                     longitude: lng,
@@ -517,9 +507,9 @@ const ProjectModule = {
                 console.error('[Project] Failed to save site to DB:', result.error);
             } else {
                 console.log('[Project] Site saved to database:', result);
-                // Update site_id if server assigned one
-                if (result.site_id) {
-                    this.currentSite.site_id = result.site_id;
+                // Update id if server assigned one (for new sites)
+                if (result.id) {
+                    this.currentSite.id = result.id;
                 }
             }
         } catch (err) {
@@ -612,10 +602,10 @@ const ProjectModule = {
     // Load pool data from database (with localStorage fallback)
     async loadPoolData() {
         try {
-            // Build URL with site_id if available
+            // Build URL with pool_site_id (INT) if available
             let url = './api/heataq_api.php?action=get_pools';
-            if (this.currentSite?.site_id) {
-                url += `&site_id=${encodeURIComponent(this.currentSite.site_id)}`;
+            if (this.currentSite?.id) {
+                url += `&pool_site_id=${encodeURIComponent(this.currentSite.id)}`;
             }
             console.log('[Project] Fetching pools from:', url);
 
@@ -648,7 +638,7 @@ const ProjectModule = {
                 console.log('[Project] Pool loaded from database:', this.currentPool);
                 return;
             } else {
-                console.warn('[Project] No pools returned from API for site_id:', data.site_id);
+                console.warn('[Project] No pools returned from API for pool_site_id:', data.pool_site_id);
             }
         } catch (err) {
             console.warn('[Project] Failed to load pool from database, using localStorage:', err);
