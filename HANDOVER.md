@@ -211,13 +211,25 @@ The System tab (Admin only) provides three cards in order:
 
 Both Archive and Export use **branch-then-merge** pattern for clean git history.
 
-## Database Migration Workflow (Simplified)
+## Database Migration Workflow (Safe Deployment)
+
+**Key principle**: Code must work BEFORE and AFTER migration runs.
 
 1. **Create migration** in `db/migrations/NNN_description.sql`
-2. **Merge & Deploy** to get code on server
-3. **Run** migration via System tab → verify green button + log
-4. **Archive** → automatically exports schema, commits, merges to master, pushes
-5. Done! GitHub is in sync.
+2. **Make code backward-compatible** - check if column/table exists before using
+   ```php
+   // Example: Check if column exists before INSERT
+   $cols = $db->query("SHOW COLUMNS FROM table LIKE 'old_column'")->fetchAll();
+   if (count($cols) > 0) {
+       // Pre-migration: include old_column
+   } else {
+       // Post-migration: skip old_column
+   }
+   ```
+3. **Deploy** code (works with current schema)
+4. **Run** migration via System tab → verify green button + log
+5. **Archive** → exports schema, commits, merges to master, pushes
+6. **Next version**: Remove backward-compatibility code (optional cleanup)
 
 ## Design Principles
 
