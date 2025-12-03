@@ -1,0 +1,6 @@
+2025-12-03 10:16:24 - Running migration: 027_drop_pool_sites_site_id.sql
+Executing: DROP INDEX idx_site_code ON pool_sites
+Executing: ALTER TABLE pool_sites DROP COLUMN site_id
+Executing: SELECT 'pool_sites columns after migration:' as info
+Executing: SHOW COLUMNS FROM pool_sites
+ERROR: SQLSTATE[HY000]: General error: 2014 Cannot execute queries while other unbuffered queries are active.  Consider using PDOStatement::fetchAll().  Alternatively, if your code is only ever going to run against mysql, you may enable query buffering by setting the PDO::MYSQL_ATTR_USE_BUFFERED_QUERY attribute.
