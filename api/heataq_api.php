@@ -3021,20 +3021,22 @@ class HeatAQAPI {
      * Returns pool_site_id (INT) and site name
      */
     private function getProjectSite() {
-        // Return the pool_site_id (INT) associated with the current project
-        if ($this->poolSiteId) {
+        // Allow pool_site_id override from query parameter
+        $siteId = isset($_GET['pool_site_id']) ? (int)$_GET['pool_site_id'] : $this->poolSiteId;
+
+        if ($siteId) {
             $stmt = $this->db->prepare("
                 SELECT id, name, latitude, longitude, weather_station_id, description,
                        hp_base_cost_nok, hp_marginal_cost_per_kw,
                        boiler_base_cost_nok, boiler_marginal_cost_per_kw
                 FROM pool_sites WHERE id = ? LIMIT 1
             ");
-            $stmt->execute([$this->poolSiteId]);
+            $stmt->execute([$siteId]);
             $site = $stmt->fetch(PDO::FETCH_ASSOC);
 
             $response = [
-                'pool_site_id' => $this->poolSiteId,
-                'id' => $this->poolSiteId,  // INT primary key
+                'pool_site_id' => $siteId,
+                'id' => $siteId,  // INT primary key
                 'project_id' => $this->projectId
             ];
 

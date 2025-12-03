@@ -67,8 +67,8 @@ const EnergyAnalysis = {
                 // Set cookie for backend API
                 if (select.value) {
                     document.cookie = `heataq_pool_site_id=${select.value}; path=/; max-age=31536000`;
-                    // Load investment costs now that cookie is set
-                    this.loadInvestmentCosts();
+                    // Load investment costs with site ID
+                    this.loadInvestmentCosts(select.value);
                 }
                 this.loadPools(select.value);
             } else {
@@ -90,7 +90,7 @@ const EnergyAnalysis = {
         if (siteId) {
             document.cookie = `heataq_pool_site_id=${siteId}; path=/; max-age=31536000`;
             // Reload investment costs for new site
-            this.loadInvestmentCosts();
+            this.loadInvestmentCosts(siteId);
         }
         this.loadPools(siteId);
     },
@@ -461,9 +461,19 @@ const EnergyAnalysis = {
     /**
      * Load investment costs from current site
      */
-    loadInvestmentCosts: async function() {
+    loadInvestmentCosts: async function(siteId) {
+        // Get site ID from parameter, dropdown, or cookie
+        if (!siteId) {
+            siteId = document.getElementById('ea-site-select')?.value;
+        }
+        if (!siteId) {
+            console.warn('[EnergyAnalysis] No site ID for investment costs');
+            this.investmentCosts = null;
+            return;
+        }
+
         try {
-            const response = await fetch('./api/heataq_api.php?action=get_project_site');
+            const response = await fetch(`./api/heataq_api.php?action=get_project_site&pool_site_id=${siteId}`);
             const data = await response.json();
             console.log('[EnergyAnalysis] get_project_site response:', data);
 
