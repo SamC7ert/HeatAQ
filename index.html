@@ -584,35 +584,44 @@
                                     <td><input type="text" id="sim-scenario-name" placeholder="e.g., 2024 Benchmark"></td>
                                 </tr>
                                 <tr>
-                                    <td><label for="sim-start-date">Start Date</label></td>
-                                    <td><input type="date" id="sim-start-date" value="2024-01-01"></td>
-                                </tr>
-                                <tr>
-                                    <td><label for="sim-end-date">End Date</label></td>
-                                    <td><input type="date" id="sim-end-date" value="2024-12-31"></td>
-                                </tr>
-                                <tr>
-                                    <td><label for="sim-ohc-select">Schedule (OHC)</label></td>
-                                    <td>
-                                        <select id="sim-ohc-select">
-                                            <option value="1">Hisøy Swim Club - Standard Hours</option>
-                                        </select>
-                                    </td>
-                                </tr>
-                                <tr>
                                     <td><label for="sim-description">Notes</label></td>
                                     <td><textarea id="sim-description" rows="2" placeholder="Optional notes..."></textarea></td>
                                 </tr>
-                                <tr>
-                                    <td></td>
-                                    <td>
-                                        <label style="display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: #666; cursor: pointer;">
-                                            <input type="checkbox" id="sim-store-hourly" checked style="margin-top: 2px;">
-                                            <span>Store hourly data<br><span style="font-size: 11px; color: #888;">(uncheck for faster runs, no detailed analysis)</span></span>
-                                        </label>
-                                    </td>
-                                </tr>
                             </table>
+
+                            <!-- Common Settings -->
+                            <div style="margin-top: 15px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
+                                <div style="font-weight: 600; margin-bottom: 12px;">Common Settings</div>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                    <div>
+                                        <label style="font-size: 12px; color: #666;">Strategy</label>
+                                        <select id="sim-strategy" class="form-control">
+                                            <option value="predictive">Predictive</option>
+                                            <option value="reactive">Reactive</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style="font-size: 12px; color: #666;">Schedule</label>
+                                        <select id="sim-ohc-select" class="form-control">
+                                            <option value="1">Hisøy Swim Club - Standard Hours</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style="font-size: 12px; color: #666;">Start Date</label>
+                                        <input type="date" id="sim-start-date" class="form-control" value="2024-01-01">
+                                    </div>
+                                    <div>
+                                        <label style="font-size: 12px; color: #666;">End Date</label>
+                                        <input type="date" id="sim-end-date" class="form-control" value="2024-12-31">
+                                    </div>
+                                </div>
+                                <div style="margin-top: 10px;">
+                                    <label style="display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: #666; cursor: pointer;">
+                                        <input type="checkbox" id="sim-store-hourly" checked style="margin-top: 2px;">
+                                        <span>Store hourly data<br><span style="font-size: 11px; color: #888;">(uncheck for faster runs, no detailed analysis)</span></span>
+                                    </label>
+                                </div>
+                            </div>
                             <div class="form-info" style="display: flex; justify-content: flex-start; align-items: center; gap: 15px; margin-top: 10px;">
                                 <button id="run-simulation-btn" class="btn btn-success" onclick="SimulationsModule.startSimulation()">
                                     Run Simulation
@@ -888,6 +897,12 @@
                                             <select id="ea-strategy" class="form-control">
                                                 <option value="predictive">Predictive</option>
                                                 <option value="reactive">Reactive</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label style="font-size: 12px; color: #666;">Schedule</label>
+                                            <select id="ea-schedule" class="form-control">
+                                                <option value="">Loading...</option>
                                             </select>
                                         </div>
                                         <div>
