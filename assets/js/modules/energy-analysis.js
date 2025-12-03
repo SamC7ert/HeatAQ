@@ -477,19 +477,24 @@ const EnergyAnalysis = {
         rows.push(this.buildDiffRow('Diff vs prev', 'kNOK/yr', energyDiffs, true));
 
         // Investment (always show, dashes if no data configured)
-        const investments = this.results.map(r => this.calcInvestment(r.hp, r.boiler));
-        const hasInvestment = investments.some(v => v !== null);
+        try {
+            const investments = this.results.map(r => this.calcInvestment(r.hp || 0, r.boiler || 0));
+            console.log('[EnergyAnalysis] Investments:', investments);
 
-        rows.push(this.buildRow('Investment', 'kNOK',
-            investments.map(v => v !== null ? v / 1000 : '-'), true, false));
+            rows.push(this.buildRow('Investment', 'kNOK',
+                investments.map(v => v !== null ? v / 1000 : '-'), true, false));
 
-        // Investment Diff vs Prev (italic, indented)
-        const invDiffs = this.calcDiffsVsPrev(investments.map(v => v !== null ? v / 1000 : null));
-        rows.push(this.buildDiffRow('Diff vs prev', 'kNOK', invDiffs, false));
+            // Investment Diff vs Prev (italic, indented)
+            const invDiffs = this.calcDiffsVsPrev(investments.map(v => v !== null ? v / 1000 : null));
+            rows.push(this.buildDiffRow('Diff vs prev', 'kNOK', invDiffs, false));
 
-        // Payback vs Prev (bold)
-        const paybacks = this.calcPaybackVsPrev(investments, energyCosts);
-        rows.push(this.buildPaybackRow('Payback vs prev', 'years', paybacks));
+            // Payback vs Prev (bold)
+            const paybacks = this.calcPaybackVsPrev(investments, energyCosts);
+            rows.push(this.buildPaybackRow('Payback vs prev', 'years', paybacks));
+        } catch (err) {
+            console.error('[EnergyAnalysis] Error calculating investment rows:', err);
+            rows.push('<tr><td colspan="7" style="color: red;">Error calculating investment</td></tr>');
+        }
 
         // Divider
         rows.push(`<tr><td colspan="${2 + this.results.length}" style="background: #e9ecef; height: 2px; padding: 0;"></td></tr>`);
