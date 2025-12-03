@@ -28,9 +28,13 @@ const EnergyAnalysis = {
         });
 
         // Load dropdowns
+        console.log('[EnergyAnalysis] About to call loadSites, loadConfigs, loadSchedules');
         this.loadSites();
+        console.log('[EnergyAnalysis] loadSites called, now calling loadConfigs');
         this.loadConfigs();
+        console.log('[EnergyAnalysis] loadConfigs called, now calling loadSchedules');
         this.loadSchedules();
+        console.log('[EnergyAnalysis] All loaders called');
 
         // Initial preview
         this.updatePreview();
