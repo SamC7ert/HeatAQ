@@ -119,7 +119,7 @@ const EnergyAnalysis = {
 
             if (data.configs && data.configs.length > 0) {
                 select.innerHTML = data.configs.map(c =>
-                    `<option value="${c.template_id}">${c.template_name}</option>`
+                    `<option value="${c.template_id}">${c.name}</option>`
                 ).join('');
             } else {
                 select.innerHTML = '<option value="">No configs found</option>';
