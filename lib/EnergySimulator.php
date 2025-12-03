@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.43';  // Add cover breakdown to debug
+    const VERSION = '3.10.44';  // Fix: solar surplus no longer cancels heating when below target
 
     private $db;
     private $siteId;
@@ -2026,7 +2026,11 @@ class EnergySimulator {
             // BELOW TARGET: Need extra heat to raise temperature
             // Required = losses + heat to raise temp to target in 1 hour
             $heatToRaise = $this->calculateHeatForTempRise($tempDiff, 1.0);
-            $requiredHeat = $netRequirement + $heatToRaise;
+
+            // V3.10.44: When solar surplus (netRequirement < 0), solar already
+            // contributes to warming. But we still need heatToRaise to accelerate.
+            // Don't let solar surplus completely cancel heating demand.
+            $requiredHeat = max($heatToRaise, $netRequirement + $heatToRaise);
         } else {
             // AT OR ABOVE TARGET: Excess temp reduces heat demand
             // The thermal energy stored in excess temp offsets some losses
