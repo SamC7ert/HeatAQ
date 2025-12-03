@@ -46,7 +46,7 @@ const EnergyAnalysis = {
      */
     loadSites: async function() {
         try {
-            const response = await fetch('/api/heataq_api.php?action=get_sites');
+            const response = await fetch('./api/heataq_api.php?action=get_sites');
             const data = await response.json();
 
             const select = document.getElementById('ea-site-select');
@@ -106,7 +106,7 @@ const EnergyAnalysis = {
         const previousValue = select.value;
 
         try {
-            const response = await fetch(`/api/heataq_api.php?action=get_pools&pool_site_id=${encodeURIComponent(siteId)}`);
+            const response = await fetch(`./api/heataq_api.php?action=get_pools&pool_site_id=${encodeURIComponent(siteId)}`);
             const data = await response.json();
 
             if (data.pools && data.pools.length > 0) {
@@ -132,15 +132,20 @@ const EnergyAnalysis = {
      */
     loadConfigs: async function() {
         const select = document.getElementById('ea-config-select');
-        if (!select) return;
+        if (!select) {
+            console.warn('[EnergyAnalysis] ea-config-select element not found');
+            return;
+        }
 
         const previousValue = select.value;
 
         try {
-            const response = await fetch('/api/heataq_api.php?action=get_project_configs');
+            const response = await fetch('./api/heataq_api.php?action=get_project_configs');
             const data = await response.json();
+            console.log('[EnergyAnalysis] Config response:', data);
 
             if (data.configs && data.configs.length > 0) {
+                console.log('[EnergyAnalysis] Configs:', data.configs.map(c => ({ id: c.template_id, name: c.name })));
                 select.innerHTML = data.configs.map(c =>
                     `<option value="${c.template_id}">${c.name}</option>`
                 ).join('');
@@ -150,6 +155,7 @@ const EnergyAnalysis = {
                     select.value = previousValue;
                 }
             } else {
+                console.warn('[EnergyAnalysis] No configs in response');
                 select.innerHTML = '<option value="">No configs found</option>';
             }
         } catch (error) {
@@ -176,7 +182,7 @@ const EnergyAnalysis = {
         const previousValue = select.value;
 
         try {
-            const response = await fetch('/api/heataq_api.php?action=get_templates');
+            const response = await fetch('./api/heataq_api.php?action=get_templates');
             const data = await response.json();
 
             if (data.templates && data.templates.length > 0) {
@@ -389,7 +395,7 @@ const EnergyAnalysis = {
      * Run a single simulation scenario
      */
     runSingleScenario: async function(params) {
-        const response = await fetch('/api/simulation_api.php', {
+        const response = await fetch('./api/simulation_api.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -450,7 +456,7 @@ const EnergyAnalysis = {
      */
     loadInvestmentCosts: async function() {
         try {
-            const response = await fetch('/api/heataq_api.php?action=get_project_site');
+            const response = await fetch('./api/heataq_api.php?action=get_project_site');
             const data = await response.json();
 
             if (data.error) {
