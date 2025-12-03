@@ -64,6 +64,10 @@ const EnergyAnalysis = {
                 if (previousValue && data.sites.some(s => s.id == previousValue)) {
                     select.value = previousValue;
                 }
+                // Set cookie for backend API
+                if (select.value) {
+                    document.cookie = `heataq_pool_site_id=${select.value}; path=/; max-age=31536000`;
+                }
                 this.loadPools(select.value);
             } else {
                 select.innerHTML = '<option value="">No sites found</option>';
@@ -80,6 +84,10 @@ const EnergyAnalysis = {
     onSiteChange: function() {
         const siteId = document.getElementById('ea-site-select')?.value;
         console.log('[EnergyAnalysis] Site changed:', siteId);
+        // Set cookie for backend API
+        if (siteId) {
+            document.cookie = `heataq_pool_site_id=${siteId}; path=/; max-age=31536000`;
+        }
         this.loadPools(siteId);
     },
 
@@ -442,8 +450,14 @@ const EnergyAnalysis = {
      */
     loadInvestmentCosts: async function() {
         try {
-            const response = await fetch(`${config.API_BASE_URL}?action=get_project_site`);
+            const response = await fetch('/api/heataq_api.php?action=get_project_site');
             const data = await response.json();
+
+            if (data.error) {
+                console.warn('[EnergyAnalysis] get_project_site returned error:', data.error);
+                this.investmentCosts = null;
+                return;
+            }
 
             this.investmentCosts = {
                 hp_base: parseFloat(data.hp_base_cost_nok) || 0,
@@ -455,7 +469,7 @@ const EnergyAnalysis = {
             console.log('[EnergyAnalysis] Investment costs loaded:', this.investmentCosts);
         } catch (error) {
             console.error('[EnergyAnalysis] Failed to load investment costs:', error);
-            this.investmentCosts = { hp_base: 0, hp_marginal: 0, boiler_base: 0, boiler_marginal: 0 };
+            this.investmentCosts = null;
         }
     },
 
