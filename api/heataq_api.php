@@ -2,13 +2,24 @@
 /**
  * HeatAQ API - Schedule Management System
  * Version: 3.0 - With secure configuration
- * 
+ *
  * Security improvements:
  * - Database credentials in external config
  * - Optional authentication support
  * - Input validation
  * - Prepared statements throughout
  */
+
+// Enable error reporting for debugging (outputs to error log)
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+ini_set('log_errors', 1);
+
+// Global error handler to return JSON on fatal errors
+set_error_handler(function($errno, $errstr, $errfile, $errline) {
+    error_log("PHP Error: [$errno] $errstr in $errfile:$errline");
+    return false; // Let PHP handle it normally
+});
 
 // Include configuration loader
 require_once __DIR__ . '/../config.php';
@@ -2435,6 +2446,20 @@ class HeatAQAPI {
         }
         $log[] = "App version: $appVersion";
 
+        // Clear PHP OPcache if available
+        if (function_exists('opcache_reset')) {
+            opcache_reset();
+            $log[] = "✓ PHP OPcache cleared";
+        }
+
+        // Clear APCu cache if available
+        if (function_exists('apcu_clear_cache')) {
+            apcu_clear_cache();
+            $log[] = "✓ APCu cache cleared";
+        }
+
+        $log[] = "⚠ Browser: Hard refresh (Ctrl+Shift+R) to load new code";
+
         chdir($oldDir);
         $this->sendResponse([
             'success' => true,
@@ -2501,7 +2526,21 @@ class HeatAQAPI {
             // Push to origin
             $log[] = "Pushing to origin...";
             $log[] = trim(shell_exec('git push origin master 2>&1'));
+
+            // Clear PHP OPcache if available
+            if (function_exists('opcache_reset')) {
+                opcache_reset();
+                $log[] = "✓ PHP OPcache cleared";
+            }
+
+            // Clear APCu cache if available
+            if (function_exists('apcu_clear_cache')) {
+                apcu_clear_cache();
+                $log[] = "✓ APCu cache cleared";
+            }
+
             $log[] = "✓ Merge complete!";
+            $log[] = "⚠ Browser: Hard refresh (Ctrl+Shift+R) to load new code";
         } else {
             // Abort the merge
             $log[] = "Merge failed, aborting...";

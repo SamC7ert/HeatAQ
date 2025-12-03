@@ -1,10 +1,11 @@
 <?php
 /**
  * HeatAQ Session Authentication
- * Version: 2.2 - Fixed for new database structure
+ * Version: 2.3 - Uses pool_site_id (INT) instead of VARCHAR site_id
  * Include this file in any PHP that requires authentication
  *
- * Note: site_id now comes from pool_sites table (linked via project_id), not projects table
+ * Note: pool_site_id is the INT primary key from pool_sites table (linked via project_id)
+ * The VARCHAR site_id column was removed in migration 027.
  */
 
 // Include configuration loader
@@ -71,12 +72,10 @@ class HeatAQAuth {
         // Verify session in database
         $pdo = self::initDB();
 
-        // Join with pool_sites to get site_id and pool_site_id
-        // NOTE: site_id comes from pool_sites (via project_id), NOT from projects table
+        // Join with pool_sites to get pool_site_id (INT)
         $stmt = $pdo->prepare("
             SELECT s.*, u.*, p.*,
                    up.role as user_role,
-                   ps.site_id,
                    ps.id as pool_site_id
             FROM user_sessions s
             JOIN users u ON s.user_id = u.user_id
@@ -115,14 +114,12 @@ class HeatAQAuth {
         self::$project = [
             'project_id' => $session['project_id'],
             'project_name' => $session['project_name'],
-            'site_id' => $session['site_id'],  // From pool_sites, may be null
             'pool_site_id' => $session['pool_site_id'] ? (int)$session['pool_site_id'] : null
         ];
 
         // Update PHP session
         $_SESSION[$sessionName . '_user_id'] = self::$user['user_id'];
         $_SESSION[$sessionName . '_project_id'] = self::$project['project_id'];
-        $_SESSION[$sessionName . '_site_id'] = self::$project['site_id'];
         $_SESSION[$sessionName . '_pool_site_id'] = self::$project['pool_site_id'];
         $_SESSION[$sessionName . '_user_role'] = self::$user['role'];
 
@@ -168,14 +165,8 @@ class HeatAQAuth {
     }
 
     /**
-     * Get site ID for current project (string)
-     */
-    public static function getSiteId() {
-        return self::$project['site_id'] ?? null;
-    }
-
-    /**
      * Get pool site ID for current project (integer)
+     * Note: getSiteId() removed - use getPoolSiteId() instead
      */
     public static function getPoolSiteId() {
         return self::$project['pool_site_id'] ?? null;

@@ -1,8 +1,13 @@
 # HeatAQ Development Handover Guide
 
-**Current Version:** V131 (December 2024)
+**Current Version:** V132 (December 2024)
 
 ## Recent Session Summary (Dec 2024)
+
+### V132 - Database Migrations Complete
+- Migrations 026 & 027 executed - all VARCHAR site_id columns removed
+- Database schema now clean: only INT foreign keys (pool_site_id, project_id)
+- Version bump forces browser cache refresh
 
 ### V131 - Code Cleanup & Energy Analysis Preparation
 
@@ -47,15 +52,15 @@
    - Pre-migration: generates slug and includes site_id
    - Post-migration: inserts without site_id column
 
-#### Current Database State (After Migrations 026 & 027)
+#### Database State (V132 - Migrations Complete)
 | Table | site_id Status | Notes |
 |-------|---------------|-------|
 | schedule_templates | ✅ CLEAN | Uses project_id |
-| day_schedules | ❌ Needs migration 026 | Has site_id VARCHAR |
-| week_schedules | ❌ Needs migration 026 | Has site_id VARCHAR + pool_site_id |
-| pool_sites | ❌ Needs migration 027 | Has site_id VARCHAR (to be removed) |
+| day_schedules | ✅ CLEAN | Uses project_id (migration 026) |
+| week_schedules | ✅ CLEAN | Uses project_id (migration 026) |
+| pool_sites | ✅ CLEAN | Uses id (INT PK) only (migration 027) |
 
-#### After All Migrations Complete
+**Result:**
 - **No more VARCHAR site_id columns** in any table
 - All foreign key references use INT `pool_site_id` (references `pool_sites.id`)
 - Schedule tables use INT `project_id` for access control
