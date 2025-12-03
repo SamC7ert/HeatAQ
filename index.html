@@ -786,6 +786,12 @@
                             <!-- Run Settings Row -->
                             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 8px;">
                                 <div>
+                                    <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Site</label>
+                                    <select id="ea-site-select" class="form-control" onchange="EnergyAnalysis.onSiteChange()">
+                                        <option value="">Loading...</option>
+                                    </select>
+                                </div>
+                                <div>
                                     <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Pool</label>
                                     <select id="ea-pool-select" class="form-control" onchange="EnergyAnalysis.onPoolChange()">
                                         <option value="">Loading...</option>
@@ -794,12 +800,6 @@
                                 <div>
                                     <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Configuration</label>
                                     <select id="ea-config-select" class="form-control">
-                                        <option value="">Loading...</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Schedule</label>
-                                    <select id="ea-schedule" class="form-control">
                                         <option value="">Loading...</option>
                                     </select>
                                 </div>
@@ -883,12 +883,6 @@
                                 <div style="padding: 15px; background: #f5f5f5; border-radius: 8px;">
                                     <div style="font-weight: 600; margin-bottom: 12px;">Common Settings</div>
                                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                                        <div>
-                                            <label style="font-size: 12px; color: #666;">Schedule</label>
-                                            <select id="ea-schedule" class="form-control">
-                                                <option value="">Loading...</option>
-                                            </select>
-                                        </div>
                                         <div>
                                             <label style="font-size: 12px; color: #666;">Strategy</label>
                                             <select id="ea-strategy" class="form-control">

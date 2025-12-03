@@ -28,7 +28,7 @@ const EnergyAnalysis = {
         });
 
         // Load dropdowns
-        this.loadPools();
+        this.loadSites();
         this.loadConfigs();
         this.loadSchedules();
 
@@ -42,15 +42,56 @@ const EnergyAnalysis = {
     },
 
     /**
-     * Load pools into dropdown
+     * Load sites into dropdown
      */
-    loadPools: async function() {
+    loadSites: async function() {
         try {
-            const response = await fetch(`${config.API_BASE_URL}?action=get_pools`);
+            const response = await fetch('/api/heataq_api.php?action=get_sites');
             const data = await response.json();
 
-            const select = document.getElementById('ea-pool-select');
+            const select = document.getElementById('ea-site-select');
             if (!select) return;
+
+            if (data.sites && data.sites.length > 0) {
+                this.sites = data.sites;
+                select.innerHTML = data.sites.map(s =>
+                    `<option value="${s.id}">${s.name}</option>`
+                ).join('');
+                // Load pools for first site
+                this.loadPools(data.sites[0].id);
+            } else {
+                select.innerHTML = '<option value="">No sites found</option>';
+            }
+        } catch (error) {
+            console.error('[EnergyAnalysis] Failed to load sites:', error);
+            document.getElementById('ea-site-select').innerHTML = '<option value="">Error loading sites</option>';
+        }
+    },
+
+    /**
+     * Handle site selection change
+     */
+    onSiteChange: function() {
+        const siteId = document.getElementById('ea-site-select')?.value;
+        console.log('[EnergyAnalysis] Site changed:', siteId);
+        this.loadPools(siteId);
+    },
+
+    /**
+     * Load pools into dropdown
+     */
+    loadPools: async function(siteId) {
+        const select = document.getElementById('ea-pool-select');
+        if (!select) return;
+
+        if (!siteId) {
+            select.innerHTML = '<option value="">Select a site first</option>';
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/heataq_api.php?action=get_pools&pool_site_id=${encodeURIComponent(siteId)}`);
+            const data = await response.json();
 
             if (data.pools && data.pools.length > 0) {
                 select.innerHTML = data.pools.map(p =>
@@ -61,6 +102,7 @@ const EnergyAnalysis = {
             }
         } catch (error) {
             console.error('[EnergyAnalysis] Failed to load pools:', error);
+            select.innerHTML = '<option value="">Error loading pools</option>';
         }
     },
 
@@ -69,7 +111,7 @@ const EnergyAnalysis = {
      */
     loadConfigs: async function() {
         try {
-            const response = await fetch(`${config.API_BASE_URL}?action=get_project_configs`);
+            const response = await fetch('/api/heataq_api.php?action=get_project_configs');
             const data = await response.json();
 
             const select = document.getElementById('ea-config-select');
@@ -84,6 +126,7 @@ const EnergyAnalysis = {
             }
         } catch (error) {
             console.error('[EnergyAnalysis] Failed to load configs:', error);
+            select.innerHTML = '<option value="">Error loading configs</option>';
         }
     },
 
