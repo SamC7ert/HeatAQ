@@ -27,7 +27,9 @@ const EnergyAnalysis = {
             }
         });
 
-        // Load schedules
+        // Load dropdowns
+        this.loadPools();
+        this.loadConfigs();
         this.loadSchedules();
 
         // Initial preview
@@ -37,6 +39,60 @@ const EnergyAnalysis = {
         this.onModeChange();
 
         console.log('[EnergyAnalysis] Module initialized');
+    },
+
+    /**
+     * Load pools into dropdown
+     */
+    loadPools: async function() {
+        try {
+            const response = await fetch(`${config.API_BASE_URL}?action=get_pools`);
+            const data = await response.json();
+
+            const select = document.getElementById('ea-pool-select');
+            if (!select) return;
+
+            if (data.pools && data.pools.length > 0) {
+                select.innerHTML = data.pools.map(p =>
+                    `<option value="${p.pool_id}">${p.name}</option>`
+                ).join('');
+            } else {
+                select.innerHTML = '<option value="">No pools found</option>';
+            }
+        } catch (error) {
+            console.error('[EnergyAnalysis] Failed to load pools:', error);
+        }
+    },
+
+    /**
+     * Load configurations into dropdown
+     */
+    loadConfigs: async function() {
+        try {
+            const response = await fetch(`${config.API_BASE_URL}?action=get_project_configs`);
+            const data = await response.json();
+
+            const select = document.getElementById('ea-config-select');
+            if (!select) return;
+
+            if (data.configs && data.configs.length > 0) {
+                select.innerHTML = data.configs.map(c =>
+                    `<option value="${c.template_id}">${c.template_name}</option>`
+                ).join('');
+            } else {
+                select.innerHTML = '<option value="">No configs found</option>';
+            }
+        } catch (error) {
+            console.error('[EnergyAnalysis] Failed to load configs:', error);
+        }
+    },
+
+    /**
+     * Handle pool selection change
+     */
+    onPoolChange: function() {
+        // Could update related UI if needed
+        console.log('[EnergyAnalysis] Pool changed:', document.getElementById('ea-pool-select')?.value);
     },
 
     /**
@@ -164,26 +220,30 @@ const EnergyAnalysis = {
             return;
         }
 
+        // Get selections from Energy Analysis tab
+        const poolId = document.getElementById('ea-pool-select')?.value || null;
+        const configId = document.getElementById('ea-config-select')?.value || null;
+        const scheduleId = document.getElementById('ea-schedule')?.value || null;
+
+        // Validate required selections
+        if (!poolId) {
+            alert('Please select a Pool');
+            return;
+        }
+        if (!configId) {
+            alert('Please select a Configuration');
+            return;
+        }
+
         this.isRunning = true;
         this.results = [];
         this.startTime = Date.now();
 
-        // Get common settings
-        const scheduleId = document.getElementById('ea-schedule')?.value;
+        // Get other settings
         const strategy = document.getElementById('ea-strategy')?.value || 'predictive';
         const startDate = document.getElementById('ea-start-date')?.value || '2024-01-01';
         const endDate = document.getElementById('ea-end-date')?.value || '2024-12-31';
         const storeHourly = document.getElementById('ea-store-hourly')?.checked || false;
-        const poolId = typeof SimControlModule !== 'undefined' ? SimControlModule.currentPoolId : null;
-
-        // Get config_id from Simulate tab's config selector
-        const configId = document.getElementById('sim-config-select')?.value || null;
-        if (!configId) {
-            alert('Please select a Config in the Simulate tab first');
-            this.isRunning = false;
-            if (runBtn) runBtn.disabled = false;
-            return;
-        }
 
         // Load investment costs from current site
         await this.loadInvestmentCosts();
@@ -416,21 +476,20 @@ const EnergyAnalysis = {
         const energyDiffs = this.calcDiffsVsPrev(energyCosts);
         rows.push(this.buildDiffRow('Diff vs prev', 'kNOK/yr', energyDiffs, true));
 
-        // Investment
+        // Investment (always show, dashes if no data configured)
         const investments = this.results.map(r => this.calcInvestment(r.hp, r.boiler));
         const hasInvestment = investments.some(v => v !== null);
-        if (hasInvestment) {
-            rows.push(this.buildRow('Investment', 'kNOK',
-                investments.map(v => v !== null ? v / 1000 : '-'), true, false));
 
-            // Investment Diff vs Prev (italic, indented)
-            const invDiffs = this.calcDiffsVsPrev(investments.map(v => v !== null ? v / 1000 : null));
-            rows.push(this.buildDiffRow('Diff vs prev', 'kNOK', invDiffs, false));
+        rows.push(this.buildRow('Investment', 'kNOK',
+            investments.map(v => v !== null ? v / 1000 : '-'), true, false));
 
-            // Payback vs Prev (bold)
-            const paybacks = this.calcPaybackVsPrev(investments, energyCosts);
-            rows.push(this.buildPaybackRow('Payback vs prev', 'years', paybacks));
-        }
+        // Investment Diff vs Prev (italic, indented)
+        const invDiffs = this.calcDiffsVsPrev(investments.map(v => v !== null ? v / 1000 : null));
+        rows.push(this.buildDiffRow('Diff vs prev', 'kNOK', invDiffs, false));
+
+        // Payback vs Prev (bold)
+        const paybacks = this.calcPaybackVsPrev(investments, energyCosts);
+        rows.push(this.buildPaybackRow('Payback vs prev', 'years', paybacks));
 
         // Divider
         rows.push(`<tr><td colspan="${2 + this.results.length}" style="background: #e9ecef; height: 2px; padding: 0;"></td></tr>`);

@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.43';  // Add cover breakdown to debug
+    const VERSION = '3.10.45';  // Fix: HP/boiler enabled=null caused no heating
 
     private $db;
     private $siteId;
@@ -249,6 +249,14 @@ class EnergySimulator {
             $this->equipment['heat_pump']['cop_nominal'] = $uiConfig['equipment']['hp_cop'] ?? $this->equipment['heat_pump']['cop_nominal'];
             $this->equipment['boiler']['capacity_kw'] = $uiConfig['equipment']['boiler_capacity_kw'] ?? $this->equipment['boiler']['capacity_kw'];
             $this->equipment['boiler']['efficiency'] = $uiConfig['equipment']['boiler_efficiency'] ?? $this->equipment['boiler']['efficiency'];
+
+            // V3.10.45: Enable HP/boiler if capacity is set (fix for null 'enabled' bug)
+            if ($this->equipment['heat_pump']['capacity_kw'] > 0) {
+                $this->equipment['heat_pump']['enabled'] = true;
+            }
+            if ($this->equipment['boiler']['capacity_kw'] > 0) {
+                $this->equipment['boiler']['enabled'] = true;
+            }
         }
 
         // Control settings
@@ -2027,6 +2035,11 @@ class EnergySimulator {
             // Required = losses + heat to raise temp to target in 1 hour
             $heatToRaise = $this->calculateHeatForTempRise($tempDiff, 1.0);
             $requiredHeat = $netRequirement + $heatToRaise;
+
+            // DEBUG: Log when heating should happen but might not
+            if ($requiredHeat <= 0 && $tempDiff > 1) {
+                error_log("[calculateHeating] BUG? tempDiff={$tempDiff}, heatToRaise={$heatToRaise}, netReq={$netRequirement}, requiredHeat={$requiredHeat}, volume=" . ($this->poolConfig['volume_m3'] ?? 'null'));
+            }
         } else {
             // AT OR ABOVE TARGET: Excess temp reduces heat demand
             // The thermal energy stored in excess temp offsets some losses
@@ -2398,6 +2411,12 @@ class EnergySimulator {
             $boilerFuel = $heating['boiler_fuel'];
         }
 
+        // DEBUG: Calculate intermediate values from calculateHeating for visibility
+        $debugTempDiff = ($targetTemp ?? 28.0) - $poolTemp;
+        $debugHeatToRaise = $this->calculateHeatForTempRise(max(0, $debugTempDiff), 1.0);
+        $debugRequiredHeat = $netRequirementKW + $debugHeatToRaise;
+        $debugVolume = $this->poolConfig['volume_m3'] ?? 0;
+
         $totalHeating = $hpOutput + $boilerOutput;
         $unmetHeat = max(0, $netRequirementKW - $totalHeating);
 
@@ -2509,6 +2528,23 @@ class EnergySimulator {
                 'total_heating_kw' => round($totalHeating, 3),
                 'unmet_kw' => round($unmetHeat, 3),
                 'debug_mode' => $heatingDebugMode,  // Which heating path was used
+            ],
+            'heating_calc_debug' => [
+                // Inputs to calculateHeating
+                'net_requirement_kw' => round($netRequirementKW, 2),
+                'air_temp_c' => round($airTemp, 2),
+                'target_temp_c' => round($targetTemp ?? 28.0, 2),
+                'water_temp_c' => round($poolTemp, 2),
+                'volume_m3' => $debugVolume,
+                // Intermediate calculations
+                'temp_diff_c' => round($debugTempDiff, 2),
+                'heat_to_raise_kw' => round($debugHeatToRaise, 2),
+                'required_heat_kw' => round($debugRequiredHeat, 2),
+                // Output
+                'hp_output_kw' => round($hpOutput, 2),
+                'boiler_output_kw' => round($boilerOutput, 2),
+                // Analysis
+                'would_heat' => $debugRequiredHeat > 0 ? 'YES' : 'NO (requiredHeat <= 0)',
             ],
             'summary' => [
                 'evaporation_kw' => round($evapLossKW, 3),
