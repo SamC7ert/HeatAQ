@@ -170,6 +170,15 @@ try {
             $templateId = getParam('template_id', null);
             $poolId = getParam('pool_id', null);
 
+            // Store hourly data? Default true for backward compatibility
+            // Set to false for faster analysis runs that only need summary
+            $storeHourly = getParam('store_hourly', true);
+            if ($storeHourly === 'false' || $storeHourly === false) {
+                $storeHourly = false;
+            } else {
+                $storeHourly = true;
+            }
+
             // Initialize scheduler (with optional template selection)
             $poolSiteId = $currentPoolSiteId;
             $scheduler = new PoolScheduler($pdo, $poolSiteId, $templateId);
@@ -357,8 +366,8 @@ try {
                 // Run simulation
                 $results = $simulator->runSimulation($startDate, $endDate);
 
-                // Store results
-                storeSimulationResults($pdo, $runId, $results);
+                // Store results (pass storeHourly flag)
+                storeSimulationResults($pdo, $runId, $results, $storeHourly);
 
                 // Update status to completed
                 updateRunStatus($pdo, $runId, 'completed', $results['summary']);
@@ -370,7 +379,8 @@ try {
                     'summary' => $results['summary'],
                     'meta' => $results['meta'],
                     'daily_count' => count($results['daily']),
-                    'hourly_count' => count($results['hourly']),
+                    'hourly_count' => $storeHourly ? count($results['hourly']) : 0,
+                    'hourly_stored' => $storeHourly
                 ]);
 
             } catch (Exception $e) {
@@ -1014,7 +1024,7 @@ function updateRunStatus($pdo, $runId, $status, $summary = null) {
 /**
  * Store simulation results
  */
-function storeSimulationResults($pdo, $runId, $results) {
+function storeSimulationResults($pdo, $runId, $results, $storeHourly = true) {
     // Check if thermal columns exist (backward compatibility)
     $hasThermalColumns = false;
     try {
@@ -1077,46 +1087,48 @@ function storeSimulationResults($pdo, $runId, $results) {
         }
     }
 
-    // Store hourly results (in batches for performance)
-    $batchSize = 500;
-    $hourlyData = $results['hourly'];
-    $totalHours = count($hourlyData);
+    // Store hourly results (in batches for performance) - only if requested
+    if ($storeHourly && !empty($results['hourly'])) {
+        $batchSize = 500;
+        $hourlyData = $results['hourly'];
+        $totalHours = count($hourlyData);
 
-    for ($i = 0; $i < $totalHours; $i += $batchSize) {
-        $batch = array_slice($hourlyData, $i, $batchSize);
-        $placeholders = [];
-        $values = [];
+        for ($i = 0; $i < $totalHours; $i += $batchSize) {
+            $batch = array_slice($hourlyData, $i, $batchSize);
+            $placeholders = [];
+            $values = [];
 
-        foreach ($batch as $hour) {
-            $placeholders[] = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            $values = array_merge($values, [
-                $runId,
-                $hour['timestamp'],
-                $hour['weather']['air_temp'],
-                $hour['weather']['wind_speed'],
-                $hour['weather']['humidity'],
-                $hour['weather']['solar_kwh_m2'],
-                $hour['pool']['target_temp'],
-                $hour['pool']['water_temp'],
-                $hour['pool']['is_open'] ? 1 : 0,
-                $hour['losses']['total_kw'],
-                $hour['gains']['solar_kw'],
-                $hour['gains']['heat_pump_kw'],
-                $hour['gains']['boiler_kw'],
-                $hour['energy']['hp_electricity_kwh'],
-                $hour['energy']['boiler_fuel_kwh'],
-                $hour['energy']['hp_cop'],
-                $hour['cost']
-            ]);
+            foreach ($batch as $hour) {
+                $placeholders[] = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $values = array_merge($values, [
+                    $runId,
+                    $hour['timestamp'],
+                    $hour['weather']['air_temp'],
+                    $hour['weather']['wind_speed'],
+                    $hour['weather']['humidity'],
+                    $hour['weather']['solar_kwh_m2'],
+                    $hour['pool']['target_temp'],
+                    $hour['pool']['water_temp'],
+                    $hour['pool']['is_open'] ? 1 : 0,
+                    $hour['losses']['total_kw'],
+                    $hour['gains']['solar_kw'],
+                    $hour['gains']['heat_pump_kw'],
+                    $hour['gains']['boiler_kw'],
+                    $hour['energy']['hp_electricity_kwh'],
+                    $hour['energy']['boiler_fuel_kwh'],
+                    $hour['energy']['hp_cop'],
+                    $hour['cost']
+                ]);
+            }
+
+            $sql = "INSERT INTO simulation_hourly_results
+                    (run_id, timestamp, air_temp, wind_speed, humidity, solar_kwh_m2,
+                     target_temp, water_temp, is_open, total_loss_kw, solar_gain_kw,
+                     hp_heat_kw, boiler_heat_kw, hp_electricity_kwh, boiler_fuel_kwh, hp_cop, cost)
+                    VALUES " . implode(", ", $placeholders);
+
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($values);
         }
-
-        $sql = "INSERT INTO simulation_hourly_results
-                (run_id, timestamp, air_temp, wind_speed, humidity, solar_kwh_m2,
-                 target_temp, water_temp, is_open, total_loss_kw, solar_gain_kw,
-                 hp_heat_kw, boiler_heat_kw, hp_electricity_kwh, boiler_fuel_kwh, hp_cop, cost)
-                VALUES " . implode(", ", $placeholders);
-
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($values);
     }
 }
