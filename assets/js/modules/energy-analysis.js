@@ -100,7 +100,7 @@ const EnergyAnalysis = {
      */
     loadSchedules: async function() {
         try {
-            const response = await fetch(`${config.API_BASE_URL}?action=get_templates`);
+            const response = await fetch('/api/heataq_api.php?action=get_templates');
             const data = await response.json();
 
             const select = document.getElementById('ea-schedule');
