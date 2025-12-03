@@ -512,8 +512,8 @@ const EnergyAnalysis = {
 
         if (resultsTitle) resultsTitle.textContent = `Results: ${modeDesc}`;
 
-        // Build header
-        let headerHtml = '<tr><th style="width: 160px;">Parameter</th><th style="width: 70px;">Unit</th>';
+        // Build header with light blue background
+        let headerHtml = '<tr style="background: #e3f2fd;"><th style="width: 160px;">Parameter</th><th style="width: 70px;">Unit</th>';
         this.results.forEach((r, i) => {
             headerHtml += `<th style="text-align: right;">Case ${i + 1}</th>`;
         });
@@ -527,10 +527,10 @@ const EnergyAnalysis = {
         rows.push(this.buildRow('HP + Boiler', 'kW',
             this.results.map(r => r.label), false, false));
 
-        // Thermal Pool
-        rows.push(this.buildRow('Thermal Pool', 'MWh/yr',
+        // Thermal Pool - with thick bottom border to separate from electric section
+        rows.push(this.buildRowStyled('Thermal Pool', 'MWh/yr',
             this.results.map(r => r.success ? ((r.summary?.hp_thermal_kwh || 0) + (r.summary?.boiler_thermal_kwh || 0)) / 1000 : '-'),
-            true, false));
+            true, { borderBottom: '2px solid #999' }));
 
         // HP Electric (API uses total_hp_energy_kwh)
         rows.push(this.buildRow('HP Electric', 'MWh/yr',
@@ -549,17 +549,17 @@ const EnergyAnalysis = {
             const boiler = r.summary?.total_boiler_energy_kwh || 0;
             return (hp + boiler) / 1000;
         });
-        rows.push(this.buildRow('Total Electric', 'MWh/yr', totalElec, true, false));
+        rows.push(this.buildRow('Total Electric', 'MWh/yr', totalElec, true, true));
 
-        // HP Share %
-        rows.push(this.buildRow('HP Share', '%',
+        // HP Share % - italic with percentage format
+        rows.push(this.buildRowStyled('HP Share', '%',
             this.results.map(r => {
                 if (!r.success) return '-';
                 const hpThermal = r.summary?.hp_thermal_kwh || 0;
                 const boilerThermal = r.summary?.boiler_thermal_kwh || 0;
                 const total = hpThermal + boilerThermal;
-                return total > 0 ? (hpThermal / total * 100).toFixed(1) : '-';
-            }), false, false));
+                return total > 0 ? (hpThermal / total * 100).toFixed(1) + '%' : '-';
+            }), false, { fontStyle: 'italic' }));
 
         // Energy Cost
         const energyCosts = this.results.map(r => r.success ? (r.summary?.total_cost || 0) / 1000 : null);
@@ -597,15 +597,15 @@ const EnergyAnalysis = {
             this.results.map(r => r.success ? (r.summary?.min_water_temp?.toFixed(2) || '-') : '-'),
             false, false));
 
-        // Days < 27°C
-        rows.push(this.buildRow('Days < 27°C', 'days',
+        // Days < 27°C - light blue background (key metrics)
+        rows.push(this.buildRowStyled('Days < 27°C', 'days',
             this.results.map(r => r.success ? (r.summary?.days_below_27 || 0) : '-'),
-            false, false));
+            false, { background: '#e3f2fd' }));
 
-        // Days < 26°C
-        rows.push(this.buildRow('Days < 26°C', 'days',
+        // Days < 26°C - light blue background (key metrics)
+        rows.push(this.buildRowStyled('Days < 26°C', 'days',
             this.results.map(r => r.success ? (r.summary?.days_below_26 || 0) : '-'),
-            false, false));
+            false, { background: '#e3f2fd' }));
 
         tbody.innerHTML = rows.join('');
         resultsCard.style.display = 'block';
@@ -625,6 +625,31 @@ const EnergyAnalysis = {
                 displayVal = v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
             }
             html += `<td style="text-align: right;${isBold ? ' font-weight: bold;' : ''}">${displayVal}</td>`;
+        });
+
+        html += '</tr>';
+        return html;
+    },
+
+    /**
+     * Build a row with custom styles
+     */
+    buildRowStyled: function(label, unit, values, formatNum, styles) {
+        const rowStyle = [];
+        if (styles.background) rowStyle.push(`background: ${styles.background}`);
+        if (styles.borderBottom) rowStyle.push(`border-bottom: ${styles.borderBottom}`);
+        if (styles.fontStyle) rowStyle.push(`font-style: ${styles.fontStyle}`);
+
+        let html = `<tr${rowStyle.length ? ` style="${rowStyle.join('; ')}"` : ''}>`;
+        html += `<td>${label}</td>`;
+        html += `<td style="color: #666; font-size: 12px;">${unit}</td>`;
+
+        values.forEach(v => {
+            let displayVal = v;
+            if (typeof v === 'number' && formatNum) {
+                displayVal = v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+            }
+            html += `<td style="text-align: right;">${displayVal}</td>`;
         });
 
         html += '</tr>';
@@ -657,9 +682,9 @@ const EnergyAnalysis = {
      * Build payback row (bold)
      */
     buildPaybackRow: function(label, unit, values) {
-        let html = `<tr style="font-weight: bold;">`;
-        html += `<td>${label}</td>`;
-        html += `<td style="font-size: 12px;">${unit}</td>`;
+        let html = `<tr>`;
+        html += `<td style="font-weight: bold;">${label}</td>`;
+        html += `<td style="font-size: 12px; color: #666;">${unit}</td>`;
 
         values.forEach((v, i) => {
             if (i === 0 || v === null || v === Infinity || v < 0) {
