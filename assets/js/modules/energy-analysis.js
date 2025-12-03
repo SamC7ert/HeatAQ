@@ -211,12 +211,20 @@ const EnergyAnalysis = {
         const totalInputs = document.getElementById('mode-total-inputs');
         const hpInputs = document.getElementById('mode-hp-inputs');
         const titleEl = document.getElementById('mode-inputs-title');
+        const inputBox = titleEl?.parentElement;
 
         if (totalInputs) totalInputs.style.display = isTotalMode ? 'block' : 'none';
         if (hpInputs) hpInputs.style.display = isTotalMode ? 'none' : 'block';
-        if (titleEl) titleEl.textContent = isTotalMode ? 'Total Capacity Mode' : 'HP Distribution Mode';
+        if (titleEl) {
+            titleEl.textContent = isTotalMode ? 'Total Capacity Mode' : 'HP Capacity Mode';
+            titleEl.style.color = isTotalMode ? '#1565c0' : '#2e7d32';
+        }
+        // Change input box background color based on mode
+        if (inputBox) {
+            inputBox.style.background = isTotalMode ? '#e3f2fd' : '#e8f5e9';
+        }
 
-        // Style selected mode
+        // Style selected mode labels
         const totalLabel = document.getElementById('mode-total-label');
         const hpLabel = document.getElementById('mode-hp-label');
 
@@ -225,8 +233,8 @@ const EnergyAnalysis = {
             totalLabel.style.background = isTotalMode ? '#e3f2fd' : 'transparent';
         }
         if (hpLabel) {
-            hpLabel.style.border = !isTotalMode ? '2px solid #1976d2' : '2px solid transparent';
-            hpLabel.style.background = !isTotalMode ? '#e3f2fd' : 'transparent';
+            hpLabel.style.border = !isTotalMode ? '2px solid #388e3c' : '2px solid transparent';
+            hpLabel.style.background = !isTotalMode ? '#e8f5e9' : 'transparent';
         }
 
         this.updatePreview();
@@ -578,9 +586,9 @@ const EnergyAnalysis = {
             const invDiffs = this.calcDiffsVsPrev(investments.map(v => v !== null ? v / 1000 : null));
             rows.push(this.buildDiffRow('Diff vs prev', 'kNOK', invDiffs, false));
 
-            // Payback vs Prev (bold)
+            // Payback vs Prev - light blue background, not bold
             const paybacks = this.calcPaybackVsPrev(investments, energyCosts);
-            rows.push(this.buildPaybackRow('Payback vs prev', 'years', paybacks));
+            rows.push(this.buildPaybackRowStyled('Payback vs prev', 'years', paybacks));
         } catch (err) {
             console.error('[EnergyAnalysis] Error calculating investment rows:', err);
             rows.push('<tr><td colspan="7" style="color: red;">Error calculating investment</td></tr>');
@@ -594,15 +602,15 @@ const EnergyAnalysis = {
             this.results.map(r => r.success ? (r.summary?.min_water_temp?.toFixed(2) || '-') : '-'),
             false, false));
 
-        // Days < 27°C - light blue background (key metrics)
-        rows.push(this.buildRowStyled('Days < 27°C', 'days',
+        // Days < 27°C
+        rows.push(this.buildRow('Days < 27°C', 'days',
             this.results.map(r => r.success ? (r.summary?.days_below_27 || 0) : '-'),
-            false, { background: '#e3f2fd' }));
+            false, false));
 
-        // Days < 26°C - light blue background (key metrics)
-        rows.push(this.buildRowStyled('Days < 26°C', 'days',
+        // Days < 26°C
+        rows.push(this.buildRow('Days < 26°C', 'days',
             this.results.map(r => r.success ? (r.summary?.days_below_26 || 0) : '-'),
-            false, { background: '#e3f2fd' }));
+            false, false));
 
         tbody.innerHTML = rows.join('');
         resultsCard.style.display = 'block';
@@ -681,6 +689,27 @@ const EnergyAnalysis = {
     buildPaybackRow: function(label, unit, values) {
         let html = `<tr>`;
         html += `<td style="font-weight: bold;">${label}</td>`;
+        html += `<td style="font-size: 12px; color: #666;">${unit}</td>`;
+
+        values.forEach((v, i) => {
+            if (i === 0 || v === null || v === Infinity || v < 0) {
+                html += `<td style="text-align: right;">-</td>`;
+            } else {
+                const color = v <= 3 ? '#28a745' : (v <= 7 ? '#ffc107' : '#dc3545');
+                html += `<td style="text-align: right; color: ${color};">${v.toFixed(2)}</td>`;
+            }
+        });
+
+        html += '</tr>';
+        return html;
+    },
+
+    /**
+     * Build payback row with light blue background (not bold)
+     */
+    buildPaybackRowStyled: function(label, unit, values) {
+        let html = `<tr style="background: #e3f2fd;">`;
+        html += `<td>${label}</td>`;
         html += `<td style="font-size: 12px; color: #666;">${unit}</td>`;
 
         values.forEach((v, i) => {
