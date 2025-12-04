@@ -673,7 +673,7 @@ const EnergyAnalysis = {
         });
         rows.push(this.buildTotalElectricRow('Total Electric', 'MWh/yr', totalElec));
 
-        // HP Share % - italic, indented
+        // HP Share % - italic, indented, with border below
         rows.push(this.buildRowStyled('    HP Share', '%',
             this.results.map(r => {
                 if (!r.success) return '-';
@@ -681,18 +681,17 @@ const EnergyAnalysis = {
                 const boilerThermal = r.summary?.boiler_thermal_kwh || 0;
                 const total = hpThermal + boilerThermal;
                 return total > 0 ? (hpThermal / total * 100).toFixed(1) + '%' : '-';
-            }), false, { fontStyle: 'italic' }));
-
-        // Divider after HP Share
-        rows.push(`<tr><td colspan="${2 + this.results.length}" style="background: #e9ecef; height: 2px; padding: 0;"></td></tr>`);
+            }), false, { fontStyle: 'italic', borderBottom: '2px solid #999' }));
 
         // Energy Cost
         const energyCosts = this.results.map(r => r.success ? (r.summary?.total_cost || 0) / 1000 : null);
         rows.push(this.buildRow('Energy Cost', 'kNOK/yr', energyCosts, true, false));
 
-        // Energy Cost Diff vs Prev (italic, indented)
-        const energyDiffs = this.calcDiffsVsPrev(energyCosts);
-        rows.push(this.buildDiffRow('Diff vs prev', 'kNOK/yr', energyDiffs, true));
+        // Energy Cost Diff vs Prev - only in HP Capacity mode
+        if (!isTotalMode) {
+            const energyDiffs = this.calcDiffsVsPrev(energyCosts);
+            rows.push(this.buildDiffRow('Diff vs prev', 'kNOK/yr', energyDiffs, true));
+        }
 
         // Investment (always show, dashes if no data configured)
         try {
@@ -702,14 +701,16 @@ const EnergyAnalysis = {
             rows.push(this.buildRow('Investment', 'kNOK',
                 investments.map(v => v !== null ? v / 1000 : '-'), true, false));
 
-            // Investment Diff vs Prev (italic, indented)
-            const invDiffs = this.calcDiffsVsPrev(investments.map(v => v !== null ? v / 1000 : null));
-            rows.push(this.buildDiffRow('Diff vs prev', 'kNOK', invDiffs, false));
+            // Investment Diff vs Prev - only in HP Capacity mode
+            if (!isTotalMode) {
+                const invDiffs = this.calcDiffsVsPrev(investments.map(v => v !== null ? v / 1000 : null));
+                rows.push(this.buildDiffRow('Diff vs prev', 'kNOK', invDiffs, false));
+            }
 
-            // Payback vs Prev - highlight only in HP Capacity mode
+            // Payback vs Prev - highlight only in HP Capacity mode, with border below
             const paybacks = this.calcPaybackVsPrev(investments, energyCosts);
             if (isTotalMode) {
-                rows.push(this.buildPaybackRow('Payback vs prev', 'years', paybacks));
+                rows.push(this.buildPaybackRowPlain('Payback vs prev', 'years', paybacks));
             } else {
                 rows.push(this.buildPaybackRowStyled('Payback vs prev', 'years', paybacks));
             }
@@ -717,9 +718,6 @@ const EnergyAnalysis = {
             console.error('[EnergyAnalysis] Error calculating investment rows:', err);
             rows.push('<tr><td colspan="7" style="color: red;">Error calculating investment</td></tr>');
         }
-
-        // Divider
-        rows.push(`<tr><td colspan="${2 + this.results.length}" style="background: #e9ecef; height: 2px; padding: 0;"></td></tr>`);
 
         // Min Temperature
         rows.push(this.buildRow('Min Temperature', '°C',
@@ -763,7 +761,7 @@ const EnergyAnalysis = {
         values.forEach(v => {
             let displayVal = v;
             if (typeof v === 'number' && formatNum) {
-                displayVal = v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+                displayVal = v.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
             }
             html += `<td style="text-align: right;${isBold ? ' font-weight: bold;' : ''}">${displayVal}</td>`;
         });
@@ -783,7 +781,7 @@ const EnergyAnalysis = {
         values.forEach(v => {
             let displayVal = v;
             if (typeof v === 'number') {
-                displayVal = v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+                displayVal = v.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
             }
             html += `<td style="text-align: right;">${displayVal !== null ? displayVal : '-'}</td>`;
         });
@@ -839,19 +837,18 @@ const EnergyAnalysis = {
     },
 
     /**
-     * Build payback row (bold)
+     * Build payback row plain (Total Capacity mode - not bold, with border)
      */
-    buildPaybackRow: function(label, unit, values) {
-        let html = `<tr>`;
-        html += `<td style="font-weight: bold;">${label}</td>`;
+    buildPaybackRowPlain: function(label, unit, values) {
+        let html = `<tr style="border-bottom: 2px solid #999;">`;
+        html += `<td>${label}</td>`;
         html += `<td style="font-size: 12px; color: #666;">${unit}</td>`;
 
         values.forEach((v, i) => {
             if (i === 0 || v === null || v === Infinity || v < 0) {
                 html += `<td style="text-align: right;">-</td>`;
             } else {
-                const color = v <= 3 ? '#28a745' : (v <= 7 ? '#ffc107' : '#dc3545');
-                html += `<td style="text-align: right; color: ${color};">${v.toFixed(2)}</td>`;
+                html += `<td style="text-align: right;">${v.toFixed(2)}</td>`;
             }
         });
 
@@ -863,7 +860,7 @@ const EnergyAnalysis = {
      * Build payback row with light green background (HP Capacity mode)
      */
     buildPaybackRowStyled: function(label, unit, values) {
-        let html = `<tr style="background: #e8f5e9; font-weight: bold;">`;
+        let html = `<tr style="background: #e8f5e9; font-weight: bold; border-bottom: 2px solid #999;">`;
         html += `<td>${label}</td>`;
         html += `<td style="font-size: 12px;">${unit}</td>`;
 
