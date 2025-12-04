@@ -1,6 +1,6 @@
 # HeatAQ Development Handover Guide
 
-**Current Version:** V133 (December 2024)
+**Current Version:** V137 (December 2024)
 
 ## Pre-Commit Checklist
 
@@ -41,7 +41,15 @@ When debugging, don't search peripherally - go directly to where the core logic 
 
 ## Recent Session Summary (Dec 2024)
 
-### V133 - Energy Analysis Feature
+### V137 - Energy Analysis Results Table Polish
+- Renamed "Thermal Pool" → "Net Heating Need"
+- HP Share row: proper 20px indent, 12px font size
+- Total Capacity mode: removed Payback/Diff rows (not relevant), Min Temp highlighted
+- HP Capacity mode: Payback row with green background, bold text
+- All energy values show exactly 1 decimal place
+- Consistent divider styling (2px solid #999)
+
+### V133-V136 - Energy Analysis Feature
 - **Energy Analysis tab** fully functional with two modes:
   - **Total Capacity Analysis** (blue theme): Varies total capacity, fixed HP
   - **HP Capacity Analysis** (green theme): Varies HP capacity, fixed total
@@ -219,7 +227,7 @@ HTML:
 ### App Version
 **Set in ONE place:** `assets/js/config.js`
 ```javascript
-APP_VERSION: 'V133',
+APP_VERSION: 'V137',
 ```
 
 This updates both:
