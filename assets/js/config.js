@@ -2,7 +2,7 @@
 
 const config = {
     // App version - update this when releasing new versions
-    APP_VERSION: 'V133',
+    APP_VERSION: 'V134',
 
     API_BASE_URL: '/api/heataq_api.php',
 
