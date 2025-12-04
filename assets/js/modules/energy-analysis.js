@@ -649,8 +649,8 @@ const EnergyAnalysis = {
         rows.push(this.buildRow('HP + Boiler', 'kW',
             this.results.map(r => r.label), false, false));
 
-        // Thermal Pool - with thick bottom border to separate from electric section
-        rows.push(this.buildRowStyled('Thermal Pool', 'MWh/yr',
+        // Net Heating Need - with thick bottom border to separate from electric section
+        rows.push(this.buildRowStyled('Net Heating Need', 'MWh/yr',
             this.results.map(r => r.success ? ((r.summary?.hp_thermal_kwh || 0) + (r.summary?.boiler_thermal_kwh || 0)) / 1000 : '-'),
             true, { borderBottom: '2px solid #999' }));
 
@@ -673,15 +673,15 @@ const EnergyAnalysis = {
         });
         rows.push(this.buildTotalElectricRow('Total Electric', 'MWh/yr', totalElec));
 
-        // HP Share % - italic, indented, with border below
-        rows.push(this.buildRowStyled('    HP Share', '%',
+        // HP Share % - italic, indented, smaller font, with border below
+        rows.push(this.buildRowStyled('HP Share', '%',
             this.results.map(r => {
                 if (!r.success) return '-';
                 const hpThermal = r.summary?.hp_thermal_kwh || 0;
                 const boilerThermal = r.summary?.boiler_thermal_kwh || 0;
                 const total = hpThermal + boilerThermal;
                 return total > 0 ? (hpThermal / total * 100).toFixed(1) + '%' : '-';
-            }), false, { fontStyle: 'italic', borderBottom: '2px solid #999' }));
+            }), false, { fontStyle: 'italic', borderBottom: '2px solid #999', paddingLeft: '20px', fontSize: '12px' }));
 
         // Energy Cost
         const energyCosts = this.results.map(r => r.success ? (r.summary?.total_cost || 0) / 1000 : null);
@@ -698,8 +698,15 @@ const EnergyAnalysis = {
             const investments = this.results.map(r => this.calcInvestment(r.hp || 0, r.boiler || 0));
             console.log('[EnergyAnalysis] Investments:', investments);
 
-            rows.push(this.buildRow('Investment', 'kNOK',
-                investments.map(v => v !== null ? v / 1000 : '-'), true, false));
+            // Investment - with border in Total mode (since no Payback row follows)
+            if (isTotalMode) {
+                rows.push(this.buildRowStyled('Investment', 'kNOK',
+                    investments.map(v => v !== null ? v / 1000 : '-'),
+                    true, { borderBottom: '2px solid #999' }));
+            } else {
+                rows.push(this.buildRow('Investment', 'kNOK',
+                    investments.map(v => v !== null ? v / 1000 : '-'), true, false));
+            }
 
             // Investment Diff vs Prev - only in HP Capacity mode
             if (!isTotalMode) {
@@ -707,11 +714,9 @@ const EnergyAnalysis = {
                 rows.push(this.buildDiffRow('Diff vs prev', 'kNOK', invDiffs, false));
             }
 
-            // Payback vs Prev - highlight only in HP Capacity mode, with border below
-            const paybacks = this.calcPaybackVsPrev(investments, energyCosts);
-            if (isTotalMode) {
-                rows.push(this.buildPaybackRowPlain('Payback vs prev', 'years', paybacks));
-            } else {
+            // Payback vs Prev - only in HP Capacity mode
+            if (!isTotalMode) {
+                const paybacks = this.calcPaybackVsPrev(investments, energyCosts);
                 rows.push(this.buildPaybackRowStyled('Payback vs prev', 'years', paybacks));
             }
         } catch (err) {
@@ -719,10 +724,16 @@ const EnergyAnalysis = {
             rows.push('<tr><td colspan="7" style="color: red;">Error calculating investment</td></tr>');
         }
 
-        // Min Temperature
-        rows.push(this.buildRow('Min Temperature', '°C',
-            this.results.map(r => r.success ? (r.summary?.min_water_temp?.toFixed(2) || '-') : '-'),
-            false, false));
+        // Min Temperature - highlight in Total Capacity mode
+        if (isTotalMode) {
+            rows.push(this.buildRowStyled('Min Temperature', '°C',
+                this.results.map(r => r.success ? (r.summary?.min_water_temp?.toFixed(2) || '-') : '-'),
+                false, { background: '#e3f2fd' }));
+        } else {
+            rows.push(this.buildRow('Min Temperature', '°C',
+                this.results.map(r => r.success ? (r.summary?.min_water_temp?.toFixed(2) || '-') : '-'),
+                false, false));
+        }
 
         // Days < 27°C - highlight in Total Capacity mode
         if (isTotalMode) {
@@ -798,10 +809,14 @@ const EnergyAnalysis = {
         if (styles.background) rowStyle.push(`background: ${styles.background}`);
         if (styles.borderBottom) rowStyle.push(`border-bottom: ${styles.borderBottom}`);
         if (styles.fontStyle) rowStyle.push(`font-style: ${styles.fontStyle}`);
+        if (styles.fontSize) rowStyle.push(`font-size: ${styles.fontSize}`);
+
+        const labelStyle = [];
+        if (styles.paddingLeft) labelStyle.push(`padding-left: ${styles.paddingLeft}`);
 
         let html = `<tr${rowStyle.length ? ` style="${rowStyle.join('; ')}"` : ''}>`;
-        html += `<td>${label}</td>`;
-        html += `<td style="color: #666; font-size: 12px;">${unit}</td>`;
+        html += `<td${labelStyle.length ? ` style="${labelStyle.join('; ')}"` : ''}>${label}</td>`;
+        html += `<td style="color: #666; font-size: ${styles.fontSize || '12px'};">${unit}</td>`;
 
         values.forEach(v => {
             let displayVal = v;
