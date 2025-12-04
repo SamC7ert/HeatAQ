@@ -1,8 +1,58 @@
 # HeatAQ Development Handover Guide
 
-**Current Version:** V132 (December 2024)
+**Current Version:** V133 (December 2024)
+
+## Pre-Commit Checklist
+
+Before committing code, verify:
+
+- [ ] **Version updated** - Bump `APP_VERSION` in `assets/js/config.js` and update fallbacks in `index.html`
+- [ ] **API field names** - Verify field names match what API actually returns (check Network tab)
+- [ ] **API paths** - Use `./api/` prefix (not `/api/`) for consistency
+- [ ] **Cookie timing** - If setting cookie and immediately calling API, pass value as query param instead
+- [ ] **Server cache** - Test with cache disabled if behavior seems stale
+- [ ] **Core logic first** - When debugging, go directly to core calculation/logic, not peripheral code
+
+## Process Lessons Learned
+
+### 1. Cookie Timing Issues
+When setting a cookie via JavaScript and immediately calling an API that reads that cookie, the cookie may not be sent yet. **Solution:** Pass the value as a query parameter instead of relying on the cookie.
+
+### 2. API Field Names
+Always verify the actual field names returned by APIs. Example: config dropdown showed "undefined" because code used `c.template_name` but API returned `c.name`.
+
+### 3. Server Caching
+Development mode with caching disabled helps debug issues where old code is being served.
+
+### 4. State Persistence Pattern
+For localStorage persistence:
+- Save state on every input change
+- Pass savedState to async loaders (dropdowns)
+- Restore dropdown values *after* options are populated
+- Use `dataset.listenerAdded` flag to avoid duplicate event listeners
+
+### 5. CSS Table Behavior
+Tables with `width: 100%` spread columns across the container. For comparison tables where columns should stay close together, use `width: auto`.
+
+### 6. Go to the Core First
+When debugging, don't search peripherally - go directly to where the core logic lives. If searching through files without a clear target, pause and discuss the architecture together.
+
+---
 
 ## Recent Session Summary (Dec 2024)
+
+### V133 - Energy Analysis Feature
+- **Energy Analysis tab** fully functional with two modes:
+  - **Total Capacity Analysis** (blue theme): Varies total capacity, fixed HP
+  - **HP Capacity Analysis** (green theme): Varies HP capacity, fixed total
+- **State persistence**: All selections saved to localStorage, restored on reload
+- **Results table**: Columns align left (not spread), mode-specific row highlighting
+- **Investment costs**: Loaded via query parameter for reliability
+
+Key files:
+- `assets/js/modules/energy-analysis.js` - Core module
+- `assets/css/components/simulations.css` - Table styling
+- `api/heataq_api.php` - API fix for pool_site_id parameter
 
 ### V132 - Database Migrations Complete
 - Migrations 026 & 027 executed - all VARCHAR site_id columns removed
@@ -169,7 +219,7 @@ HTML:
 ### App Version
 **Set in ONE place:** `assets/js/config.js`
 ```javascript
-APP_VERSION: 'V130',
+APP_VERSION: 'V133',
 ```
 
 This updates both:
