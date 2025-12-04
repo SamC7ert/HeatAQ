@@ -698,8 +698,15 @@ const EnergyAnalysis = {
             const investments = this.results.map(r => this.calcInvestment(r.hp || 0, r.boiler || 0));
             console.log('[EnergyAnalysis] Investments:', investments);
 
-            rows.push(this.buildRow('Investment', 'kNOK',
-                investments.map(v => v !== null ? v / 1000 : '-'), true, false));
+            // Investment - with border in Total mode (since no Payback row follows)
+            if (isTotalMode) {
+                rows.push(this.buildRowStyled('Investment', 'kNOK',
+                    investments.map(v => v !== null ? v / 1000 : '-'),
+                    true, { borderBottom: '2px solid #999' }));
+            } else {
+                rows.push(this.buildRow('Investment', 'kNOK',
+                    investments.map(v => v !== null ? v / 1000 : '-'), true, false));
+            }
 
             // Investment Diff vs Prev - only in HP Capacity mode
             if (!isTotalMode) {
@@ -707,11 +714,9 @@ const EnergyAnalysis = {
                 rows.push(this.buildDiffRow('Diff vs prev', 'kNOK', invDiffs, false));
             }
 
-            // Payback vs Prev - highlight only in HP Capacity mode, with border below
-            const paybacks = this.calcPaybackVsPrev(investments, energyCosts);
-            if (isTotalMode) {
-                rows.push(this.buildPaybackRowPlain('Payback vs prev', 'years', paybacks));
-            } else {
+            // Payback vs Prev - only in HP Capacity mode
+            if (!isTotalMode) {
+                const paybacks = this.calcPaybackVsPrev(investments, energyCosts);
                 rows.push(this.buildPaybackRowStyled('Payback vs prev', 'years', paybacks));
             }
         } catch (err) {
@@ -719,10 +724,16 @@ const EnergyAnalysis = {
             rows.push('<tr><td colspan="7" style="color: red;">Error calculating investment</td></tr>');
         }
 
-        // Min Temperature
-        rows.push(this.buildRow('Min Temperature', '°C',
-            this.results.map(r => r.success ? (r.summary?.min_water_temp?.toFixed(2) || '-') : '-'),
-            false, false));
+        // Min Temperature - highlight in Total Capacity mode
+        if (isTotalMode) {
+            rows.push(this.buildRowStyled('Min Temperature', '°C',
+                this.results.map(r => r.success ? (r.summary?.min_water_temp?.toFixed(2) || '-') : '-'),
+                false, { background: '#e3f2fd' }));
+        } else {
+            rows.push(this.buildRow('Min Temperature', '°C',
+                this.results.map(r => r.success ? (r.summary?.min_water_temp?.toFixed(2) || '-') : '-'),
+                false, false));
+        }
 
         // Days < 27°C - highlight in Total Capacity mode
         if (isTotalMode) {
