@@ -15,7 +15,7 @@ echo "========================================"
 echo ""
 
 # 1. Check PHP syntax
-echo -e "${YELLOW}[1/4] Checking PHP syntax...${NC}"
+echo -e "${YELLOW}[1/5] Checking PHP syntax...${NC}"
 for file in $(find . -name "*.php" -not -path "./vendor/*" 2>/dev/null); do
     result=$(php -l "$file" 2>&1)
     if [[ $? -ne 0 ]]; then
@@ -30,7 +30,7 @@ fi
 
 # 2. Check version consistency
 echo ""
-echo -e "${YELLOW}[2/4] Checking version consistency...${NC}"
+echo -e "${YELLOW}[2/5] Checking version consistency...${NC}"
 HEADER_VER=$(grep -oP 'V[0-9]+' index.html | head -1)
 CACHE_VER=$(grep -oP '\?v=[0-9]+' index.html | head -1 | grep -oP '[0-9]+')
 
@@ -47,7 +47,7 @@ fi
 
 # 3. Check for common JS issues
 echo ""
-echo -e "${YELLOW}[3/4] Checking for undefined references...${NC}"
+echo -e "${YELLOW}[3/5] Checking for undefined references...${NC}"
 # Look for common patterns that indicate undefined variables
 UNDEF=$(grep -rn "getElementById.*null" assets/js/modules/*.js 2>/dev/null | head -5)
 if [[ -n "$UNDEF" ]]; then
@@ -66,7 +66,7 @@ echo -e "${GREEN}  JS check complete${NC}"
 
 # 4. Check API endpoint consistency
 echo ""
-echo -e "${YELLOW}[4/4] Checking API endpoints...${NC}"
+echo -e "${YELLOW}[4/5] Checking API endpoints...${NC}"
 # Extract actions called from JS
 JS_ACTIONS=$(grep -ohP "action=\w+" assets/js/modules/*.js 2>/dev/null | sort -u | sed 's/action=//')
 # Extract actions handled in PHP
@@ -84,6 +84,25 @@ if [[ -n "$MISSING" ]]; then
     ((ERRORS++))
 else
     echo -e "${GREEN}  All JS actions have PHP handlers${NC}"
+fi
+
+# 5. Check database column references
+echo ""
+echo -e "${YELLOW}[5/5] Checking database column references...${NC}"
+if [[ -f "scripts/validate_columns.php" ]]; then
+    COLUMN_OUTPUT=$(php scripts/validate_columns.php 2>&1)
+    COLUMN_EXIT=$?
+    if [[ $COLUMN_EXIT -ne 0 ]]; then
+        echo -e "${RED}  FAIL: Invalid column/table references found${NC}"
+        echo "$COLUMN_OUTPUT" | grep -E "^api/|^lib/" | head -10 | while read line; do
+            echo -e "  $line"
+        done
+        ((ERRORS++))
+    else
+        echo -e "${GREEN}  $COLUMN_OUTPUT${NC}"
+    fi
+else
+    echo -e "${YELLOW}  Skipped: validate_columns.php not found${NC}"
 fi
 
 # Summary
