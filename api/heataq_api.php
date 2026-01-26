@@ -1660,12 +1660,23 @@ class HeatAQAPI {
         }
 
         try {
+            // Create the project
             $stmt = $this->db->prepare("
                 INSERT INTO projects (project_name, description, is_active, created_at)
                 VALUES (?, ?, 1, NOW())
             ");
             $stmt->execute([$name, $description]);
             $projectId = $this->db->lastInsertId();
+
+            // Link the current user to the new project
+            if ($this->userId) {
+                $role = $this->userRole ?? 'operator';
+                $stmt = $this->db->prepare("
+                    INSERT INTO user_projects (user_id, project_id, role)
+                    VALUES (?, ?, ?)
+                ");
+                $stmt->execute([$this->userId, $projectId, $role]);
+            }
 
             $this->sendResponse(['success' => true, 'id' => $projectId, 'name' => $name]);
         } catch (PDOException $e) {

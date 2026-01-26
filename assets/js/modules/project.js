@@ -952,13 +952,17 @@ const ProjectModule = {
             const container = document.getElementById('projects-list');
 
             if (response.ok) {
-                this.projects = await response.json();
+                const data = await response.json();
+                this.projects = data.projects || [];
 
                 if (container && Array.isArray(this.projects) && this.projects.length > 0) {
                     container.innerHTML = this.projects.map(project => {
-                        const isActive = project.id == this.currentProject?.id;
-                        return `<div class="project-item" style="padding: 10px; border: 1px solid ${isActive ? '#0d6efd' : '#dee2e6'}; border-radius: 6px; margin-bottom: 8px; background: ${isActive ? '#e7f1ff' : '#fff'}; cursor: pointer;" onclick="app.project.switchProject(${project.id})">
-                            <strong>${project.name || 'Unnamed Project'}</strong>
+                        // API returns project_id and project_name
+                        const projectId = project.project_id || project.id;
+                        const projectName = project.project_name || project.name;
+                        const isActive = projectId == this.currentProject?.id;
+                        return `<div class="project-item" style="padding: 10px; border: 1px solid ${isActive ? '#0d6efd' : '#dee2e6'}; border-radius: 6px; margin-bottom: 8px; background: ${isActive ? '#e7f1ff' : '#fff'}; cursor: pointer;" onclick="app.project.switchProject(${projectId})">
+                            <strong>${projectName || 'Unnamed Project'}</strong>
                             ${isActive ? '<span style="float: right; color: #0d6efd; font-size: 12px;">Current</span>' : ''}
                             <p style="margin: 5px 0 0; font-size: 12px; color: #666;">${project.description || 'No description'}</p>
                         </div>`;
@@ -1229,17 +1233,19 @@ const ProjectModule = {
         }
 
         try {
-            // Find project in list
-            const project = this.projects.find(p => p.id == projectId);
+            // Find project in list (API returns project_id and project_name)
+            const project = this.projects.find(p => (p.project_id || p.id) == projectId);
 
             if (project) {
-                localStorage.setItem('heataq_project', project.id);
-                localStorage.setItem('heataq_project_name', project.name);
+                const pId = project.project_id || project.id;
+                const pName = project.project_name || project.name;
+                localStorage.setItem('heataq_project', pId);
+                localStorage.setItem('heataq_project_name', pName);
                 localStorage.setItem('heataq_project_desc', project.description || '');
 
                 this.currentProject = {
-                    id: project.id,
-                    name: project.name,
+                    id: pId,
+                    name: pName,
                     description: project.description
                 };
 
