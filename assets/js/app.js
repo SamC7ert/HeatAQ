@@ -196,13 +196,35 @@ const app = {
 document.addEventListener('DOMContentLoaded', () => {
     app.init().catch(error => {
         console.error('Failed to initialize application:', error);
-        document.body.innerHTML = `
-            <div style="padding: 50px; text-align: center;">
-                <h2>Failed to Initialize Application</h2>
-                <p style="color: red;">${error.message}</p>
-                <p>Please check the console for more details.</p>
-            </div>
-        `;
+
+        // Check for specific error types
+        const isPoolSiteError = error.message?.includes('pool site') ||
+                               error.message?.includes('pool_site') ||
+                               error.message?.includes('NO_POOL_SITE');
+
+        if (isPoolSiteError) {
+            document.body.innerHTML = `
+                <div style="padding: 50px; text-align: center; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #d62828;">Project Not Configured</h2>
+                    <p style="font-size: 16px; color: #333;">This project does not have a pool site configured yet.</p>
+                    <p style="color: #666;">Please select a different project or contact an administrator to set up the pool site.</p>
+                    <div style="margin-top: 30px;">
+                        <button onclick="window.location.href='login.html'"
+                                style="padding: 12px 24px; font-size: 16px; cursor: pointer; background: #006494; color: white; border: none; border-radius: 4px;">
+                            Back to Login
+                        </button>
+                    </div>
+                </div>
+            `;
+        } else {
+            document.body.innerHTML = `
+                <div style="padding: 50px; text-align: center;">
+                    <h2>Failed to Initialize Application</h2>
+                    <p style="color: red;">${error.message}</p>
+                    <p>Please check the console for more details.</p>
+                </div>
+            `;
+        }
     });
 });
 

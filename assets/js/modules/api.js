@@ -14,18 +14,25 @@ const api = {
             }
             
             const response = await fetch(urlString);
-            
+
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                // Try to get error details from response body
+                try {
+                    const errorData = await response.json();
+                    const errorMsg = errorData.message || errorData.error || `HTTP error! status: ${response.status}`;
+                    throw new Error(errorMsg);
+                } catch (parseError) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
             }
-            
+
             const data = await response.json();
-            
+
             if (data.error) {
                 console.error('API Error:', data.error);
-                throw new Error(data.error);
+                throw new Error(data.message || data.error);
             }
-            
+
             return data;
         } catch (error) {
             console.error(`API call failed for ${action}:`, error);

@@ -1654,12 +1654,16 @@ class HeatAQAPI {
         $input = $this->getPostInput();
         $name = $input['name'] ?? null;
         $description = $input['description'] ?? '';
+        $sourcePoolSiteId = $input['source_pool_site_id'] ?? null;
+        $createDefaultSite = $input['create_default_site'] ?? true;
 
         if (!$name) {
             $this->sendError('Project name is required');
         }
 
         try {
+            $this->db->beginTransaction();
+
             // Create the project
             $stmt = $this->db->prepare("
                 INSERT INTO projects (project_name, description, is_active, created_at)
@@ -1678,8 +1682,107 @@ class HeatAQAPI {
                 $stmt->execute([$this->userId, $projectId, $role]);
             }
 
-            $this->sendResponse(['success' => true, 'id' => $projectId, 'name' => $name]);
+            $poolSiteId = null;
+            $poolId = null;
+
+            // Copy from source pool_site if provided
+            if ($sourcePoolSiteId) {
+                // Get source pool_site
+                $stmt = $this->db->prepare("SELECT * FROM pool_sites WHERE id = ?");
+                $stmt->execute([$sourcePoolSiteId]);
+                $sourceSite = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                if ($sourceSite) {
+                    // Create new pool_site based on source
+                    $stmt = $this->db->prepare("
+                        INSERT INTO pool_sites (project_id, name, latitude, longitude,
+                            default_weather_station, hp_base_cost_nok, hp_marginal_cost_per_kw,
+                            boiler_base_cost_nok, boiler_marginal_cost_per_kw, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                    ");
+                    $stmt->execute([
+                        $projectId,
+                        $name . ' Site',
+                        $sourceSite['latitude'],
+                        $sourceSite['longitude'],
+                        $sourceSite['default_weather_station'],
+                        $sourceSite['hp_base_cost_nok'],
+                        $sourceSite['hp_marginal_cost_per_kw'],
+                        $sourceSite['boiler_base_cost_nok'],
+                        $sourceSite['boiler_marginal_cost_per_kw']
+                    ]);
+                    $poolSiteId = $this->db->lastInsertId();
+
+                    // Copy pools from source
+                    $stmt = $this->db->prepare("SELECT * FROM pools WHERE pool_site_id = ?");
+                    $stmt->execute([$sourcePoolSiteId]);
+                    $sourcePools = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                    foreach ($sourcePools as $sourcePool) {
+                        $stmt = $this->db->prepare("
+                            INSERT INTO pools (pool_site_id, name, description, length_m, width_m, depth_m,
+                                area_m2, volume_m3, wind_exposure, solar_absorption, years_operating,
+                                has_cover, cover_r_value, cover_solar_transmittance, has_tunnel,
+                                floor_insulated, pool_type, is_active, created_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())
+                        ");
+                        $stmt->execute([
+                            $poolSiteId,
+                            $sourcePool['name'],
+                            $sourcePool['description'],
+                            $sourcePool['length_m'],
+                            $sourcePool['width_m'],
+                            $sourcePool['depth_m'],
+                            $sourcePool['area_m2'],
+                            $sourcePool['volume_m3'],
+                            $sourcePool['wind_exposure'],
+                            $sourcePool['solar_absorption'],
+                            $sourcePool['years_operating'],
+                            $sourcePool['has_cover'],
+                            $sourcePool['cover_r_value'],
+                            $sourcePool['cover_solar_transmittance'],
+                            $sourcePool['has_tunnel'],
+                            $sourcePool['floor_insulated'],
+                            $sourcePool['pool_type']
+                        ]);
+                        if (!$poolId) {
+                            $poolId = $this->db->lastInsertId();
+                        }
+                    }
+                }
+            } elseif ($createDefaultSite) {
+                // Create default pool_site
+                $stmt = $this->db->prepare("
+                    INSERT INTO pool_sites (project_id, name, created_at)
+                    VALUES (?, ?, NOW())
+                ");
+                $stmt->execute([$projectId, $name . ' Site']);
+                $poolSiteId = $this->db->lastInsertId();
+
+                // Create default pool
+                $stmt = $this->db->prepare("
+                    INSERT INTO pools (pool_site_id, name, length_m, width_m, depth_m,
+                        area_m2, volume_m3, wind_exposure, solar_absorption, years_operating,
+                        has_cover, cover_r_value, cover_solar_transmittance, has_tunnel,
+                        floor_insulated, pool_type, is_active, created_at)
+                    VALUES (?, 'Main Pool', 25.0, 12.5, 2.0, 312.5, 625.0, 0.535, 60.0, 3,
+                        1, 5.0, 10.0, 1, 1, 'outdoor', 1, NOW())
+                ");
+                $stmt->execute([$poolSiteId]);
+                $poolId = $this->db->lastInsertId();
+            }
+
+            $this->db->commit();
+
+            $this->sendResponse([
+                'success' => true,
+                'id' => $projectId,
+                'name' => $name,
+                'pool_site_id' => $poolSiteId,
+                'pool_id' => $poolId
+            ]);
         } catch (PDOException $e) {
+            $this->db->rollBack();
             $this->sendError('Failed to create project: ' . $e->getMessage());
         }
     }

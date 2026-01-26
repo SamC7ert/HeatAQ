@@ -45,10 +45,14 @@ if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
     require_once __DIR__ . '/../auth.php';
     $auth = HeatAQAuth::check(Config::requiresAuth());
     if ($auth) {
-        if (!isset($auth['project']['pool_site_id'])) {
+        if (!isset($auth['project']['pool_site_id']) || empty($auth['project']['pool_site_id'])) {
             header('Content-Type: application/json');
-            http_response_code(500);
-            echo json_encode(['error' => 'Auth context missing pool_site_id']);
+            http_response_code(400);
+            echo json_encode([
+                'error' => 'No pool site configured for this project',
+                'code' => 'NO_POOL_SITE',
+                'message' => 'This project does not have a pool site configured. Please go to the Project tab and create a site first.'
+            ]);
             exit;
         }
         $currentPoolSiteId = (int)$auth['project']['pool_site_id'];
@@ -67,7 +71,11 @@ if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
     if (!$currentPoolSiteId) {
         header('Content-Type: application/json');
         http_response_code(400);
-        echo json_encode(['error' => 'Missing pool_site_id: Set heataq_pool_site_id cookie or enable authentication']);
+        echo json_encode([
+            'error' => 'No pool site configured',
+            'code' => 'NO_POOL_SITE',
+            'message' => 'Missing pool_site_id: Set heataq_pool_site_id cookie or enable authentication'
+        ]);
         exit;
     }
 }
