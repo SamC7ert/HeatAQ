@@ -21,6 +21,8 @@ const SimControlModule = {
             this.loadWeatherRange();
             // Restore saved dates and add listeners
             this.initDateInputs();
+            // Initialize monthly report
+            this.initMonthlyReport();
         }
 
         // Initialize current tab
@@ -622,6 +624,165 @@ const SimControlModule = {
         if (report) {
             report.style.display = 'none';
         }
+    },
+
+    // Monthly report data cache
+    monthlyReportData: null,
+
+    // Initialize monthly report - load available runs
+    initMonthlyReport: async function() {
+        console.log('[SimControl] initMonthlyReport starting...');
+        const card = document.getElementById('monthly-report-card');
+        const select = document.getElementById('monthly-report-run');
+
+        if (!card) {
+            console.warn('[SimControl] monthly-report-card element not found');
+            return;
+        }
+        if (!select) {
+            console.warn('[SimControl] monthly-report-run element not found');
+            return;
+        }
+
+        // Show the card
+        card.style.display = 'block';
+        console.log('[SimControl] Monthly report card shown');
+
+        try {
+            // Load simulation runs
+            const response = await fetch('./api/simulation_api.php?action=get_runs&limit=50');
+            console.log('[SimControl] get_runs response status:', response.status);
+
+            if (!response.ok) {
+                console.warn('[SimControl] get_runs failed with status:', response.status);
+                select.innerHTML = '<option value="">Could not load runs</option>';
+                return;
+            }
+
+            const data = await response.json();
+            const runs = data.runs || [];
+            console.log('[SimControl] Loaded runs:', runs.length);
+
+            if (runs.length > 0) {
+                select.innerHTML = '<option value="">Select simulation run...</option>' +
+                    runs.map(run => {
+                        const name = run.scenario_name || 'Unnamed';
+                        const period = `${run.start_date} - ${run.end_date}`;
+                        return `<option value="${run.run_id}">${name} (${period})</option>`;
+                    }).join('');
+            } else {
+                select.innerHTML = '<option value="">No simulation runs available</option>';
+            }
+        } catch (error) {
+            console.error('[SimControl] Error loading runs for monthly report:', error);
+            select.innerHTML = '<option value="">Error loading runs</option>';
+        }
+    },
+
+    // Load monthly report data for selected run
+    loadMonthlyReport: async function() {
+        const select = document.getElementById('monthly-report-run');
+        const tbody = document.getElementById('monthly-report-tbody');
+        const thead = document.getElementById('monthly-report-thead');
+        const runId = select?.value;
+
+        if (!runId || !tbody || !thead) {
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #666;">Select a simulation run to view report</td></tr>';
+            }
+            return;
+        }
+
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">Loading...</td></tr>';
+
+        try {
+            const response = await fetch(`./api/simulation_api.php?action=get_monthly_results&run_id=${runId}`);
+            if (!response.ok) throw new Error('Failed to load monthly data');
+
+            const data = await response.json();
+            const monthlyResults = data.monthly_results || [];
+            this.monthlyReportData = monthlyResults;
+
+            if (monthlyResults.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #666;">No data available for this run</td></tr>';
+                return;
+            }
+
+            // Get unique years
+            const years = [...new Set(monthlyResults.map(r => r.year))].sort();
+
+            // Build header
+            thead.innerHTML = `<tr><th style="width: 100px;">Month</th>${years.map(y => `<th style="text-align: right;">${y}</th>`).join('')}</tr>`;
+
+            // Month names
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+            // Build pivot table (months as rows, years as columns)
+            let html = '';
+            for (let month = 1; month <= 12; month++) {
+                html += `<tr><td><strong>${monthNames[month - 1]}</strong></td>`;
+                for (const year of years) {
+                    const record = monthlyResults.find(r => r.year == year && r.month == month);
+                    const value = record ? parseFloat(record.total_loss_kwh).toLocaleString('no-NO', {maximumFractionDigits: 0}) : '-';
+                    html += `<td style="text-align: right;">${value}</td>`;
+                }
+                html += '</tr>';
+            }
+
+            // Add total row
+            html += '<tr style="font-weight: bold; background: #f5f5f5;"><td>Total</td>';
+            for (const year of years) {
+                const yearRecords = monthlyResults.filter(r => r.year == year);
+                const total = yearRecords.reduce((sum, r) => sum + parseFloat(r.total_loss_kwh || 0), 0);
+                html += `<td style="text-align: right;">${total.toLocaleString('no-NO', {maximumFractionDigits: 0})}</td>`;
+            }
+            html += '</tr>';
+
+            tbody.innerHTML = html;
+
+        } catch (error) {
+            console.error('Error loading monthly report:', error);
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: red;">Error loading data</td></tr>';
+        }
+    },
+
+    // Export monthly report to CSV
+    exportMonthlyReport: function() {
+        if (!this.monthlyReportData || this.monthlyReportData.length === 0) {
+            alert('No data to export. Please select a simulation run first.');
+            return;
+        }
+
+        const years = [...new Set(this.monthlyReportData.map(r => r.year))].sort();
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        // Build CSV
+        let csv = 'Month,' + years.join(',') + '\n';
+
+        for (let month = 1; month <= 12; month++) {
+            csv += monthNames[month - 1];
+            for (const year of years) {
+                const record = this.monthlyReportData.find(r => r.year == year && r.month == month);
+                csv += ',' + (record ? parseFloat(record.total_loss_kwh).toFixed(0) : '');
+            }
+            csv += '\n';
+        }
+
+        // Add total row
+        csv += 'Total';
+        for (const year of years) {
+            const yearRecords = this.monthlyReportData.filter(r => r.year == year);
+            const total = yearRecords.reduce((sum, r) => sum + parseFloat(r.total_loss_kwh || 0), 0);
+            csv += ',' + total.toFixed(0);
+        }
+        csv += '\n';
+
+        // Download
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'monthly_heat_loss_report.csv';
+        link.click();
     }
 };
 

@@ -45,10 +45,14 @@ if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
     require_once __DIR__ . '/../auth.php';
     $auth = HeatAQAuth::check(Config::requiresAuth());
     if ($auth) {
-        if (!isset($auth['project']['pool_site_id'])) {
+        if (!isset($auth['project']['pool_site_id']) || empty($auth['project']['pool_site_id'])) {
             header('Content-Type: application/json');
-            http_response_code(500);
-            echo json_encode(['error' => 'Auth context missing pool_site_id']);
+            http_response_code(400);
+            echo json_encode([
+                'error' => 'No pool site configured for this project',
+                'code' => 'NO_POOL_SITE',
+                'message' => 'This project does not have a pool site configured. Please go to the Project tab and create a site first.'
+            ]);
             exit;
         }
         $currentPoolSiteId = (int)$auth['project']['pool_site_id'];
@@ -67,7 +71,11 @@ if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
     if (!$currentPoolSiteId) {
         header('Content-Type: application/json');
         http_response_code(400);
-        echo json_encode(['error' => 'Missing pool_site_id: Set heataq_pool_site_id cookie or enable authentication']);
+        echo json_encode([
+            'error' => 'No pool site configured',
+            'code' => 'NO_POOL_SITE',
+            'message' => 'Missing pool_site_id: Set heataq_pool_site_id cookie or enable authentication'
+        ]);
         exit;
     }
 }
@@ -529,6 +537,48 @@ try {
             sendResponse([
                 'run_id' => $runId,
                 'daily_results' => $dailyResults
+            ]);
+            break;
+
+        case 'get_monthly_results':
+            $runId = (int) getParam('run_id');
+            if (!$runId) {
+                sendError('run_id parameter required');
+            }
+
+            // Verify run belongs to site
+            $poolSiteId = $currentPoolSiteId;
+            $stmt = $pdo->prepare("SELECT run_id FROM simulation_runs WHERE run_id = ? AND pool_site_id = ?");
+            $stmt->execute([$runId, $poolSiteId]);
+            if (!$stmt->fetch()) {
+                sendError('Simulation run not found', 404);
+            }
+
+            // Get monthly aggregated results
+            $stmt = $pdo->prepare("
+                SELECT
+                    YEAR(date) as year,
+                    MONTH(date) as month,
+                    SUM(total_loss_kwh) as total_loss_kwh,
+                    SUM(total_solar_kwh) as total_solar_kwh,
+                    SUM(total_hp_kwh) as total_hp_kwh,
+                    SUM(total_boiler_kwh) as total_boiler_kwh,
+                    SUM(total_cost) as total_cost,
+                    AVG(avg_air_temp) as avg_air_temp,
+                    AVG(avg_water_temp) as avg_water_temp,
+                    SUM(open_hours) as open_hours,
+                    COUNT(*) as days_count
+                FROM simulation_daily_results
+                WHERE run_id = ?
+                GROUP BY YEAR(date), MONTH(date)
+                ORDER BY year, month
+            ");
+            $stmt->execute([$runId]);
+            $monthlyResults = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            sendResponse([
+                'run_id' => $runId,
+                'monthly_results' => $monthlyResults
             ]);
             break;
 

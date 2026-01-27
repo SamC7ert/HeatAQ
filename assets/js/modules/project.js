@@ -8,6 +8,7 @@ const ProjectModule = {
 
     // Load project data
     async load() {
+        console.log('[Project] load() starting...');
         try {
             // Load current project from localStorage
             const projectId = localStorage.getItem('heataq_project');
@@ -19,26 +20,33 @@ const ProjectModule = {
                 name: projectName,
                 description: projectDesc
             };
+            console.log('[Project] currentProject:', this.currentProject);
 
             // Update display
             this.updateDisplay();
 
             // Load site data
+            console.log('[Project] Loading site data...');
             await this.loadSiteData();
 
             // Load pool data (must await before updatePoolCard)
+            console.log('[Project] Loading pool data...');
             await this.loadPoolData();
 
             // Load project summary
+            console.log('[Project] Loading summary...');
             await this.loadSummary();
 
             // Update pool card
+            console.log('[Project] Updating pool card...');
             await this.updatePoolCard();
 
             // Load projects list
+            console.log('[Project] Loading projects list...');
             await this.loadProjectsList();
+            console.log('[Project] load() completed');
         } catch (error) {
-            console.error('Error loading project:', error);
+            console.error('[Project] Error loading project:', error);
         }
     },
 
@@ -952,13 +960,17 @@ const ProjectModule = {
             const container = document.getElementById('projects-list');
 
             if (response.ok) {
-                this.projects = await response.json();
+                const data = await response.json();
+                this.projects = data.projects || [];
 
                 if (container && Array.isArray(this.projects) && this.projects.length > 0) {
                     container.innerHTML = this.projects.map(project => {
-                        const isActive = project.id == this.currentProject?.id;
-                        return `<div class="project-item" style="padding: 10px; border: 1px solid ${isActive ? '#0d6efd' : '#dee2e6'}; border-radius: 6px; margin-bottom: 8px; background: ${isActive ? '#e7f1ff' : '#fff'}; cursor: pointer;" onclick="app.project.switchProject(${project.id})">
-                            <strong>${project.name || 'Unnamed Project'}</strong>
+                        // API returns project_id and project_name
+                        const projectId = project.project_id || project.id;
+                        const projectName = project.project_name || project.name;
+                        const isActive = projectId == this.currentProject?.id;
+                        return `<div class="project-item" style="padding: 10px; border: 1px solid ${isActive ? '#0d6efd' : '#dee2e6'}; border-radius: 6px; margin-bottom: 8px; background: ${isActive ? '#e7f1ff' : '#fff'}; cursor: pointer;" onclick="app.project.switchProject(${projectId})">
+                            <strong>${projectName || 'Unnamed Project'}</strong>
                             ${isActive ? '<span style="float: right; color: #0d6efd; font-size: 12px;">Current</span>' : ''}
                             <p style="margin: 5px 0 0; font-size: 12px; color: #666;">${project.description || 'No description'}</p>
                         </div>`;
@@ -1116,7 +1128,7 @@ const ProjectModule = {
     },
 
     // Show new project modal
-    showNewProjectModal() {
+    async showNewProjectModal() {
         const modal = document.getElementById('new-project-modal');
         if (modal) {
             modal.style.display = 'flex';
@@ -1129,6 +1141,50 @@ const ProjectModule = {
             if (descInput) {
                 descInput.value = '';
             }
+            // Reset site option to default
+            const siteOption = document.getElementById('new-project-site-option');
+            if (siteOption) {
+                siteOption.value = 'default';
+            }
+            // Hide source site dropdown
+            const sourceContainer = document.getElementById('new-project-source-site-container');
+            if (sourceContainer) {
+                sourceContainer.style.display = 'none';
+            }
+            // Load available sites for copy option
+            await this.loadAvailableSites();
+        }
+    },
+
+    // Load available sites for the copy dropdown
+    async loadAvailableSites() {
+        try {
+            const response = await fetch(`${config.API_BASE_URL}?action=get_sites`);
+            if (response.ok) {
+                const data = await response.json();
+                const sites = data.sites || [];
+                const select = document.getElementById('new-project-source-site');
+                if (select) {
+                    if (sites.length > 0) {
+                        select.innerHTML = sites.map(site =>
+                            `<option value="${site.id}">${site.name} (${site.pool_count || 0} pools)</option>`
+                        ).join('');
+                    } else {
+                        select.innerHTML = '<option value="">No existing sites available</option>';
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error loading sites:', error);
+        }
+    },
+
+    // Handle site option change
+    onSiteOptionChange() {
+        const siteOption = document.getElementById('new-project-site-option')?.value;
+        const sourceContainer = document.getElementById('new-project-source-site-container');
+        if (sourceContainer) {
+            sourceContainer.style.display = siteOption === 'copy' ? 'block' : 'none';
         }
     },
 
@@ -1144,21 +1200,33 @@ const ProjectModule = {
     async createNewProject() {
         const nameInput = document.getElementById('new-project-name');
         const descInput = document.getElementById('new-project-desc');
+        const siteOptionSelect = document.getElementById('new-project-site-option');
+        const sourceSiteSelect = document.getElementById('new-project-source-site');
 
         const name = nameInput?.value?.trim();
         const description = descInput?.value?.trim() || '';
+        const siteOption = siteOptionSelect?.value || 'default';
+        const sourcePoolSiteId = siteOption === 'copy' ? sourceSiteSelect?.value : null;
 
         if (!name) {
             alert('Please enter a project name');
             return;
         }
 
+        // Build request body
+        const requestBody = {
+            name,
+            description,
+            create_default_site: siteOption === 'default',
+            source_pool_site_id: sourcePoolSiteId ? parseInt(sourcePoolSiteId) : null
+        };
+
         try {
             // Create in backend
             const response = await fetch(`${config.API_BASE_URL}?action=create_project`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, description })
+                body: JSON.stringify(requestBody)
             });
 
             if (response.ok) {
@@ -1229,17 +1297,19 @@ const ProjectModule = {
         }
 
         try {
-            // Find project in list
-            const project = this.projects.find(p => p.id == projectId);
+            // Find project in list (API returns project_id and project_name)
+            const project = this.projects.find(p => (p.project_id || p.id) == projectId);
 
             if (project) {
-                localStorage.setItem('heataq_project', project.id);
-                localStorage.setItem('heataq_project_name', project.name);
+                const pId = project.project_id || project.id;
+                const pName = project.project_name || project.name;
+                localStorage.setItem('heataq_project', pId);
+                localStorage.setItem('heataq_project_name', pName);
                 localStorage.setItem('heataq_project_desc', project.description || '');
 
                 this.currentProject = {
-                    id: project.id,
-                    name: project.name,
+                    id: pId,
+                    name: pName,
                     description: project.description
                 };
 
