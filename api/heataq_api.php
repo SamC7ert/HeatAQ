@@ -985,6 +985,7 @@ class HeatAQAPI {
 
     private function saveDateRange() {
         $input = $this->getPostInput();
+        error_log("[saveDateRange] Input received: " . json_encode($input));
 
         $rangeId = $input['range_id'] ?? null;
         if (!isset($input['template_id'])) {
@@ -995,6 +996,8 @@ class HeatAQAPI {
         $startDate = $input['start_date'] ?? null;
         $endDate = $input['end_date'] ?? null;
         $priority = (int)($input['priority'] ?? 1);
+
+        error_log("[saveDateRange] Parsed: rangeId=$rangeId, templateId=$templateId, weekScheduleId=$weekScheduleId, priority=$priority");
 
         if (!$weekScheduleId) {
             $this->sendError('Week schedule is required');
@@ -1010,22 +1013,27 @@ class HeatAQAPI {
 
         if ($rangeId) {
             // Update existing (column is 'id', not 'range_id')
+            error_log("[saveDateRange] UPDATE: id=$rangeId, weekScheduleId=$weekScheduleId, startDate=$startDate, endDate=$endDate, priority=$priority");
             $stmt = $this->db->prepare("
                 UPDATE calendar_date_ranges
                 SET week_schedule_id = ?, start_date = ?, end_date = ?, priority = ?
                 WHERE id = ?
             ");
             $stmt->execute([$weekScheduleId, $startDate, $endDate, $priority, $rangeId]);
+            error_log("[saveDateRange] UPDATE affected rows: " . $stmt->rowCount());
         } else {
             // Create new (column is 'schedule_template_id', not 'template_id')
+            error_log("[saveDateRange] INSERT: templateId=$templateId, weekScheduleId=$weekScheduleId, startDate=$startDate, endDate=$endDate, priority=$priority");
             $stmt = $this->db->prepare("
                 INSERT INTO calendar_date_ranges (schedule_template_id, week_schedule_id, start_date, end_date, priority)
                 VALUES (?, ?, ?, ?, ?)
             ");
             $stmt->execute([$templateId, $weekScheduleId, $startDate, $endDate, $priority]);
             $rangeId = $this->db->lastInsertId();
+            error_log("[saveDateRange] INSERT new range_id: $rangeId");
         }
 
+        error_log("[saveDateRange] Success, returning range_id: $rangeId");
         $this->sendResponse(['success' => true, 'range_id' => $rangeId]);
     }
 

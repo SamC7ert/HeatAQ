@@ -271,26 +271,39 @@ const calendar = {
         const select = document.getElementById('default-week-schedule');
         const weekScheduleId = select.value;
 
+        console.log('[Calendar] saveDefaultSchedule called', {
+            weekScheduleId,
+            templateId: this.currentTemplateId,
+            dateRanges: this.dateRanges
+        });
+
         if (!weekScheduleId) {
+            console.log('[Calendar] No weekScheduleId selected, returning early');
             return;
         }
 
         // Find existing default range (priority 0)
         const defaultRange = this.dateRanges.find(r => r.priority === 0 || r.priority === '0');
+        console.log('[Calendar] Default range found:', defaultRange);
+
+        const payload = {
+            range_id: defaultRange?.range_id || null,
+            template_id: this.currentTemplateId,
+            week_schedule_id: parseInt(weekScheduleId),
+            start_date: null,
+            end_date: null,
+            priority: 0
+        };
+        console.log('[Calendar] Saving date range with payload:', payload);
 
         try {
-            await api.calendar.saveDateRange({
-                range_id: defaultRange?.range_id || null,
-                template_id: this.currentTemplateId,
-                week_schedule_id: parseInt(weekScheduleId),
-                start_date: null,
-                end_date: null,
-                priority: 0
-            });
+            const result = await api.calendar.saveDateRange(payload);
+            console.log('[Calendar] Save result:', result);
 
             api.utils.showSuccess('Default schedule saved');
             await this.loadCalendarRules(this.currentTemplateId);
         } catch (err) {
+            console.error('[Calendar] Save failed:', err);
             api.utils.showError('Failed to save: ' + err.message);
         }
     },
