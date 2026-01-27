@@ -185,6 +185,12 @@ try {
             // DEBUG: Log what PoolScheduler loaded
             $scheduleTemplate = $scheduler->getTemplate();
             $dateRanges = $scheduler->getDateRanges();  // Get loaded date ranges
+
+            // DEBUG: Direct DB query to see what's actually in the table
+            $dbCheckStmt = $pdo->prepare("SELECT id, schedule_template_id, is_active, priority, week_schedule_id FROM calendar_date_ranges WHERE schedule_template_id = ?");
+            $dbCheckStmt->execute([$templateId]);
+            $dbRows = $dbCheckStmt->fetchAll(PDO::FETCH_ASSOC);
+
             $debugScheduleInfo = [
                 'requested_template_id' => $templateId,
                 'loaded_template_id' => $scheduleTemplate['template_id'] ?? null,
@@ -198,6 +204,7 @@ try {
                         'priority' => $r['priority'] ?? null,
                     ];
                 }, $dateRanges),
+                'db_direct_query' => $dbRows,  // Show what's actually in DB
             ];
 
             // Get first date schedule to verify (with error handling)

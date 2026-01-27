@@ -225,6 +225,9 @@ class PoolScheduler {
      */
     private function loadDateRanges() {
         try {
+            // Debug: Log the exact query and parameter
+            error_log("[PoolScheduler] loadDateRanges: Querying for schedule_template_id = {$this->templateId}");
+
             $stmt = $this->db->prepare("
                 SELECT
                     id,
@@ -241,6 +244,15 @@ class PoolScheduler {
             ");
             $stmt->execute([$this->templateId]);
             $rows = $stmt->fetchAll();
+
+            // Debug: Also try without is_active filter to see if that's the issue
+            $stmt2 = $this->db->prepare("SELECT id, is_active FROM calendar_date_ranges WHERE schedule_template_id = ?");
+            $stmt2->execute([$this->templateId]);
+            $allRows = $stmt2->fetchAll();
+            error_log("[PoolScheduler] loadDateRanges: Found " . count($rows) . " active rows, " . count($allRows) . " total rows for template {$this->templateId}");
+            foreach ($allRows as $r) {
+                error_log("[PoolScheduler]   Row id={$r['id']}, is_active={$r['is_active']}");
+            }
 
             // Debug: Log loaded date ranges
             error_log("[PoolScheduler] Template {$this->templateId}: Loading " . count($rows) . " date ranges");
