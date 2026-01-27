@@ -543,23 +543,36 @@ const ProjectModule = {
             boiler_marginal_cost_per_kw: boilerMarginal
         };
 
+        // Validate project_id before saving
+        const projectId = this.currentProject?.id;
+        if (!projectId) {
+            console.error('[Project] Cannot save site: no currentProject.id set');
+            alert('Error: No project selected. Please select a project first.');
+            return;
+        }
+
+        console.log('[Project] Saving site with project_id:', projectId, 'currentProject:', this.currentProject);
+
         // Save to database via API - uses INT id
         try {
+            const payload = {
+                id: this.currentSite.id || null,  // INT pool_site_id, null for new
+                project_id: projectId,  // Required for new sites - validated above
+                name: name,
+                latitude: lat,
+                longitude: lng,
+                weather_station_id: wsId,
+                hp_base_cost_nok: hpBase,
+                hp_marginal_cost_per_kw: hpMarginal,
+                boiler_base_cost_nok: boilerBase,
+                boiler_marginal_cost_per_kw: boilerMarginal
+            };
+            console.log('[Project] Save site payload:', JSON.stringify(payload));
+
             const response = await fetch(`${config.API_BASE_URL}?action=save_site`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    id: this.currentSite.id || null,  // INT pool_site_id, null for new
-                    project_id: this.currentProject?.id,  // Required for new sites
-                    name: name,
-                    latitude: lat,
-                    longitude: lng,
-                    weather_station_id: wsId,
-                    hp_base_cost_nok: hpBase,
-                    hp_marginal_cost_per_kw: hpMarginal,
-                    boiler_base_cost_nok: boilerBase,
-                    boiler_marginal_cost_per_kw: boilerMarginal
-                })
+                body: JSON.stringify(payload)
             });
             const result = await response.json();
 
@@ -947,9 +960,12 @@ const ProjectModule = {
 
         // Validate we have a site
         if (!poolData.pool_site_id) {
+            console.error('[Project] Cannot save pool: no currentSite.id set');
             alert('Error: No site configured. Please create a site first.');
             return;
         }
+
+        console.log('[Project] Saving pool with pool_site_id:', poolData.pool_site_id, 'currentSite:', this.currentSite);
 
         // Update local state
         this.currentPool = {
