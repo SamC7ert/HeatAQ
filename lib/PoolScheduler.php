@@ -409,6 +409,8 @@ class PoolScheduler {
             $date = new DateTime($date);
         }
 
+        $dateStr = $date->format('Y-m-d');
+
         // 1. Check exception days (holidays) - highest priority
         $exception = $this->checkExceptionDays($date);
         if ($exception) {
@@ -417,14 +419,21 @@ class PoolScheduler {
 
         // 2. Check date ranges (programs)
         foreach ($this->dateRanges as $dateRange) {
-            if ($this->dateInRange($date, $dateRange)) {
-                $weekSchedule = $this->weekSchedules[$dateRange['week_schedule_id']] ?? null;
+            $inRange = $this->dateInRange($date, $dateRange);
+            if ($inRange) {
+                $weekScheduleId = $dateRange['week_schedule_id'];
+                $weekSchedule = $this->weekSchedules[$weekScheduleId] ?? null;
                 if ($weekSchedule) {
                     $dow = $this->getDayOfWeekShort($date);
                     $scheduleName = $weekSchedule['days'][$dow] ?? null;
                     if ($scheduleName) {
                         return $scheduleName;
+                    } else {
+                        // Day not mapped in week schedule - log this
+                        error_log("[PoolScheduler] Date $dateStr: Range '{$dateRange['name']}' (id={$dateRange['id']}, is_default=" . ($dateRange['is_default'] ?? 'false') . ") matched, but week_schedule '{$weekSchedule['name']}' has no mapping for $dow");
                     }
+                } else {
+                    error_log("[PoolScheduler] Date $dateStr: Range '{$dateRange['name']}' matched but week_schedule_id $weekScheduleId not found");
                 }
             }
         }
