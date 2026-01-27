@@ -540,6 +540,48 @@ try {
             ]);
             break;
 
+        case 'get_monthly_results':
+            $runId = (int) getParam('run_id');
+            if (!$runId) {
+                sendError('run_id parameter required');
+            }
+
+            // Verify run belongs to site
+            $poolSiteId = $currentPoolSiteId;
+            $stmt = $pdo->prepare("SELECT run_id FROM simulation_runs WHERE run_id = ? AND pool_site_id = ?");
+            $stmt->execute([$runId, $poolSiteId]);
+            if (!$stmt->fetch()) {
+                sendError('Simulation run not found', 404);
+            }
+
+            // Get monthly aggregated results
+            $stmt = $pdo->prepare("
+                SELECT
+                    YEAR(date) as year,
+                    MONTH(date) as month,
+                    SUM(total_loss_kwh) as total_loss_kwh,
+                    SUM(total_solar_kwh) as total_solar_kwh,
+                    SUM(total_hp_kwh) as total_hp_kwh,
+                    SUM(total_boiler_kwh) as total_boiler_kwh,
+                    SUM(total_cost) as total_cost,
+                    AVG(avg_air_temp) as avg_air_temp,
+                    AVG(avg_water_temp) as avg_water_temp,
+                    SUM(open_hours) as open_hours,
+                    COUNT(*) as days_count
+                FROM simulation_daily_results
+                WHERE run_id = ?
+                GROUP BY YEAR(date), MONTH(date)
+                ORDER BY year, month
+            ");
+            $stmt->execute([$runId]);
+            $monthlyResults = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            sendResponse([
+                'run_id' => $runId,
+                'monthly_results' => $monthlyResults
+            ]);
+            break;
+
         case 'get_results':
             $runId = (int) getParam('run_id');
             if (!$runId) {
