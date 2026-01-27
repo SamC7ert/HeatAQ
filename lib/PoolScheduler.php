@@ -236,7 +236,6 @@ class PoolScheduler {
                     week_schedule_id,
                     start_date,
                     end_date,
-                    is_recurring,
                     is_active
                 FROM calendar_date_ranges
                 WHERE schedule_template_id = ? AND is_active = 1
@@ -347,8 +346,8 @@ class PoolScheduler {
 
             return $exceptions;
         } catch (Exception $e) {
-            // If query fails, return empty array
-            return [];
+            error_log("[PoolScheduler] loadExceptionDays EXCEPTION: " . $e->getMessage());
+            throw $e;
         }
     }
 
@@ -387,8 +386,8 @@ class PoolScheduler {
 
             return $holidays;
         } catch (Exception $e) {
-            // If table doesn't exist, use algorithm fallback
-            return [];
+            error_log("[PoolScheduler] loadHolidayDates EXCEPTION: " . $e->getMessage());
+            throw $e;
         }
     }
 
