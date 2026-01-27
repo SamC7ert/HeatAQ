@@ -589,6 +589,11 @@ const ProjectModule = {
 
         console.log('[Project] Site saved:', this.currentSite);
 
+        // Reload pool data for the new/updated site
+        // This ensures pools are filtered by the current site's pool_site_id
+        await this.loadPoolData();
+        await this.updatePoolCard();
+
         // Auto-fetch NASA solar data if coordinates changed
         if (coordsChanged) {
             console.log('[Project] Coordinates changed - fetching NASA solar data...');
