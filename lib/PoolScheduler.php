@@ -239,20 +239,36 @@ class PoolScheduler {
 
             $dateRanges = [];
             foreach ($rows as $row) {
-                $startDate = new DateTime($row['start_date']);
-                $endDate = new DateTime($row['end_date']);
+                // Check for default/year-round range (null dates or priority 0)
+                $isDefault = empty($row['start_date']) || empty($row['end_date']) || $row['priority'] == 0;
 
-                $dateRanges[] = [
-                    'id' => $row['id'],
-                    'name' => $row['name'],
-                    'priority' => $row['priority'] ?? 0,
-                    'week_schedule_id' => $row['week_schedule_id'],
-                    'start_month' => (int) $startDate->format('n'),
-                    'start_day' => (int) $startDate->format('j'),
-                    'end_month' => (int) $endDate->format('n'),
-                    'end_day' => (int) $endDate->format('j'),
-                    'is_recurring' => isset($row['is_recurring']) ? (bool) $row['is_recurring'] : true
-                ];
+                if ($isDefault) {
+                    // Default range applies to all dates
+                    $dateRanges[] = [
+                        'id' => $row['id'],
+                        'name' => $row['name'],
+                        'priority' => $row['priority'] ?? 0,
+                        'week_schedule_id' => $row['week_schedule_id'],
+                        'is_default' => true,
+                        'is_recurring' => true
+                    ];
+                } else {
+                    $startDate = new DateTime($row['start_date']);
+                    $endDate = new DateTime($row['end_date']);
+
+                    $dateRanges[] = [
+                        'id' => $row['id'],
+                        'name' => $row['name'],
+                        'priority' => $row['priority'] ?? 0,
+                        'week_schedule_id' => $row['week_schedule_id'],
+                        'start_month' => (int) $startDate->format('n'),
+                        'start_day' => (int) $startDate->format('j'),
+                        'end_month' => (int) $endDate->format('n'),
+                        'end_day' => (int) $endDate->format('j'),
+                        'is_default' => false,
+                        'is_recurring' => isset($row['is_recurring']) ? (bool) $row['is_recurring'] : true
+                    ];
+                }
             }
 
             return $dateRanges;
@@ -482,6 +498,11 @@ class PoolScheduler {
      * @return bool
      */
     private function dateInRange($date, $dateRange) {
+        // Default/year-round ranges match all dates
+        if ($dateRange['is_default'] ?? false) {
+            return true;
+        }
+
         if ($dateRange['is_recurring'] ?? true) {
             $fromMD = [$dateRange['start_month'], $dateRange['start_day']];
             $toMD = [$dateRange['end_month'], $dateRange['end_day']];
