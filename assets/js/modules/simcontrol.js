@@ -550,6 +550,7 @@ const SimControlModule = {
         );
 
         const strategy = equip.control_strategy || config.control_strategy || 'reactive';
+        const scheduleName = results.meta?.schedule_template_name || '-';
         const hasOverrides = Object.keys(overrides).length > 0;
 
         // Build config HTML with clear sections
@@ -565,6 +566,7 @@ const SimControlModule = {
             <div><strong>Strategy:</strong> ${strategy}</div>
             <div><strong>Bathers/day:</strong> ${bathersPerDay}</div>
             <div><strong>Activity:</strong> ${activityFactor}</div>
+            <div><strong>Schedule:</strong> ${scheduleName}</div>
             <div><strong>Wind exp:</strong> ${windExp}</div>
             <div><strong>Solar abs:</strong> ${solarAbs}</div>
             <div><strong>Cover R:</strong> ${fmt(config.cover_r_value, ' m²K/W', 1)}</div>
