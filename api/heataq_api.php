@@ -1579,7 +1579,7 @@ class HeatAQAPI {
             ");
             $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (Exception $e) {
-            // Fallback to simpler query if columns don't exist
+            error_log("[HeataqAPI] getUsers query failed, using fallback: " . $e->getMessage());
             $stmt = $this->db->query("SELECT user_id, email FROM users ORDER BY email");
             $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
             foreach ($users as &$user) {

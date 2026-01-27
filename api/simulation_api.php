@@ -474,7 +474,7 @@ try {
                 $stmt->execute([$poolSiteId]);
                 $runs = $stmt->fetchAll(PDO::FETCH_ASSOC);
             } catch (Exception $e) {
-                // Table might not exist yet
+                error_log("[SimAPI] get_runs query failed: " . $e->getMessage());
                 $runs = [];
             }
 
@@ -492,6 +492,7 @@ try {
                 $countStmt->execute([$poolSiteId]);
                 $totalCount = $countStmt->fetchColumn();
             } catch (Exception $e) {
+                error_log("[SimAPI] get_runs count query failed: " . $e->getMessage());
                 $totalCount = count($runs);
             }
 
