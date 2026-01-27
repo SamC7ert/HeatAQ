@@ -8,6 +8,7 @@ const ProjectModule = {
 
     // Load project data
     async load() {
+        console.log('[Project] load() starting...');
         try {
             // Load current project from localStorage
             const projectId = localStorage.getItem('heataq_project');
@@ -19,26 +20,33 @@ const ProjectModule = {
                 name: projectName,
                 description: projectDesc
             };
+            console.log('[Project] currentProject:', this.currentProject);
 
             // Update display
             this.updateDisplay();
 
             // Load site data
+            console.log('[Project] Loading site data...');
             await this.loadSiteData();
 
             // Load pool data (must await before updatePoolCard)
+            console.log('[Project] Loading pool data...');
             await this.loadPoolData();
 
             // Load project summary
+            console.log('[Project] Loading summary...');
             await this.loadSummary();
 
             // Update pool card
+            console.log('[Project] Updating pool card...');
             await this.updatePoolCard();
 
             // Load projects list
+            console.log('[Project] Loading projects list...');
             await this.loadProjectsList();
+            console.log('[Project] load() completed');
         } catch (error) {
-            console.error('Error loading project:', error);
+            console.error('[Project] Error loading project:', error);
         }
     },
 
