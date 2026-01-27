@@ -827,8 +827,25 @@ const AdminModule = {
             const frostStart = frostDateRange.from ? frostDateRange.from.split('T')[0] : '2015-01-01';
             const frostEnd = frostDateRange.to ? frostDateRange.to.split('T')[0] : today;
 
-            // Default to fetching from 2015 or station start (whichever is later) to today
-            const defaultStart = frostStart > '2015-01-01' ? frostStart : '2015-01-01';
+            // Parse existing data end date from currentDateRange (format: "2020-01-01 → 2024-12-31")
+            let existingEndDate = null;
+            if (currentDateRange && currentDateRange !== '-') {
+                const match = currentDateRange.match(/→\s*(\d{4}-\d{2}-\d{2})/);
+                if (match) {
+                    existingEndDate = match[1];
+                }
+            }
+
+            // Default start: day after existing data ends, or frost start if no existing data
+            let defaultStart;
+            if (existingEndDate) {
+                // Add one day to existing end date
+                const nextDay = new Date(existingEndDate);
+                nextDay.setDate(nextDay.getDate() + 1);
+                defaultStart = nextDay.toISOString().split('T')[0];
+            } else {
+                defaultStart = frostStart > '2015-01-01' ? frostStart : '2015-01-01';
+            }
             const defaultEnd = frostEnd > today ? today : frostEnd;
 
             contentDiv.innerHTML = `
