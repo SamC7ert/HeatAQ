@@ -429,10 +429,21 @@ class PoolScheduler {
                     if ($scheduleName) {
                         return $scheduleName;
                     } else {
-                        // Day not mapped in week schedule - log this
-                        error_log("[PoolScheduler] Date $dateStr: Range '{$dateRange['name']}' (id={$dateRange['id']}, is_default=" . ($dateRange['is_default'] ?? 'false') . ") matched, but week_schedule '{$weekSchedule['name']}' has no mapping for $dow");
+                        // Day not mapped in week schedule
+                        // For default/year-round range, treat unmapped days as CLOSED
+                        // (return special marker that getPeriods will treat as closed)
+                        if ($dateRange['is_default'] ?? false) {
+                            error_log("[PoolScheduler] Date $dateStr: Default range matched, week_schedule '{$weekSchedule['name']}' has no mapping for $dow - treating as CLOSED");
+                            return '_CLOSED_';  // Will be treated as unknown = closed by getPeriods()
+                        }
+                        error_log("[PoolScheduler] Date $dateStr: Range '{$dateRange['name']}' matched, but week_schedule '{$weekSchedule['name']}' has no mapping for $dow - continuing to next range");
                     }
                 } else {
+                    // Week schedule not found - for default range, treat as closed
+                    if ($dateRange['is_default'] ?? false) {
+                        error_log("[PoolScheduler] Date $dateStr: Default range matched but week_schedule_id $weekScheduleId not found - treating as CLOSED");
+                        return '_CLOSED_';
+                    }
                     error_log("[PoolScheduler] Date $dateStr: Range '{$dateRange['name']}' matched but week_schedule_id $weekScheduleId not found");
                 }
             }
