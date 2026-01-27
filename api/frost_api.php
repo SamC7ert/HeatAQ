@@ -9,82 +9,7 @@
 set_time_limit(300);  // 5 minutes
 ini_set('memory_limit', '512M');
 
-// Catch all errors and return as JSON
-set_error_handler(function($severity, $message, $file, $line) {
-    throw new ErrorException($message, 0, $severity, $file, $line);
-});
-
-try {
-
 header('Content-Type: application/json');
-
-// Include configuration loader (same as heataq_api.php)
-require_once __DIR__ . '/../config.php';
-
-// Get FROST_CLIENT_ID - try Config class first, then fallback to direct file read
-$frostClientId = null;
-
-// Method 1: Try Config class if it has a get method
-if (method_exists('Config', 'get')) {
-    $frostClientId = Config::get('FROST_CLIENT_ID');
-}
-
-// Method 2: Try Config class getEnvConfig if available
-if (!$frostClientId && method_exists('Config', 'getEnvConfig')) {
-    $envConfig = Config::getEnvConfig();
-    $frostClientId = $envConfig['FROST_CLIENT_ID'] ?? null;
-}
-
-// Method 3: Fallback - read database.env directly (same location Config class uses)
-if (!$frostClientId) {
-    $configPaths = [
-        dirname(__DIR__, 2) . '/config_heataq/database.env',  // /config_heataq/database.env
-        '/config_heataq/database.env',                          // Absolute path
-        dirname(__DIR__) . '/database.env',                     // HeatAQ/database.env
-    ];
-
-    foreach ($configPaths as $configPath) {
-        if (file_exists($configPath)) {
-            $lines = file($configPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            foreach ($lines as $line) {
-                if (strpos($line, ';') === 0) continue; // Skip comments
-                if (strpos($line, 'FROST_CLIENT_ID') !== false && strpos($line, '=') !== false) {
-                    list($key, $value) = explode('=', $line, 2);
-                    if (trim($key) === 'FROST_CLIENT_ID') {
-                        $frostClientId = trim($value);
-                        break 2;
-                    }
-                }
-            }
-        }
-    }
-}
-
-if (!$frostClientId) {
-    http_response_code(500);
-    echo json_encode(['error' => 'FROST_CLIENT_ID not configured', 'debug' => 'Checked Config class and database.env paths']);
-    exit;
-}
-
-$action = $_GET['action'] ?? '';
-
-switch ($action) {
-    case 'check_station':
-        checkStation($frostClientId);
-        break;
-    case 'get_available_series':
-        getAvailableSeries($frostClientId);
-        break;
-    case 'fetch_data':
-        fetchWeatherData($frostClientId);
-        break;
-    case 'fetch_and_store_year':
-        fetchAndStoreYear($frostClientId);
-        break;
-    default:
-        http_response_code(400);
-        echo json_encode(['error' => 'Invalid action']);
-}
 
 /**
  * Check if a station exists and get its metadata
@@ -565,6 +490,82 @@ function fetchAndStoreYear($clientId) {
         ]);
     }
 }
+
+// ========== MAIN EXECUTION ==========
+
+// Catch all errors and return as JSON
+set_error_handler(function($severity, $message, $file, $line) {
+    throw new ErrorException($message, 0, $severity, $file, $line);
+});
+
+try {
+    // Include configuration loader
+    require_once __DIR__ . '/../config.php';
+
+    // Get FROST_CLIENT_ID - try Config class first, then fallback to direct file read
+    $frostClientId = null;
+
+    // Method 1: Try Config class if it has a get method
+    if (method_exists('Config', 'get')) {
+        $frostClientId = Config::get('FROST_CLIENT_ID');
+    }
+
+    // Method 2: Try Config class getEnvConfig if available
+    if (!$frostClientId && method_exists('Config', 'getEnvConfig')) {
+        $envConfig = Config::getEnvConfig();
+        $frostClientId = $envConfig['FROST_CLIENT_ID'] ?? null;
+    }
+
+    // Method 3: Fallback - read database.env directly (same location Config class uses)
+    if (!$frostClientId) {
+        $configPaths = [
+            dirname(__DIR__, 2) . '/config_heataq/database.env',  // /config_heataq/database.env
+            '/config_heataq/database.env',                          // Absolute path
+            dirname(__DIR__) . '/database.env',                     // HeatAQ/database.env
+        ];
+
+        foreach ($configPaths as $configPath) {
+            if (file_exists($configPath)) {
+                $lines = file($configPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+                foreach ($lines as $line) {
+                    if (strpos($line, ';') === 0) continue; // Skip comments
+                    if (strpos($line, 'FROST_CLIENT_ID') !== false && strpos($line, '=') !== false) {
+                        list($key, $value) = explode('=', $line, 2);
+                        if (trim($key) === 'FROST_CLIENT_ID') {
+                            $frostClientId = trim($value);
+                            break 2;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (!$frostClientId) {
+        http_response_code(500);
+        echo json_encode(['error' => 'FROST_CLIENT_ID not configured', 'debug' => 'Checked Config class and database.env paths']);
+        exit;
+    }
+
+    $action = $_GET['action'] ?? '';
+
+    switch ($action) {
+        case 'check_station':
+            checkStation($frostClientId);
+            break;
+        case 'get_available_series':
+            getAvailableSeries($frostClientId);
+            break;
+        case 'fetch_data':
+            fetchWeatherData($frostClientId);
+            break;
+        case 'fetch_and_store_year':
+            fetchAndStoreYear($frostClientId);
+            break;
+        default:
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid action']);
+    }
 
 } catch (Exception $e) {
     // Global error handler
