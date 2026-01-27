@@ -53,41 +53,57 @@ const ProjectModule = {
     // Load site data from localStorage or API
     async loadSiteData() {
         try {
-            // First try localStorage
+            // First try localStorage (but only if it has an id)
             const siteData = localStorage.getItem('heataq_site');
             if (siteData) {
-                this.currentSite = JSON.parse(siteData);
+                const parsed = JSON.parse(siteData);
+                if (parsed.id) {
+                    this.currentSite = parsed;
+                    console.log('[Project] Loaded site from localStorage, id:', this.currentSite.id);
+                }
             }
 
-            // If no id in localStorage, fetch from API to get the actual pool_site_id (INT)
+            // If no id in localStorage, fetch from API (filtered by project_id)
             if (!this.currentSite?.id) {
                 try {
                     const response = await fetch(`${config.API_BASE_URL}?action=get_sites`);
                     const result = await response.json();
+                    console.log('[Project] get_sites response:', result);
+
                     if (result.sites && result.sites.length > 0) {
-                        // Use first site from DB (or match by project_id later)
+                        // Use first site for current project
                         const dbSite = result.sites[0];
                         this.currentSite = {
-                            ...this.currentSite,
                             id: dbSite.id,  // INT pool_site_id
                             name: dbSite.name,
                             latitude: parseFloat(dbSite.latitude) || null,
                             longitude: parseFloat(dbSite.longitude) || null,
-                            weather_station_id: dbSite.default_weather_station || dbSite.weather_station_id,
+                            weather_station_id: dbSite.weather_station_id,
                         };
                         console.log('[Project] Loaded site from DB, id:', this.currentSite.id);
                         // Save to localStorage with id
                         localStorage.setItem('heataq_site', JSON.stringify(this.currentSite));
+                    } else {
+                        // No site for this project
+                        console.log('[Project] No pool_site found for project', this.currentProject?.id);
+                        this.currentSite = {
+                            id: null,
+                            name: 'No Site Configured',
+                            latitude: null,
+                            longitude: null,
+                            weather_station_id: null,
+                        };
                     }
                 } catch (err) {
                     console.warn('[Project] Could not fetch site from API:', err);
                 }
             }
 
-            // Fallback to default if still no site
+            // Fallback to default if still no site object
             if (!this.currentSite) {
                 this.currentSite = {
-                    name: 'Main Site',
+                    id: null,
+                    name: 'No Site',
                     latitude: null,
                     longitude: null,
                     weather_station_id: null,
@@ -114,6 +130,10 @@ const ProjectModule = {
         // Update name
         const nameEl = document.getElementById('site-name');
         if (nameEl) nameEl.textContent = site.name || 'Main Site';
+
+        // Update debug ID
+        const debugIdEl = document.getElementById('site-debug-id');
+        if (debugIdEl) debugIdEl.textContent = `Site ID: ${site.id || '-'}`;
 
         // Update location
         const locationEl = document.getElementById('site-location');
@@ -636,11 +656,24 @@ const ProjectModule = {
     // Load pool data from database (with localStorage fallback)
     async loadPoolData() {
         try {
-            // Build URL with pool_site_id (INT) if available
-            let url = './api/heataq_api.php?action=get_pools';
-            if (this.currentSite?.id) {
-                url += `&pool_site_id=${encodeURIComponent(this.currentSite.id)}`;
+            // If no pool_site configured, set empty pool
+            if (!this.currentSite?.id) {
+                console.log('[Project] No pool_site configured, cannot load pools');
+                this.currentPool = {
+                    pool_id: null,
+                    name: 'No Pool',
+                    length: null,
+                    width: null,
+                    depth: null,
+                    area: null,
+                    volume: null
+                };
+                this.currentPoolId = null;
+                return;
             }
+
+            // Build URL with pool_site_id (INT)
+            let url = `./api/heataq_api.php?action=get_pools&pool_site_id=${encodeURIComponent(this.currentSite.id)}`;
             console.log('[Project] Fetching pools from:', url);
 
             // Try to load from database first
@@ -672,7 +705,19 @@ const ProjectModule = {
                 console.log('[Project] Pool loaded from database:', this.currentPool);
                 return;
             } else {
-                console.warn('[Project] No pools returned from API for pool_site_id:', data.pool_site_id);
+                // No pools for this site/project - set empty placeholder
+                console.log('[Project] No pools for pool_site_id:', data.pool_site_id);
+                this.currentPool = {
+                    pool_id: null,
+                    name: 'No Pool Configured',
+                    length: null,
+                    width: null,
+                    depth: null,
+                    area: null,
+                    volume: null
+                };
+                this.currentPoolId = null;
+                return;
             }
         } catch (err) {
             console.warn('[Project] Failed to load pool from database, using localStorage:', err);
@@ -844,6 +889,10 @@ const ProjectModule = {
         const nameEl = document.getElementById('pool-name');
         if (nameEl) nameEl.textContent = pool.name || 'Main Pool';
 
+        // Pool debug ID
+        const debugIdEl = document.getElementById('pool-debug-id');
+        if (debugIdEl) debugIdEl.textContent = `Pool ID: ${pool.pool_id || '-'}`;
+
         // Pool physical properties from pool data
         const areaEl = document.getElementById('pool-area');
         const volumeEl = document.getElementById('pool-volume');
@@ -869,12 +918,18 @@ const ProjectModule = {
     updateDisplay() {
         const nameEl = document.getElementById('project-display-name');
         const descEl = document.getElementById('project-display-desc');
+        const debugEl = document.getElementById('project-debug-ids');
 
         if (nameEl) {
             nameEl.textContent = this.currentProject?.name || 'Unnamed Project';
         }
         if (descEl) {
             descEl.textContent = this.currentProject?.description || 'Click to add description...';
+        }
+        if (debugEl) {
+            const poolSiteId = this.currentPoolSite?.id || '-';
+            const poolId = this.currentPool?.pool_id || '-';
+            debugEl.textContent = `Project: ${this.currentProject?.id || '-'} | Site: ${poolSiteId} | Pool: ${poolId}`;
         }
 
         // Also update header
@@ -956,12 +1011,17 @@ const ProjectModule = {
     // Load list of available projects
     async loadProjectsList() {
         try {
+            console.log('[Project] Fetching projects list...');
             const response = await fetch(`${config.API_BASE_URL}?action=get_projects`);
+            console.log('[Project] get_projects response status:', response.status);
             const container = document.getElementById('projects-list');
+            console.log('[Project] projects-list container found:', !!container);
 
             if (response.ok) {
                 const data = await response.json();
+                console.log('[Project] get_projects data:', data);
                 this.projects = data.projects || [];
+                console.log('[Project] Parsed projects array:', this.projects.length, 'projects');
 
                 if (container && Array.isArray(this.projects) && this.projects.length > 0) {
                     container.innerHTML = this.projects.map(project => {
@@ -1303,6 +1363,13 @@ const ProjectModule = {
             if (project) {
                 const pId = project.project_id || project.id;
                 const pName = project.project_name || project.name;
+
+                // Clear old project's site/pool data from localStorage
+                localStorage.removeItem('heataq_site');
+                localStorage.removeItem('heataq_pool');
+                localStorage.removeItem('heataq_pool_site_id');
+
+                // Set new project
                 localStorage.setItem('heataq_project', pId);
                 localStorage.setItem('heataq_project_name', pName);
                 localStorage.setItem('heataq_project_desc', project.description || '');

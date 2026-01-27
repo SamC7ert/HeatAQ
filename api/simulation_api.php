@@ -41,43 +41,25 @@ register_shutdown_function(function() {
 require_once __DIR__ . '/../config.php';
 
 // Include authentication if required
+// pool_site_id is now OPTIONAL at startup - individual actions check if they need it
+$currentPoolSiteId = null;
+$currentUserId = null;
+
 if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
     require_once __DIR__ . '/../auth.php';
     $auth = HeatAQAuth::check(Config::requiresAuth());
     if ($auth) {
-        if (!isset($auth['project']['pool_site_id']) || empty($auth['project']['pool_site_id'])) {
-            header('Content-Type: application/json');
-            http_response_code(400);
-            echo json_encode([
-                'error' => 'No pool site configured for this project',
-                'code' => 'NO_POOL_SITE',
-                'message' => 'This project does not have a pool site configured. Please go to the Project tab and create a site first.'
-            ]);
-            exit;
+        if (isset($auth['project']['pool_site_id']) && !empty($auth['project']['pool_site_id'])) {
+            $currentPoolSiteId = (int)$auth['project']['pool_site_id'];
         }
-        $currentPoolSiteId = (int)$auth['project']['pool_site_id'];
         $currentUserId = $auth['user']['user_id'] ?? null;
     }
 } else {
-    // Development mode - get pool_site_id from cookie (required)
-    $currentPoolSiteId = null;
-    $currentUserId = null;
-
+    // Development mode - get pool_site_id from cookie (optional)
     if (isset($_COOKIE['heataq_pool_site_id']) && !empty($_COOKIE['heataq_pool_site_id'])) {
         $currentPoolSiteId = (int)$_COOKIE['heataq_pool_site_id'];
     }
-
-    // No default - require explicit pool_site_id
-    if (!$currentPoolSiteId) {
-        header('Content-Type: application/json');
-        http_response_code(400);
-        echo json_encode([
-            'error' => 'No pool site configured',
-            'code' => 'NO_POOL_SITE',
-            'message' => 'Missing pool_site_id: Set heataq_pool_site_id cookie or enable authentication'
-        ]);
-        exit;
-    }
+    // pool_site_id check moved to individual actions that require it
 }
 
 // Include required classes
@@ -142,6 +124,15 @@ try {
 
     switch ($action) {
         case 'run_simulation':
+            // Require pool_site_id for simulation
+            if (!$currentPoolSiteId) {
+                sendResponse([
+                    'error' => 'No pool site configured',
+                    'code' => 'NO_POOL_SITE',
+                    'message' => 'Please configure a pool site before running simulations'
+                ], 400);
+            }
+
             // Validate required parameters
             $startDate = getParam('start_date');
             $endDate = getParam('end_date');
@@ -403,8 +394,17 @@ try {
             $limit = (int) getParam('limit', 50);
             $offset = (int) getParam('offset', 0);
 
-            // Ensure we have pool_site_id
+            // If no pool_site_id, return empty list (no runs possible without site)
             $poolSiteId = $currentPoolSiteId;
+            if (!$poolSiteId) {
+                sendResponse([
+                    'runs' => [],
+                    'total' => 0,
+                    'limit' => $limit,
+                    'offset' => $offset,
+                    'note' => 'No pool site configured'
+                ]);
+            }
 
             try {
                 // Note: LIMIT/OFFSET as prepared params can cause issues, so we embed them directly (already cast to int)
@@ -687,6 +687,15 @@ try {
 
         case 'get_pool_config':
             $poolSiteId = $currentPoolSiteId;
+            if (!$poolSiteId) {
+                sendResponse([
+                    'error' => 'No pool site configured',
+                    'code' => 'NO_POOL_SITE',
+                    'pool_config' => null,
+                    'equipment' => null
+                ], 400);
+            }
+
             $scheduler = new PoolScheduler($pdo, $poolSiteId);
             $simulator = new EnergySimulator($pdo, $poolSiteId, $scheduler);
 

@@ -25,55 +25,51 @@ set_error_handler(function($errno, $errstr, $errfile, $errline) {
 require_once __DIR__ . '/../config.php';
 
 // Include authentication if required
+$currentPoolSiteId = null;
+$currentProjectId = null;
+$auth = null;
+
 if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
     require_once __DIR__ . '/../auth.php';
     $auth = HeatAQAuth::check(Config::requiresAuth());
     if ($auth) {
-        if (!isset($auth['project']['pool_site_id'])) {
-            header('Content-Type: application/json');
-            http_response_code(500);
-            echo json_encode(['error' => 'Auth context missing pool_site_id']);
-            exit;
+        // pool_site_id is now OPTIONAL - some projects may not have one yet
+        if (isset($auth['project']['pool_site_id'])) {
+            $currentPoolSiteId = (int)$auth['project']['pool_site_id'];
         }
-        $currentPoolSiteId = (int)$auth['project']['pool_site_id'];
+        if (isset($auth['project']['project_id'])) {
+            $currentProjectId = (int)$auth['project']['project_id'];
+        }
     }
 } else {
-    // Development mode - get pool_site_id from cookie (required)
-    $currentPoolSiteId = null;
-
+    // Development mode - get pool_site_id from cookie (optional)
     // Try to get from cookie (set by frontend)
     if (isset($_COOKIE['heataq_pool_site_id']) && !empty($_COOKIE['heataq_pool_site_id'])) {
         $currentPoolSiteId = (int)$_COOKIE['heataq_pool_site_id'];
     }
+    if (isset($_COOKIE['heataq_project']) && !empty($_COOKIE['heataq_project'])) {
+        $currentProjectId = (int)$_COOKIE['heataq_project'];
+    }
 
-    // Validate pool_site_id exists in database
+    // Validate pool_site_id exists in database (if provided)
     if ($currentPoolSiteId) {
         try {
             $db = Config::getDatabase();
             $stmt = $db->prepare("SELECT id FROM pool_sites WHERE id = ? LIMIT 1");
             $stmt->execute([$currentPoolSiteId]);
             if (!$stmt->fetch()) {
-                // Site not found in DB - fail with clear error
-                header('Content-Type: application/json');
-                http_response_code(400);
-                echo json_encode(['error' => "Invalid pool_site_id: {$currentPoolSiteId} not found in database"]);
-                exit;
+                // Site not found in DB - clear it (might be from old project)
+                $currentPoolSiteId = null;
             }
         } catch (Exception $e) {
-            header('Content-Type: application/json');
-            http_response_code(500);
-            echo json_encode(['error' => 'Database error validating pool_site_id: ' . $e->getMessage()]);
-            exit;
+            // Log but don't fail - pool_site_id is optional now
+            error_log('Database error validating pool_site_id: ' . $e->getMessage());
+            $currentPoolSiteId = null;
         }
     }
 
-    // No default - require explicit pool_site_id
-    if (!$currentPoolSiteId) {
-        header('Content-Type: application/json');
-        http_response_code(400);
-        echo json_encode(['error' => 'Missing pool_site_id: Set heataq_pool_site_id cookie or enable authentication']);
-        exit;
-    }
+    // pool_site_id is now OPTIONAL - actions that need it will check themselves
+    // This allows get_projects, get_sites, etc. to work without pool_site_id
 }
 
 // ====================================
@@ -3173,14 +3169,18 @@ class HeatAQAPI {
     }
 
     private function getSites() {
+        // Filter by project_id if available
+        $projectId = $this->projectId;
+
         // Check if pools table exists to avoid error on subquery
         $tableCheck = $this->db->query("SHOW TABLES LIKE 'pools'");
         $poolsTableExists = $tableCheck->rowCount() > 0;
 
         if ($poolsTableExists) {
-            $stmt = $this->db->prepare("
+            $sql = "
                 SELECT
                     ps.id,
+                    ps.project_id,
                     ps.name,
                     ps.latitude,
                     ps.longitude,
@@ -3192,12 +3192,17 @@ class HeatAQAPI {
                     ps.boiler_marginal_cost_per_kw,
                     (SELECT COUNT(*) FROM pools p WHERE p.pool_site_id = ps.id AND p.is_active = 1) as pool_count
                 FROM pool_sites ps
-                ORDER BY ps.name
-            ");
+            ";
+            if ($projectId) {
+                $sql .= " WHERE ps.project_id = ?";
+            }
+            $sql .= " ORDER BY ps.name";
+            $stmt = $this->db->prepare($sql);
         } else {
-            $stmt = $this->db->prepare("
+            $sql = "
                 SELECT
                     ps.id,
+                    ps.project_id,
                     ps.name,
                     ps.latitude,
                     ps.longitude,
@@ -3209,13 +3214,22 @@ class HeatAQAPI {
                     ps.boiler_marginal_cost_per_kw,
                     0 as pool_count
                 FROM pool_sites ps
-                ORDER BY ps.name
-            ");
+            ";
+            if ($projectId) {
+                $sql .= " WHERE ps.project_id = ?";
+            }
+            $sql .= " ORDER BY ps.name";
+            $stmt = $this->db->prepare($sql);
         }
-        $stmt->execute();
+
+        if ($projectId) {
+            $stmt->execute([$projectId]);
+        } else {
+            $stmt->execute();
+        }
         $sites = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $this->sendResponse(['sites' => $sites]);
+        $this->sendResponse(['sites' => $sites, 'project_id' => $projectId]);
     }
 
     /**

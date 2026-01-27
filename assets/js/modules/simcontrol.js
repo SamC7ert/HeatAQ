@@ -629,18 +629,14 @@ const SimControlModule = {
     // Monthly report data cache
     monthlyReportData: null,
 
-    // Initialize monthly report - load available runs
+    // Initialize monthly report - auto-load latest run
     initMonthlyReport: async function() {
         console.log('[SimControl] initMonthlyReport starting...');
         const card = document.getElementById('monthly-report-card');
-        const select = document.getElementById('monthly-report-run');
+        const infoEl = document.getElementById('monthly-report-run-info');
 
         if (!card) {
             console.warn('[SimControl] monthly-report-card element not found');
-            return;
-        }
-        if (!select) {
-            console.warn('[SimControl] monthly-report-run element not found');
             return;
         }
 
@@ -649,13 +645,13 @@ const SimControlModule = {
         console.log('[SimControl] Monthly report card shown');
 
         try {
-            // Load simulation runs
-            const response = await fetch('./api/simulation_api.php?action=get_runs&limit=50');
+            // Load simulation runs and get the latest one
+            const response = await fetch('./api/simulation_api.php?action=get_runs&limit=1');
             console.log('[SimControl] get_runs response status:', response.status);
 
             if (!response.ok) {
                 console.warn('[SimControl] get_runs failed with status:', response.status);
-                select.innerHTML = '<option value="">Could not load runs</option>';
+                if (infoEl) infoEl.textContent = 'Could not load runs';
                 return;
             }
 
@@ -664,36 +660,35 @@ const SimControlModule = {
             console.log('[SimControl] Loaded runs:', runs.length);
 
             if (runs.length > 0) {
-                select.innerHTML = '<option value="">Select simulation run...</option>' +
-                    runs.map(run => {
-                        const name = run.scenario_name || 'Unnamed';
-                        const period = `${run.start_date} - ${run.end_date}`;
-                        return `<option value="${run.run_id}">${name} (${period})</option>`;
-                    }).join('');
+                const latestRun = runs[0];
+                const name = latestRun.scenario_name || 'Unnamed';
+                const period = `${latestRun.start_date} to ${latestRun.end_date}`;
+                if (infoEl) infoEl.textContent = `${name} (${period})`;
+
+                // Auto-load the latest run
+                this.loadMonthlyReport(latestRun.run_id);
             } else {
-                select.innerHTML = '<option value="">No simulation runs available</option>';
+                if (infoEl) infoEl.textContent = 'No simulation runs available';
             }
         } catch (error) {
             console.error('[SimControl] Error loading runs for monthly report:', error);
-            select.innerHTML = '<option value="">Error loading runs</option>';
+            if (infoEl) infoEl.textContent = 'Error loading runs';
         }
     },
 
-    // Load monthly report data for selected run
-    loadMonthlyReport: async function() {
-        const select = document.getElementById('monthly-report-run');
+    // Load monthly report data for a specific run
+    loadMonthlyReport: async function(runId) {
         const tbody = document.getElementById('monthly-report-tbody');
         const thead = document.getElementById('monthly-report-thead');
-        const runId = select?.value;
 
         if (!runId || !tbody || !thead) {
             if (tbody) {
-                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #666;">Select a simulation run to view report</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" style="color: #666;">No simulation data</td></tr>';
             }
             return;
         }
 
-        tbody.innerHTML = '<tr><td colspan="10" style="text-align: center;">Loading...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10">Loading...</td></tr>';
 
         try {
             const response = await fetch(`./api/simulation_api.php?action=get_monthly_results&run_id=${runId}`);
@@ -704,15 +699,15 @@ const SimControlModule = {
             this.monthlyReportData = monthlyResults;
 
             if (monthlyResults.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: #666;">No data available for this run</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" style="color: #666;">No data available for this run</td></tr>';
                 return;
             }
 
             // Get unique years
             const years = [...new Set(monthlyResults.map(r => r.year))].sort();
 
-            // Build header
-            thead.innerHTML = `<tr><th style="width: 100px;">Month</th>${years.map(y => `<th style="text-align: right;">${y}</th>`).join('')}</tr>`;
+            // Build header (left-aligned)
+            thead.innerHTML = `<tr><th style="width: 60px; text-align: left;">Month</th>${years.map(y => `<th style="text-align: left; padding-left: 15px;">${y}</th>`).join('')}</tr>`;
 
             // Month names
             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -724,7 +719,7 @@ const SimControlModule = {
                 for (const year of years) {
                     const record = monthlyResults.find(r => r.year == year && r.month == month);
                     const value = record ? parseFloat(record.total_loss_kwh).toLocaleString('no-NO', {maximumFractionDigits: 0}) : '-';
-                    html += `<td style="text-align: right;">${value}</td>`;
+                    html += `<td style="text-align: left; padding-left: 15px;">${value}</td>`;
                 }
                 html += '</tr>';
             }
@@ -734,7 +729,7 @@ const SimControlModule = {
             for (const year of years) {
                 const yearRecords = monthlyResults.filter(r => r.year == year);
                 const total = yearRecords.reduce((sum, r) => sum + parseFloat(r.total_loss_kwh || 0), 0);
-                html += `<td style="text-align: right;">${total.toLocaleString('no-NO', {maximumFractionDigits: 0})}</td>`;
+                html += `<td style="text-align: left; padding-left: 15px;">${total.toLocaleString('no-NO', {maximumFractionDigits: 0})}</td>`;
             }
             html += '</tr>';
 
@@ -742,7 +737,7 @@ const SimControlModule = {
 
         } catch (error) {
             console.error('Error loading monthly report:', error);
-            tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; color: red;">Error loading data</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" style="color: red;">Error loading data</td></tr>';
         }
     },
 
