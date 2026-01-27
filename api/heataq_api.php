@@ -2031,6 +2031,11 @@ class HeatAQAPI {
         $name = $input['name'] ?? '';
         $configData = $input['config'] ?? [];
 
+        // Prefer project_id from request body (allows saving to switched project)
+        $projectId = isset($input['project_id']) && !empty($input['project_id'])
+            ? (int)$input['project_id']
+            : $this->projectId;
+
         if (empty($name)) {
             $this->sendError('Name is required');
         }
@@ -2085,13 +2090,13 @@ class HeatAQAPI {
                     INSERT INTO config_templates (project_id, template_name, json_config, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 ");
-                $stmt->execute([$this->projectId, $name, $configJson, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy]);
+                $stmt->execute([$projectId, $name, $configJson, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy]);
             } else {
                 $stmt = $this->db->prepare("
                     INSERT INTO config_templates (project_id, template_name, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy)
                     VALUES (?, ?, ?, ?, ?, ?)
                 ");
-                $stmt->execute([$this->projectId, $name, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy]);
+                $stmt->execute([$projectId, $name, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy]);
             }
             $configId = $this->db->lastInsertId();
         }
