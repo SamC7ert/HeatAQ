@@ -4,8 +4,26 @@ const navigation = {
     currentSection: 'simcontrol',
 
     async init() {
+        // Check if project has a pool_site configured
+        // If not, start on project page instead of simcontrol
+        let startSection = 'simcontrol';
+        const siteData = localStorage.getItem('heataq_site');
+        if (siteData) {
+            try {
+                const site = JSON.parse(siteData);
+                if (!site.id) {
+                    // No pool_site - start on project page
+                    startSection = 'project';
+                    console.log('[Navigation] No pool_site configured, starting on project page');
+                }
+            } catch (e) {
+                // Parse error - use default
+            }
+        }
+        // Note: Don't redirect if no site data at all - let it load first
+
         // Set initial active state
-        await this.switchSection('simcontrol', false);
+        await this.switchSection(startSection, false);
     },
     
     async switchSection(sectionName, updateUI = true) {
