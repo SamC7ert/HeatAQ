@@ -338,6 +338,17 @@ const ProjectModule = {
                 // Handle both array and object with stations property
                 this.weatherStations = Array.isArray(data) ? data : (data.stations || []);
                 console.log('[Project] Loaded weather stations:', this.weatherStations.length);
+
+                // Look up station name for current site and update display
+                if (this.currentSite?.weather_station_id && this.weatherStations.length > 0) {
+                    const station = this.weatherStations.find(ws => ws.station_id === this.currentSite.weather_station_id);
+                    if (station) {
+                        this.currentSite.weather_station_name = station.name;
+                        // Update display with the station name
+                        const wsEl = document.getElementById('site-weather-station');
+                        if (wsEl) wsEl.textContent = station.name;
+                    }
+                }
             } else {
                 console.warn('[Project] Weather stations API returned:', response.status);
                 this.weatherStations = [];
