@@ -414,6 +414,10 @@ const ProjectModule = {
         if (boilerBaseEl) boilerBaseEl.value = site.boiler_base_cost_nok || '';
         if (boilerMarginalEl) boilerMarginalEl.value = site.boiler_marginal_cost_per_kw || '';
 
+        // Update modal title for edit mode
+        const titleEl = modal.querySelector('h3');
+        if (titleEl) titleEl.textContent = 'Edit Site';
+
         modal.style.display = 'flex';
     },
 
@@ -548,6 +552,7 @@ const ProjectModule = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     id: this.currentSite.id || null,  // INT pool_site_id, null for new
+                    project_id: this.currentProject?.id,  // Required for new sites
                     name: name,
                     latitude: lat,
                     longitude: lng,
@@ -562,11 +567,15 @@ const ProjectModule = {
 
             if (result.error) {
                 console.error('[Project] Failed to save site to DB:', result.error);
+                alert('Failed to save site: ' + result.error);
+                return;
             } else {
                 console.log('[Project] Site saved to database:', result);
                 // Update id if server assigned one (for new sites)
                 if (result.id) {
                     this.currentSite.id = result.id;
+                    // Set cookie for API to use
+                    document.cookie = `heataq_pool_site_id=${result.id}; path=/; max-age=31536000`;
                 }
             }
         } catch (err) {
@@ -642,14 +651,107 @@ const ProjectModule = {
         setTimeout(() => notification.remove(), 4000);
     },
 
-    // Show add site modal (placeholder)
-    showAddSiteModal() {
-        alert('Multi-site support coming soon. Currently only one site per project is supported.');
+    // Populate weather station dropdown
+    async populateWeatherStationDropdown(selectedId = null) {
+        // Ensure weather stations are loaded
+        if (this.weatherStations.length === 0) {
+            await this.loadWeatherStations();
+        }
+
+        const wsSelect = document.getElementById('edit-site-weather');
+        if (wsSelect) {
+            wsSelect.innerHTML = '<option value="">-- Select Weather Station --</option>';
+            this.weatherStations.forEach(ws => {
+                const selected = ws.station_id === selectedId ? 'selected' : '';
+                wsSelect.innerHTML += `<option value="${ws.station_id}" ${selected}>${ws.name || ws.station_name} (${ws.station_id})</option>`;
+            });
+        }
     },
 
-    // Show add pool modal (placeholder)
+    // Show add site modal - opens edit modal with empty fields for creating new site
+    async showAddSiteModal() {
+        const modal = document.getElementById('edit-site-modal');
+        if (!modal) return;
+
+        // Clear form for new site
+        document.getElementById('edit-site-name').value = '';
+        document.getElementById('edit-site-lat').value = '';
+        document.getElementById('edit-site-lng').value = '';
+        document.getElementById('edit-site-weather').value = '';
+        document.getElementById('edit-site-hp-base').value = '';
+        document.getElementById('edit-site-hp-marginal').value = '';
+        document.getElementById('edit-site-boiler-base').value = '';
+        document.getElementById('edit-site-boiler-marginal').value = '';
+
+        // Reset displays
+        const solarEl = document.getElementById('edit-site-solar-estimate');
+        if (solarEl) solarEl.textContent = '-';
+        const statusEl = document.getElementById('solar-fetch-status');
+        if (statusEl) statusEl.textContent = 'Not fetched - click to load 10 years of hourly solar radiation data';
+        const mapEl = document.getElementById('site-map-preview');
+        if (mapEl) mapEl.innerHTML = 'Enter coordinates to preview map';
+
+        // Update modal title
+        const titleEl = modal.querySelector('h3');
+        if (titleEl) titleEl.textContent = 'Add New Site';
+
+        // Mark as new site (clear id)
+        this.currentSite = {
+            id: null,
+            name: '',
+            latitude: null,
+            longitude: null,
+            weather_station_id: null
+        };
+
+        // Load weather stations for dropdown
+        await this.populateWeatherStationDropdown();
+
+        modal.style.display = 'flex';
+    },
+
+    // Show add pool modal - opens edit modal with empty fields for creating new pool
     showAddPoolModal() {
-        alert('Multi-pool support coming soon. Use Edit Pool to configure the main pool.');
+        // Check if we have a site to add pool to
+        if (!this.currentSite?.id) {
+            alert('Please create a site first before adding pools.');
+            return;
+        }
+
+        const modal = document.getElementById('edit-pool-modal');
+        if (!modal) return;
+
+        // Clear form for new pool
+        document.getElementById('edit-pool-name').value = '';
+        document.getElementById('edit-pool-length').value = '';
+        document.getElementById('edit-pool-width').value = '';
+        document.getElementById('edit-pool-depth').value = '';
+        document.getElementById('edit-pool-wind').value = '0.535';
+        document.getElementById('edit-pool-solar').value = '60';
+        document.getElementById('edit-pool-has-cover').value = '1';
+        document.getElementById('edit-pool-cover-u').value = '5.0';
+        document.getElementById('edit-pool-cover-solar').value = '10';
+        document.getElementById('edit-pool-has-tunnel').value = '1';
+        document.getElementById('edit-pool-floor-insulated').value = '1';
+
+        // Reset dimensions display
+        this.calcPoolDimensions();
+
+        // Update modal title
+        const titleEl = modal.querySelector('h3');
+        if (titleEl) titleEl.textContent = 'Add New Pool';
+
+        // Mark as new pool (clear id)
+        this.currentPool = {
+            pool_id: null,
+            name: '',
+            length: null,
+            width: null,
+            depth: null
+        };
+        this.currentPoolId = null;
+
+        modal.style.display = 'flex';
     },
 
     // Current pool data
@@ -782,6 +884,10 @@ const ProjectModule = {
         this.calcPoolDimensions();
         this.togglePoolCover();
 
+        // Update modal title for edit mode
+        const titleEl = modal.querySelector('h3');
+        if (titleEl) titleEl.textContent = 'Edit Pool';
+
         modal.style.display = 'flex';
     },
 
@@ -821,6 +927,7 @@ const ProjectModule = {
 
         const poolData = {
             pool_id: this.currentPoolId || null,
+            pool_site_id: this.currentSite?.id,  // Required for new pools
             name: document.getElementById('edit-pool-name')?.value?.trim() || 'Main Pool',
             length_m: length,
             width_m: width,
@@ -834,6 +941,12 @@ const ProjectModule = {
             floor_insulated: document.getElementById('edit-pool-floor-insulated')?.value === '1',
             years_operating: parseInt(document.getElementById('edit-pool-years')?.value) || 3
         };
+
+        // Validate we have a site
+        if (!poolData.pool_site_id) {
+            alert('Error: No site configured. Please create a site first.');
+            return;
+        }
 
         // Update local state
         this.currentPool = {
