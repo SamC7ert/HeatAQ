@@ -19,7 +19,12 @@ const app = {
             this.admin.initDebugMode();
         }
 
-        // Initialize navigation (await to ensure ProjectModule loads first for SimControl)
+        // Load ProjectModule FIRST to determine site/pool config before navigation
+        if (typeof ProjectModule !== 'undefined') {
+            await ProjectModule.load();
+        }
+
+        // Initialize navigation (uses site data to decide start section)
         await this.navigation.init();
 
         // Set up global event handlers

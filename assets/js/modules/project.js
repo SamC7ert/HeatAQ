@@ -127,9 +127,12 @@ const ProjectModule = {
         const site = this.currentSite;
         if (!site) return;
 
+        // Check if site is configured (has an id)
+        const hasSite = site.id != null;
+
         // Update name
         const nameEl = document.getElementById('site-name');
-        if (nameEl) nameEl.textContent = site.name || 'Main Site';
+        if (nameEl) nameEl.textContent = hasSite ? (site.name || 'Unnamed Site') : 'No Site Configured';
 
         // Update debug ID
         const debugIdEl = document.getElementById('site-debug-id');
@@ -927,9 +930,9 @@ const ProjectModule = {
             descEl.textContent = this.currentProject?.description || 'Click to add description...';
         }
         if (debugEl) {
-            const poolSiteId = this.currentPoolSite?.id || '-';
+            const siteId = this.currentSite?.id || '-';
             const poolId = this.currentPool?.pool_id || '-';
-            debugEl.textContent = `Project: ${this.currentProject?.id || '-'} | Site: ${poolSiteId} | Pool: ${poolId}`;
+            debugEl.textContent = `Project: ${this.currentProject?.id || '-'} | Site: ${siteId} | Pool: ${poolId}`;
         }
 
         // Also update header
@@ -1368,6 +1371,9 @@ const ProjectModule = {
                 localStorage.removeItem('heataq_site');
                 localStorage.removeItem('heataq_pool');
                 localStorage.removeItem('heataq_pool_site_id');
+
+                // Clear the pool_site_id cookie (used by API)
+                document.cookie = 'heataq_pool_site_id=; path=/; max-age=0';
 
                 // Set new project
                 localStorage.setItem('heataq_project', pId);
