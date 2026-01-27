@@ -465,23 +465,10 @@ class PoolScheduler {
             }
         }
 
-        // 3. Fall back to base week schedule from template
-        $baseWeekId = $this->template['base_week_schedule_id'] ?? null;
-        if ($baseWeekId && isset($this->weekSchedules[$baseWeekId])) {
-            $weekSchedule = $this->weekSchedules[$baseWeekId];
-            $dow = $this->getDayOfWeekShort($date);
-            $scheduleName = $weekSchedule['days'][$dow] ?? null;
-            if ($scheduleName) {
-                return $scheduleName;
-            }
-        }
-
-        // 4. Last resort: use first available schedule
-        if (!empty($this->schedules)) {
-            return array_key_first($this->schedules);
-        }
-
-        throw new Exception("No schedule found for date " . $date->format('Y-m-d'));
+        // No schedule found - this is a configuration error
+        // User must define a Default (Year-Round) date range with priority=0
+        error_log("[PoolScheduler] ERROR: No schedule found for date $dateStr. You must configure a Default (Year-Round) schedule in Schedule Management.");
+        throw new Exception("No schedule found for date $dateStr. Please configure a Default (Year-Round) schedule in Schedule Management for template '{$this->template['name']}'.");
     }
 
     /**
@@ -860,12 +847,6 @@ class PoolScheduler {
             $openHours += ($period['to'] - $period['from']);
         }
 
-        // Get template info
-        $baseWeekId = $this->template['base_week_schedule_id'] ?? null;
-        $baseWeekSchedule = $baseWeekId && isset($this->weekSchedules[$baseWeekId])
-            ? $this->weekSchedules[$baseWeekId]
-            : null;
-
         return [
             'date' => $date,
             'day_of_week' => $dateObj->format('l'),
@@ -874,8 +855,6 @@ class PoolScheduler {
             'open_hours' => $openHours,
             'template_id' => $this->templateId,
             'template_name' => $this->template['name'] ?? null,
-            'base_week_schedule_id' => $baseWeekId,
-            'base_week_schedule_name' => $baseWeekSchedule ? $baseWeekSchedule['name'] : null,
             'available_schedules' => array_keys($this->schedules),
         ];
     }

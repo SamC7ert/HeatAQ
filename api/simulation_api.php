@@ -182,6 +182,20 @@ try {
             $poolSiteId = $currentPoolSiteId;
             $scheduler = new PoolScheduler($pdo, $poolSiteId, $templateId);
 
+            // DEBUG: Log what PoolScheduler loaded
+            $scheduleTemplate = $scheduler->getTemplate();
+            $debugScheduleInfo = [
+                'requested_template_id' => $templateId,
+                'loaded_template_id' => $scheduleTemplate['template_id'] ?? null,
+                'loaded_template_name' => $scheduleTemplate['name'] ?? null,
+            ];
+            // Get first date schedule to verify
+            $testDate = $startDate ?? date('Y-m-d');
+            $testScheduleName = $scheduler->getScheduleForDate($testDate);
+            $debugScheduleInfo['test_date'] = $testDate;
+            $debugScheduleInfo['test_schedule_name'] = $testScheduleName;
+            error_log("[SimAPI] Schedule debug: " . json_encode($debugScheduleInfo));
+
             // Initialize simulator
             $simulator = new EnergySimulator($pdo, $poolSiteId, $scheduler);
 
@@ -375,6 +389,7 @@ try {
                 $results['meta']['schedule_template_id'] = $scheduleTemplate['template_id'] ?? null;
                 $results['meta']['schedule_template_name'] = $scheduleTemplate['name'] ?? null;
                 $results['meta']['config_template_name'] = $configTemplateName;
+                $results['meta']['schedule_debug'] = $debugScheduleInfo;  // Add debug info
 
                 sendResponse([
                     'status' => 'success',
