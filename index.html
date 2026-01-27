@@ -776,6 +776,32 @@
                             <canvas id="sim-yearly-chart"></canvas>
                         </div>
                     </div>
+
+                    <!-- Monthly Heat Loss Report -->
+                    <div class="card" id="monthly-report-card" style="margin-top: 20px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h3 style="margin: 0;">Monthly Surface Heat Loss (kWh)</h3>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <select id="monthly-report-run" class="form-control" style="width: 250px;" onchange="app.simcontrol.loadMonthlyReport()">
+                                    <option value="">Select simulation run...</option>
+                                </select>
+                                <button class="btn btn-sm" onclick="app.simcontrol.exportMonthlyReport()">Export CSV</button>
+                            </div>
+                        </div>
+                        <div style="overflow-x: auto;">
+                            <table class="data-table" id="monthly-report-table">
+                                <thead id="monthly-report-thead">
+                                    <tr>
+                                        <th>Month</th>
+                                        <!-- Year columns added dynamically -->
+                                    </tr>
+                                </thead>
+                                <tbody id="monthly-report-tbody">
+                                    <tr><td colspan="10" style="text-align: center; color: #666;">Select a simulation run to view report</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                     </div><!-- end sim-tab-new -->
 
                     <!-- History Tab Content -->
@@ -1186,32 +1212,6 @@
                             <!-- Comparison Card -->
                             <div class="card" style="margin-top: 12px; padding: 10px; display: none;" id="debug-comparison">
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Monthly Heat Loss Report -->
-                    <div class="card" id="monthly-report-card" style="margin-top: 20px; display: none;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                            <h3 style="margin: 0;">Monthly Surface Heat Loss (kWh)</h3>
-                            <div style="display: flex; gap: 10px; align-items: center;">
-                                <select id="monthly-report-run" class="form-control" style="width: 250px;" onchange="app.simcontrol.loadMonthlyReport()">
-                                    <option value="">Select simulation run...</option>
-                                </select>
-                                <button class="btn btn-sm" onclick="app.simcontrol.exportMonthlyReport()">Export CSV</button>
-                            </div>
-                        </div>
-                        <div style="overflow-x: auto;">
-                            <table class="data-table" id="monthly-report-table">
-                                <thead id="monthly-report-thead">
-                                    <tr>
-                                        <th>Month</th>
-                                        <!-- Year columns added dynamically -->
-                                    </tr>
-                                </thead>
-                                <tbody id="monthly-report-tbody">
-                                    <tr><td colspan="10" style="text-align: center; color: #666;">Select a simulation run to view report</td></tr>
-                                </tbody>
-                            </table>
                         </div>
                     </div>
                 </section>
