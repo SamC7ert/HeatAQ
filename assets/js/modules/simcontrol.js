@@ -631,20 +631,37 @@ const SimControlModule = {
 
     // Initialize monthly report - load available runs
     initMonthlyReport: async function() {
+        console.log('[SimControl] initMonthlyReport starting...');
         const card = document.getElementById('monthly-report-card');
         const select = document.getElementById('monthly-report-run');
-        if (!card || !select) return;
+
+        if (!card) {
+            console.warn('[SimControl] monthly-report-card element not found');
+            return;
+        }
+        if (!select) {
+            console.warn('[SimControl] monthly-report-run element not found');
+            return;
+        }
 
         // Show the card
         card.style.display = 'block';
+        console.log('[SimControl] Monthly report card shown');
 
         try {
             // Load simulation runs
             const response = await fetch('./api/simulation_api.php?action=get_runs&limit=50');
-            if (!response.ok) return;
+            console.log('[SimControl] get_runs response status:', response.status);
+
+            if (!response.ok) {
+                console.warn('[SimControl] get_runs failed with status:', response.status);
+                select.innerHTML = '<option value="">Could not load runs</option>';
+                return;
+            }
 
             const data = await response.json();
             const runs = data.runs || [];
+            console.log('[SimControl] Loaded runs:', runs.length);
 
             if (runs.length > 0) {
                 select.innerHTML = '<option value="">Select simulation run...</option>' +
@@ -657,7 +674,8 @@ const SimControlModule = {
                 select.innerHTML = '<option value="">No simulation runs available</option>';
             }
         } catch (error) {
-            console.error('Error loading runs for monthly report:', error);
+            console.error('[SimControl] Error loading runs for monthly report:', error);
+            select.innerHTML = '<option value="">Error loading runs</option>';
         }
     },
 
