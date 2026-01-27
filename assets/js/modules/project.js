@@ -50,53 +50,42 @@ const ProjectModule = {
         }
     },
 
-    // Load site data from localStorage or API
+    // Load site data from API (always fetch to ensure correct project)
     async loadSiteData() {
         try {
-            // First try localStorage (but only if it has an id)
-            const siteData = localStorage.getItem('heataq_site');
-            if (siteData) {
-                const parsed = JSON.parse(siteData);
-                if (parsed.id) {
-                    this.currentSite = parsed;
-                    console.log('[Project] Loaded site from localStorage, id:', this.currentSite.id);
-                }
-            }
+            // ALWAYS fetch from API to get sites for CURRENT project
+            // Don't trust localStorage - it might be from a different project
+            const response = await fetch(`${config.API_BASE_URL}?action=get_sites`);
+            const result = await response.json();
+            console.log('[Project] get_sites response for project', this.currentProject?.id, ':', result);
 
-            // If no id in localStorage, fetch from API (filtered by project_id)
-            if (!this.currentSite?.id) {
-                try {
-                    const response = await fetch(`${config.API_BASE_URL}?action=get_sites`);
-                    const result = await response.json();
-                    console.log('[Project] get_sites response:', result);
-
-                    if (result.sites && result.sites.length > 0) {
-                        // Use first site for current project
-                        const dbSite = result.sites[0];
-                        this.currentSite = {
-                            id: dbSite.id,  // INT pool_site_id
-                            name: dbSite.name,
-                            latitude: parseFloat(dbSite.latitude) || null,
-                            longitude: parseFloat(dbSite.longitude) || null,
-                            weather_station_id: dbSite.weather_station_id,
-                        };
-                        console.log('[Project] Loaded site from DB, id:', this.currentSite.id);
-                        // Save to localStorage with id
-                        localStorage.setItem('heataq_site', JSON.stringify(this.currentSite));
-                    } else {
-                        // No site for this project
-                        console.log('[Project] No pool_site found for project', this.currentProject?.id);
-                        this.currentSite = {
-                            id: null,
-                            name: 'No Site Configured',
-                            latitude: null,
-                            longitude: null,
-                            weather_station_id: null,
-                        };
-                    }
-                } catch (err) {
-                    console.warn('[Project] Could not fetch site from API:', err);
-                }
+            if (result.sites && result.sites.length > 0) {
+                // Use first site for current project
+                const dbSite = result.sites[0];
+                this.currentSite = {
+                    id: dbSite.id,  // INT pool_site_id
+                    name: dbSite.name,
+                    latitude: parseFloat(dbSite.latitude) || null,
+                    longitude: parseFloat(dbSite.longitude) || null,
+                    weather_station_id: dbSite.weather_station_id,
+                };
+                console.log('[Project] Loaded site from DB, id:', this.currentSite.id);
+                // Save to localStorage
+                localStorage.setItem('heataq_site', JSON.stringify(this.currentSite));
+                // Set cookie for API
+                document.cookie = `heataq_pool_site_id=${this.currentSite.id}; path=/; max-age=31536000`;
+            } else {
+                // No site for this project - clear any stale data
+                console.log('[Project] No pool_site found for project', this.currentProject?.id);
+                localStorage.removeItem('heataq_site');
+                document.cookie = 'heataq_pool_site_id=; path=/; max-age=0';
+                this.currentSite = {
+                    id: null,
+                    name: 'No Site Configured',
+                    latitude: null,
+                    longitude: null,
+                    weather_station_id: null,
+                };
             }
 
             // Fallback to default if still no site object
