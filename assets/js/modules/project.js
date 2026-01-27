@@ -22,6 +22,11 @@ const ProjectModule = {
             };
             console.log('[Project] currentProject:', this.currentProject);
 
+            // Set project cookie so API can filter by project_id
+            if (projectId) {
+                document.cookie = `heataq_project=${projectId}; path=/; max-age=31536000`;
+            }
+
             // Update display
             this.updateDisplay();
 
@@ -1400,6 +1405,7 @@ const ProjectModule = {
                 // Switch to new project
                 if (newProject.id) {
                     localStorage.setItem('heataq_project', newProject.id);
+                    document.cookie = `heataq_project=${newProject.id}; path=/; max-age=31536000`;
                 }
                 localStorage.setItem('heataq_project_name', name);
                 localStorage.setItem('heataq_project_desc', description);
@@ -1422,6 +1428,7 @@ const ProjectModule = {
                 localStorage.setItem('heataq_project', localId);
                 localStorage.setItem('heataq_project_name', name);
                 localStorage.setItem('heataq_project_desc', description);
+                document.cookie = `heataq_project=${localId}; path=/; max-age=31536000`;
 
                 this.currentProject = {
                     id: localId,
@@ -1442,6 +1449,7 @@ const ProjectModule = {
             localStorage.setItem('heataq_project', localId);
             localStorage.setItem('heataq_project_name', name);
             localStorage.setItem('heataq_project_desc', description);
+            document.cookie = `heataq_project=${localId}; path=/; max-age=31536000`;
 
             this.currentProject = {
                 id: localId,
@@ -1477,10 +1485,11 @@ const ProjectModule = {
                 // Clear the pool_site_id cookie (used by API)
                 document.cookie = 'heataq_pool_site_id=; path=/; max-age=0';
 
-                // Set new project
+                // Set new project in localStorage AND cookie (API reads cookie)
                 localStorage.setItem('heataq_project', pId);
                 localStorage.setItem('heataq_project_name', pName);
                 localStorage.setItem('heataq_project_desc', project.description || '');
+                document.cookie = `heataq_project=${pId}; path=/; max-age=31536000`;
 
                 this.currentProject = {
                     id: pId,
