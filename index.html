@@ -783,24 +783,22 @@
                     <!-- Monthly Heat Loss Report -->
                     <div class="card" id="monthly-report-card" style="margin-top: 20px;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                            <h3 style="margin: 0;">Monthly Surface Heat Loss (kWh)</h3>
-                            <div style="display: flex; gap: 10px; align-items: center;">
-                                <select id="monthly-report-run" class="form-control" style="width: 250px;" onchange="app.simcontrol.loadMonthlyReport()">
-                                    <option value="">Select simulation run...</option>
-                                </select>
-                                <button class="btn btn-sm" onclick="app.simcontrol.exportMonthlyReport()">Export CSV</button>
+                            <div>
+                                <h3 style="margin: 0;">Monthly Surface Heat Loss (kWh)</h3>
+                                <small id="monthly-report-run-info" style="color: #666;">Last Simulation Run</small>
                             </div>
+                            <button class="btn btn-sm" onclick="app.simcontrol.exportMonthlyReport()">Export CSV</button>
                         </div>
                         <div style="overflow-x: auto;">
-                            <table class="data-table" id="monthly-report-table">
+                            <table class="data-table" id="monthly-report-table" style="text-align: left;">
                                 <thead id="monthly-report-thead">
                                     <tr>
-                                        <th>Month</th>
+                                        <th style="text-align: left;">Month</th>
                                         <!-- Year columns added dynamically -->
                                     </tr>
                                 </thead>
                                 <tbody id="monthly-report-tbody">
-                                    <tr><td colspan="10" style="text-align: center; color: #666;">Select a simulation run to view report</td></tr>
+                                    <tr><td colspan="10" style="color: #666;">Loading...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1666,16 +1664,16 @@
     <!-- Core configuration -->
     <script src="./assets/js/config.js"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=142"></script>
-    <script src="./assets/js/modules/navigation.js?v=142"></script>
-    <script src="./assets/js/modules/schedules.js?v=142"></script>
-    <script src="./assets/js/modules/calendar.js?v=142"></script>
-    <script src="./assets/js/modules/simulations.js?v=142"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=142"></script>
-    <script src="./assets/js/modules/configuration.js?v=142"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=142"></script>
-    <script src="./assets/js/modules/admin.js?v=142"></script>
-    <script src="./assets/js/modules/project.js?v=142"></script>
-    <script src="./assets/js/app.js?v=142"></script>
+    <script src="./assets/js/modules/api.js?v=143"></script>
+    <script src="./assets/js/modules/navigation.js?v=143"></script>
+    <script src="./assets/js/modules/schedules.js?v=143"></script>
+    <script src="./assets/js/modules/calendar.js?v=143"></script>
+    <script src="./assets/js/modules/simulations.js?v=143"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=143"></script>
+    <script src="./assets/js/modules/configuration.js?v=143"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=143"></script>
+    <script src="./assets/js/modules/admin.js?v=143"></script>
+    <script src="./assets/js/modules/project.js?v=143"></script>
+    <script src="./assets/js/app.js?v=143"></script>
 </body>
 </html>
