@@ -28,11 +28,13 @@ const calendar = {
     },
 
     async loadCalendarRules(templateId) {
+        // Use default template if not specified
+        const tid = templateId || this.currentTemplateId || 1;
         try {
-            const data = await api.calendar.getRules(templateId);
+            const data = await api.calendar.getRules(tid);
             this.dateRanges = data.rules || [];
 
-            const exceptionsData = await api.calendar.getExceptionDays(templateId);
+            const exceptionsData = await api.calendar.getExceptionDays(tid);
             this.exceptionDays = exceptionsData.exceptions || [];
 
             this.renderDateRanges();

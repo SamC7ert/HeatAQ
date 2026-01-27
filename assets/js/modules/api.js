@@ -6,9 +6,10 @@ const api = {
         try {
             // Build URL as string (no URL objects for compatibility)
             let urlString = config.API_BASE_URL + '?action=' + action;
-            
+
             for (const [key, value] of Object.entries(params)) {
-                if (value !== undefined && value !== null) {
+                // Skip undefined, null, and empty strings
+                if (value !== undefined && value !== null && value !== '') {
                     urlString += '&' + key + '=' + encodeURIComponent(value);
                 }
             }
