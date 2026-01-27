@@ -29,12 +29,15 @@ class PoolScheduler {
      *
      * @param PDO $db Database connection
      * @param int $poolSiteId Integer pool_site_id (references pool_sites.id) - REQUIRED
-     * @param int|null $templateId Optional specific template ID
-     * @throws InvalidArgumentException if poolSiteId is not provided
+     * @param int $templateId Schedule template ID - REQUIRED (no defaults!)
+     * @throws InvalidArgumentException if poolSiteId or templateId not provided
      */
-    public function __construct($db, $poolSiteId, $templateId = null) {
+    public function __construct($db, $poolSiteId, $templateId) {
         if (!$poolSiteId) {
             throw new InvalidArgumentException('PoolScheduler requires poolSiteId - no default allowed');
+        }
+        if (!$templateId) {
+            throw new InvalidArgumentException('PoolScheduler requires templateId - select a schedule in simulation settings');
         }
         $this->db = $db;
         $this->poolSiteId = (int)$poolSiteId;
@@ -54,32 +57,28 @@ class PoolScheduler {
 
     /**
      * Load schedule template from database
-     * @param int|null $templateId Template ID - if null, uses first available template (with warning)
+     * @param int $templateId Template ID - REQUIRED, no defaults allowed
+     * @throws InvalidArgumentException if templateId is not provided
+     * @throws Exception if template not found
      */
-    private function loadTemplate($templateId = null) {
-        if ($templateId) {
-            $stmt = $this->db->prepare("
-                SELECT * FROM schedule_templates
-                WHERE template_id = ?
-            ");
-            $stmt->execute([$templateId]);
-        } else {
-            // No template_id provided - get first available (not silent default to ID 1)
-            $stmt = $this->db->prepare("
-                SELECT * FROM schedule_templates
-                ORDER BY template_id ASC
-                LIMIT 1
-            ");
-            $stmt->execute();
-            error_log("PoolScheduler: No template_id provided, using first available template");
+    private function loadTemplate($templateId) {
+        if (!$templateId) {
+            throw new InvalidArgumentException("PoolScheduler: template_id is REQUIRED - no default template allowed. Check that schedule is selected in simulation settings.");
         }
+
+        $stmt = $this->db->prepare("
+            SELECT * FROM schedule_templates
+            WHERE template_id = ?
+        ");
+        $stmt->execute([$templateId]);
 
         $result = $stmt->fetch();
 
         if (!$result) {
-            throw new Exception("No schedule template found" . ($templateId ? " for template_id: {$templateId}" : ""));
+            throw new Exception("No schedule template found for template_id: {$templateId}");
         }
 
+        error_log("[PoolScheduler] Loaded template: id={$templateId}, name='{$result['name']}'");
         return $result;
     }
 
@@ -236,6 +235,12 @@ class PoolScheduler {
             ");
             $stmt->execute([$this->templateId]);
             $rows = $stmt->fetchAll();
+
+            // Debug: Log loaded date ranges
+            error_log("[PoolScheduler] Template {$this->templateId}: Loading " . count($rows) . " date ranges");
+            foreach ($rows as $i => $row) {
+                error_log("[PoolScheduler]   Range $i: id={$row['id']}, name='{$row['name']}', priority={$row['priority']}, week_schedule_id={$row['week_schedule_id']}, dates={$row['start_date']} to {$row['end_date']}");
+            }
 
             $dateRanges = [];
             foreach ($rows as $row) {

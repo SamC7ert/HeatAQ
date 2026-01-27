@@ -371,6 +371,11 @@ try {
                 // Update status to completed
                 updateRunStatus($pdo, $runId, 'completed', $results['summary']);
 
+                // Add schedule info to meta (so frontend can display it)
+                $results['meta']['schedule_template_id'] = $scheduleTemplate['template_id'] ?? null;
+                $results['meta']['schedule_template_name'] = $scheduleTemplate['name'] ?? null;
+                $results['meta']['config_template_name'] = $configTemplateName;
+
                 sendResponse([
                     'status' => 'success',
                     'run_id' => $runId,
