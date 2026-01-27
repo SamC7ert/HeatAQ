@@ -1,8 +1,18 @@
 // Configuration module - API settings and constants
 
+// Extract version from script tags (single source of truth)
+function getVersionFromScripts() {
+    const script = document.querySelector('script[src*="?v="]');
+    if (script) {
+        const match = script.src.match(/\?v=(\d+)/);
+        if (match) return 'V' + match[1];
+    }
+    return 'V???';
+}
+
 const config = {
-    // App version - update this when releasing new versions
-    APP_VERSION: 'V154',
+    // App version - auto-detected from script tags
+    APP_VERSION: getVersionFromScripts(),
 
     API_BASE_URL: '/api/heataq_api.php',
 

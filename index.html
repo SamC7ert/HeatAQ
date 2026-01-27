@@ -80,7 +80,7 @@
     <div class="app-container">
         <!-- User Info and Logout -->
         <div class="user-info">
-            <span class="project-name" id="current-project"></span>
+            <select id="projects-dropdown" onchange="app.project.switchProject(this.value)" style="padding: 4px 8px; font-size: 13px; border: 1px solid #ccc; border-radius: 4px; background: #fff; margin-right: 10px; max-width: 200px;"></select>
             <span class="user-name" id="current-user"></span>
             <span class="version-badge" id="header-version">V140</span>
             <button onclick="logout()" class="btn-logout">Logout</button>
@@ -292,6 +292,14 @@
                             </div>
                         </div>
 
+                        <!-- Add Site Card -->
+                        <div class="card add-site-card" onclick="app.project.showAddSiteModal()" style="flex: 0 0 120px; min-height: 180px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                            <div class="add-content" style="text-align: center;">
+                                <div class="add-icon" style="font-size: 32px; color: var(--neutral-400);">+</div>
+                                <div style="font-size: 13px; color: var(--neutral-500);">Add Site</div>
+                            </div>
+                        </div>
+
                         <!-- Pool Card -->
                         <div class="pool-card card" id="main-pool-card" style="flex: 0 0 240px; max-width: 260px;">
                             <div class="site-header" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);">
@@ -364,15 +372,6 @@
                         </div>
                     </div>
 
-                    <!-- Project Switcher -->
-                    <div class="card" style="margin-top: 20px;">
-                        <h3>Switch Project</h3>
-                        <div style="margin-top: 10px;">
-                            <select id="projects-dropdown" onchange="app.project.switchProject(this.value)" style="width: 100%; padding: 10px; font-size: 14px; border: 1px solid #dee2e6; border-radius: 6px;">
-                                <option value="">Loading projects...</option>
-                            </select>
-                        </div>
-                    </div>
                 </section>
 
                 <!-- Configuration Section -->
@@ -1666,16 +1665,16 @@
     <!-- Core configuration -->
     <script src="./assets/js/config.js"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=154"></script>
-    <script src="./assets/js/modules/navigation.js?v=154"></script>
-    <script src="./assets/js/modules/schedules.js?v=154"></script>
-    <script src="./assets/js/modules/calendar.js?v=154"></script>
-    <script src="./assets/js/modules/simulations.js?v=154"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=154"></script>
-    <script src="./assets/js/modules/configuration.js?v=154"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=154"></script>
-    <script src="./assets/js/modules/admin.js?v=154"></script>
-    <script src="./assets/js/modules/project.js?v=154"></script>
-    <script src="./assets/js/app.js?v=154"></script>
+    <script src="./assets/js/modules/api.js?v=156"></script>
+    <script src="./assets/js/modules/navigation.js?v=156"></script>
+    <script src="./assets/js/modules/schedules.js?v=156"></script>
+    <script src="./assets/js/modules/calendar.js?v=156"></script>
+    <script src="./assets/js/modules/simulations.js?v=156"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=156"></script>
+    <script src="./assets/js/modules/configuration.js?v=156"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=156"></script>
+    <script src="./assets/js/modules/admin.js?v=156"></script>
+    <script src="./assets/js/modules/project.js?v=156"></script>
+    <script src="./assets/js/app.js?v=156"></script>
 </body>
 </html>
