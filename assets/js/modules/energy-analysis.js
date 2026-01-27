@@ -235,7 +235,8 @@ const EnergyAnalysis = {
         if (!select) return;
 
         try {
-            const response = await fetch('./api/heataq_api.php?action=get_project_configs');
+            const projectId = localStorage.getItem('heataq_project') || '';
+            const response = await fetch(`./api/heataq_api.php?action=get_project_configs&project_id=${projectId}`);
             const data = await response.json();
 
             if (data.configs && data.configs.length > 0) {

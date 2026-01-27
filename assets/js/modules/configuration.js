@@ -90,7 +90,9 @@ const ConfigurationModule = {
     // Load all configs from API
     loadConfigs: async function() {
         try {
-            const response = await fetch('./api/heataq_api.php?action=get_project_configs');
+            // Get current project ID and pass explicitly to ensure correct filtering
+            const projectId = localStorage.getItem('heataq_project') || '';
+            const response = await fetch(`./api/heataq_api.php?action=get_project_configs&project_id=${projectId}`);
             const data = await response.json();
 
             if (data.configs) {

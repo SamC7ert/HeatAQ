@@ -343,7 +343,8 @@ const SimControlModule = {
     loadConfigOptions: async function() {
         console.log('[SimControl] Loading config options...');
         try {
-            const response = await fetch('./api/heataq_api.php?action=get_project_configs');
+            const projectId = localStorage.getItem('heataq_project') || '';
+            const response = await fetch(`./api/heataq_api.php?action=get_project_configs&project_id=${projectId}`);
             const data = await response.json();
             console.log('[SimControl] Config response:', data);
 

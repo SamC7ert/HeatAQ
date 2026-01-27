@@ -1898,15 +1898,20 @@ class HeatAQAPI {
 
     private function getProjectConfigs() {
         try {
+            // Prefer GET parameter over auth context (allows switching projects without page reload)
+            $projectId = isset($_GET['project_id']) && !empty($_GET['project_id'])
+                ? (int)$_GET['project_id']
+                : $this->projectId;
+
             // Include legacy columns to merge with json_config
-            if ($this->projectId) {
+            if ($projectId) {
                 $query = "SELECT template_id, template_name as name, json_config, created_at,
                                  hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy
                           FROM config_templates
                           WHERE project_id = :project_id
                           ORDER BY template_name";
                 $stmt = $this->db->prepare($query);
-                $stmt->execute([':project_id' => $this->projectId]);
+                $stmt->execute([':project_id' => $projectId]);
             } else {
                 $query = "SELECT template_id, template_name as name, json_config, created_at,
                                  hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy
@@ -2484,7 +2489,7 @@ class HeatAQAPI {
             'head' => trim(shell_exec('git rev-parse HEAD 2>&1')),
             'head_short' => trim(shell_exec('git rev-parse --short HEAD 2>&1')),
             'status' => shell_exec('git status --porcelain 2>&1'),
-            'last_commits' => array_filter(explode("\n", shell_exec('git log --oneline -5 2>&1'))),
+            'last_commits' => array_filter(explode("\n", shell_exec("git log --format='%ad %h %s' --date=format:'%H:%M' -5 2>&1"))),
             'remote_url' => trim(shell_exec('git remote get-url origin 2>&1')),
         ];
 
