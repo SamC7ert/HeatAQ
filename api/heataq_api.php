@@ -2478,11 +2478,14 @@ class HeatAQAPI {
         ];
 
         // Check for updates (prune removes references to deleted remote branches)
+        // Using claude/continue-work-8dFhv as the deploy branch
+        $deployBranch = 'claude/continue-work-8dFhv';
         shell_exec('git fetch --all --prune 2>&1');
-        $behind = trim(shell_exec('git rev-list HEAD..origin/master --count 2>&1'));
-        $ahead = trim(shell_exec('git rev-list origin/master..HEAD --count 2>&1'));
+        $behind = trim(shell_exec("git rev-list HEAD..origin/$deployBranch --count 2>&1"));
+        $ahead = trim(shell_exec("git rev-list origin/$deployBranch..HEAD --count 2>&1"));
         $result['behind_origin'] = is_numeric($behind) ? (int)$behind : 0;
         $result['ahead_origin'] = is_numeric($ahead) ? (int)$ahead : 0;
+        $result['deploy_branch'] = $deployBranch;
 
         // Get remote branches (for merge dropdown)
         $branchesRaw = shell_exec('git branch -r 2>&1');
@@ -2524,8 +2527,12 @@ class HeatAQAPI {
         $oldDir = getcwd();
         chdir($repoRoot);
 
+        // Using claude/continue-work-8dFhv as the deploy branch
+        $deployBranch = 'claude/continue-work-8dFhv';
+
         $log = [];
         $log[] = "Working dir: $repoRoot";
+        $log[] = "Deploy branch: $deployBranch";
 
         // Stash any local changes
         $log[] = "Stashing local changes...";
@@ -2533,18 +2540,18 @@ class HeatAQAPI {
 
         // Fetch from origin
         $log[] = "Fetching from origin...";
-        $log[] = shell_exec('git fetch origin master 2>&1');
+        $log[] = shell_exec("git fetch origin $deployBranch 2>&1");
 
-        // Checkout master if not on it
-        $branch = trim(shell_exec('git branch --show-current 2>&1'));
-        if ($branch !== 'master') {
-            $log[] = "Switching to master (was on $branch)...";
-            $log[] = shell_exec('git checkout master 2>&1');
+        // Checkout the deploy branch if not on it
+        $currentBranch = trim(shell_exec('git branch --show-current 2>&1'));
+        if ($currentBranch !== $deployBranch) {
+            $log[] = "Switching to $deployBranch (was on $currentBranch)...";
+            $log[] = shell_exec("git checkout $deployBranch 2>&1");
         }
 
-        // Reset to origin/master
-        $log[] = "Resetting to origin/master...";
-        $log[] = shell_exec('git reset --hard origin/master 2>&1');
+        // Reset to origin/deployBranch
+        $log[] = "Resetting to origin/$deployBranch...";
+        $log[] = shell_exec("git reset --hard origin/$deployBranch 2>&1");
 
         // Get new version
         $newHead = trim(shell_exec('git rev-parse --short HEAD 2>&1'));
