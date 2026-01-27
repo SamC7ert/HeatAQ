@@ -1118,14 +1118,14 @@ const ProjectModule = {
         }
     },
 
-    // Load list of available projects
+    // Load list of available projects into dropdown
     async loadProjectsList() {
         try {
             console.log('[Project] Fetching projects list...');
             const response = await fetch(`${config.API_BASE_URL}?action=get_projects`);
             console.log('[Project] get_projects response status:', response.status);
-            const container = document.getElementById('projects-list');
-            console.log('[Project] projects-list container found:', !!container);
+            const dropdown = document.getElementById('projects-dropdown');
+            console.log('[Project] projects-dropdown found:', !!dropdown);
 
             if (response.ok) {
                 const data = await response.json();
@@ -1133,42 +1133,25 @@ const ProjectModule = {
                 this.projects = data.projects || [];
                 console.log('[Project] Parsed projects array:', this.projects.length, 'projects');
 
-                if (container && Array.isArray(this.projects) && this.projects.length > 0) {
-                    container.innerHTML = this.projects.map(project => {
-                        // API returns project_id and project_name
+                if (dropdown && Array.isArray(this.projects) && this.projects.length > 0) {
+                    dropdown.innerHTML = this.projects.map(project => {
                         const projectId = project.project_id || project.id;
                         const projectName = project.project_name || project.name;
                         const isActive = projectId == this.currentProject?.id;
-                        return `<div class="project-item" style="padding: 10px; border: 1px solid ${isActive ? '#0d6efd' : '#dee2e6'}; border-radius: 6px; margin-bottom: 8px; background: ${isActive ? '#e7f1ff' : '#fff'}; cursor: pointer;" onclick="app.project.switchProject(${projectId})">
-                            <strong>${projectName || 'Unnamed Project'}</strong>
-                            ${isActive ? '<span style="float: right; color: #0d6efd; font-size: 12px;">Current</span>' : ''}
-                            <p style="margin: 5px 0 0; font-size: 12px; color: #666;">${project.description || 'No description'}</p>
-                        </div>`;
+                        const desc = project.description ? ` - ${project.description}` : '';
+                        return `<option value="${projectId}" ${isActive ? 'selected' : ''}>${projectName || 'Unnamed Project'}${desc}</option>`;
                     }).join('');
-                } else if (container) {
-                    container.innerHTML = `<div class="project-item" style="padding: 10px; border: 1px solid #0d6efd; border-radius: 6px; background: #e7f1ff;">
-                        <strong>${this.currentProject?.name || 'Default Project'}</strong>
-                        <span style="float: right; color: #0d6efd; font-size: 12px;">Current</span>
-                        <p style="margin: 5px 0 0; font-size: 12px; color: #666;">${this.currentProject?.description || 'No description'}</p>
-                    </div>`;
+                } else if (dropdown) {
+                    dropdown.innerHTML = `<option value="${this.currentProject?.id || ''}" selected>${this.currentProject?.name || 'Default Project'}</option>`;
                 }
-            } else if (container) {
-                // API might not have getProjects yet - show current project only
-                container.innerHTML = `<div class="project-item" style="padding: 10px; border: 1px solid #0d6efd; border-radius: 6px; background: #e7f1ff;">
-                    <strong>${this.currentProject?.name || 'Default Project'}</strong>
-                    <span style="float: right; color: #0d6efd; font-size: 12px;">Current</span>
-                    <p style="margin: 5px 0 0; font-size: 12px; color: #666;">${this.currentProject?.description || 'No description'}</p>
-                </div>`;
+            } else if (dropdown) {
+                dropdown.innerHTML = `<option value="${this.currentProject?.id || ''}" selected>${this.currentProject?.name || 'Default Project'}</option>`;
             }
         } catch (error) {
             console.error('Error loading projects list:', error);
-            // Show current project as fallback
-            const container = document.getElementById('projects-list');
-            if (container) {
-                container.innerHTML = `<div class="project-item" style="padding: 10px; border: 1px solid #0d6efd; border-radius: 6px; background: #e7f1ff;">
-                    <strong>${this.currentProject?.name || 'Default Project'}</strong>
-                    <span style="float: right; color: #0d6efd; font-size: 12px;">Current</span>
-                </div>`;
+            const dropdown = document.getElementById('projects-dropdown');
+            if (dropdown) {
+                dropdown.innerHTML = `<option value="${this.currentProject?.id || ''}" selected>${this.currentProject?.name || 'Default Project'}</option>`;
             }
         }
     },
