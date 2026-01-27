@@ -328,8 +328,8 @@ const schedules = {
                 html += `
                     <tr data-index="${index}">
                         <td>${index + 1}</td>
-                        <td><input type="time" class="form-control form-control-sm period-start" value="${startTime}" step="60" /></td>
-                        <td><input type="time" class="form-control form-control-sm period-end" value="${endTime}" step="60" /></td>
+                        <td><input type="text" class="form-control form-control-sm period-start" value="${startTime}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" style="width: 70px;" /></td>
+                        <td><input type="text" class="form-control form-control-sm period-end" value="${endTime}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" style="width: 70px;" /></td>
                         <td><input type="number" class="form-control form-control-sm period-target" value="${target}" step="0.5" min="20" max="35" style="width: 70px;" /></td>
                         <td>
                             <button class="btn btn-danger btn-xs" onclick="app.schedules.removePeriod(${index})" title="Remove period" style="padding: 1px 6px;">×</button>
