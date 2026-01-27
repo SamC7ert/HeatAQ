@@ -2489,7 +2489,7 @@ class HeatAQAPI {
             'head' => trim(shell_exec('git rev-parse HEAD 2>&1')),
             'head_short' => trim(shell_exec('git rev-parse --short HEAD 2>&1')),
             'status' => shell_exec('git status --porcelain 2>&1'),
-            'last_commits' => array_filter(explode("\n", shell_exec('git log --oneline -5 2>&1'))),
+            'last_commits' => array_filter(explode("\n", shell_exec("git log --format='%ad %h %s' --date=format:'%H:%M' -5 2>&1"))),
             'remote_url' => trim(shell_exec('git remote get-url origin 2>&1')),
         ];
 
