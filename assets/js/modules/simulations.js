@@ -272,6 +272,16 @@ const SimulationsModule = {
                 throw new Error(data.error);
             }
 
+            // DEBUG: Log schedule resolution info
+            console.log('[Simulation] Run completed:', data);
+            if (data.meta?.schedule_debug) {
+                console.log('[Simulation] Schedule Debug:', data.meta.schedule_debug);
+                console.log(`  Requested template_id: ${data.meta.schedule_debug.requested_template_id}`);
+                console.log(`  Loaded template: ${data.meta.schedule_debug.loaded_template_name} (ID: ${data.meta.schedule_debug.loaded_template_id})`);
+                console.log(`  Test date: ${data.meta.schedule_debug.test_date}`);
+                console.log(`  Schedule for test date: ${data.meta.schedule_debug.test_schedule_name}`);
+            }
+
             // Show success with date/time and version
             const now = new Date();
             const dateStr = now.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
