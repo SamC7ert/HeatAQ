@@ -184,16 +184,35 @@ try {
 
             // DEBUG: Log what PoolScheduler loaded
             $scheduleTemplate = $scheduler->getTemplate();
+            $dateRanges = $scheduler->getDateRanges();  // Get loaded date ranges
             $debugScheduleInfo = [
                 'requested_template_id' => $templateId,
                 'loaded_template_id' => $scheduleTemplate['template_id'] ?? null,
                 'loaded_template_name' => $scheduleTemplate['name'] ?? null,
+                'date_ranges_count' => count($dateRanges),
+                'date_ranges' => array_map(function($r) {
+                    return [
+                        'id' => $r['id'] ?? null,
+                        'is_default' => $r['is_default'] ?? false,
+                        'week_schedule_id' => $r['week_schedule_id'] ?? null,
+                        'priority' => $r['priority'] ?? null,
+                    ];
+                }, $dateRanges),
             ];
-            // Get first date schedule to verify
+
+            // Get first date schedule to verify (with error handling)
             $testDate = $startDate ?? date('Y-m-d');
-            $testScheduleName = $scheduler->getScheduleForDate($testDate);
-            $debugScheduleInfo['test_date'] = $testDate;
-            $debugScheduleInfo['test_schedule_name'] = $testScheduleName;
+            try {
+                $testScheduleName = $scheduler->getScheduleForDate($testDate);
+                $debugScheduleInfo['test_date'] = $testDate;
+                $debugScheduleInfo['test_schedule_name'] = $testScheduleName;
+            } catch (Exception $e) {
+                $debugScheduleInfo['test_date'] = $testDate;
+                $debugScheduleInfo['test_error'] = $e->getMessage();
+                // Re-throw to stop simulation
+                error_log("[SimAPI] Schedule debug (error): " . json_encode($debugScheduleInfo));
+                sendError($e->getMessage() . ' | Debug: ' . json_encode($debugScheduleInfo), 400);
+            }
             error_log("[SimAPI] Schedule debug: " . json_encode($debugScheduleInfo));
 
             // Initialize simulator
