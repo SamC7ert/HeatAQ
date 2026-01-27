@@ -237,6 +237,12 @@ class PoolScheduler {
             $stmt->execute([$this->templateId]);
             $rows = $stmt->fetchAll();
 
+            // Debug: Log loaded date ranges
+            error_log("[PoolScheduler] Template {$this->templateId}: Loading " . count($rows) . " date ranges");
+            foreach ($rows as $i => $row) {
+                error_log("[PoolScheduler]   Range $i: id={$row['id']}, name='{$row['name']}', priority={$row['priority']}, week_schedule_id={$row['week_schedule_id']}, dates={$row['start_date']} to {$row['end_date']}");
+            }
+
             $dateRanges = [];
             foreach ($rows as $row) {
                 // Check for default/year-round range (null dates or priority 0)
