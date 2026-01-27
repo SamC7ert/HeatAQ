@@ -209,6 +209,12 @@ class PoolScheduler {
             ];
         }
 
+        // Debug: Log loaded week schedules
+        error_log("[PoolScheduler] Loaded " . count($weekSchedules) . " week schedules:");
+        foreach ($weekSchedules as $wsId => $ws) {
+            error_log("[PoolScheduler]   WeekSchedule[$wsId] = '{$ws['name']}' -> thu='{$ws['days']['thu']}'");
+        }
+
         return $weekSchedules;
     }
 
@@ -423,15 +429,20 @@ class PoolScheduler {
         }
 
         // 2. Check date ranges (programs)
-        foreach ($this->dateRanges as $dateRange) {
+        error_log("[PoolScheduler] getScheduleForDate($dateStr): Checking " . count($this->dateRanges) . " date ranges");
+        foreach ($this->dateRanges as $i => $dateRange) {
             $inRange = $this->dateInRange($date, $dateRange);
+            error_log("[PoolScheduler]   Range $i: id={$dateRange['id']}, is_default=" . ($dateRange['is_default'] ? 'YES' : 'no') . ", week_schedule_id={$dateRange['week_schedule_id']}, inRange=" . ($inRange ? 'YES' : 'no'));
             if ($inRange) {
                 $weekScheduleId = $dateRange['week_schedule_id'];
                 $weekSchedule = $this->weekSchedules[$weekScheduleId] ?? null;
+                error_log("[PoolScheduler]   -> Matched! Looking up weekSchedule[$weekScheduleId]: " . ($weekSchedule ? "found '{$weekSchedule['name']}'" : "NOT FOUND"));
                 if ($weekSchedule) {
                     $dow = $this->getDayOfWeekShort($date);
                     $scheduleName = $weekSchedule['days'][$dow] ?? null;
+                    error_log("[PoolScheduler]   -> Day mapping for $dow: " . ($scheduleName ?: 'NULL'));
                     if ($scheduleName) {
+                        error_log("[PoolScheduler]   -> RETURNING: $scheduleName");
                         return $scheduleName;
                     } else {
                         // Day not mapped in week schedule
