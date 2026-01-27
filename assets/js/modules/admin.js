@@ -1539,11 +1539,14 @@ const AdminModule = {
 
             // Show available branches to merge
             if (data.remote_branches && data.remote_branches.length > 0) {
+                // Default to continue-work branch if available
+                const defaultBranch = 'claude/continue-work-8dFhv';
                 html += '<div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #ddd;">';
                 html += '<strong>Merge Branch:</strong> ';
                 html += '<select id="merge-branch-select" style="margin: 0 0.5rem;">';
                 data.remote_branches.forEach(b => {
-                    html += `<option value="${b}">${b}</option>`;
+                    const selected = b === defaultBranch ? 'selected' : '';
+                    html += `<option value="${b}" ${selected}>${b}</option>`;
                 });
                 html += '</select>';
                 html += '<button class="btn btn-primary" onclick="AdminModule.mergeBranch()">Merge & Deploy</button>';

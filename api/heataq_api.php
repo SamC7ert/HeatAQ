@@ -93,7 +93,7 @@ class HeatAQAPI {
     private $userRole;
     private $postInput = null;  // Store POST body to avoid double-read
 
-    public function __construct($poolSiteId = null, $auth = null) {
+    public function __construct($poolSiteId = null, $auth = null, $projectId = null) {
         try {
             // Get database connection from Config
             $this->db = Config::getDatabase();
@@ -101,11 +101,14 @@ class HeatAQAPI {
             // Set site context (INT pool_site_id)
             $this->poolSiteId = $poolSiteId ? (int)$poolSiteId : null;
 
-            // Set auth context if available
+            // Set project context - from auth or direct parameter
             if ($auth) {
                 $this->userId = $auth['user']['user_id'] ?? null;
                 $this->projectId = $auth['project']['project_id'] ?? null;
                 $this->userRole = $auth['user']['role'] ?? null;
+            } else if ($projectId) {
+                // Development mode - use direct project_id
+                $this->projectId = (int)$projectId;
             }
 
         } catch (Exception $e) {
@@ -3506,7 +3509,7 @@ class HeatAQAPI {
 
 // Initialize and handle request
 try {
-    $api = new HeatAQAPI($currentSiteId ?? null, $auth ?? null);
+    $api = new HeatAQAPI($currentPoolSiteId ?? null, $auth ?? null, $currentProjectId ?? null);
     $api->handle();
 } catch (Exception $e) {
     http_response_code(500);
