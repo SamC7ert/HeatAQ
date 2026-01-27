@@ -996,8 +996,9 @@ class HeatAQAPI {
         $startDate = $input['start_date'] ?? null;
         $endDate = $input['end_date'] ?? null;
         $priority = (int)($input['priority'] ?? 1);
+        $name = $input['name'] ?? null;
 
-        error_log("[saveDateRange] Parsed: rangeId=$rangeId, templateId=$templateId, weekScheduleId=$weekScheduleId, priority=$priority");
+        error_log("[saveDateRange] Parsed: rangeId=$rangeId, templateId=$templateId, weekScheduleId=$weekScheduleId, priority=$priority, name=$name");
 
         if (!$weekScheduleId) {
             $this->sendError('Week schedule is required');
@@ -1009,6 +1010,9 @@ class HeatAQAPI {
             $startDate = $startDate ?: '1970-01-01';
             $endDate = $endDate ?: '2099-12-31';
             $priority = 0;
+            $name = $name ?: 'Default (Year-Round)';  // Default name for year-round range
+        } else {
+            $name = $name ?: 'Seasonal Range';  // Default name for other ranges
         }
 
         if ($rangeId) {
@@ -1023,12 +1027,12 @@ class HeatAQAPI {
             error_log("[saveDateRange] UPDATE affected rows: " . $stmt->rowCount());
         } else {
             // Create new (column is 'schedule_template_id', not 'template_id')
-            error_log("[saveDateRange] INSERT: templateId=$templateId, weekScheduleId=$weekScheduleId, startDate=$startDate, endDate=$endDate, priority=$priority");
+            error_log("[saveDateRange] INSERT: templateId=$templateId, weekScheduleId=$weekScheduleId, name=$name, startDate=$startDate, endDate=$endDate, priority=$priority");
             $stmt = $this->db->prepare("
-                INSERT INTO calendar_date_ranges (schedule_template_id, week_schedule_id, start_date, end_date, priority)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO calendar_date_ranges (schedule_template_id, week_schedule_id, name, start_date, end_date, priority)
+                VALUES (?, ?, ?, ?, ?, ?)
             ");
-            $stmt->execute([$templateId, $weekScheduleId, $startDate, $endDate, $priority]);
+            $stmt->execute([$templateId, $weekScheduleId, $name, $startDate, $endDate, $priority]);
             $rangeId = $this->db->lastInsertId();
             error_log("[saveDateRange] INSERT new range_id: $rangeId");
         }
