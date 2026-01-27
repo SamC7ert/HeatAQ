@@ -807,6 +807,11 @@ const AdminModule = {
             if (!frostData.found) {
                 contentDiv.innerHTML = `
                     <p style="color: var(--danger);">Station not found in Frost API</p>
+                    <p class="text-muted" style="font-size: 11px;">
+                        Station ID used: ${frostData.station_id_used || this.selectedStationId}<br>
+                        ${frostData.error || ''}<br>
+                        ${frostData.http_code ? 'HTTP: ' + frostData.http_code : ''}
+                    </p>
                     <button class="btn btn-secondary" onclick="app.admin.closeStationModal()">Close</button>
                 `;
                 return;

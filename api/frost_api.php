@@ -125,14 +125,21 @@ function checkStation($clientId) {
         echo json_encode([
             'found' => false,
             'error' => 'Station not found or API error',
-            'http_code' => $httpCode
+            'http_code' => $httpCode,
+            'station_id_used' => $stationId,
+            'url' => $url
         ]);
         return;
     }
 
     $data = json_decode($response, true);
     if (!isset($data['data']) || empty($data['data'])) {
-        echo json_encode(['found' => false, 'error' => 'Station not found']);
+        echo json_encode([
+            'found' => false,
+            'error' => 'Station not found in Frost response',
+            'station_id_used' => $stationId,
+            'url' => $url
+        ]);
         return;
     }
 
