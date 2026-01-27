@@ -956,12 +956,17 @@ const ProjectModule = {
     // Load list of available projects
     async loadProjectsList() {
         try {
+            console.log('[Project] Fetching projects list...');
             const response = await fetch(`${config.API_BASE_URL}?action=get_projects`);
+            console.log('[Project] get_projects response status:', response.status);
             const container = document.getElementById('projects-list');
+            console.log('[Project] projects-list container found:', !!container);
 
             if (response.ok) {
                 const data = await response.json();
+                console.log('[Project] get_projects data:', data);
                 this.projects = data.projects || [];
+                console.log('[Project] Parsed projects array:', this.projects.length, 'projects');
 
                 if (container && Array.isArray(this.projects) && this.projects.length > 0) {
                     container.innerHTML = this.projects.map(project => {
