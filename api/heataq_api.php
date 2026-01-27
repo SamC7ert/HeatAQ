@@ -1948,7 +1948,12 @@ class HeatAQAPI {
                       $config['target_temp'], $config['control_strategy']);
             }
 
-            $this->sendResponse(['configs' => $configs]);
+            $this->sendResponse([
+                'configs' => $configs,
+                'debug_project_id_used' => $projectId,
+                'debug_get_param' => $_GET['project_id'] ?? null,
+                'debug_auth_project' => $this->projectId
+            ]);
         } catch (PDOException $e) {
             // Fallback: json_config column might not exist
             try {
