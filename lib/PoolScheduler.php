@@ -296,7 +296,10 @@ class PoolScheduler {
 
             return $dateRanges;
         } catch (Exception $e) {
-            return [];
+            // DON'T SWALLOW EXCEPTIONS - log and re-throw!
+            error_log("[PoolScheduler] loadDateRanges EXCEPTION: " . $e->getMessage());
+            error_log("[PoolScheduler] Stack trace: " . $e->getTraceAsString());
+            throw $e;  // Re-throw so we can see the actual error
         }
     }
 
