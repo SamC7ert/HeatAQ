@@ -9,21 +9,18 @@ const SimControlModule = {
     init: async function() {
         if (!this.initialized) {
             this.initialized = true;
-            // Load user preferences from server first (syncs across devices)
+            // One-time setup
             await this.loadUserPreferences();
-            // Load sites and pools for selection
-            await this.loadSites();
-            // Load OHC options for the dropdown
             this.loadOHCOptions();
-            // Load configuration options
             this.loadConfigOptions();
-            // Load weather range info
             this.loadWeatherRange();
-            // Restore saved dates and add listeners
             this.initDateInputs();
-            // Initialize monthly report
             this.initMonthlyReport();
         }
+
+        // Always reload sites/pools when entering SimControl
+        // (project may have changed since last visit)
+        await this.loadSites();
 
         // Initialize current tab
         this.switchTab(this.currentTab);
