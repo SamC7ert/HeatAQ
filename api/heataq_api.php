@@ -1595,13 +1595,14 @@ class HeatAQAPI {
 
     private function getProjects() {
         $stmt = $this->db->query("
-            SELECT project_id, project_name
+            SELECT project_id, project_name, description, is_active
             FROM projects
+            WHERE is_active = 1
             ORDER BY project_name
         ");
         $projects = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $this->sendResponse(['projects' => $projects]);
+        $this->sendResponse(['projects' => $projects, 'count' => count($projects)]);
     }
 
     private function updateProject() {
