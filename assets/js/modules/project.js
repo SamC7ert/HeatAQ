@@ -58,11 +58,15 @@ const ProjectModule = {
     // Load site data from API (always fetch to ensure correct project)
     async loadSiteData() {
         try {
-            // ALWAYS fetch from API to get sites for CURRENT project
-            // Don't trust localStorage - it might be from a different project
-            const response = await fetch(`${config.API_BASE_URL}?action=get_sites`);
+            // ALWAYS fetch from API with explicit project_id parameter
+            // Cannot rely on cookies - they don't update until next request
+            const projectId = this.currentProject?.id;
+            const url = projectId
+                ? `${config.API_BASE_URL}?action=get_sites&project_id=${projectId}`
+                : `${config.API_BASE_URL}?action=get_sites`;
+            const response = await fetch(url);
             const result = await response.json();
-            console.log('[Project] get_sites response for project', this.currentProject?.id, ':', result);
+            console.log('[Project] get_sites response for project', projectId, ':', result);
 
             if (result.sites && result.sites.length > 0) {
                 // Use first site for current project

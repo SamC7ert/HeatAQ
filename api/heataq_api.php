@@ -3172,8 +3172,11 @@ class HeatAQAPI {
     }
 
     private function getSites() {
-        // Filter by project_id if available
-        $projectId = $this->projectId;
+        // Filter by project_id - prefer GET parameter over cookie/auth
+        // GET parameter is needed because cookies don't update until next request
+        $projectId = isset($_GET['project_id']) && !empty($_GET['project_id'])
+            ? (int)$_GET['project_id']
+            : $this->projectId;
 
         // Check if pools table exists to avoid error on subquery
         $tableCheck = $this->db->query("SHOW TABLES LIKE 'pools'");
