@@ -225,11 +225,12 @@
                     <div class="project-header-card card" style="margin-bottom: 20px;">
                         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                             <div style="flex: 1;">
-                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
                                     <h3 id="project-display-name" style="margin: 0; cursor: pointer;" onclick="app.project.editName()" title="Click to edit">Loading...</h3>
                                     <button class="btn btn-sm btn-secondary" onclick="app.project.editName()" style="padding: 2px 8px; font-size: 11px;">Edit</button>
                                 </div>
-                                <p id="project-display-desc" class="text-muted" style="margin: 0; cursor: pointer;" onclick="app.project.editDescription()" title="Click to edit">Loading description...</p>
+                                <small id="project-debug-ids" style="color: #999; font-size: 11px; font-family: monospace;">Project ID: -</small>
+                                <p id="project-display-desc" class="text-muted" style="margin: 5px 0 0; cursor: pointer;" onclick="app.project.editDescription()" title="Click to edit">Loading description...</p>
                             </div>
                             <button class="btn btn-sm" style="background: #90EE90; color: #000;" onclick="app.project.showNewProjectModal()">+ New Project</button>
                         </div>
@@ -260,6 +261,7 @@
                             <div class="site-header">
                                 <h4>📍 <span id="site-name">Main Site</span></h4>
                                 <span class="site-location" id="site-location">Location not set</span>
+                                <small id="site-debug-id" style="display: block; color: #999; font-size: 10px; font-family: monospace; margin-top: 2px;">Site ID: -</small>
                             </div>
                             <div class="site-map" id="site-map" style="height: 140px;">
                                 <div class="site-map-placeholder">
@@ -295,6 +297,7 @@
                             <div class="site-header" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);">
                                 <h4>🏊 <span id="pool-name">Main Pool</span></h4>
                                 <span class="site-location" id="pool-type">Outdoor Pool</span>
+                                <small id="pool-debug-id" style="display: block; color: #666; font-size: 10px; font-family: monospace; margin-top: 2px;">Pool ID: -</small>
                             </div>
                             <div class="site-details" style="padding: 12px;">
                                 <div class="detail-row">
@@ -1663,16 +1666,16 @@
     <!-- Core configuration -->
     <script src="./assets/js/config.js"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=141"></script>
-    <script src="./assets/js/modules/navigation.js?v=141"></script>
-    <script src="./assets/js/modules/schedules.js?v=141"></script>
-    <script src="./assets/js/modules/calendar.js?v=141"></script>
-    <script src="./assets/js/modules/simulations.js?v=141"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=141"></script>
-    <script src="./assets/js/modules/configuration.js?v=141"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=141"></script>
-    <script src="./assets/js/modules/admin.js?v=141"></script>
-    <script src="./assets/js/modules/project.js?v=141"></script>
-    <script src="./assets/js/app.js?v=141"></script>
+    <script src="./assets/js/modules/api.js?v=142"></script>
+    <script src="./assets/js/modules/navigation.js?v=142"></script>
+    <script src="./assets/js/modules/schedules.js?v=142"></script>
+    <script src="./assets/js/modules/calendar.js?v=142"></script>
+    <script src="./assets/js/modules/simulations.js?v=142"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=142"></script>
+    <script src="./assets/js/modules/configuration.js?v=142"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=142"></script>
+    <script src="./assets/js/modules/admin.js?v=142"></script>
+    <script src="./assets/js/modules/project.js?v=142"></script>
+    <script src="./assets/js/app.js?v=142"></script>
 </body>
 </html>

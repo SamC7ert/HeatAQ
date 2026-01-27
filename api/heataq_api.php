@@ -3173,14 +3173,18 @@ class HeatAQAPI {
     }
 
     private function getSites() {
+        // Filter by project_id if available
+        $projectId = $this->projectId;
+
         // Check if pools table exists to avoid error on subquery
         $tableCheck = $this->db->query("SHOW TABLES LIKE 'pools'");
         $poolsTableExists = $tableCheck->rowCount() > 0;
 
         if ($poolsTableExists) {
-            $stmt = $this->db->prepare("
+            $sql = "
                 SELECT
                     ps.id,
+                    ps.project_id,
                     ps.name,
                     ps.latitude,
                     ps.longitude,
@@ -3192,12 +3196,17 @@ class HeatAQAPI {
                     ps.boiler_marginal_cost_per_kw,
                     (SELECT COUNT(*) FROM pools p WHERE p.pool_site_id = ps.id AND p.is_active = 1) as pool_count
                 FROM pool_sites ps
-                ORDER BY ps.name
-            ");
+            ";
+            if ($projectId) {
+                $sql .= " WHERE ps.project_id = ?";
+            }
+            $sql .= " ORDER BY ps.name";
+            $stmt = $this->db->prepare($sql);
         } else {
-            $stmt = $this->db->prepare("
+            $sql = "
                 SELECT
                     ps.id,
+                    ps.project_id,
                     ps.name,
                     ps.latitude,
                     ps.longitude,
@@ -3209,13 +3218,22 @@ class HeatAQAPI {
                     ps.boiler_marginal_cost_per_kw,
                     0 as pool_count
                 FROM pool_sites ps
-                ORDER BY ps.name
-            ");
+            ";
+            if ($projectId) {
+                $sql .= " WHERE ps.project_id = ?";
+            }
+            $sql .= " ORDER BY ps.name";
+            $stmt = $this->db->prepare($sql);
         }
-        $stmt->execute();
+
+        if ($projectId) {
+            $stmt->execute([$projectId]);
+        } else {
+            $stmt->execute();
+        }
         $sites = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $this->sendResponse(['sites' => $sites]);
+        $this->sendResponse(['sites' => $sites, 'project_id' => $projectId]);
     }
 
     /**
