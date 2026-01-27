@@ -1480,8 +1480,32 @@ const ProjectModule = {
                     description: project.description
                 };
 
-                // Refresh page to load new project data
-                window.location.reload();
+                // Clear current site/pool (will be reloaded from API)
+                this.currentSite = null;
+                this.currentPool = null;
+                this.currentPoolId = null;
+
+                // Update project display
+                this.updateDisplay();
+
+                // Reload site data from API (for new project)
+                await this.loadSiteData();
+
+                // Reload pool data
+                await this.loadPoolData();
+
+                // Update pool card
+                await this.updatePoolCard();
+
+                // Update projects dropdown to show new selection
+                await this.loadProjectsList();
+
+                // Stay on project page (ensure we're there)
+                if (typeof navigation !== 'undefined') {
+                    navigation.switchSection('project', true);
+                }
+
+                console.log('[Project] Switched to project:', pName);
             }
         } catch (error) {
             console.error('Error switching project:', error);
