@@ -68,7 +68,9 @@
     <script>
         // Check if user is logged in
         const session = localStorage.getItem('heataq_session');
-        const projectName = localStorage.getItem('heataq_project_name') || 'Project';
+        const projectId = localStorage.getItem('heataq_project') || '';
+        const projectNameRaw = localStorage.getItem('heataq_project_name') || 'Project';
+        const projectName = projectId ? `[${projectId}] ${projectNameRaw}` : projectNameRaw;
         const userName = localStorage.getItem('heataq_user') || 'User';
         
         if (!session) {
