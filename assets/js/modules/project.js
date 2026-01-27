@@ -1533,6 +1533,12 @@ const ProjectModule = {
                 // Update pool card
                 await this.updatePoolCard();
 
+                // Reload configurations for new project
+                if (typeof app !== 'undefined' && app.configuration) {
+                    app.configuration.currentConfigId = null; // Clear current selection
+                    await app.configuration.loadConfigs();
+                }
+
                 // Update projects dropdown to show new selection
                 await this.loadProjectsList();
 
