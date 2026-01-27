@@ -92,8 +92,10 @@ const ConfigurationModule = {
         try {
             // Get current project ID and pass explicitly to ensure correct filtering
             const projectId = localStorage.getItem('heataq_project') || '';
+            console.log('[Config] Loading configs for project_id:', projectId);
             const response = await fetch(`./api/heataq_api.php?action=get_project_configs&project_id=${projectId}`);
             const data = await response.json();
+            console.log('[Config] API response:', data);
 
             if (data.configs) {
                 this.configs = data.configs;

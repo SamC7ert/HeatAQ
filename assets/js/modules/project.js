@@ -1078,10 +1078,12 @@ const ProjectModule = {
             debugEl.textContent = `Project: ${this.currentProject?.id || '-'} | Site: ${siteId} | Pool: ${poolId}`;
         }
 
-        // Also update header
+        // Also update header (show project ID for debugging)
         const headerProject = document.getElementById('current-project');
         if (headerProject) {
-            headerProject.textContent = this.currentProject?.name || 'Project';
+            const pId = this.currentProject?.id || '';
+            const pName = this.currentProject?.name || 'Project';
+            headerProject.textContent = pId ? `[${pId}] ${pName}` : pName;
         }
     },
 
