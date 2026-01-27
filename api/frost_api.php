@@ -114,20 +114,44 @@ function checkStation($clientId) {
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_USERPWD => $clientId . ':',
         CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
-        CURLOPT_TIMEOUT => 15
+        CURLOPT_TIMEOUT => 15,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_FOLLOWLOCATION => true
     ]);
 
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    $curlErrno = curl_errno($ch);
     curl_close($ch);
 
-    if ($httpCode !== 200) {
+    // Log for server-side debugging
+    error_log("[FrostAPI] checkStation: stationId=$stationId, httpCode=$httpCode, curlErrno=$curlErrno, curlError=$curlError");
+    error_log("[FrostAPI] Response (first 500 chars): " . substr($response, 0, 500));
+
+    if ($curlErrno) {
         echo json_encode([
             'found' => false,
-            'error' => 'Station not found or API error',
-            'http_code' => $httpCode,
+            'error' => 'Connection error: ' . $curlError,
+            'curl_errno' => $curlErrno,
             'station_id_used' => $stationId,
             'url' => $url
+        ]);
+        return;
+    }
+
+    if ($httpCode !== 200) {
+        // Try to get error message from response
+        $errorData = json_decode($response, true);
+        $apiError = $errorData['error']['message'] ?? $errorData['message'] ?? null;
+
+        echo json_encode([
+            'found' => false,
+            'error' => $apiError ?: 'Station not found or API error',
+            'http_code' => $httpCode,
+            'station_id_used' => $stationId,
+            'url' => $url,
+            'response_preview' => substr($response, 0, 200)
         ]);
         return;
     }
