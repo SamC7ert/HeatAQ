@@ -12,7 +12,7 @@ const ConfigurationModule = {
             volume_m3: 625,
             area_m2: 312.5,
             depth_m: 2.0,
-            wind_exposure: 0.535,
+            wind_exposure: 0.5,
             years_operating: 3      // Years since startup (affects ground thermal)
         },
         cover: {

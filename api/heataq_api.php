@@ -1785,7 +1785,7 @@ class HeatAQAPI {
                         area_m2, volume_m3, wind_exposure, solar_absorption, years_operating,
                         has_cover, cover_r_value, cover_solar_transmittance, has_tunnel,
                         floor_insulated, pool_type, is_active, created_at)
-                    VALUES (?, 'Main Pool', 25.0, 12.5, 2.0, 312.5, 625.0, 0.535, 60.0, 3,
+                    VALUES (?, 'Main Pool', 25.0, 12.5, 2.0, 312.5, 625.0, 0.5, 60.0, 3,
                         1, 5.0, 10.0, 1, 1, 'outdoor', 1, NOW())
                 ");
                 $stmt->execute([$poolSiteId]);

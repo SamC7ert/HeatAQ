@@ -753,7 +753,7 @@ const ProjectModule = {
         document.getElementById('edit-pool-length').value = '';
         document.getElementById('edit-pool-width').value = '';
         document.getElementById('edit-pool-depth').value = '';
-        document.getElementById('edit-pool-wind').value = '0.535';
+        document.getElementById('edit-pool-wind').value = '0.5';
         document.getElementById('edit-pool-solar').value = '60';
         document.getElementById('edit-pool-has-cover').value = '1';
         document.getElementById('edit-pool-cover-u').value = '5.0';
@@ -826,7 +826,7 @@ const ProjectModule = {
                     depth: parseFloat(dbPool.depth_m) || 2.0,
                     area: parseFloat(dbPool.area_m2) || 312.5,
                     volume: parseFloat(dbPool.volume_m3) || 625,
-                    wind_exposure: parseFloat(dbPool.wind_exposure) || 0.535,
+                    wind_exposure: parseFloat(dbPool.wind_exposure) || 0.5,
                     solar_absorption: parseFloat(dbPool.solar_absorption) || 60,
                     has_cover: dbPool.has_cover == 1,
                     cover_u_value: parseFloat(dbPool.cover_r_value) || 5.0,
@@ -870,7 +870,7 @@ const ProjectModule = {
                 depth: 2.0,
                 area: 312.5,
                 volume: 625,
-                wind_exposure: 0.535,
+                wind_exposure: 0.5,
                 solar_absorption: 60,
                 has_cover: true,
                 cover_u_value: 5.0,
@@ -898,7 +898,7 @@ const ProjectModule = {
         document.getElementById('edit-pool-length').value = pool.length || '';
         document.getElementById('edit-pool-width').value = pool.width || '';
         document.getElementById('edit-pool-depth').value = pool.depth || '';
-        document.getElementById('edit-pool-wind').value = pool.wind_exposure ?? 0.535;
+        document.getElementById('edit-pool-wind').value = pool.wind_exposure ?? 0.5;
         document.getElementById('edit-pool-solar').value = pool.solar_absorption ?? 60;
         document.getElementById('edit-pool-has-cover').value = pool.has_cover ? '1' : '0';
         document.getElementById('edit-pool-cover-u').value = pool.cover_u_value ?? 5.0;
@@ -959,7 +959,7 @@ const ProjectModule = {
             length_m: length,
             width_m: width,
             depth_m: depth,
-            wind_exposure: parseFloat(document.getElementById('edit-pool-wind')?.value) || 0.535,
+            wind_exposure: parseFloat(document.getElementById('edit-pool-wind')?.value) || 0.5,
             solar_absorption: parseFloat(document.getElementById('edit-pool-solar')?.value) || 60,
             has_cover: document.getElementById('edit-pool-has-cover')?.value === '1',
             cover_r_value: parseFloat(document.getElementById('edit-pool-cover-u')?.value) || 5.0,
