@@ -10,6 +10,10 @@ const EnergyAnalysis = {
     startTime: null,
     investmentCosts: null,
 
+    // Guards one-time change listeners so reloading dropdowns (on tab entry /
+    // project switch) does not stack duplicate handlers
+    listenersAttached: { site: false, config: false, schedule: false },
+
     // localStorage key for state persistence
     STORAGE_KEY: 'heataq_energy_analysis_state',
 
@@ -133,11 +137,26 @@ const EnergyAnalysis = {
     },
 
     /**
+     * Reload project-dependent dropdowns. Called when the Energy Analysis tab is
+     * entered so a project switch (or a newly created site/config) is reflected
+     * without a full page reload. Preserves the current selection where valid.
+     */
+    reload: function() {
+        const savedState = this.restoreState();
+        this.loadSites(savedState);
+        this.loadConfigs(savedState);
+        this.loadSchedules(savedState);
+    },
+
+    /**
      * Load sites into dropdown
      */
     loadSites: async function(savedState) {
         try {
-            const response = await fetch('./api/heataq_api.php?action=get_sites');
+            // Filter by the currently selected project (mirrors SimControl) so
+            // switching projects shows this project's sites, not a stale one
+            const projectId = localStorage.getItem('heataq_project') || '';
+            const response = await fetch(`./api/heataq_api.php?action=get_sites&project_id=${projectId}`);
             const data = await response.json();
 
             const select = document.getElementById('ea-site-select');
@@ -161,8 +180,11 @@ const EnergyAnalysis = {
                 }
                 this.loadPools(select.value, savedState);
 
-                // Save state on change
-                select.addEventListener('change', () => this.saveState());
+                // Save state on change (attach once to avoid stacking on reload)
+                if (!this.listenersAttached.site) {
+                    this.listenersAttached.site = true;
+                    select.addEventListener('change', () => this.saveState());
+                }
             } else {
                 select.innerHTML = '<option value="">No sites found</option>';
             }
@@ -249,8 +271,11 @@ const EnergyAnalysis = {
                     select.value = savedState.config;
                 }
 
-                // Save state on change
-                select.addEventListener('change', () => this.saveState());
+                // Save state on change (attach once to avoid stacking on reload)
+                if (!this.listenersAttached.config) {
+                    this.listenersAttached.config = true;
+                    select.addEventListener('change', () => this.saveState());
+                }
             } else {
                 console.warn('[EnergyAnalysis] No configs in response');
                 select.innerHTML = '<option value="">No configs found</option>';
@@ -290,8 +315,11 @@ const EnergyAnalysis = {
                     select.value = savedState.schedule;
                 }
 
-                // Save state on change
-                select.addEventListener('change', () => this.saveState());
+                // Save state on change (attach once to avoid stacking on reload)
+                if (!this.listenersAttached.schedule) {
+                    this.listenersAttached.schedule = true;
+                    select.addEventListener('change', () => this.saveState());
+                }
             } else {
                 select.innerHTML = '<option value="">No schedules found</option>';
             }

@@ -302,6 +302,12 @@ const SimControlModule = {
                 if (typeof SimulationsModule !== 'undefined') {
                     SimulationsModule.initCompare();
                 }
+                // Reload Energy Analysis dropdowns for the current project
+                // (the tab is populated once at page load, so switching
+                // projects would otherwise leave a stale site list)
+                if (typeof EnergyAnalysis !== 'undefined' && EnergyAnalysis.reload) {
+                    EnergyAnalysis.reload();
+                }
                 break;
             case 'debug':
                 // Re-apply debug mode visibility when switching to Details tab
