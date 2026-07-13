@@ -58,3 +58,6 @@ Thumbs.db
 # Keep example files
 !*.example
 !*.sample
+
+# Claude Code personal settings
+.claude/settings.local.json
