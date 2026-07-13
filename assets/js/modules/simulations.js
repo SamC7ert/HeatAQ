@@ -1725,43 +1725,39 @@ const SimulationsModule = {
             if (isPredictive) {
                 preheatCard.style.display = '';
                 const effectiveTarget = inp.pool?.target_temp;
-                const openPlan = data.pool?.open_plan;
-                const preheatPlan = data.pool?.preheat_plan;
-                const modeCheck = data.pool?.mode_check;
+                // New predictive plan shape (from replay cache; see PREDICTIVE_CONTROL.md)
+                const plan = stored.open_plan || data.pool?.open_plan;
+                const mode = stored.heating_mode || '?';
 
                 let planInfo = '';
-                if (isOpen && openPlan) {
+                if (plan && plan.type === 'closed') {
                     planInfo = `
-                        <tr style="background:#e3f2fd;"><td colspan="2"><strong>Open Period Plan</strong></td></tr>
-                        <tr><td>Avg Demand</td><td><code>${openPlan.avg_demand} kW</code></td></tr>
-                        <tr><td>Period Demand</td><td><code>${openPlan.period_demand} kWh</code></td></tr>
-                        <tr><td>Buffer</td><td><code>${openPlan.buffer_kwh} kWh (${openPlan.temp_diff}°C)</code></td></tr>
-                        <tr><td>Planned HP</td><td><code>${openPlan.hp_rate} kW</code></td></tr>
-                        <tr><td>Thermal Mass</td><td><code>${openPlan.thermal_mass} kWh/°C</code></td></tr>
+                        <tr style="background:#fff3e0;"><td colspan="2"><strong>Closed-period plan</strong></td></tr>
+                        <tr><td>Preheat needed</td><td><code>${plan.preheat ? 'YES' : 'no'}</code></td></tr>
+                        ${plan.preheat ? `
+                        <tr><td>Required temp</td><td><code>${plan.t_req}°C</code> (cap ${plan.max_temp}°C)</td></tr>
+                        <tr><td>Buffer energy</td><td><code>${plan.buffer_energy} kWh</code></td></tr>
+                        <tr><td>Open demand / HP</td><td><code>${plan.open_demand} / ${plan.open_hp_deliver} kWh</code></td></tr>
+                        ` : `<tr><td>Action</td><td><code>hold at target ${effectiveTarget ?? ''}°C</code></td></tr>`}
                     `;
-                } else if (!isOpen && preheatPlan) {
+                } else if (plan && plan.type === 'open') {
                     planInfo = `
-                        <tr style="background:#fff3e0;"><td colspan="2"><strong>Preheat Plan (Case ${preheatPlan.case})</strong></td></tr>
-                        <tr><td>Target Night</td><td><code>${preheatPlan.target_night}°C</code></td></tr>
-                        <tr><td>Forecast Demand</td><td><code>${preheatPlan.forecast_demand_kw} kW</code></td></tr>
-                        <tr><td>Start HP in</td><td><code>${preheatPlan.start_hp_in} hrs</code></td></tr>
+                        <tr style="background:#e3f2fd;"><td colspan="2"><strong>Open-period plan</strong></td></tr>
+                        <tr><td>Preheated</td><td><code>${plan.preheat ? 'YES — HP full, buffer coasts to target' : 'no — hold target'}</code></td></tr>
+                        <tr><td>Max cap</td><td><code>${plan.max_temp}°C</code></td></tr>
                     `;
                 }
 
-                // Check if actual HP matches planned
                 const actualHP = stored.hp_heat_kw || 0;
-                const plannedHP = openPlan?.hp_rate || 0;
-                const hpMismatch = isOpen && openPlan && Math.abs(actualHP - plannedHP) > 1;
-
                 setHtml('debug-preheat', `
                     <table class="data-table compact" style="font-size: 11px;">
                         <tr><td>Strategy</td><td><code style="color:#9c27b0;"><strong>PREDICTIVE</strong></code></td></tr>
                         <tr><td>Pool State</td><td><code>${isOpen ? 'OPEN' : 'CLOSED'}</code></td></tr>
-                        <tr><td>Expected Mode</td><td><code>${modeCheck?.expected_mode || '?'}</code></td></tr>
-                        <tr><td>HP Output</td><td><code>${actualHP.toFixed(1)} kW</code>${hpMismatch ? ' <span style="color:red;">≠ plan!</span>' : ''}</td></tr>
+                        <tr><td>Mode</td><td><code>${mode}</code></td></tr>
+                        <tr><td>HP Output</td><td><code>${actualHP.toFixed(1)} kW</code></td></tr>
                         ${planInfo}
                     </table>
-                    ${hpMismatch ? '<div style="color:red;font-size:10px;margin-top:4px;">⚠ Actual HP (' + actualHP.toFixed(0) + ') ≠ Planned (' + plannedHP.toFixed(0) + ') - openPlan may be null during sim</div>' : ''}
+                    <div style="margin-top:6px;font-size:10px;color:#888;">Single-hour view is steady-state hold; preheat coast/ramp &amp; full-HP show in the weekly profile.</div>
                 `);
             } else {
                 preheatCard.style.display = '';
