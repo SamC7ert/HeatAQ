@@ -264,10 +264,14 @@ class EnergySimulator {
         // Control settings
         if (isset($uiConfig['control'])) {
             $this->equipment['control_strategy'] = $uiConfig['control']['strategy'] ?? $this->equipment['control_strategy'];
-            $this->equipment['target_temp'] = $uiConfig['control']['target_temp'] ?? null;
+            // Preserve previously-set values on a PARTIAL override. A per-sim
+            // override may carry only one field (e.g. just upper_tolerance);
+            // "?? null" would wipe target_temp/lower_tolerance and silently
+            // revert the pool to the 28°C fallback.
+            $this->equipment['target_temp'] = $uiConfig['control']['target_temp'] ?? $this->equipment['target_temp'] ?? null;
             // Config stores upper/lower tolerance separately
-            $this->equipment['upper_tolerance'] = $uiConfig['control']['upper_tolerance'] ?? null;
-            $this->equipment['lower_tolerance'] = $uiConfig['control']['lower_tolerance'] ?? null;
+            $this->equipment['upper_tolerance'] = $uiConfig['control']['upper_tolerance'] ?? $this->equipment['upper_tolerance'] ?? null;
+            $this->equipment['lower_tolerance'] = $uiConfig['control']['lower_tolerance'] ?? $this->equipment['lower_tolerance'] ?? null;
             // For backward compat, also check temp_tolerance
             if (isset($uiConfig['control']['temp_tolerance'])) {
                 $this->equipment['upper_tolerance'] = $uiConfig['control']['temp_tolerance'];
@@ -897,7 +901,10 @@ class EnergySimulator {
                 $results['summary']['preheat_hours'] = ($results['summary']['preheat_hours'] ?? 0) + 1;
             }
 
-            if ($heating['hp_cop'] > 0) {
+            // Average COP only over hours the HP actually consumed electricity.
+            // Idle hours still report the nominal COP (heat=0, elec=0) and would
+            // bias the average high; the denominator (below) counts elec>0 hours.
+            if ($heating['hp_electricity'] > 0) {
                 $results['summary']['avg_cop'] += $heating['hp_cop'];
             }
 

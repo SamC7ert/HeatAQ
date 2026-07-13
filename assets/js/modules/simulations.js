@@ -308,6 +308,9 @@ const SimulationsModule = {
             // would keep showing the previous run's data).
             if (typeof SimControlModule !== 'undefined' && data.run_id && SimControlModule.loadMonthlyReport) {
                 SimControlModule.loadMonthlyReport(data.run_id);
+                // Keep the report's run-info label in sync with the table.
+                const mInfo = document.getElementById('monthly-report-run-info');
+                if (mInfo) mInfo.textContent = `${scenarioName || 'Unnamed'} (${startDate} to ${endDate})`;
             }
 
             // View the new run
@@ -361,6 +364,8 @@ const SimulationsModule = {
         const summary = run.summary || {};
         const config = run.config || {};
         const scheduleName = config.schedule_template_name || 'Unknown';
+        // Per-year divisor: summary.*_kwh / total_cost are cumulative over the run.
+        const years = (summary.total_hours || 0) / 8760 || 1;
 
         container.innerHTML = `
             <div class="run-detail-header">
@@ -389,24 +394,24 @@ const SimulationsModule = {
 
             <div class="run-summary-cards">
                 <div class="summary-card">
-                    <div class="card-value">${this.formatCurrency(summary.total_cost)}</div>
-                    <div class="card-label">Total Cost</div>
+                    <div class="card-value">${this.formatCurrency((summary.total_cost || 0) / years)}</div>
+                    <div class="card-label">Total Cost/yr</div>
                 </div>
                 <div class="summary-card">
-                    <div class="card-value">${this.formatEnergy(summary.total_heat_loss_kwh)}</div>
-                    <div class="card-label">Heat Loss</div>
+                    <div class="card-value">${this.formatEnergy((summary.total_heat_loss_kwh || 0) / years)}</div>
+                    <div class="card-label">Heat Loss/yr</div>
                 </div>
                 <div class="summary-card">
-                    <div class="card-value">${this.formatEnergy(summary.total_solar_gain_kwh)}</div>
-                    <div class="card-label">Solar Gain</div>
+                    <div class="card-value">${this.formatEnergy((summary.total_solar_gain_kwh || 0) / years)}</div>
+                    <div class="card-label">Solar Gain/yr</div>
                 </div>
                 <div class="summary-card">
-                    <div class="card-value">${this.formatEnergy(summary.total_hp_energy_kwh)}</div>
-                    <div class="card-label">Heat Pump</div>
+                    <div class="card-value">${this.formatEnergy((summary.total_hp_energy_kwh || 0) / years)}</div>
+                    <div class="card-label">Heat Pump/yr</div>
                 </div>
                 <div class="summary-card">
-                    <div class="card-value">${this.formatEnergy(summary.total_boiler_energy_kwh)}</div>
-                    <div class="card-label">Boiler</div>
+                    <div class="card-value">${this.formatEnergy((summary.total_boiler_energy_kwh || 0) / years)}</div>
+                    <div class="card-label">Boiler/yr</div>
                 </div>
                 <div class="summary-card">
                     <div class="card-value">${summary.avg_cop?.toFixed(2) || '-'}</div>
@@ -2644,12 +2649,16 @@ const SimulationsModule = {
             ? summary.boiler_thermal_kwh
             : (summary.total_boiler_energy_kwh || 0) * 0.92;
 
+        // Show per-year figures (summary.*_kwh / total_cost are cumulative over
+        // the whole simulated period) so these cards match the annualized
+        // Simulation Report instead of showing 10x-larger period totals.
+        const years = (summary.total_hours || 0) / 8760 || 1;
         const cards = [
-            { label: 'Total Cost', value: this.formatCurrency(summary.total_cost) },
-            { label: 'Heat Loss', value: this.formatEnergy(summary.total_heat_loss_kwh) },
-            { label: 'Solar Gain', value: this.formatEnergy(summary.total_solar_gain_kwh) },
-            { label: 'HP Thermal', value: this.formatEnergy(hpThermal) },
-            { label: 'Boiler Thermal', value: this.formatEnergy(boilerThermal) },
+            { label: 'Total Cost/yr', value: this.formatCurrency((summary.total_cost || 0) / years) },
+            { label: 'Heat Loss/yr', value: this.formatEnergy((summary.total_heat_loss_kwh || 0) / years) },
+            { label: 'Solar Gain/yr', value: this.formatEnergy((summary.total_solar_gain_kwh || 0) / years) },
+            { label: 'HP Thermal/yr', value: this.formatEnergy((hpThermal || 0) / years) },
+            { label: 'Boiler Thermal/yr', value: this.formatEnergy((boilerThermal || 0) / years) },
             { label: 'Avg COP', value: summary.avg_cop?.toFixed(2) || '-' }
         ];
 

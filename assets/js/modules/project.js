@@ -1443,6 +1443,10 @@ const ProjectModule = {
                     description: description
                 };
 
+                // New project has its own (empty) schedules — force the
+                // Schedules section to reload rather than show the old project's.
+                window.schedulesLoaded = false;
+
                 // Refresh display
                 this.hideNewProjectModal();
                 await this.load();
@@ -1560,6 +1564,13 @@ const ProjectModule = {
                     app.configuration.currentConfigId = null; // Clear current selection
                     await app.configuration.loadConfigs();
                 }
+
+                // Force the Schedules section to reload for the new project.
+                // It is gated by a one-time window.schedulesLoaded flag and is
+                // otherwise never refreshed on a project switch, so it would keep
+                // showing (and editing against) the previous project's templates,
+                // day/week schedules and calendar until a full page reload.
+                window.schedulesLoaded = false;
 
                 // Update projects dropdown to show new selection
                 await this.loadProjectsList();
