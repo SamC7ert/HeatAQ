@@ -138,6 +138,37 @@ users → user_projects → projects → pool_sites → pools
 
 ## Data & Calculations
 
+### Wind height/roughness correction (currently manual via wind_exposure)
+**Priority:** Medium
+**Status:** Planned
+
+The simulator applies **only** a single `wind_exposure` factor to the measured
+wind (`vEff = windSpeed * wind_exposure_factor`, `EnergySimulator.php:1236`).
+It does **not** use the station's stored `wind_height_m` or `terrain_roughness`
+(z₀) — those fields are saved but never read in the loss calc (confirmed: no
+height/roughness logic in `EnergySimulator.php`, `heataq_api.php`, or
+`frost_api.php`; `frost_api.php:175` only picks which measurement level to
+fetch).
+
+Consequence: correcting wind from the 10 m measurement height down to pool
+height (~2 m) has to be folded manually into `wind_exposure`, which mixes a
+measurement-height correction with the shelter meaning the field is documented
+for ("0 = sheltered, 1 = fully exposed").
+
+**Interim method** (log wind profile, same z₀ at station and pool):
+```
+f_height = ln(z_pool/z0) / ln(z_ref/z0)          # 10 m -> 2 m, z0=0.03 -> 0.723
+wind_exposure = f_height × f_fence               # e.g. 0.723 × 0.60 (40% fence) = 0.43
+vEff = windSpeed × wind_exposure
+```
+Effect for the 25×5 m Svalbard case: exposure 0.535 → 0.43 lowers open-pool
+loss ~15% (−10 °C: 184 → 157 kW).
+
+**Proposed improvement:** apply the log-law height/roughness correction
+automatically at weather-read time using the station's `wind_height_m` + z₀ and
+the pool height, and reserve `wind_exposure` purely for shelter (fence/terrain
+screening). This separates the two concepts and removes the manual step.
+
 ### Weather data source flexibility
 **Priority:** Low
 **Status:** Planned
