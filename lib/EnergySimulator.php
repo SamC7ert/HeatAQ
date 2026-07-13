@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.11.2';   // Fix predictive target source: use schedule/config target (was poolConfig fallback 28)
+    const VERSION = '3.11.3';   // Predictive demand now net of solar (losses - solar), matching run()
 
     private $db;
     private $siteId;
@@ -633,7 +633,8 @@ class EnergySimulator {
                         $currentTimestamp,
                         $currentWaterTemp,
                         $weatherArray,
-                        $hourIndex
+                        $hourIndex,
+                        $solarData
                     );
                     $this->closedPlanTimestamp = $currentTimestamp;
                     $this->openPlan = null;
@@ -1537,8 +1538,10 @@ class EnergySimulator {
      * heat-pump output, estimates the coming open-period demand, then delegates
      * the decision to computeClosedPlan(). See docs/PREDICTIVE_CONTROL.md.
      *
-     * Approximations (documented): closed/open losses are estimated at target
-     * temperature, and solar gain is ignored in planning.
+     * Demand is net of solar (losses - solar), matching run(). Bather/refill
+     * load is intentionally excluded because the hourly balance does not heat
+     * for it either. Remaining approximation: losses are estimated at target
+     * temperature (small sensitivity over the min..max band).
      *
      * @param DateTime $timestamp Current timestamp at close transition
      * @param float $waterTemp Current water temperature
@@ -1546,7 +1549,7 @@ class EnergySimulator {
      * @param int $currentIdx Current index in weather array
      * @return array|null Plan or null if no next opening / not ready
      */
-    private function planClosedPeriod($timestamp, $waterTemp, $weatherData, $currentIdx) {
+    private function planClosedPeriod($timestamp, $waterTemp, $weatherData, $currentIdx, $solarData = []) {
         if (!$this->scheduler) {
             return null;
         }
@@ -1595,7 +1598,8 @@ class EnergySimulator {
                 false, // cover on
                 isset($h['tunnel_temperature']) ? (float)$h['tunnel_temperature'] : null
             );
-            $closedLoss[] = $loss['total'];
+            // Net loss = losses - solar gain (matches run(): net = losses - solar)
+            $closedLoss[] = $loss['total'] - $this->planningSolarGain($solarData, $h, false);
             $closedHpOut[] = $this->applyHeatPump($hpCapacity, $air)['heat'];
         }
 
@@ -1618,7 +1622,8 @@ class EnergySimulator {
                 true, // cover off
                 isset($h['tunnel_temperature']) ? (float)$h['tunnel_temperature'] : null
             );
-            $openDemand += $loss['total'];       // solar ignored in planning (approx)
+            // Net demand = losses - solar gain (cover off), matching run()
+            $openDemand += $loss['total'] - $this->planningSolarGain($solarData, $h, true);
             $openHpDeliver += $this->applyHeatPump($hpCapacity, $air)['heat'];
             $openDuration++;
         }
@@ -1728,6 +1733,19 @@ class EnergySimulator {
             'max_temp' => $maxTemp,
             'buffer_energy' => $bufferEnergy,
         ];
+    }
+
+    /**
+     * Solar gain (kW) for a weather row during planning, matching run()'s
+     * calculateSolarGain. Returns 0 when no solar data is available.
+     */
+    private function planningSolarGain($solarData, $weatherRow, $isOpen) {
+        if (empty($solarData) || !isset($weatherRow['timestamp'])) {
+            return 0.0;
+        }
+        $date = substr($weatherRow['timestamp'], 0, 10);
+        $hour = (int)substr($weatherRow['timestamp'], 11, 2);
+        return $this->calculateSolarGain($this->getSolarForHour($solarData, $date, $hour), $isOpen);
     }
 
     /**
@@ -1886,7 +1904,8 @@ class EnergySimulator {
                 for ($j = $i; $j < $nextOpenIdx; $j++) {
                     $air = (float)($rows[$j]['air_temp'] ?? 10);
                     $loss = $this->calculateHeatLosses($cycleTarget, $air, (float)($rows[$j]['wind_speed'] ?? 2), 70, false, null);
-                    $closedLoss[] = $loss['total'];
+                    // Net = losses - stored solar gain (matches run())
+                    $closedLoss[] = $loss['total'] - (float)($rows[$j]['solar_gain_kw'] ?? 0);
                     $closedHpOut[] = $this->applyHeatPump($hpCapacity, $air)['heat'];
                 }
                 $openDemand = 0.0;
@@ -1894,7 +1913,7 @@ class EnergySimulator {
                 for ($j = $nextOpenIdx; $j < $n && (bool)$rows[$j]['is_open']; $j++) {
                     $air = (float)($rows[$j]['air_temp'] ?? 10);
                     $loss = $this->calculateHeatLosses($cycleTarget, $air, (float)($rows[$j]['wind_speed'] ?? 2), 70, true, null);
-                    $openDemand += $loss['total'];
+                    $openDemand += $loss['total'] - (float)($rows[$j]['solar_gain_kw'] ?? 0);
                     $openHpDeliver += $this->applyHeatPump($hpCapacity, $air)['heat'];
                 }
 
