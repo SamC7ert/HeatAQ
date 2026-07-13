@@ -612,10 +612,11 @@ const SimControlModule = {
         setEl('bench-shower', toMWh(summary.shower_heating_kwh) || '-');
         setEl('bench-total-elec', toMWh((summary.total_hp_energy_kwh || 0) + (summary.total_boiler_energy_kwh || 0) + (summary.shower_heating_kwh || 0)));
 
-        // Temperature
-        setEl('bench-temp-min', summary.min_water_temp?.toFixed(2) || '-');
-        setEl('bench-temp-avg', summary.avg_water_temp?.toFixed(2) || '-');
-        setEl('bench-temp-max', summary.max_water_temp?.toFixed(2) || '-');
+        // Temperature — in-use values (open hours only), with fallback to the
+        // overall figure for older stored runs that lack the *_open fields.
+        setEl('bench-temp-min', (summary.min_water_temp_open ?? summary.min_water_temp)?.toFixed(2) || '-');
+        setEl('bench-temp-avg', (summary.avg_water_temp_open ?? summary.avg_water_temp)?.toFixed(2) || '-');
+        setEl('bench-temp-max', (summary.max_water_temp_open ?? summary.max_water_temp)?.toFixed(2) || '-');
         // Thresholds are target-relative (target-1 / target-2); render the
         // actual temperatures in the labels so they stay correct for any target.
         const t1 = summary.days_below_threshold1_temp;

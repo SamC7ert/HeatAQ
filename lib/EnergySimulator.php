@@ -555,6 +555,9 @@ class EnergySimulator {
                 'min_water_temp' => 999,
                 'max_water_temp' => -999,
                 'avg_water_temp' => 0,
+                'min_water_temp_open' => 999,  // min during OPEN hours (in-use)
+                'max_water_temp_open' => -999, // max during OPEN hours (in-use)
+                'avg_water_temp_open' => 0,    // avg during OPEN hours (in-use)
                 'days_below_27' => 0,
                 'days_below_26' => 0,
                 'avg_cop' => 0,
@@ -882,6 +885,12 @@ class EnergySimulator {
             $results['summary']['min_water_temp'] = min($results['summary']['min_water_temp'], $currentWaterTemp);
             $results['summary']['max_water_temp'] = max($results['summary']['max_water_temp'], $currentWaterTemp);
             $results['summary']['avg_water_temp'] += $currentWaterTemp;
+            if ($targetTemp !== null) {
+                // In-use temperature stats (open hours only)
+                $results['summary']['min_water_temp_open'] = min($results['summary']['min_water_temp_open'], $currentWaterTemp);
+                $results['summary']['max_water_temp_open'] = max($results['summary']['max_water_temp_open'], $currentWaterTemp);
+                $results['summary']['avg_water_temp_open'] += $currentWaterTemp;
+            }
 
             // Preheat stats (V3.10.0)
             if ($isPreheat) {
@@ -933,6 +942,12 @@ class EnergySimulator {
         if ($results['summary']['total_hours'] > 0) {
             $results['summary']['avg_water_temp'] /= $results['summary']['total_hours'];
         }
+        // In-use average: divide by open hours, else fall back to overall.
+        if (($results['summary']['open_hours'] ?? 0) > 0) {
+            $results['summary']['avg_water_temp_open'] /= $results['summary']['open_hours'];
+        } else {
+            $results['summary']['avg_water_temp_open'] = $results['summary']['avg_water_temp'];
+        }
 
         // Fix min/max if no data
         if ($results['summary']['min_water_temp'] == 999) {
@@ -940,6 +955,13 @@ class EnergySimulator {
         }
         if ($results['summary']['max_water_temp'] == -999) {
             $results['summary']['max_water_temp'] = 0;
+        }
+        // In-use min/max: fall back to overall when there were no open hours.
+        if ($results['summary']['min_water_temp_open'] == 999) {
+            $results['summary']['min_water_temp_open'] = $results['summary']['min_water_temp'];
+        }
+        if ($results['summary']['max_water_temp_open'] == -999) {
+            $results['summary']['max_water_temp_open'] = $results['summary']['max_water_temp'];
         }
 
         if ($results['summary']['total_hp_energy_kwh'] > 0) {
