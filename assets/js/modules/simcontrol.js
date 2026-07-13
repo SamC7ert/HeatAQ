@@ -3,6 +3,7 @@
 const SimControlModule = {
     currentTab: 'new',
     initialized: false,
+    configListenerAttached: false,  // Guards one-time config dropdown change listener
     userPreferences: {},  // Cached preferences from server
 
     // Initialize SimControl
@@ -12,15 +13,15 @@ const SimControlModule = {
             // One-time setup
             await this.loadUserPreferences();
             this.loadOHCOptions();
-            this.loadConfigOptions();
             this.loadWeatherRange();
             this.initDateInputs();
             this.initMonthlyReport();
         }
 
-        // Always reload sites/pools when entering SimControl
-        // (project may have changed since last visit)
+        // Always reload sites/pools and configs when entering SimControl
+        // (project may have changed, or a config may have been created, since last visit)
         await this.loadSites();
+        this.loadConfigOptions();
 
         // Initialize current tab
         this.switchTab(this.currentTab);
@@ -374,12 +375,16 @@ const SimControlModule = {
             const savedConfig = this.getPreference('selected_config');
             if (simSelect) simSelect.value = savedConfig;
 
-            // Load config values on change
+            // Load config values on change (attach listener only once to avoid
+            // stacking duplicates when the dropdown is reloaded on re-entry)
             if (simSelect) {
-                simSelect.addEventListener('change', () => {
-                    this.savePreference('selected_config', simSelect.value);
-                    this.loadSelectedConfig(simSelect.value);
-                });
+                if (!this.configListenerAttached) {
+                    this.configListenerAttached = true;
+                    simSelect.addEventListener('change', () => {
+                        this.savePreference('selected_config', simSelect.value);
+                        this.loadSelectedConfig(simSelect.value);
+                    });
+                }
 
                 // Load initial config if one is selected
                 if (savedConfig) {
