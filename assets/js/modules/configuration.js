@@ -265,6 +265,7 @@ const ConfigurationModule = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'save_project_config',
+                    project_id: localStorage.getItem('heataq_project'),
                     name: name,
                     description: description,
                     config: config
@@ -430,6 +431,7 @@ const ConfigurationModule = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'save_project_config',
+                    project_id: localStorage.getItem('heataq_project'),
                     config_id: this.currentConfigId,
                     name: currentConfig?.name || 'Configuration',
                     description: currentConfig?.description || '',
