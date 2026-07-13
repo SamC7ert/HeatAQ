@@ -619,12 +619,14 @@ const SimControlModule = {
         setEl('bench-temp-max', (summary.max_water_temp_open ?? summary.max_water_temp)?.toFixed(2) || '-');
         // Thresholds are target-relative (target-1 / target-2); render the
         // actual temperatures in the labels so they stay correct for any target.
+        // Counts are accumulated over the whole period, so show them per year.
         const t1 = summary.days_below_threshold1_temp;
         const t2 = summary.days_below_threshold2_temp;
-        if (t1 !== undefined && t1 !== null) setEl('bench-days-27-label', `Days < ${t1}°C`);
-        if (t2 !== undefined && t2 !== null) setEl('bench-days-26-label', `Days < ${t2}°C`);
-        setEl('bench-days-27', summary.days_below_27 || '0');
-        setEl('bench-days-26', summary.days_below_26 || '0');
+        if (t1 !== undefined && t1 !== null) setEl('bench-days-27-label', `Days/yr < ${t1}°C`);
+        if (t2 !== undefined && t2 !== null) setEl('bench-days-26-label', `Days/yr < ${t2}°C`);
+        const daysPerYr = (v) => v ? (v / years).toFixed(1) : '0';
+        setEl('bench-days-27', daysPerYr(summary.days_below_27));
+        setEl('bench-days-26', daysPerYr(summary.days_below_26));
     },
 
     // Hide benchmark report
