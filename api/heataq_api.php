@@ -1708,7 +1708,7 @@ class HeatAQAPI {
                     // Create new pool_site based on source
                     $stmt = $this->db->prepare("
                         INSERT INTO pool_sites (project_id, name, latitude, longitude,
-                            default_weather_station, hp_base_cost_nok, hp_marginal_cost_per_kw,
+                            weather_station_id, hp_base_cost_nok, hp_marginal_cost_per_kw,
                             boiler_base_cost_nok, boiler_marginal_cost_per_kw, created_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
                     ");
@@ -1717,7 +1717,8 @@ class HeatAQAPI {
                         $name . ' Site',
                         $sourceSite['latitude'],
                         $sourceSite['longitude'],
-                        $sourceSite['default_weather_station'],
+                        // Prefer the canonical column; fall back to legacy for old source sites
+                        $sourceSite['weather_station_id'] ?? $sourceSite['default_weather_station'] ?? null,
                         $sourceSite['hp_base_cost_nok'],
                         $sourceSite['hp_marginal_cost_per_kw'],
                         $sourceSite['boiler_base_cost_nok'],

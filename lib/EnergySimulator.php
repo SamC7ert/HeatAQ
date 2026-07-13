@@ -959,7 +959,7 @@ class EnergySimulator {
                 wd.tunnel_temp as tunnel_temperature
             FROM weather_data wd
             JOIN weather_stations ws ON wd.station_id = ws.station_id
-            JOIN pool_sites ps ON ws.station_id = ps.default_weather_station
+            JOIN pool_sites ps ON ws.station_id = COALESCE(ps.weather_station_id, ps.default_weather_station)
             WHERE ps.id = ?
               AND DATE(wd.timestamp) BETWEEN ? AND ?
             ORDER BY wd.timestamp
@@ -1028,7 +1028,7 @@ class EnergySimulator {
                 sd.cloud_reduction_factor as cloud_factor
             FROM solar_daily_data sd
             JOIN weather_stations ws ON sd.station_id = ws.station_id
-            JOIN pool_sites ps ON ws.station_id = ps.default_weather_station
+            JOIN pool_sites ps ON ws.station_id = COALESCE(ps.weather_station_id, ps.default_weather_station)
             WHERE ps.id = ?
               AND sd.date BETWEEN ? AND ?
             ORDER BY sd.date
@@ -2236,7 +2236,7 @@ class EnergySimulator {
                 wd.tunnel_temp
             FROM weather_data wd
             JOIN weather_stations ws ON wd.station_id = ws.station_id
-            JOIN pool_sites ps ON ws.station_id = ps.default_weather_station
+            JOIN pool_sites ps ON ws.station_id = COALESCE(ps.weather_station_id, ps.default_weather_station)
             WHERE ps.id = ?
               AND wd.timestamp = ?
             LIMIT 1
@@ -2276,7 +2276,7 @@ class EnergySimulator {
                 SELECT daily_total_kwh_m2, daily_clear_sky_kwh_m2
                 FROM solar_daily_data sd
                 JOIN weather_stations ws ON sd.station_id = ws.station_id
-                JOIN pool_sites ps ON ws.station_id = ps.default_weather_station
+                JOIN pool_sites ps ON ws.station_id = COALESCE(ps.weather_station_id, ps.default_weather_station)
                 WHERE ps.id = ? AND sd.date = ?
                 LIMIT 1
             ");
