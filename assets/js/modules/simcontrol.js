@@ -582,8 +582,12 @@ const SimControlModule = {
 
         setHtml('bench-config-summary', configHtml);
 
-        // Thermal losses (convert kWh to MWh)
-        const toMWh = (val) => val ? (val / 1000).toFixed(1) : '-';
+        // Thermal losses (convert kWh to MWh, normalised to per-year).
+        // Report headers read "MWh/year", but summary.*_kwh are cumulative
+        // totals over the whole simulated period, so divide by the number of
+        // years to get a true annual figure (matches the Python reference).
+        const years = hours > 0 ? hours / 8760 : 1;
+        const toMWh = (val) => val ? (val / 1000 / years).toFixed(1) : '-';
 
         setEl('bench-evap', toMWh(summary.evaporation_kwh) || '-');
         setEl('bench-conv', toMWh(summary.convection_kwh) || '-');
@@ -592,7 +596,9 @@ const SimControlModule = {
         setEl('bench-floor', toMWh(summary.floor_loss_kwh) || '-');
         setEl('bench-wall', toMWh(summary.wall_loss_kwh) || '-');
         setEl('bench-solar', summary.total_solar_gain_kwh ? '-' + toMWh(summary.total_solar_gain_kwh) : '-');
-        setEl('bench-total-loss', toMWh(summary.total_heat_loss_kwh));
+        // Total system loss is net of solar gain: gross losses - solar gain.
+        const netLossKwh = (summary.total_heat_loss_kwh || 0) - (summary.total_solar_gain_kwh || 0);
+        setEl('bench-total-loss', toMWh(netLossKwh));
 
         // Heating delivered
         setEl('bench-hp-thermal', toMWh(summary.hp_thermal_kwh) || '-');
