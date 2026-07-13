@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.11.1';   // Debug single-hour + weekly replay migrated to the new predictive regimes
+    const VERSION = '3.11.2';   // Fix predictive target source: use schedule/config target (was poolConfig fallback 28)
 
     private $db;
     private $siteId;
@@ -1560,10 +1560,17 @@ class EnergySimulator {
         }
 
         $tmr = $this->thermalMassRate;
-        $target = $this->poolConfig['target_temp'] ?? 28.0;
+        // Target for the coming open period: prefer the schedule's target for the
+        // next opening (what the pool is actually held at when open), then the
+        // config target. NOTE: poolConfig has no target_temp - setConfigFromUI
+        // stores it in equipment - so reading poolConfig here would wrongly
+        // fall back to 28. See doc §7 (schedule/config target).
+        $target = $nextOpening['target_temp']
+            ?? $this->equipment['target_temp']
+            ?? $this->poolConfig['target_temp']
+            ?? 28.0;
         $upperTol = $this->equipment['upper_tolerance'] ?? 1.0;
         $lowerTol = $this->equipment['lower_tolerance'] ?? 2.0;
-        // Config is the source of target/min/max for now (see doc §7).
         $maxTemp = $this->poolConfig['max_temp'] ?? ($target + $upperTol);
         $minTemp = $this->poolConfig['min_temp'] ?? ($target - $lowerTol);
         $hpCapacity = $this->equipment['heat_pump']['capacity_kw'] ?? 0;
@@ -1837,11 +1844,11 @@ class EnergySimulator {
         $openPlansByDate = [];
 
         $tmr = ($this->thermalMassRate && $this->thermalMassRate > 0) ? $this->thermalMassRate : 1.0;
-        $target = $this->poolConfig['target_temp'] ?? 28.0;
+        // Base target from config (equipment, not poolConfig - see planClosedPeriod).
+        // Per closed period the schedule target of the next opening is preferred.
+        $baseTarget = $this->equipment['target_temp'] ?? $this->poolConfig['target_temp'] ?? 28.0;
         $upperTol = $this->equipment['upper_tolerance'] ?? 1.0;
         $lowerTol = $this->equipment['lower_tolerance'] ?? 2.0;
-        $maxTemp = $this->poolConfig['max_temp'] ?? ($target + $upperTol);
-        $minTemp = $this->poolConfig['min_temp'] ?? ($target - $lowerTol);
         $hpCapacity = $this->equipment['heat_pump']['capacity_kw'] ?? 0;
 
         $n = count($rows);
@@ -1849,6 +1856,11 @@ class EnergySimulator {
         $prevWaterTemp = null;
         $closedPlan = null;    // reconstructed plan for the current closed period
         $openPreheat = false;  // was the just-ended closed period a preheat?
+        // Per-cycle target/min/max (schedule target of the next opening; falls
+        // back to the config target). Set at each close transition.
+        $cycleTarget = $baseTarget;
+        $cycleMax = $baseTarget + $upperTol;
+        $cycleMin = $baseTarget - $lowerTol;
 
         foreach ($rows as $i => $row) {
             $ts = $row['timestamp'];
@@ -1863,11 +1875,17 @@ class EnergySimulator {
                 for ($j = $i; $j < $n; $j++) {
                     if ((bool)$rows[$j]['is_open']) { $nextOpenIdx = $j; break; }
                 }
+                // Target for the coming open period from the stored schedule
+                $cycleTarget = ($nextOpenIdx < $n && isset($rows[$nextOpenIdx]['target_temp']) && $rows[$nextOpenIdx]['target_temp'] !== null)
+                    ? (float)$rows[$nextOpenIdx]['target_temp'] : $baseTarget;
+                $cycleMax = $cycleTarget + $upperTol;
+                $cycleMin = $cycleTarget - $lowerTol;
+
                 $closedLoss = [];
                 $closedHpOut = [];
                 for ($j = $i; $j < $nextOpenIdx; $j++) {
                     $air = (float)($rows[$j]['air_temp'] ?? 10);
-                    $loss = $this->calculateHeatLosses($target, $air, (float)($rows[$j]['wind_speed'] ?? 2), 70, false, null);
+                    $loss = $this->calculateHeatLosses($cycleTarget, $air, (float)($rows[$j]['wind_speed'] ?? 2), 70, false, null);
                     $closedLoss[] = $loss['total'];
                     $closedHpOut[] = $this->applyHeatPump($hpCapacity, $air)['heat'];
                 }
@@ -1875,14 +1893,14 @@ class EnergySimulator {
                 $openHpDeliver = 0.0;
                 for ($j = $nextOpenIdx; $j < $n && (bool)$rows[$j]['is_open']; $j++) {
                     $air = (float)($rows[$j]['air_temp'] ?? 10);
-                    $loss = $this->calculateHeatLosses($target, $air, (float)($rows[$j]['wind_speed'] ?? 2), 70, true, null);
+                    $loss = $this->calculateHeatLosses($cycleTarget, $air, (float)($rows[$j]['wind_speed'] ?? 2), 70, true, null);
                     $openDemand += $loss['total'];
                     $openHpDeliver += $this->applyHeatPump($hpCapacity, $air)['heat'];
                 }
 
                 if (count($closedLoss) > 0 && $openDemand > 0) {
                     $closedPlan = self::computeClosedPlan(
-                        $waterTempStart, $target, $minTemp, $maxTemp, $tmr,
+                        $waterTempStart, $cycleTarget, $cycleMin, $cycleMax, $tmr,
                         $closedLoss, $closedHpOut, $openDemand, $openHpDeliver
                     );
                     $closedPlan['start_index'] = $i + ($closedPlan['start_offset'] ?? 0);
@@ -1902,8 +1920,8 @@ class EnergySimulator {
                     $openPlansByDate[$tsDate] = [
                         'timestamp' => $ts,
                         'preheat' => $openPreheat,
-                        'target' => $target,
-                        'max_temp' => $maxTemp,
+                        'target' => $cycleTarget,
+                        'max_temp' => $cycleMax,
                     ];
                 }
                 if ($debugPlanCall === null && $tsDate === $focusDate) {
@@ -1911,8 +1929,8 @@ class EnergySimulator {
                         'timestamp' => $ts,
                         'selected_date' => $focusDate,
                         'preheat' => $openPreheat,
-                        'target' => $target,
-                        'max_temp' => $maxTemp,
+                        'target' => $cycleTarget,
+                        'max_temp' => $cycleMax,
                     ];
                 }
             }
@@ -1923,8 +1941,8 @@ class EnergySimulator {
                 $planOut = [
                     'type' => 'open',
                     'preheat' => $openPreheat,
-                    'target' => $target,
-                    'max_temp' => $maxTemp,
+                    'target' => $cycleTarget,
+                    'max_temp' => $cycleMax,
                 ];
             } else {
                 if ($closedPlan && !empty($closedPlan['preheat'])) {
@@ -1935,13 +1953,13 @@ class EnergySimulator {
                 $planOut = $closedPlan ? [
                     'type' => 'closed',
                     'preheat' => $closedPlan['preheat'] ?? false,
-                    't_req' => round($closedPlan['t_req'] ?? $target, 2),
+                    't_req' => round($closedPlan['t_req'] ?? $cycleTarget, 2),
                     'start_index' => $closedPlan['start_index'] ?? $i,
                     'open_demand' => $closedPlan['open_demand'] ?? 0,
                     'open_hp_deliver' => $closedPlan['open_hp_deliver'] ?? 0,
                     'buffer_energy' => round($closedPlan['buffer_energy'] ?? 0, 1),
-                    'min_temp' => $minTemp,
-                    'max_temp' => $maxTemp,
+                    'min_temp' => $cycleMin,
+                    'max_temp' => $cycleMax,
                 ] : null;
             }
 
@@ -2442,7 +2460,15 @@ class EnergySimulator {
         $targetTemp = null;
         if ($isOpenOverride !== null) {
             $isOpen = $isOpenOverride;
-            $targetTemp = $this->poolConfig['target_temp'] ?? 28;
+            // Prefer the schedule's target for this hour, then config equipment
+            // target - NOT poolConfig (no target_temp -> would default to 28).
+            $targetTemp = $this->equipment['target_temp'] ?? $this->poolConfig['target_temp'] ?? 28;
+            if ($this->scheduler) {
+                $period = $this->scheduler->getCurrentPeriod(new DateTime($timestamp));
+                if ($period && isset($period['target_temp'])) {
+                    $targetTemp = (float)$period['target_temp'];
+                }
+            }
         } elseif ($this->scheduler) {
             $period = $this->scheduler->getCurrentPeriod(new DateTime($timestamp));
             if ($period) {
@@ -2531,9 +2557,11 @@ class EnergySimulator {
         // replay (Details -> weekly profile) to see those modes.
         $tmr = ($this->thermalMassRate && $this->thermalMassRate > 0) ? $this->thermalMassRate : 1.0;
         if ($controlStrategy === 'predictive' && !$isOpen) {
-            // Closed: heat pump only, hold target (steady-state approximation)
-            $heating = $this->heatPumpToHold($targetTemp ?? ($this->poolConfig['target_temp'] ?? 28.0),
-                $netRequirementKW, $airTemp, $poolTemp, $tmr);
+            // Closed: heat pump only, hold target (steady-state approximation).
+            // Target from schedule (if any) then config equipment - NOT poolConfig
+            // which has no target_temp (would wrongly fall back to 28).
+            $holdTarget = $targetTemp ?? $this->equipment['target_temp'] ?? $this->poolConfig['target_temp'] ?? 28.0;
+            $heating = $this->heatPumpToHold($holdTarget, $netRequirementKW, $airTemp, $poolTemp, $tmr);
             $heatingDebugMode = 'closed_hold';
         } else {
             // Open (or reactive): modulate to target (HP first, boiler backstop)
