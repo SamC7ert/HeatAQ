@@ -37,6 +37,25 @@ Long-term architectural improvements and technical debt items.
   `switchProject()` calls it and awaits before reloading. (`heataq_api.php`,
   `project.js`)
 
+### Code review (Jul 2026) — see `docs/CODE_REVIEW_2026-07.md`
+Fixed (V209): per-year summary cards, partial control-override no longer nulls
+target_temp, avg_cop over elec>0 hours, monthly-report label refresh, Schedules
+reload on project switch. **Flagged follow-ups (not yet done):**
+- [ ] Config template overriding pools-table cover/solar/wind/years (strip in `simulation_api`) — HIGH latent
+- [ ] `unmet_kwh` over-counts deliberate non-heating (reporting) — thread requested-heat
+- [ ] Outdoor pool wall/floor loss vs 15°C tunnel / 5°C ground anchor — derive from soil temp — HIGH modeling
+- [ ] Silent weather/solar fallbacks (`wind ?? 2`, `humidity ?? 70`, NASA -999→0) + no coverage check — fail-fast/report
+- [ ] Weather-fetch error handling (INSERT IGNORE, 200-on-error, no completeness check, no retry)
+- [ ] `PoolScheduler` project scoping (loads/merges schedules globally by name) — HIGH latent multi-project
+- [ ] Sim starting inside a closed period never plans the first opening (day-1 no preheat)
+- [ ] HP COP curve / sky-temp offset / cover-U / capacity defaults hardcoded — make config/derived
+
+### Test suite design — see `docs/TEST_STRATEGY.md`
+Designed (not built): Layer 0 CI lint (php -l + node --check), Layer 1 physics
+regression (extract `HeatLossPhysics`, known-value + energy-balance + per-year
+invariants, golden-master), Layer 2 Playwright UI action scenarios, Layer 3 API
+contract tests. Build order: physics first.
+
 ---
 
 ## Recent Changes (Dec 2024)

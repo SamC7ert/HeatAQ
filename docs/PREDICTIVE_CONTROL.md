@@ -192,30 +192,39 @@ mistaken for the intended design.
 
 ## 8. Current code vs. this spec
 
-As of this writing the implementation is a simplified stand-in and **diverges**
-from the strategy above. The divergences:
+**Update (July 2026 review): the code now implements this spec.** A correctness
+review of `EnergySimulator.php` verified that the earlier "simplified stand-in"
+has been rewritten to match the strategy above; the divergences previously
+listed here are **stale**. Specifically the current code:
 
 | Area | This spec | Current code |
 |------|-----------|--------------|
-| Preheat decision | Conditional on `open_demand > hp_capacity` | **Unconditional** — always preheats (`planClosedPeriod`, `EnergySimulator.php:1575`) |
-| Preheat level | `min(target + deficit/thermal_mass, max_temp)` | Fixed `target + upper_tolerance` (`:1575`) |
-| Closed-period start | Latest possible (late-start) | **Immediate** — "start heating immediately" (`:679`) |
-| Closed-period boiler | Never | Has a boiler path (`:1615`) |
-| Open-period, preheated | Heat pump at **full** | Reduced **average** rate spread over the period (`calculateOpenPlanRates`, `:1676`) |
+| Preheat decision | Conditional on `open_demand > hp_capacity` | ✅ Conditional Regime A/B (`computeClosedPlan`) |
+| Preheat level | `min(target + deficit/thermal_mass, max_temp)` | ✅ Demand-driven `T_req`, capped at `max_temp` |
+| Closed-period start | Latest possible (late-start) | ✅ Backward-scan late-start ramp |
+| Closed-period boiler | Never | ✅ HP-only (`heatPumpToHold`); boiler never builds buffer |
+| Open-period, preheated | Heat pump at **full** | ✅ `openPreheatHeating` runs HP at full; boiler backstops only once buffer spent |
 | No-preheat regime | Hold target, modulate | ✅ Matches |
-| Coast floor | Config `min_temp` | Not applied in the closed plan |
-| Preheat flag | Explicit flag carried close→open | Open planner re-infers from `water_temp − target` |
+| Coast floor | Config `min_temp` | ✅ Coast floored at `min_temp` |
+| Preheat flag | Explicit flag carried close→open | ✅ Explicit `openPreheat` flag carried close→open |
 
-The stored `case` numbers in the current plan (`:1610`) decide only whether the
-*closed-period* heating needs the boiler; they are **not** the demand-driven
-regimes described here.
+The `calculateOpenPlanRates` reduced-average path the previous version of this
+section criticised is now **dead code** (never called).
 
-### Symptom this explains
+### Remaining known disconnects
+- **Target source** (§7): the planner reads the config/equipment target, and
+  `poolConfig` has no `target_temp`; the code guards this correctly by falling
+  back to `equipment['target_temp']`. Driving from the schedule per period is
+  still future work.
+- **Simulation starting inside a closed period**: if the weather window begins
+  while the pool is already closed, no close-transition fires, so the first
+  closed stretch gets no plan and no preheat — a Regime-B first opening can open
+  below target on day 1 (see `CODE_REVIEW_2026-07.md` B7). Every subsequent day
+  is planned normally.
 
-"Target is 27 but the pool sits at 28." The current code preheats every closed
-period to `target + upper_tolerance` (27 + 1 = 28) and holds it there, rather
-than only preheating when the open period actually needs it. Under this spec a
-pool whose open demand fits within the heat pump would stay at 27 (Regime A).
+The "target 27 but pool sits at 28" symptom the old version of this section
+described no longer applies — the code only preheats when the open period
+demands it (Regime A holds at target).
 
 ---
 
