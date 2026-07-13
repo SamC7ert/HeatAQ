@@ -41,6 +41,8 @@ Long-term architectural improvements and technical debt items.
 - [ ] **Progress reporting for multi-year simulations** - Show progress bar when simulation spans more than one year
 - [ ] **Norwegian date format** - Date fields currently show English format, should be Norwegian (dd.mm.yyyy). Investigate where locale is set - possibly per-user preference?
 - [ ] **Station search/browse feature** - Add ability to search/browse nearby weather stations instead of typing IDs manually. Use Frost API `/sources/v0.jsonld` endpoint with geometry parameter for location-based search. Docs: https://frost.met.no/api.html
+- [ ] **Show missing weather data in the station UI** - The Weather Station admin view (Yearly/Monthly Averages) silently hides gaps: a year/month with no data just doesn't render a row, so a missing year (e.g. Svalbard 2025 before backfill) is invisible. Flag incomplete coverage — e.g. show every expected year/month and mark ones below full hourly coverage (~8760/yr), so gaps are obvious without the diag endpoint. Root cause of such gaps: `fetchWeatherDataForStation` (admin.js) swallows per-year fetch errors without retry; consider adding retry/backoff + a re-queue for short years so transient Frost failures self-heal.
+- [ ] **Default station = the open project's station** - When opening the Weather Station admin view, default the "Select Station" dropdown to the station linked to the currently open project (`pool_sites.weather_station_id` / `default_weather_station`) instead of the first station alphabetically.
 
 ### 2. Security & Permissions
 **Priority:** High
