@@ -822,6 +822,7 @@ class EnergySimulator {
                     'avg_air_temp' => 0,
                     'avg_water_temp' => 0,
                     'min_water_temp' => 999,
+                    'min_water_temp_open' => 999,  // min during OPEN hours only (comfort metric)
                     'total_loss_kwh' => 0,
                     'total_solar_kwh' => 0,
                     'total_hp_kwh' => 0,           // Electricity consumed
@@ -838,6 +839,10 @@ class EnergySimulator {
             $dailyStats['avg_air_temp'] += (float) $hour['air_temperature'];
             $dailyStats['avg_water_temp'] += $currentWaterTemp;
             $dailyStats['min_water_temp'] = min($dailyStats['min_water_temp'], $currentWaterTemp);
+            if ($targetTemp !== null) {
+                // Pool is open this hour: track the min temp seen while in use.
+                $dailyStats['min_water_temp_open'] = min($dailyStats['min_water_temp_open'], $currentWaterTemp);
+            }
             $dailyStats['total_loss_kwh'] += $losses['total'];
             $dailyStats['total_solar_kwh'] += $solarGain;
             $dailyStats['total_hp_kwh'] += $heating['hp_electricity'];
@@ -909,10 +914,17 @@ class EnergySimulator {
         $results['summary']['days_below_threshold1_temp'] = $threshold1;
         $results['summary']['days_below_threshold2_temp'] = $threshold2;
         foreach ($results['daily'] as $day) {
-            if ($day['min_water_temp'] < $threshold1) {
+            // Only assess days the pool was actually OPEN. While closed the
+            // water is allowed to coast below target by design, so those dips
+            // are not comfort failures and must not be counted.
+            if (($day['open_hours'] ?? 0) <= 0) {
+                continue;
+            }
+            $minOpen = $day['min_water_temp_open'];
+            if ($minOpen < $threshold1) {
                 $results['summary']['days_below_27']++;
             }
-            if ($day['min_water_temp'] < $threshold2) {
+            if ($minOpen < $threshold2) {
                 $results['summary']['days_below_26']++;
             }
         }
