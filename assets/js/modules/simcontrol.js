@@ -4,6 +4,7 @@ const SimControlModule = {
     currentTab: 'new',
     initialized: false,
     configListenerAttached: false,  // Guards one-time config dropdown change listener
+    ohcListenerAttached: false,     // Guards one-time OHC dropdown change listener
     userPreferences: {},  // Cached preferences from server
 
     // Initialize SimControl
@@ -12,16 +13,19 @@ const SimControlModule = {
             this.initialized = true;
             // One-time setup
             await this.loadUserPreferences();
-            this.loadOHCOptions();
-            this.loadWeatherRange();
             this.initDateInputs();
             this.initMonthlyReport();
         }
 
-        // Always reload sites/pools and configs when entering SimControl
-        // (project may have changed, or a config may have been created, since last visit)
+        // Always reload project-dependent data when entering SimControl.
+        // The project may have changed, or a config / weather station may have
+        // been created or connected, since the last visit — so these must NOT
+        // live behind the one-time init guard (that would require a full page
+        // refresh to pick up the change).
         await this.loadSites();
         this.loadConfigOptions();
+        this.loadOHCOptions();
+        this.loadWeatherRange();
 
         // Initialize current tab
         this.switchTab(this.currentTab);
@@ -330,10 +334,14 @@ const SimControlModule = {
                     select.value = savedOHC;
                 }
 
-                // Save selection on change (to server + localStorage)
-                select.addEventListener('change', () => {
-                    this.savePreference('selected_ohc', select.value);
-                });
+                // Save selection on change (attach listener only once to avoid
+                // stacking duplicates when the dropdown is reloaded on re-entry)
+                if (!this.ohcListenerAttached) {
+                    this.ohcListenerAttached = true;
+                    select.addEventListener('change', () => {
+                        this.savePreference('selected_ohc', select.value);
+                    });
+                }
             }
         } catch (err) {
             console.error('Failed to load OHC options:', err);
