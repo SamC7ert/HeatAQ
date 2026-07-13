@@ -1,8 +1,41 @@
 # HeatAQ Roadmap
 
-**Last Updated:** December 2024 (Session: Exception Days & Simulator Debug)
+**Last Updated:** July 2026 (Session: Climate verification, report & project-switch fixes)
 
 Long-term architectural improvements and technical debt items.
+
+---
+
+## Recent Changes (Jul 2026)
+
+### Simulation Report fixes (V200–V203, deployed)
+- **Per-year losses (V200):** report headers read "MWh/year" but `summary.*_kwh`
+  are cumulative over the whole period; the display now divides by the number
+  of years (`total_hours / 8760`), so all MWh/year sections are true annual
+  figures. (`simcontrol.js`)
+- **Total system loss net of solar (V200):** total is now gross losses −
+  solar gain, not gross alone. (`simcontrol.js`)
+- **Days-below thresholds target-relative (V201):** were hard-coded 27/26
+  (only correct for target 28); now `target−1` / `target−2`, with the actual
+  temps rendered in the labels. (`EnergySimulator.php`, `simcontrol.js`,
+  `energy-analysis.js`)
+- **Comfort metrics use open hours only (V202–V203):** "days below" now counts
+  only days the pool was open, against the in-use daily minimum; the whole
+  Temperature block (min/avg/max) aggregates over open hours and is retitled
+  "Temp. når åpent". While closed the water is allowed to coast below target by
+  design, so those dips no longer count as failures. (`EnergySimulator.php`,
+  `simcontrol.js`, `index.html`)
+
+### Project switch persisted on server session (deployed)
+- The backend derives the current project from `user_sessions.project_id`
+  (set at login); the client's project selection only updated a cookie that
+  production ignores, so creating/switching a project left the backend on the
+  login-time project and project-scoped writes (schedules, configs) landed
+  under the wrong id.
+- Added `switch_project` action (validates access, updates the session);
+  `create_project` now switches the session to the new project; frontend
+  `switchProject()` calls it and awaits before reloading. (`heataq_api.php`,
+  `project.js`)
 
 ---
 
