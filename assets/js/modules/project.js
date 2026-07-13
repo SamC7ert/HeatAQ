@@ -1518,6 +1518,20 @@ const ProjectModule = {
                     description: project.description
                 };
 
+                // Persist the switch on the server session BEFORE reloading
+                // data. The backend derives the current project from the
+                // session (not the cookie) in production, so this must complete
+                // first or the reloads below read the previous project.
+                try {
+                    await fetch(`${config.API_BASE_URL}?action=switch_project`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ project_id: pId })
+                    });
+                } catch (e) {
+                    console.error('[Project] switch_project failed:', e);
+                }
+
                 // Clear current site/pool (will be reloaded from API)
                 this.currentSite = null;
                 this.currentPool = null;

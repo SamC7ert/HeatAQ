@@ -400,6 +400,13 @@ class HeatAQAPI {
                     $this->createProject();
                     break;
 
+                case 'switch_project':
+                    // Change the active project for the current server session.
+                    // Access is validated inside; any role may switch to a
+                    // project they belong to.
+                    $this->switchProject();
+                    break;
+
                 // PROJECT CONFIGURATION
                 case 'get_project_configs':
                     $this->getProjectConfigs();
@@ -1787,6 +1794,12 @@ class HeatAQAPI {
 
             $this->db->commit();
 
+            // Switch the server session to the freshly created project so the
+            // backend and the UI agree on the current project. Without this the
+            // session stays pinned to the login-time project and subsequent
+            // project-scoped writes (schedules, configs) land under the wrong id.
+            $this->setSessionProject($projectId);
+
             $this->sendResponse([
                 'success' => true,
                 'id' => $projectId,
@@ -1797,6 +1810,91 @@ class HeatAQAPI {
         } catch (PDOException $e) {
             $this->db->rollBack();
             $this->sendError('Failed to create project: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Change the active project for the current server session.
+     *
+     * The backend derives the current project from user_sessions.project_id
+     * (set at login), NOT from the client. Selecting or creating a project in
+     * the UI therefore has no effect on the backend until the session row is
+     * updated here. Validates that the user may access the target project.
+     */
+    private function switchProject() {
+        // Dev mode has no server session; the frontend cookie drives the
+        // project, so there is nothing to persist here.
+        if (!Config::requiresAuth()) {
+            $this->sendResponse(['success' => true, 'dev_mode' => true]);
+        }
+        if (!$this->userId) {
+            $this->sendError('Not authenticated', 401);
+        }
+
+        $input = $this->getPostInput();
+        $projectId = isset($input['project_id']) ? (int)$input['project_id'] : 0;
+        if ($projectId <= 0) {
+            $this->sendError('project_id is required');
+        }
+
+        // Access check: the user must belong to the project, or be super admin.
+        $stmt = $this->db->prepare(
+            "SELECT 1 FROM user_projects WHERE user_id = ? AND project_id = ? LIMIT 1"
+        );
+        $stmt->execute([$this->userId, $projectId]);
+        $hasAccess = (bool)$stmt->fetchColumn();
+        if (!$hasAccess) {
+            $stmt = $this->db->prepare("SELECT is_super_admin FROM users WHERE user_id = ? LIMIT 1");
+            $stmt->execute([$this->userId]);
+            $hasAccess = (bool)$stmt->fetchColumn();
+        }
+        if (!$hasAccess) {
+            $this->sendError('Access denied to this project', 403);
+        }
+
+        // Confirm the project exists and is active.
+        $stmt = $this->db->prepare(
+            "SELECT project_id FROM projects WHERE project_id = ? AND is_active = 1 LIMIT 1"
+        );
+        $stmt->execute([$projectId]);
+        if (!$stmt->fetchColumn()) {
+            $this->sendError('Project not found', 404);
+        }
+
+        $this->setSessionProject($projectId);
+
+        // Return a pool_site for the project so the client can sync site context.
+        $stmt = $this->db->prepare(
+            "SELECT id FROM pool_sites WHERE project_id = ? ORDER BY id LIMIT 1"
+        );
+        $stmt->execute([$projectId]);
+        $poolSiteId = $stmt->fetchColumn();
+
+        $this->sendResponse([
+            'success' => true,
+            'project_id' => $projectId,
+            'pool_site_id' => $poolSiteId !== false ? (int)$poolSiteId : null
+        ]);
+    }
+
+    /**
+     * Persist the active project on the current user's session row(s).
+     *
+     * Subsequent requests read the current project from user_sessions via
+     * auth, so this is what actually makes a project switch take effect on the
+     * backend. No-op in dev mode (project comes from a cookie there).
+     */
+    private function setSessionProject($projectId) {
+        if (!Config::requiresAuth() || !$this->userId) {
+            return;
+        }
+        try {
+            $stmt = $this->db->prepare(
+                "UPDATE user_sessions SET project_id = ? WHERE user_id = ? AND expires_at > NOW()"
+            );
+            $stmt->execute([(int)$projectId, $this->userId]);
+        } catch (Exception $e) {
+            error_log('[setSessionProject] failed: ' . $e->getMessage());
         }
     }
 
