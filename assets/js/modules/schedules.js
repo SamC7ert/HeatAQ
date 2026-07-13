@@ -542,6 +542,11 @@ const schedules = {
                 api.utils.showSuccess('Created: ' + name);
                 nameInput.value = '';
                 await this.loadWeekSchedules();
+                // Also refresh calendar's week schedules dropdown
+                if (app.calendar) {
+                    app.calendar.weekSchedules = this.weekSchedules;
+                    app.calendar.renderDateRanges();
+                }
                 this.selectWeekSchedule(result.week_schedule_id);
             }
         } catch (err) {
@@ -570,15 +575,18 @@ const schedules = {
         });
 
         try {
-            const result = await api.weekSchedules.save(data);
-            if (result.success) {
-                api.utils.showSuccess('Week schedule saved');
-                const scheduleId = this.selectedWeekSchedule.week_schedule_id;
-                // Reload to get fresh data
-                await this.loadWeekSchedules();
-                // Re-select the schedule
-                this.selectWeekSchedule(scheduleId);
+            await api.weekSchedules.save(data);
+            api.utils.showSuccess('Week schedule saved');
+            const scheduleId = this.selectedWeekSchedule.week_schedule_id;
+            // Reload to get fresh data
+            await this.loadWeekSchedules();
+            // Also refresh calendar's week schedules dropdown
+            if (app.calendar) {
+                app.calendar.weekSchedules = this.weekSchedules;
+                app.calendar.renderDateRanges();
             }
+            // Re-select the schedule
+            this.selectWeekSchedule(scheduleId);
         } catch (err) {
             api.utils.showError('Failed to save: ' + err.message);
         }
@@ -685,21 +693,18 @@ const schedules = {
         }
 
         try {
-            const result = await api.daySchedules.save({
+            await api.daySchedules.save({
                 day_schedule_id: this.selectedDaySchedule.day_schedule_id,
                 name: this.selectedDaySchedule.name,
                 is_closed: this.selectedDaySchedule.is_closed || 0,
                 periods: periods
             });
-
-            if (result.success) {
-                api.utils.showSuccess('Day schedule saved');
-                const scheduleId = this.selectedDaySchedule.day_schedule_id;
-                // Reload to get fresh data
-                await this.loadDaySchedules();
-                // Re-select the schedule
-                this.selectDaySchedule(scheduleId);
-            }
+            api.utils.showSuccess('Day schedule saved');
+            const scheduleId = this.selectedDaySchedule.day_schedule_id;
+            // Reload to get fresh data
+            await this.loadDaySchedules();
+            // Re-select the schedule
+            this.selectDaySchedule(scheduleId);
         } catch (err) {
             api.utils.showError('Failed to save: ' + err.message);
         }
