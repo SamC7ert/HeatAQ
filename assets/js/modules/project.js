@@ -1018,6 +1018,12 @@ const ProjectModule = {
         this.updatePoolCard();
         this.hidePoolModal();
 
+        // Refresh the SimControl "From Pool Settings" values (Wind Exposure,
+        // Solar Absorption) so they reflect the edit without a page reload.
+        if (typeof SimulationsModule !== 'undefined' && SimulationsModule.refreshPoolValues) {
+            SimulationsModule.refreshPoolValues();
+        }
+
         console.log('[Project] Pool saved:', this.currentPool);
     },
 

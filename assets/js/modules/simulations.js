@@ -843,6 +843,22 @@ const SimulationsModule = {
     },
 
     /**
+     * Re-read the pool-derived config values (Wind Exposure, Solar Absorption)
+     * from the live pool object. Call after the pool settings are edited so the
+     * "From Pool Settings" display refreshes without reloading the whole config.
+     */
+    refreshPoolValues: function() {
+        const pool = (typeof ProjectModule !== 'undefined') ? ProjectModule.currentPool : null;
+        if (!pool) return;
+        const wind = Number(pool.wind_exposure);
+        const solar = Number(pool.solar_absorption);
+        const windEl = document.getElementById('cfg-val-wind');
+        const solarEl = document.getElementById('cfg-val-solar');
+        if (windEl && Number.isFinite(wind)) windEl.textContent = (wind * 100).toFixed(1) + '%';
+        if (solarEl && Number.isFinite(solar)) solarEl.textContent = solar.toFixed(1) + '%';
+    },
+
+    /**
      * Load saved override values from server (with localStorage fallback)
      */
     loadSavedOverrides: async function() {
