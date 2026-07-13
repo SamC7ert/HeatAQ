@@ -674,23 +674,31 @@ const EnergyAnalysis = {
         // Build body rows
         const rows = [];
 
+        // Per-result year count, so cumulative totals can be shown as true
+        // per-year figures (summary.*_kwh / days are accumulated over the
+        // whole simulated period, not per year).
+        const yearsOf = (r) => {
+            const h = r.summary?.total_hours || 0;
+            return h > 0 ? h / 8760 : 1;
+        };
+
         // HP + Boiler row
         rows.push(this.buildRow('HP + Boiler', 'kW',
             this.results.map(r => r.label), false, false));
 
         // Net Heating Need - with thick bottom border to separate from electric section
         rows.push(this.buildRowStyled('Net Heating Need', 'MWh/yr',
-            this.results.map(r => r.success ? ((r.summary?.hp_thermal_kwh || 0) + (r.summary?.boiler_thermal_kwh || 0)) / 1000 : '-'),
+            this.results.map(r => r.success ? ((r.summary?.hp_thermal_kwh || 0) + (r.summary?.boiler_thermal_kwh || 0)) / 1000 / yearsOf(r) : '-'),
             true, { borderBottom: '2px solid #999' }));
 
         // HP Electric (API uses total_hp_energy_kwh)
         rows.push(this.buildRow('HP Electric', 'MWh/yr',
-            this.results.map(r => r.success ? (r.summary?.total_hp_energy_kwh || 0) / 1000 : '-'),
+            this.results.map(r => r.success ? (r.summary?.total_hp_energy_kwh || 0) / 1000 / yearsOf(r) : '-'),
             true, false));
 
         // Boiler Electric (API uses total_boiler_energy_kwh)
         rows.push(this.buildRow('Boiler Electric', 'MWh/yr',
-            this.results.map(r => r.success ? (r.summary?.total_boiler_energy_kwh || 0) / 1000 : '-'),
+            this.results.map(r => r.success ? (r.summary?.total_boiler_energy_kwh || 0) / 1000 / yearsOf(r) : '-'),
             true, false));
 
         // Total Electric - all bold including unit
@@ -698,7 +706,7 @@ const EnergyAnalysis = {
             if (!r.success) return null;
             const hp = r.summary?.total_hp_energy_kwh || 0;
             const boiler = r.summary?.total_boiler_energy_kwh || 0;
-            return (hp + boiler) / 1000;
+            return (hp + boiler) / 1000 / yearsOf(r);
         });
         rows.push(this.buildTotalElectricRow('Total Electric', 'MWh/yr', totalElec));
 
@@ -713,7 +721,7 @@ const EnergyAnalysis = {
             }), false, { fontStyle: 'italic', borderBottom: '2px solid #999', paddingLeft: '20px', fontSize: '12px' }));
 
         // Energy Cost
-        const energyCosts = this.results.map(r => r.success ? (r.summary?.total_cost || 0) / 1000 : null);
+        const energyCosts = this.results.map(r => r.success ? (r.summary?.total_cost || 0) / 1000 / yearsOf(r) : null);
         rows.push(this.buildRow('Energy Cost', 'kNOK/yr', energyCosts, true, false));
 
         // Energy Cost Diff vs Prev - only in HP Capacity mode
@@ -756,36 +764,39 @@ const EnergyAnalysis = {
         // Min Temperature - highlight in Total Capacity mode
         if (isTotalMode) {
             rows.push(this.buildRowStyled('Min Temperature', '°C',
-                this.results.map(r => r.success ? (r.summary?.min_water_temp?.toFixed(2) || '-') : '-'),
+                this.results.map(r => r.success ? ((r.summary?.min_water_temp_open ?? r.summary?.min_water_temp)?.toFixed(2) || '-') : '-'),
                 false, { background: '#e3f2fd' }));
         } else {
             rows.push(this.buildRow('Min Temperature', '°C',
-                this.results.map(r => r.success ? (r.summary?.min_water_temp?.toFixed(2) || '-') : '-'),
+                this.results.map(r => r.success ? ((r.summary?.min_water_temp_open ?? r.summary?.min_water_temp)?.toFixed(2) || '-') : '-'),
                 false, false));
         }
 
-        // Days below target-1°C - highlight in Total Capacity mode.
-        // Threshold is target-relative; label kept generic since compared
-        // scenarios may use different targets.
+        // Days below the comfort thresholds — per year, labelled with the
+        // actual threshold temperatures (target-1 / target-2). Counts are
+        // accumulated over the whole period, so divide by years. Thresholds
+        // come from the first successful run (compared cases share the target).
+        // The backend already counts only days the pool was OPEN.
+        const firstOk = this.results.find(r => r.success);
+        const th1 = firstOk?.summary?.days_below_threshold1_temp;
+        const th2 = firstOk?.summary?.days_below_threshold2_temp;
+        const daysLbl1 = (th1 !== undefined && th1 !== null) ? `Days < ${th1}°C` : 'Days < target-1°C';
+        const daysLbl2 = (th2 !== undefined && th2 !== null) ? `Days < ${th2}°C` : 'Days < target-2°C';
+        const daysBelow1 = this.results.map(r => r.success ? (r.summary?.days_below_27 || 0) / yearsOf(r) : '-');
+        const daysBelow2 = this.results.map(r => r.success ? (r.summary?.days_below_26 || 0) / yearsOf(r) : '-');
+
+        // Days below target-1 - highlight in Total Capacity mode
         if (isTotalMode) {
-            rows.push(this.buildRowStyled('Days < target-1°C', 'days',
-                this.results.map(r => r.success ? (r.summary?.days_below_27 || 0) : '-'),
-                false, { background: '#e3f2fd' }));
+            rows.push(this.buildRowStyled(daysLbl1, 'days/yr', daysBelow1, true, { background: '#e3f2fd' }));
         } else {
-            rows.push(this.buildRow('Days < target-1°C', 'days',
-                this.results.map(r => r.success ? (r.summary?.days_below_27 || 0) : '-'),
-                false, false));
+            rows.push(this.buildRow(daysLbl1, 'days/yr', daysBelow1, true, false));
         }
 
-        // Days below target-2°C - highlight in Total Capacity mode
+        // Days below target-2 - highlight in Total Capacity mode
         if (isTotalMode) {
-            rows.push(this.buildRowStyled('Days < target-2°C', 'days',
-                this.results.map(r => r.success ? (r.summary?.days_below_26 || 0) : '-'),
-                false, { background: '#e3f2fd' }));
+            rows.push(this.buildRowStyled(daysLbl2, 'days/yr', daysBelow2, true, { background: '#e3f2fd' }));
         } else {
-            rows.push(this.buildRow('Days < target-2°C', 'days',
-                this.results.map(r => r.success ? (r.summary?.days_below_26 || 0) : '-'),
-                false, false));
+            rows.push(this.buildRow(daysLbl2, 'days/yr', daysBelow2, true, false));
         }
 
         tbody.innerHTML = rows.join('');
