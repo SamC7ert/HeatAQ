@@ -202,6 +202,27 @@ automatically at weather-read time using the station's `wind_height_m` + z₀ an
 the pool height, and reserve `wind_exposure` purely for shelter (fence/terrain
 screening). This separates the two concepts and removes the manual step.
 
+### Boiler energy source: electric vs oil/gas
+**Priority:** Medium
+**Status:** Planned
+
+The backup boiler is modeled as a fuel boiler with a single `gas_nok_kwh`
+price (`EnergySimulator.php:281`, cost = `fuel × fuel_cost_per_kwh`,
+`:2397`). But the boiler may instead be **electric** (elkjele), in which
+case it consumes **electricity** and must be priced at the electricity
+tariff — not a separate (often cheaper) gas price.
+
+**Rule going forward:** we choose the boiler's energy source. If electric,
+use the electricity price (and ~100% efficiency, not a fuel efficiency);
+if oil/gas, use the fuel price. Add an explicit boiler energy-source
+selector (electric | oil/gas) instead of always treating it as gas.
+
+**Symptom this caused:** with a low gas price, "Energy Cost" *rose* as the
+HP share increased, because boiler heat (`price/efficiency`) looked cheaper
+per kWh of heat than HP heat (`price/COP`). That was an artifact of pricing
+an electric boiler as if it burned cheap gas. Interim fix: set the gas price
+equal to the electricity price when the boiler is electric.
+
 ### Weather data source flexibility
 **Priority:** Low
 **Status:** Planned
