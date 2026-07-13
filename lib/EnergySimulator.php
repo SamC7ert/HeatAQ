@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.10.45';  // Fix: HP/boiler enabled=null caused no heating
+    const VERSION = '3.11.0';   // Predictive rewrite: demand-driven conditional preheat, late-start, HP-only buffer, full-HP open
 
     private $db;
     private $siteId;
@@ -54,6 +54,8 @@ class EnergySimulator {
     private $openPlanTimestamp = null;   // When open plan was created
     private $lastPreheatCalc = [];       // Debug info for preheating
     private $debugOpenPlansByDate = [];  // Debug: capture first open plan per day
+    private $openPreheat = false;        // Was the just-ended closed period a preheat? (carried close->open)
+    private $openMaxTemp = null;         // Max temp cap carried into the open period
 
     // Physical constants
     const WATER_DENSITY = 1000;      // kg/m³
@@ -640,7 +642,11 @@ class EnergySimulator {
 
                 // Detect OPEN transition (was closed, now open)
                 if ($prevTargetTemp === null && $targetTemp !== null) {
-                    // OPEN transition - clear closed plan, create open plan
+                    // OPEN transition - carry the preheat flag from the closed plan
+                    // into the open period, then clear the closed plan.
+                    $this->openPreheat = !empty($this->closedPlan['preheat']);
+                    $this->openMaxTemp = $this->closedPlan['max_temp']
+                        ?? ($this->poolConfig['max_temp'] ?? ($targetTemp + ($this->equipment['upper_tolerance'] ?? 1.0)));
                     $this->closedPlan = null;
                     $this->closedPlanTimestamp = null;
 
@@ -674,64 +680,86 @@ class EnergySimulator {
                     $this->openPlanTimestamp = $currentTimestamp;
                 }
 
-                // During closed period with a plan: preheating starts immediately
-                if ($targetTemp === null && $this->closedPlan !== null && $this->closedPlanTimestamp !== null) {
-                    // Simple approach: start heating immediately, target is target_at_open
-                    $effectiveTarget = $this->closedPlan['target_at_open'] ?? ($this->poolConfig['target_temp'] ?? 28.0);
-                    $isPreheat = ($currentWaterTemp < $effectiveTarget - 0.1);
-                }
-
                 $prevTargetTemp = $targetTemp;
             }
 
-            // Determine heating
+            // ================================================================
+            // Determine heating (see docs/PREDICTIVE_CONTROL.md)
+            // ================================================================
             $heatingMode = 'reactive';  // Track which mode was used
             $heatingModeReason = null;  // Track why
+            $tmr = ($this->thermalMassRate && $this->thermalMassRate > 0) ? $this->thermalMassRate : 1.0;
+            $airTemp = (float) $hour['air_temperature'];
 
-            if ($controlStrategy === 'predictive' && $targetTemp !== null && $this->openPlan !== null) {
-                // OPEN period with plan - use planned HP rate
-                $heatingMode = 'open_plan';
-                $heating = $this->applyOpenPeriodHeating(
-                    $this->openPlan,
-                    $netRequirement,
-                    (float) $hour['air_temperature'],
-                    $currentWaterTemp,
-                    $targetTemp
-                );
-
-                // Debug: capture heating result for this day's first open hour
-                $dateKey = $currentTimestamp->format('Y-m-d');
-                if (isset($this->debugOpenPlansByDate[$dateKey]) && !isset($this->debugOpenPlansByDate[$dateKey]['heating_result'])) {
-                    $this->debugOpenPlansByDate[$dateKey]['heating_result'] = [
-                        'mode' => $heatingMode,
-                        'hp_heat' => $heating['hp_heat'],
-                        'boiler_heat' => $heating['boiler_heat'],
-                        'plan_case' => $this->openPlan['case'],
-                        'plan_hp_rate' => $this->openPlan['hp_rate'],
-                    ];
+            if ($controlStrategy === 'predictive' && $targetTemp === null && $this->closedPlan !== null) {
+                // ---- CLOSED period: heat pump ONLY, boiler never runs here ----
+                $plan = $this->closedPlan;
+                if (!empty($plan['preheat'])) {
+                    // Coast to min_temp until the late-start ramp index, then ramp to t_req
+                    $isRamp = ($hourIndex >= ($plan['start_index'] ?? $hourIndex));
+                    $holdTemp = $isRamp ? $plan['t_req'] : $plan['min_temp'];
+                    $heatingMode = $isRamp ? 'preheat_ramp' : 'preheat_coast';
+                } else {
+                    // No preheat needed: simply hold target through the closed period
+                    $holdTemp = $plan['target'];
+                    $heatingMode = 'closed_hold';
                 }
-            } elseif ($controlStrategy === 'predictive' && $targetTemp === null && $this->closedPlan !== null) {
-                // CLOSED period with plan - use planned HP/boiler rates for preheating
-                $heatingMode = 'closed_plan';
-                $heating = $this->applyClosedPeriodHeating(
-                    $this->closedPlan,
-                    (float) $hour['air_temperature'],
-                    $currentWaterTemp,
-                    $effectiveTarget
-                );
+                $effectiveTarget = $holdTemp;
+                $isPreheat = ($currentWaterTemp < $holdTemp - 0.1);
+
+                // Modulate the heat pump to reach holdTemp this hour (never overshoot,
+                // never below - drives coast/ramp/hold with a single formula). HP only.
+                $requiredHeat = max(0.0, $netRequirement + ($holdTemp - $currentWaterTemp) * $tmr);
+                $hpResult = $this->applyHeatPump($requiredHeat, $airTemp);
+                $heating = [
+                    'hp_heat' => $hpResult['heat'],
+                    'hp_electricity' => $hpResult['electricity'],
+                    'hp_cop' => $hpResult['cop'],
+                    'boiler_heat' => 0,
+                    'boiler_fuel' => 0,
+                    'total_heat' => $hpResult['heat'],
+                    'cost' => $hpResult['cost'],
+                ];
+            } elseif ($controlStrategy === 'predictive' && $targetTemp !== null && !empty($this->openPreheat)) {
+                // ---- OPEN period after a preheat: run HP at FULL, boiler backstops target ----
+                $heatingMode = 'open_preheat';
+                $maxTemp = $this->openMaxTemp ?? ($this->poolConfig['max_temp'] ?? ($targetTemp + 1.0));
+
+                // HP full, but do not push the water above max_temp
+                $hpReq = max(0.0, $netRequirement + ($maxTemp - $currentWaterTemp) * $tmr);
+                $hpResult = $this->applyHeatPump($hpReq, $airTemp);
+                $afterHp = $netRequirement - $hpResult['heat'];
+
+                // Boiler only once the buffer is spent (water at/below target): hold target
+                $boilerResult = ['heat' => 0, 'fuel' => 0, 'cost' => 0];
+                if ($currentWaterTemp <= $targetTemp + 0.01 && $afterHp > 0) {
+                    $boilerReq = $afterHp + max(0.0, ($targetTemp - $currentWaterTemp) * $tmr);
+                    $boilerResult = $this->applyBoiler($boilerReq);
+                }
+                $effectiveTarget = $targetTemp;
+                $isPreheat = ($currentWaterTemp > $targetTemp + 0.1); // coasting on buffer
+                $heating = [
+                    'hp_heat' => $hpResult['heat'],
+                    'hp_electricity' => $hpResult['electricity'],
+                    'hp_cop' => $hpResult['cop'],
+                    'boiler_heat' => $boilerResult['heat'],
+                    'boiler_fuel' => $boilerResult['fuel'],
+                    'total_heat' => $hpResult['heat'] + $boilerResult['heat'],
+                    'cost' => $hpResult['cost'] + $boilerResult['cost'],
+                ];
             } else {
-                // Reactive mode or no plan available
+                // Reactive, or open period with no preheat: modulate to target (HP first, boiler backstop)
                 if ($controlStrategy !== 'predictive') {
                     $heatingModeReason = 'not_predictive';
                 } elseif ($targetTemp === null) {
                     $heatingModeReason = 'closed_no_plan';
-                } elseif ($this->openPlan === null) {
-                    $heatingModeReason = 'NO_OPEN_PLAN';  // BUG indicator
+                } else {
+                    $heatingMode = 'open_hold';
                 }
 
                 $heating = $this->calculateHeating(
                     $netRequirement,
-                    (float) $hour['air_temperature'],
+                    $airTemp,
                     $effectiveTarget,
                     $currentWaterTemp
                 );
@@ -760,16 +788,17 @@ class EnergySimulator {
                     'water_temp' => round($currentWaterTemp, 2),
                     'is_open' => $targetTemp !== null,
                     'is_preheat' => $isPreheat,
-                    'heating_mode' => $heatingMode,  // Track: reactive, open_plan, closed_plan
+                    'heating_mode' => $heatingMode,  // preheat_coast, preheat_ramp, closed_hold, open_preheat, open_hold, reactive
                     'heating_mode_reason' => $heatingModeReason,  // Why this mode (null = correct)
-                    'preheat_case' => $this->closedPlan['case'] ?? null,
+                    'preheat_case' => !empty($this->closedPlan['preheat']) ? 'preheat' : 'hold',
                     'preheat_plan' => $this->closedPlan ? [
-                        'case' => $this->closedPlan['case'] ?? null,
-                        'hp_rate' => round($this->closedPlan['hp_rate'] ?? 0, 1),
-                        'boiler_rate' => round($this->closedPlan['boiler_rate'] ?? 0, 1),
+                        'preheat' => $this->closedPlan['preheat'] ?? false,
+                        't_req' => round($this->closedPlan['t_req'] ?? 0, 2),
+                        'start_index' => $this->closedPlan['start_index'] ?? 0,
                         'hours_to_open' => $this->closedPlan['hours_to_open'] ?? 0,
-                        'target_at_open' => round($this->closedPlan['target_at_open'] ?? 0, 1),
-                        'total_demand' => round($this->closedPlan['total_demand'] ?? 0, 1),
+                        'open_demand' => $this->closedPlan['open_demand'] ?? 0,
+                        'open_hp_deliver' => $this->closedPlan['open_hp_deliver'] ?? 0,
+                        'buffer_energy' => round($this->closedPlan['buffer_energy'] ?? 0, 1),
                     ] : null,
                     'open_plan' => $this->openPlan ? [
                         'case' => $this->openPlan['case'] ?? null,
@@ -1536,114 +1565,194 @@ class EnergySimulator {
     }
 
     /**
-     * Plan the closed period - determines preheating strategy
-     * Called at CLOSE transition, returns plan for entire closed period
+     * Plan the closed period - determines preheating strategy.
+     * Called at CLOSE transition. Gathers the hourly closed-period losses and
+     * heat-pump output, estimates the coming open-period demand, then delegates
+     * the decision to computeClosedPlan(). See docs/PREDICTIVE_CONTROL.md.
      *
-     * THE 4 CASES (Python v3.6.0.3):
-     * Case 1: HP can handle demand → target_night = target_temp (no preheat)
-     * Case 2: Need thermal buffer → target_night = target + extra (preheat above target)
-     * Case 3: Need boiler during day → target_night = max_temp
-     * Case 4: Everything maxed → target_night = max_temp, full boiler
+     * Approximations (documented): closed/open losses are estimated at target
+     * temperature, and solar gain is ignored in planning.
      *
      * @param DateTime $timestamp Current timestamp at close transition
      * @param float $waterTemp Current water temperature
      * @param array $weatherData Hourly weather data array
      * @param int $currentIdx Current index in weather array
-     * @return array|null Plan or null if no next opening found
+     * @return array|null Plan or null if no next opening / not ready
      */
     private function planClosedPeriod($timestamp, $waterTemp, $weatherData, $currentIdx) {
         if (!$this->scheduler) {
             return null;
         }
+        if (!$this->thermalMassRate || $this->thermalMassRate <= 0) {
+            return null;
+        }
 
-        // Find next opening
         $nextOpening = $this->scheduler->findNextOpening($timestamp);
         if (!$nextOpening['datetime']) {
             return null;
         }
 
-        // Calculate hours until opening
-        $hoursToOpen = max(1, (int)ceil(
+        $tmr = $this->thermalMassRate;
+        $target = $this->poolConfig['target_temp'] ?? 28.0;
+        $upperTol = $this->equipment['upper_tolerance'] ?? 1.0;
+        $lowerTol = $this->equipment['lower_tolerance'] ?? 2.0;
+        // Config is the source of target/min/max for now (see doc §7).
+        $maxTemp = $this->poolConfig['max_temp'] ?? ($target + $upperTol);
+        $minTemp = $this->poolConfig['min_temp'] ?? ($target - $lowerTol);
+        $hpCapacity = $this->equipment['heat_pump']['capacity_kw'] ?? 0;
+
+        $hoursToOpen = max(1, (int)round(
             ($nextOpening['datetime']->getTimestamp() - $timestamp->getTimestamp()) / 3600
         ));
+        $openIdx = $currentIdx + $hoursToOpen;
 
-        // Get equipment capacities
-        $hpCapacity = $this->equipment['heat_pump']['capacity_kw'] ?? 125;
-        $boilerCapacity = $this->equipment['boiler']['capacity_kw'] ?? 200;
-        $targetTemp = $this->poolConfig['target_temp'] ?? 28.0;
-        $upperTolerance = $this->equipment['upper_tolerance'] ?? 1.0;
-        $targetAtOpen = $targetTemp + $upperTolerance;  // Target with buffer
-
-        // Ensure thermal mass rate is set
-        if (!$this->thermalMassRate || $this->thermalMassRate <= 0) {
-            return null;
-        }
-
-        // Calculate energy needed to raise temperature
-        $tempDeficit = $targetAtOpen - $waterTemp;
-        $energyToRaise = max(0, $tempDeficit * $this->thermalMassRate);
-
-        // Forecast losses during closed period
-        $periodLosses = 0;
+        // Hourly closed-period losses (cover on) and heat-pump output
+        $closedLoss = [];
+        $closedHpOut = [];
         for ($i = 0; $i < $hoursToOpen; $i++) {
             $idx = $currentIdx + $i;
             if ($idx >= count($weatherData)) break;
-
-            $hour = $weatherData[$idx];
-            $losses = $this->calculateHeatLosses(
-                $waterTemp,  // Use current temp for loss estimation
-                (float)($hour['air_temperature'] ?? 10),
-                (float)($hour['wind_speed'] ?? 2),
-                (float)($hour['humidity'] ?? 70),
-                false, // closed (cover on)
-                isset($hour['tunnel_temperature']) ? (float)$hour['tunnel_temperature'] : null
+            $h = $weatherData[$idx];
+            $air = (float)($h['air_temperature'] ?? 10);
+            $loss = $this->calculateHeatLosses(
+                $target, $air,
+                (float)($h['wind_speed'] ?? 2),
+                (float)($h['humidity'] ?? 70),
+                false, // cover on
+                isset($h['tunnel_temperature']) ? (float)$h['tunnel_temperature'] : null
             );
-            $periodLosses += $losses['total'];
+            $closedLoss[] = $loss['total'];
+            $closedHpOut[] = $this->applyHeatPump($hpCapacity, $air)['heat'];
         }
 
-        // Total demand = energy to raise temp + losses during period
-        $totalDemand = $energyToRaise + $periodLosses;
-
-        // Calculate HP and boiler rates (similar to planOpenPeriod)
-        $hpAvailable = $hpCapacity * $hoursToOpen;
-
-        if ($hpAvailable >= $totalDemand) {
-            // Case 1: HP alone can cover it
-            $case = 1;
-            $hpRate = $totalDemand / $hoursToOpen;
-            $boilerRate = 0;
-        } else {
-            // Case 2: Need HP at full + boiler for shortfall
-            $case = 2;
-            $hpRate = $hpCapacity;
-            $shortfall = $totalDemand - $hpAvailable;
-            $boilerRate = $shortfall / $hoursToOpen;
-            $boilerRate = min($boilerRate, $boilerCapacity);  // Cap at boiler capacity
+        // Estimate the coming OPEN period (cover off) - demand vs HP deliverable
+        $openDemand = 0.0;
+        $openHpDeliver = 0.0;
+        $openDuration = 0;
+        for ($k = 0; $k < 48; $k++) {
+            $idx = $openIdx + $k;
+            if ($idx >= count($weatherData)) break;
+            $dt = clone $nextOpening['datetime'];
+            if ($k > 0) $dt->modify("+{$k} hours");
+            if ($this->scheduler->getCurrentPeriod($dt) === null) break; // closed again
+            $h = $weatherData[$idx];
+            $air = (float)($h['air_temperature'] ?? 10);
+            $loss = $this->calculateHeatLosses(
+                $target, $air,
+                (float)($h['wind_speed'] ?? 2),
+                (float)($h['humidity'] ?? 70),
+                true, // cover off
+                isset($h['tunnel_temperature']) ? (float)$h['tunnel_temperature'] : null
+            );
+            $openDemand += $loss['total'];       // solar ignored in planning (approx)
+            $openHpDeliver += $this->applyHeatPump($hpCapacity, $air)['heat'];
+            $openDuration++;
         }
 
-        // Store debug info
+        $plan = self::computeClosedPlan(
+            $waterTemp, $target, $minTemp, $maxTemp, $tmr,
+            $closedLoss, $closedHpOut, $openDemand, $openHpDeliver
+        );
+
+        // Absolute weather index at which the HP ramp should begin
+        $plan['start_index'] = $currentIdx + ($plan['start_offset'] ?? 0);
+        $plan['hours_to_open'] = count($closedLoss);
+        $plan['open_duration'] = $openDuration;
+        $plan['open_demand'] = round($openDemand, 1);
+        $plan['open_hp_deliver'] = round($openHpDeliver, 1);
+
         $this->lastPreheatCalc = [
-            'case' => $case,
-            'hours_to_open' => $hoursToOpen,
-            'target_at_open' => round($targetAtOpen, 1),
-            'temp_deficit' => round($tempDeficit, 2),
-            'energy_to_raise' => round($energyToRaise, 1),
-            'period_losses' => round($periodLosses, 1),
-            'total_demand' => round($totalDemand, 1),
-            'hp_rate' => round($hpRate, 1),
-            'boiler_rate' => round($boilerRate, 1),
-            'thermal_mass_rate' => round($this->thermalMassRate, 2),
+            'preheat' => $plan['preheat'],
+            'target' => $target,
+            't_req' => round($plan['t_req'], 2),
+            'start_offset' => $plan['start_offset'] ?? 0,
+            'hours_to_open' => $plan['hours_to_open'],
+            'open_duration' => $openDuration,
+            'open_demand' => round($openDemand, 1),
+            'open_hp_deliver' => round($openHpDeliver, 1),
+            'buffer_energy' => round($plan['buffer_energy'], 1),
+            'min_temp' => $minTemp,
+            'max_temp' => $maxTemp,
+            'thermal_mass_rate' => round($tmr, 2),
         ];
 
+        return $plan;
+    }
+
+    /**
+     * Pure closed-period planning math (no DB / scheduler dependencies, unit-testable).
+     *
+     * Decides whether a preheat is needed for the coming open period and, if so,
+     * how high to raise the water (capped at max_temp) and the LATEST hour at
+     * which a heat-pump-only ramp must begin to reach it by opening. Boiler is
+     * never used to build the buffer.
+     *
+     * @param float $waterTemp   Water temperature at close
+     * @param float $target      Target temperature
+     * @param float $minTemp     Coast floor (config minimum)
+     * @param float $maxTemp     Preheat cap (config maximum)
+     * @param float $tmr         Thermal mass rate (kWh/°C)
+     * @param array $closedLoss  Hourly heat loss (kW) over the closed period, cover on
+     * @param array $closedHpOut Hourly heat-pump heat output (kW) over the closed period
+     * @param float $openDemand  Total heat demand (kWh) over the coming open period
+     * @param float $openHpDeliver Total heat the HP can deliver (kWh) over the open period
+     * @return array plan
+     */
+    public static function computeClosedPlan(
+        $waterTemp, $target, $minTemp, $maxTemp, $tmr,
+        array $closedLoss, array $closedHpOut, $openDemand, $openHpDeliver
+    ) {
+        $hoursToOpen = count($closedLoss);
+
+        // Regime A: the heat pump can cover the whole open period on its own.
+        if ($openDemand <= $openHpDeliver + 1e-9) {
+            return [
+                'preheat' => false,
+                'target' => $target,
+                't_req' => $target,
+                'start_offset' => 0,
+                'min_temp' => $minTemp,
+                'max_temp' => $maxTemp,
+                'buffer_energy' => 0.0,
+            ];
+        }
+
+        // Regime B: size the buffer the HP cannot supply during the open period.
+        $bufferEnergy = $openDemand - $openHpDeliver;         // kWh
+        $tReq = min($target + $bufferEnergy / $tmr, $maxTemp); // capped at max
+
+        // Coast curve: water drifting with the HP off, floored at min_temp.
+        $coast = [];
+        $t = $waterTemp;
+        for ($i = 0; $i < $hoursToOpen; $i++) {
+            $coast[$i] = $t;
+            $t = max($minTemp, $t - ($closedLoss[$i] / $tmr));
+        }
+
+        // Late start: latest offset s such that HP-full from s still reaches t_req
+        // by opening. Reachability is monotonic (earlier start is always easier),
+        // so scanning from the latest hour, the first that reaches is the answer.
+        $startOffset = 0; // fallback: heat from the start (closed period too short)
+        for ($s = $hoursToOpen - 1; $s >= 0; $s--) {
+            $t = $coast[$s];
+            for ($i = $s; $i < $hoursToOpen; $i++) {
+                $t += ($closedHpOut[$i] - $closedLoss[$i]) / $tmr;
+                if ($t > $maxTemp) $t = $maxTemp;
+            }
+            if ($t >= $tReq - 0.01) {
+                $startOffset = $s;
+                break;
+            }
+        }
+
         return [
-            'case' => $case,
-            'hp_rate' => round($hpRate, 1),
-            'boiler_rate' => round($boilerRate, 1),
-            'hours_to_open' => $hoursToOpen,
-            'target_at_open' => $targetAtOpen,
-            'total_demand' => round($totalDemand, 1),
-            'energy_to_raise' => round($energyToRaise, 1),
-            'period_losses' => round($periodLosses, 1),
+            'preheat' => true,
+            'target' => $target,
+            't_req' => $tReq,
+            'start_offset' => $startOffset,
+            'min_temp' => $minTemp,
+            'max_temp' => $maxTemp,
+            'buffer_energy' => $bufferEnergy,
         ];
     }
 
