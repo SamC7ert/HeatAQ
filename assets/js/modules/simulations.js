@@ -303,6 +303,13 @@ const SimulationsModule = {
             // Reload runs list
             this.loadRuns();
 
+            // Refresh the Monthly Surface Heat Loss report for the new run
+            // (it otherwise only loads the latest run at page init, so it
+            // would keep showing the previous run's data).
+            if (typeof SimControlModule !== 'undefined' && data.run_id && SimControlModule.loadMonthlyReport) {
+                SimControlModule.loadMonthlyReport(data.run_id);
+            }
+
             // View the new run
             if (data.run_id) {
                 setTimeout(() => this.viewRun(data.run_id), 1000);
