@@ -616,6 +616,12 @@ const SimControlModule = {
         setEl('bench-temp-min', summary.min_water_temp?.toFixed(2) || '-');
         setEl('bench-temp-avg', summary.avg_water_temp?.toFixed(2) || '-');
         setEl('bench-temp-max', summary.max_water_temp?.toFixed(2) || '-');
+        // Thresholds are target-relative (target-1 / target-2); render the
+        // actual temperatures in the labels so they stay correct for any target.
+        const t1 = summary.days_below_threshold1_temp;
+        const t2 = summary.days_below_threshold2_temp;
+        if (t1 !== undefined && t1 !== null) setEl('bench-days-27-label', `Days < ${t1}°C`);
+        if (t2 !== undefined && t2 !== null) setEl('bench-days-26-label', `Days < ${t2}°C`);
         setEl('bench-days-27', summary.days_below_27 || '0');
         setEl('bench-days-26', summary.days_below_26 || '0');
     },

@@ -897,12 +897,22 @@ class EnergySimulator {
             $results['daily'][] = $dailyStats;
         }
 
-        // Count days below temperature thresholds
+        // Count days the pool dropped below the comfort thresholds.
+        // Thresholds are relative to the target temperature: target-1 and
+        // target-2 (previously hard-coded 27/26, which only matched a target
+        // of 28). Summary keys keep their historical names for frontend
+        // compatibility; the actual threshold temps are exposed alongside so
+        // the labels can be rendered dynamically.
+        $targetTemp = $this->equipment['target_temp'] ?? ($this->poolConfig['target_temp'] ?? 27);
+        $threshold1 = $targetTemp - 1;
+        $threshold2 = $targetTemp - 2;
+        $results['summary']['days_below_threshold1_temp'] = $threshold1;
+        $results['summary']['days_below_threshold2_temp'] = $threshold2;
         foreach ($results['daily'] as $day) {
-            if ($day['min_water_temp'] < 27) {
+            if ($day['min_water_temp'] < $threshold1) {
                 $results['summary']['days_below_27']++;
             }
-            if ($day['min_water_temp'] < 26) {
+            if ($day['min_water_temp'] < $threshold2) {
                 $results['summary']['days_below_26']++;
             }
         }

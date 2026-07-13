@@ -764,24 +764,26 @@ const EnergyAnalysis = {
                 false, false));
         }
 
-        // Days < 27°C - highlight in Total Capacity mode
+        // Days below target-1°C - highlight in Total Capacity mode.
+        // Threshold is target-relative; label kept generic since compared
+        // scenarios may use different targets.
         if (isTotalMode) {
-            rows.push(this.buildRowStyled('Days < 27°C', 'days',
+            rows.push(this.buildRowStyled('Days < target-1°C', 'days',
                 this.results.map(r => r.success ? (r.summary?.days_below_27 || 0) : '-'),
                 false, { background: '#e3f2fd' }));
         } else {
-            rows.push(this.buildRow('Days < 27°C', 'days',
+            rows.push(this.buildRow('Days < target-1°C', 'days',
                 this.results.map(r => r.success ? (r.summary?.days_below_27 || 0) : '-'),
                 false, false));
         }
 
-        // Days < 26°C - highlight in Total Capacity mode
+        // Days below target-2°C - highlight in Total Capacity mode
         if (isTotalMode) {
-            rows.push(this.buildRowStyled('Days < 26°C', 'days',
+            rows.push(this.buildRowStyled('Days < target-2°C', 'days',
                 this.results.map(r => r.success ? (r.summary?.days_below_26 || 0) : '-'),
                 false, { background: '#e3f2fd' }));
         } else {
-            rows.push(this.buildRow('Days < 26°C', 'days',
+            rows.push(this.buildRow('Days < target-2°C', 'days',
                 this.results.map(r => r.success ? (r.summary?.days_below_26 || 0) : '-'),
                 false, false));
         }
