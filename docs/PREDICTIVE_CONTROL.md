@@ -88,6 +88,12 @@ Executed once, the moment the pool closes. Full foresight over the closed period
 and the next open period is assumed (hourly forecast available; live forecasts
 are a later addition).
 
+> **What counts as demand.** Demand is `losses − solar`, exactly what the
+> hourly balance heats for. Bather/refill load is **not** included: the
+> current simulation does not add it to the pool heat balance, so preheating
+> for it would push the water above target. Folding refill cooling into the
+> hourly balance (and hence the plan) is a separate, larger change.
+
 ```
 1. Find the next opening. Get its duration and hourly forecast.
 
