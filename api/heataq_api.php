@@ -1422,12 +1422,12 @@ class HeatAQAPI {
             );
             $rangeStmt->execute([$stationId]);
             $range = $rangeStmt->fetch(PDO::FETCH_ASSOC);
-            $rMin = strtotime($range['mn']);
-            $rMax = strtotime($range['mx']);
+            $rMin = strtotime($range['mn'] . ' UTC');
+            $rMax = strtotime($range['mx'] . ' UTC');
 
             foreach ($yearly as &$row) {
-                $from = max(strtotime($row['year'] . '-01-01 00:00:00'), $rMin);
-                $to = min(strtotime($row['year'] . '-12-31 23:00:00'), $rMax);
+                $from = max(strtotime($row['year'] . '-01-01 00:00:00 UTC'), $rMin);
+                $to = min(strtotime($row['year'] . '-12-31 23:00:00 UTC'), $rMax);
                 $expected = $to >= $from ? (int) (($to - $from) / 3600) + 1 : 0;
                 $missingRows = max(0, $expected - (int) $row['hours_count']);
                 $row['expected_hours'] = $expected;

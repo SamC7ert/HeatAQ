@@ -23,6 +23,11 @@
  *      step a raw climatology would create at the gap edges.
  *   3. Fallback: if the climatology has no data for some hour-of-day,
  *      fall back to straight linear interpolation between the edges.
+ * ALL epoch arithmetic is done in UTC: stored timestamps are naive
+ * continuous hours, and local-DST parsing makes wall times ambiguous or
+ * nonexistent at changeovers, which manufactured phantom gaps (e.g. a
+ * complete Oct 30 reported as missing 01:00).
+ *
  * Runs longer than MAX_FILL_HOURS are refused - inventing more than a week
  * of weather is a re-fetch problem, not an interpolation problem.
  */
@@ -48,7 +53,7 @@ class WeatherGapFiller {
         $stmt->execute([$stationId]);
         $r = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$r || $r['mn'] === null) return null;
-        return [strtotime($r['mn']), strtotime($r['mx'])];
+        return [strtotime($r['mn'] . ' UTC'), strtotime($r['mx'] . ' UTC')];
     }
 
     /**
@@ -66,8 +71,8 @@ class WeatherGapFiller {
             return ['expected_hours' => 0, 'present_hours' => 0, 'missing_rows' => 0,
                     'null_field_hours' => 0, 'runs' => []];
         }
-        $from = max(strtotime("$year-01-01 00:00:00"), $range[0]);
-        $to = min(strtotime("$year-12-31 23:00:00"), $range[1]);
+        $from = max(strtotime("$year-01-01 00:00:00 UTC"), $range[0]);
+        $to = min(strtotime("$year-12-31 23:00:00 UTC"), $range[1]);
         if ($to < $from) {
             return ['expected_hours' => 0, 'present_hours' => 0, 'missing_rows' => 0,
                     'null_field_hours' => 0, 'runs' => []];
@@ -79,10 +84,10 @@ class WeatherGapFiller {
             WHERE station_id = ? AND timestamp BETWEEN ? AND ?
             ORDER BY timestamp
         ");
-        $stmt->execute([$stationId, date('Y-m-d H:i:s', $from), date('Y-m-d H:i:s', $to)]);
+        $stmt->execute([$stationId, gmdate('Y-m-d H:i:s', $from), gmdate('Y-m-d H:i:s', $to)]);
         $byTs = [];
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $byTs[strtotime($row['timestamp'])] = $row;
+            $byTs[strtotime($row['timestamp'] . ' UTC')] = $row;
         }
 
         $expected = (int) (($to - $from) / 3600) + 1;
@@ -131,8 +136,8 @@ class WeatherGapFiller {
             'null_field_hours' => $nullFieldHours,
             'runs' => array_map(function ($r) {
                 return [
-                    'start' => date('Y-m-d H:i', $r['start']),
-                    'end' => date('Y-m-d H:i', $r['end']),
+                    'start' => gmdate('Y-m-d H:i', $r['start']),
+                    'end' => gmdate('Y-m-d H:i', $r['end']),
                     'hours' => (int) (($r['end'] - $r['start']) / 3600) + 1,
                     'kind' => $r['kind'],
                     'fields' => $r['fields'],
@@ -175,12 +180,12 @@ class WeatherGapFiller {
                     . ' h - re-fetch from Frost instead of interpolating'];
                 continue;
             }
-            $startTs = strtotime($run['start'] . ':00');
-            $endTs = strtotime($run['end'] . ':00');
+            $startTs = strtotime($run['start'] . ':00 UTC');
+            $endTs = strtotime($run['end'] . ':00 UTC');
 
             // Context window for the diurnal profile
-            $ctxFrom = date('Y-m-d H:i:s', $startTs - self::CONTEXT_DAYS * 86400);
-            $ctxTo = date('Y-m-d H:i:s', $endTs + self::CONTEXT_DAYS * 86400);
+            $ctxFrom = gmdate('Y-m-d H:i:s', $startTs - self::CONTEXT_DAYS * 86400);
+            $ctxTo = gmdate('Y-m-d H:i:s', $endTs + self::CONTEXT_DAYS * 86400);
             $stmt = $this->db->prepare("
                 SELECT timestamp, temperature, wind_speed, wind_direction, humidity
                 FROM weather_data
@@ -190,7 +195,7 @@ class WeatherGapFiller {
             $stmt->execute([$stationId, $ctxFrom, $ctxTo]);
             $ctx = [];
             foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                $ctx[strtotime($row['timestamp'])] = $row;
+                $ctx[strtotime($row['timestamp'] . ' UTC')] = $row;
             }
 
             for ($t = $startTs; $t <= $endTs; $t += 3600) {
@@ -212,7 +217,7 @@ class WeatherGapFiller {
 
                 $upsert->execute([
                     $stationId,
-                    date('Y-m-d H:i:s', $t),
+                    gmdate('Y-m-d H:i:s', $t),
                     $values['temperature'],
                     $values['wind_speed'],
                     $dir,
@@ -229,14 +234,14 @@ class WeatherGapFiller {
      * Estimate one field at one hour: diurnal climatology + linear edge blend.
      */
     private function estimate(array $ctx, $field, $t, $runStart, $runEnd) {
-        $hourOfDay = (int) date('G', $t);
+        $hourOfDay = (int) gmdate('G', $t);
 
         // 1) Diurnal climatology from same-hour context values
         $sum = 0.0; $n = 0;
         foreach ($ctx as $ts => $row) {
             if ($row[$field] === null) continue;
             if ($ts >= $runStart && $ts <= $runEnd) continue; // inside the run
-            if ((int) date('G', $ts) === $hourOfDay) {
+            if ((int) gmdate('G', $ts) === $hourOfDay) {
                 $sum += (float) $row[$field];
                 $n++;
             }
@@ -281,23 +286,23 @@ class WeatherGapFiller {
 
     /** Climatology value for the hour-of-day of $t (helper for edge offsets). */
     private function climAt(array $ctx, $field, $t, $runStart, $runEnd) {
-        $hourOfDay = (int) date('G', $t);
+        $hourOfDay = (int) gmdate('G', $t);
         $sum = 0.0; $n = 0;
         foreach ($ctx as $ts => $row) {
             if ($row[$field] === null) continue;
             if ($ts >= $runStart && $ts <= $runEnd) continue;
-            if ((int) date('G', $ts) === $hourOfDay) { $sum += (float) $row[$field]; $n++; }
+            if ((int) gmdate('G', $ts) === $hourOfDay) { $sum += (float) $row[$field]; $n++; }
         }
         return $n > 0 ? $sum / $n : null;
     }
 
     /** Circular mean of same-hour wind directions from the context (degrees), or null. */
     private function circularMeanDirection(array $ctx, $t) {
-        $hourOfDay = (int) date('G', $t);
+        $hourOfDay = (int) gmdate('G', $t);
         $sinSum = 0.0; $cosSum = 0.0; $n = 0;
         foreach ($ctx as $ts => $row) {
             if ($row['wind_direction'] === null) continue;
-            if ((int) date('G', $ts) !== $hourOfDay) continue;
+            if ((int) gmdate('G', $ts) !== $hourOfDay) continue;
             $rad = deg2rad((float) $row['wind_direction']);
             $sinSum += sin($rad); $cosSum += cos($rad); $n++;
         }

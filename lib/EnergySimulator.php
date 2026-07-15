@@ -488,7 +488,7 @@ class EnergySimulator {
             . '(the fetch retries transient failures and now also fills the previously '
             . 'missing Dec 31 hours), then re-run the simulation.';
 
-        $expectedHours = ((int) ((strtotime($endDate) - strtotime($startDate)) / 86400) + 1) * 24;
+        $expectedHours = ((int) ((strtotime($endDate . ' UTC') - strtotime($startDate . ' UTC')) / 86400) + 1) * 24;
 
         if (count($weatherData) === 0) {
             throw new RuntimeException(
@@ -526,19 +526,21 @@ class EnergySimulator {
         if ($actual < $expectedHours) {
             $gaps = [];
             $rows = array_values($weatherData);
-            $prev = strtotime($startDate . ' 00:00:00') - 3600; // expect first row at 00:00
+            $prev = strtotime($startDate . ' 00:00:00 UTC') - 3600; // expect first row at 00:00
             foreach ($rows as $hour) {
-                $ts = strtotime($hour['timestamp']);
+                // UTC parse: local-DST wall times are ambiguous at changeovers and
+                // would manufacture phantom gaps over complete data.
+                $ts = strtotime($hour['timestamp'] . ' UTC');
                 $delta = (int) round(($ts - $prev) / 3600);
                 if ($delta > 1) {
-                    $gaps[] = ($delta - 1) . ' h after ' . date('Y-m-d H:i', $prev);
+                    $gaps[] = ($delta - 1) . ' h after ' . gmdate('Y-m-d H:i', $prev);
                     if (count($gaps) >= 5) break;
                 }
                 $prev = $ts;
             }
-            $tailEnd = strtotime($endDate . ' 23:00:00');
+            $tailEnd = strtotime($endDate . ' 23:00:00 UTC');
             if (count($gaps) < 5 && $prev < $tailEnd) {
-                $gaps[] = ((int) round(($tailEnd - $prev) / 3600)) . ' h after ' . date('Y-m-d H:i', $prev);
+                $gaps[] = ((int) round(($tailEnd - $prev) / 3600)) . ' h after ' . gmdate('Y-m-d H:i', $prev);
             }
             $missingTotal = $expectedHours - $actual;
             throw new RuntimeException(
@@ -1127,7 +1129,7 @@ class EnergySimulator {
         // Weather coverage: hours simulated vs hours in the requested span.
         // Missing weather rows simply don't appear in the loop, so a sparse
         // period would otherwise silently simulate (and annualize) fewer hours.
-        $expectedHours = ((int) (($end->getTimestamp() - $start->getTimestamp()) / 86400) + 1) * 24;
+        $expectedHours = ((int) ((strtotime($endDate . ' UTC') - strtotime($startDate . ' UTC')) / 86400) + 1) * 24;
         $results['summary']['expected_hours'] = $expectedHours;
         $results['summary']['weather_coverage_pct'] = $expectedHours > 0
             ? round(100 * $results['summary']['total_hours'] / $expectedHours, 1)
