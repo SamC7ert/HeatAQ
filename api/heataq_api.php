@@ -342,6 +342,17 @@ class HeatAQAPI {
                     $this->getWeatherMonthlyAverages();
                     break;
 
+                case 'get_weather_gaps':
+                    $this->getWeatherGaps();
+                    break;
+
+                case 'fill_weather_gaps':
+                    if (!$this->canEdit()) {
+                        $this->sendError('Permission denied', 403);
+                    }
+                    $this->fillWeatherGaps();
+                    break;
+
                 case 'add_weather_station':
                     if (!$this->canDelete()) {
                         $this->sendError('Permission denied - admin only', 403);
@@ -1370,6 +1381,10 @@ class HeatAQAPI {
     private function getWeatherYearlyAverages() {
         $stationId = $_GET['station_id'] ?? null;
 
+        // Interpolated-hours column only exists after migration 030
+        $hasInterp = $this->columnExists('weather_data', 'is_interpolated');
+        $interpSelect = $hasInterp ? "SUM(is_interpolated) as interpolated_hours," : "";
+
         $sql = "
             SELECT
                 YEAR(timestamp) as year,
@@ -1378,6 +1393,9 @@ class HeatAQAPI {
                 ROUND(MAX(temperature), 1) as max_temp,
                 ROUND(AVG(wind_speed), 1) as avg_wind,
                 ROUND(AVG(humidity), 0) as avg_humidity,
+                SUM(CASE WHEN temperature IS NULL OR wind_speed IS NULL OR humidity IS NULL
+                    THEN 1 ELSE 0 END) as null_field_hours,
+                {$interpSelect}
                 COUNT(*) as hours_count
             FROM weather_data
         ";
@@ -1394,9 +1412,78 @@ class HeatAQAPI {
         $stmt->execute($params);
         $yearly = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+        // Completeness per year, clamped to the station's own data range so an
+        // un-fetched tail (e.g. rest of the current year) doesn't count as
+        // "missing". incomplete_hours = missing rows + rows with NULL fields -
+        // exactly what the simulator's strict validation stops on.
+        if ($stationId && $yearly) {
+            $rangeStmt = $this->db->prepare(
+                "SELECT MIN(timestamp) mn, MAX(timestamp) mx FROM weather_data WHERE station_id = ?"
+            );
+            $rangeStmt->execute([$stationId]);
+            $range = $rangeStmt->fetch(PDO::FETCH_ASSOC);
+            $rMin = strtotime($range['mn']);
+            $rMax = strtotime($range['mx']);
+
+            foreach ($yearly as &$row) {
+                $from = max(strtotime($row['year'] . '-01-01 00:00:00'), $rMin);
+                $to = min(strtotime($row['year'] . '-12-31 23:00:00'), $rMax);
+                $expected = $to >= $from ? (int) (($to - $from) / 3600) + 1 : 0;
+                $missingRows = max(0, $expected - (int) $row['hours_count']);
+                $row['expected_hours'] = $expected;
+                $row['missing_rows'] = $missingRows;
+                $row['incomplete_hours'] = $missingRows + (int) $row['null_field_hours'];
+                if (!$hasInterp) $row['interpolated_hours'] = null;
+            }
+            unset($row);
+        }
+
         $this->sendResponse([
             'yearly_averages' => $yearly
         ]);
+    }
+
+    /**
+     * List missing/incomplete hours for one station-year (gap runs with
+     * start/end/kind/fields) - powers the clickable "Missing h" column.
+     */
+    private function getWeatherGaps() {
+        $stationId = $_GET['station_id'] ?? null;
+        $year = (int) ($_GET['year'] ?? 0);
+        if (!$stationId || !$year) {
+            $this->sendError('station_id and year required');
+        }
+        require_once __DIR__ . '/../lib/WeatherGapFiller.php';
+        $filler = new WeatherGapFiller($this->db);
+        $this->sendResponse(array_merge(
+            ['station_id' => $stationId, 'year' => $year],
+            $filler->findIncomplete($stationId, $year)
+        ));
+    }
+
+    /**
+     * Fill missing/NULL weather hours for one station-year with flagged
+     * interpolated values (diurnal profile + edge blending). Explicit,
+     * user-triggered - the opposite of a silent fallback.
+     */
+    private function fillWeatherGaps() {
+        $input = $this->getPostInput();
+        $stationId = $input['station_id'] ?? null;
+        $year = (int) ($input['year'] ?? 0);
+        if (!$stationId || !$year) {
+            $this->sendError('station_id and year required');
+        }
+        if (!$this->columnExists('weather_data', 'is_interpolated')) {
+            $this->sendError('Migration 030 (weather_data.is_interpolated) has not been run yet. '
+                . 'Run it in Admin -> Migrations first so interpolated values can be flagged.');
+        }
+        require_once __DIR__ . '/../lib/WeatherGapFiller.php';
+        $filler = new WeatherGapFiller($this->db);
+        $result = $filler->fillYear($stationId, $year);
+        $this->sendResponse(array_merge(
+            ['success' => true, 'station_id' => $stationId, 'year' => $year],
+            $result
+        ));
     }
 
     private function getWeatherMonthlyAverages() {

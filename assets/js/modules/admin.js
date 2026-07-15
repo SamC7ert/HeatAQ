@@ -1128,9 +1128,24 @@ const AdminModule = {
                 <th>Max °C</th>
                 <th>Wind m/s</th>
                 <th>Humidity %</th>
+                <th title="Missing rows + hours with NULL temp/wind/humidity, within the station's data range. Click to see details.">Missing h</th>
+                <th title="Hours reconstructed by interpolation (flagged is_interpolated)">Filled h</th>
             </tr></thead><tbody>`;
 
         data.forEach(row => {
+            // incomplete_hours = missing rows + NULL-field hours (what the
+            // simulator's strict validation stops on). Clickable when > 0.
+            const inc = row.incomplete_hours;
+            let missCell = '-';
+            if (inc !== undefined && inc !== null) {
+                missCell = inc > 0
+                    ? `<a href="#" onclick="app.admin.showWeatherGaps(${row.year}); return false;"
+                         style="color: var(--danger); font-weight: bold;">${inc} ⚠</a>`
+                    : '<span style="color: var(--success);">0 ✓</span>';
+            }
+            const interp = (row.interpolated_hours !== undefined && row.interpolated_hours !== null)
+                ? (Number(row.interpolated_hours) > 0 ? `<span style="color: #b8860b;">${row.interpolated_hours}</span>` : '0')
+                : '-';
             html += `<tr>
                 <td>${row.year}</td>
                 <td>${row.avg_temp}</td>
@@ -1138,11 +1153,104 @@ const AdminModule = {
                 <td>${row.max_temp}</td>
                 <td>${row.avg_wind}</td>
                 <td>${row.avg_humidity}</td>
+                <td style="text-align: right;">${missCell}</td>
+                <td style="text-align: right;">${interp}</td>
             </tr>`;
         });
 
         html += '</tbody></table>';
         container.innerHTML = html;
+    },
+
+    // Show the missing/incomplete hour details for one station-year, with an
+    // explicit "fill by interpolation" action (flagged, never silent).
+    showWeatherGaps: async function(year) {
+        const stationId = document.getElementById('weather-station-select')?.value;
+        if (!stationId) return;
+
+        let modal = document.getElementById('weather-gaps-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'weather-gaps-modal';
+            modal.className = 'modal';
+            modal.style.cssText = 'display:block; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:1000;';
+            document.body.appendChild(modal);
+        }
+        modal.style.display = 'block';
+        modal.innerHTML = `<div class="modal-content" style="max-width:640px; margin:8% auto; background:#fff; border-radius:6px; padding:20px; max-height:75vh; overflow-y:auto;">
+            <h3 style="margin-top:0;">Missing weather data — ${stationId}, ${year}</h3>
+            <div id="weather-gaps-body">Loading...</div>
+        </div>`;
+        modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+
+        const body = () => document.getElementById('weather-gaps-body');
+        try {
+            const resp = await fetch(`./api/heataq_api.php?action=get_weather_gaps&station_id=${encodeURIComponent(stationId)}&year=${year}`);
+            const data = await resp.json();
+            if (data.error) throw new Error(data.error);
+
+            const runs = data.runs || [];
+            let html = `<p style="font-size:13px; color:#555;">
+                Expected ${data.expected_hours} h in the station's data range ·
+                ${data.missing_rows} missing row(s) · ${data.null_field_hours} h with NULL fields</p>`;
+            if (runs.length === 0) {
+                html += '<p style="color: var(--success);">✓ No gaps in this year.</p>';
+            } else {
+                html += `<table class="data-table compact" style="width:100%;">
+                    <thead><tr><th>From</th><th>To</th><th>Hours</th><th>Problem</th></tr></thead><tbody>`;
+                runs.forEach(r => {
+                    const what = r.kind === 'missing_rows' ? 'rows missing' : `NULL: ${r.fields.join(', ')}`;
+                    html += `<tr><td>${r.start}</td><td>${r.end}</td><td style="text-align:right;">${r.hours}</td><td>${what}</td></tr>`;
+                });
+                html += '</tbody></table>';
+                html += `<div style="margin-top:14px; padding:10px; background:#fff8e6; border:1px solid #e6c200; border-radius:4px; font-size:12px;">
+                    Filling reconstructs values from the diurnal profile of ±3 neighbouring days,
+                    blended to join the gap edges. Filled hours are permanently flagged
+                    <code>is_interpolated</code> and never overwrite measured values.
+                    Gaps longer than 7 days are refused (re-fetch instead).
+                    Try <strong>Update Data</strong> (re-fetch from Frost) first — interpolation
+                    is for hours the source genuinely lacks.</div>
+                <div style="margin-top:12px; text-align:right;">
+                    <button class="btn btn-secondary btn-sm" onclick="document.getElementById('weather-gaps-modal').style.display='none'">Close</button>
+                    <button class="btn btn-primary btn-sm" onclick="app.admin.fillWeatherGaps('${stationId}', ${year})">Fill gaps by interpolation</button>
+                </div>`;
+            }
+            body().innerHTML = html;
+        } catch (err) {
+            body().innerHTML = `<p style="color: var(--danger);">Error: ${err.message}</p>`;
+        }
+    },
+
+    fillWeatherGaps: async function(stationId, year) {
+        const body = document.getElementById('weather-gaps-body');
+        if (body) body.innerHTML = 'Filling gaps...';
+        try {
+            const resp = await fetch('./api/heataq_api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'fill_weather_gaps', station_id: stationId, year: year })
+            });
+            const data = await resp.json();
+            if (data.error) throw new Error(data.error);
+
+            let html = `<p style="color: var(--success);">✓ Filled ${data.filled_hours} missing hour(s),
+                patched ${data.patched_hours} NULL-field hour(s). All flagged as interpolated.</p>`;
+            if (data.skipped_runs && data.skipped_runs.length > 0) {
+                html += '<p style="color: var(--danger);">Skipped (too long to interpolate — re-fetch instead):</p><ul style="font-size:12px;">';
+                data.skipped_runs.forEach(r => { html += `<li>${r.start} → ${r.end} (${r.hours} h)</li>`; });
+                html += '</ul>';
+            }
+            html += `<div style="margin-top:12px; text-align:right;">
+                <button class="btn btn-primary btn-sm" onclick="document.getElementById('weather-gaps-modal').style.display='none'">Close</button></div>`;
+            if (body) body.innerHTML = html;
+
+            // Refresh the yearly table so Missing/Filled columns update
+            await this.onStationChange();
+        } catch (err) {
+            if (body) body.innerHTML = `<p style="color: var(--danger);">Error: ${err.message}</p>
+                <div style="margin-top:12px; text-align:right;">
+                <button class="btn btn-secondary btn-sm" onclick="document.getElementById('weather-gaps-modal').style.display='none'">Close</button></div>`;
+        }
     },
 
     renderMonthlyAverages: function(data) {
