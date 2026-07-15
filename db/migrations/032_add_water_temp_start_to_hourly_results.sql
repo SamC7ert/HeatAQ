@@ -1,4 +1,5 @@
--- Migration 029: Add water_temp_start to simulation_hourly_results
+-- 032: Add water_temp_start to simulation_hourly_results
+-- Description: Persist start-of-hour water temp so the single-hour debug view reconciles with stored losses
 --
 -- The simulation computes each hour's heat losses on the START-of-hour water
 -- temperature, then updates the temperature and stores the END-of-hour value in

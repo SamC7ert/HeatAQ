@@ -873,7 +873,7 @@ try {
             // Use stored water temp unless overridden.
             // Prefer the START-of-hour temp (what the simulation used to compute this
             // hour's losses) so the debug recompute reconciles with stored total_loss_kw.
-            // Falls back to water_temp (end-of-hour) for runs predating migration 029.
+            // Falls back to water_temp (end-of-hour) for runs predating migration 032.
             $storedStartTemp = isset($stored['water_temp_start']) && $stored['water_temp_start'] !== null
                 ? (float)$stored['water_temp_start']
                 : (float)$stored['water_temp'];
