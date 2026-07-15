@@ -389,6 +389,9 @@ function fetchAndStoreYear($clientId) {
     curl_close($ch);
 
     if ($httpCode !== 200) {
+        // Propagate a real error status so any consumer checking HTTP status
+        // (not just data.error) sees the failure.
+        http_response_code(502);
         echo json_encode([
             'error' => 'Frost API error',
             'http_code' => $httpCode,
@@ -446,16 +449,25 @@ function fetchAndStoreYear($clientId) {
     try {
         $db = Config::getDatabase();
 
-        // Use INSERT IGNORE to skip duplicates
+        // Idempotent upsert. INSERT IGNORE also downgraded truncation/type
+        // errors to silently-dropped rows counted as "skipped" - a year where
+        // every row failed reported success. ON DUPLICATE KEY UPDATE re-fetches
+        // cleanly (existing rows refreshed) and real errors now throw.
         // Note: solar_radiation not stored - weather_data table doesn't have this column
         $stmt = $db->prepare("
-            INSERT IGNORE INTO weather_data
+            INSERT INTO weather_data
             (station_id, timestamp, temperature, wind_speed, wind_direction, humidity)
             VALUES (?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
+                temperature = VALUES(temperature),
+                wind_speed = VALUES(wind_speed),
+                wind_direction = VALUES(wind_direction),
+                humidity = VALUES(humidity)
         ");
 
-        $inserted = 0;
-        $skipped = 0;
+        $inserted = 0;   // new rows
+        $updated = 0;    // existing rows changed
+        $unchanged = 0;  // existing rows identical
 
         foreach ($records as $record) {
             $stmt->execute([
@@ -466,13 +478,19 @@ function fetchAndStoreYear($clientId) {
                 $record['wind_direction'],
                 $record['humidity']
             ]);
-
-            if ($stmt->rowCount() > 0) {
-                $inserted++;
-            } else {
-                $skipped++;
-            }
+            // MariaDB rowCount: 1 = inserted, 2 = updated, 0 = identical
+            $rc = $stmt->rowCount();
+            if ($rc === 1) $inserted++;
+            elseif ($rc === 2) $updated++;
+            else $unchanged++;
         }
+
+        // Completeness signal: expected hourly rows for the (possibly partial)
+        // year vs what Frost actually returned, so short years are visible.
+        $spanStart = strtotime($startDate);
+        $spanEnd = strtotime($endDate) + 86400; // end date inclusive
+        $expectedHours = max(0, (int) round(($spanEnd - $spanStart) / 3600));
+        $complete = $expectedHours > 0 ? round(100 * count($records) / $expectedHours, 1) : null;
 
         echo json_encode([
             'success' => true,
@@ -480,7 +498,10 @@ function fetchAndStoreYear($clientId) {
             'station_id' => $stationId,
             'fetched' => count($records),
             'inserted' => $inserted,
-            'skipped' => $skipped
+            'updated' => $updated,
+            'skipped' => $unchanged,
+            'expected_hours' => $expectedHours,
+            'completeness_pct' => $complete
         ]);
 
     } catch (PDOException $e) {

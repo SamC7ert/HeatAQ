@@ -926,7 +926,41 @@ const AdminModule = {
         let totalInserted = 0;
         let totalSkipped = 0;
         let errors = [];
+        let warnings = [];
 
+        // Fetch one year with retry + exponential backoff. A single transient
+        // Frost failure (timeout, 429, 5xx) previously left a permanent silent
+        // one-year hole in the data (e.g. Svalbard missing all of 2025).
+        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+        const fetchYearOnce = async (year) => {
+            const response = await fetch(`./api/frost_api.php?action=fetch_and_store_year&station_id=${encodeURIComponent(stationId)}&year=${year}`);
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+            return data;
+        };
+        const fetchYearWithRetry = async (year, attempts = 3) => {
+            for (let a = 1; ; a++) {
+                try {
+                    return await fetchYearOnce(year);
+                } catch (err) {
+                    if (a >= attempts) throw err;
+                    if (detailsEl) detailsEl.textContent = `${year}: attempt ${a} failed (${err.message}) - retrying...`;
+                    await sleep(2000 * Math.pow(2, a - 1)); // 2s, 4s
+                }
+            }
+        };
+        const recordResult = (year, data) => {
+            totalInserted += data.inserted || 0;
+            totalSkipped += (data.skipped || 0) + (data.updated || 0);
+            if (detailsEl) detailsEl.textContent = `${year}: ${data.inserted || 0} inserted, ${data.updated || 0} updated, ${data.skipped || 0} unchanged`;
+            // Completeness signal from the API: flag short years so partial
+            // Frost coverage is visible instead of silently accepted.
+            if (data.completeness_pct !== undefined && data.completeness_pct !== null && data.completeness_pct < 90) {
+                warnings.push(`${year}: only ${data.completeness_pct}% of expected hours returned by Frost`);
+            }
+        };
+
+        const failedYears = [];
         for (let i = 0; i < years.length; i++) {
             const year = years[i];
             const progress = Math.round(((i) / years.length) * 100);
@@ -935,20 +969,24 @@ const AdminModule = {
             if (progressBar) progressBar.style.width = progress + '%';
 
             try {
-                const response = await fetch(`./api/frost_api.php?action=fetch_and_store_year&station_id=${encodeURIComponent(stationId)}&year=${year}`);
-                const data = await response.json();
-
-                if (data.error) {
-                    errors.push(`${year}: ${data.error}`);
-                    if (detailsEl) detailsEl.textContent = `${year}: Error - ${data.error}`;
-                } else {
-                    totalInserted += data.inserted || 0;
-                    totalSkipped += data.skipped || 0;
-                    if (detailsEl) detailsEl.textContent = `${year}: ${data.inserted || 0} inserted, ${data.skipped || 0} skipped`;
-                }
+                recordResult(year, await fetchYearWithRetry(year));
             } catch (err) {
+                failedYears.push(year);
                 errors.push(`${year}: ${err.message}`);
                 if (detailsEl) detailsEl.textContent = `${year}: Error - ${err.message}`;
+            }
+        }
+
+        // Final requeue: one more pass over failed years (Frost hiccups are
+        // often gone minutes later; this pass costs nothing when all succeeded).
+        for (const year of failedYears.slice()) {
+            if (statusEl) statusEl.textContent = `Retrying failed year ${year}...`;
+            try {
+                recordResult(year, await fetchYearWithRetry(year, 2));
+                failedYears.splice(failedYears.indexOf(year), 1);
+                errors = errors.filter(e => !e.startsWith(`${year}:`));
+            } catch (err) {
+                // keep the recorded error
             }
         }
 
@@ -956,13 +994,16 @@ const AdminModule = {
         if (progressBar) progressBar.style.width = '100%';
         if (statusEl) {
             if (errors.length > 0) {
-                statusEl.innerHTML = `<span style="color: var(--warning);">Completed with ${errors.length} error(s)</span>`;
+                statusEl.innerHTML = `<span style="color: var(--danger);">Completed with ${errors.length} FAILED year(s): ${failedYears.join(', ')} - re-run Update Data to fill the gap</span>`;
+            } else if (warnings.length > 0) {
+                statusEl.innerHTML = `<span style="color: var(--warning);">Completed with warnings: ${warnings.join(' | ')}</span>`;
             } else {
                 statusEl.innerHTML = `<span style="color: var(--success);">✓ Completed successfully!</span>`;
             }
         }
         if (detailsEl) {
-            detailsEl.textContent = `Total: ${totalInserted.toLocaleString()} records inserted, ${totalSkipped.toLocaleString()} skipped`;
+            detailsEl.textContent = `Total: ${totalInserted.toLocaleString()} records inserted, ${totalSkipped.toLocaleString()} updated/unchanged`
+                + (errors.length ? ` | Errors: ${errors.join(' | ')}` : '');
         }
 
         // Add close button
