@@ -90,12 +90,12 @@ contract tests. Build order: physics first.
 - [x] Sidebar logo (V103)
 - [ ] Migration result display improvements
 - [ ] Better error feedback for users
-- [ ] **Progress reporting for multi-year simulations** - Show progress bar when simulation spans more than one year
-- [ ] **Live simulation progress next to Run button** - When the Run button switches to "Running", the adjacent status text should show which period is currently being simulated (e.g. "Running Jan 2017") instead of a static label, so long multi-year runs give visible progress.
+- [x] **Progress reporting for multi-year simulations** — DONE (V214) as live text + percent ("Simulating Jan 2017... (34% of period)"); a visual bar can be layered on later if wanted
+- [x] **Live simulation progress next to Run button** — DONE (V214): simulator reports progress once per simulated month to the run row; frontend polls `get_run_progress` and shows "Simulating Jan 2017... (34% of period)". Session lock released in simulation_api so polls don't block behind the running request.
 - [ ] **Norwegian date format** - Date fields currently show English format, should be Norwegian (dd.mm.yyyy). Investigate where locale is set - possibly per-user preference?
 - [ ] **Station search/browse feature** - Add ability to search/browse nearby weather stations instead of typing IDs manually. Use Frost API `/sources/v0.jsonld` endpoint with geometry parameter for location-based search. Docs: https://frost.met.no/api.html
 - [x] **Show missing weather data in the station UI** — DONE (V213): Yearly Averages has a clickable "Missing h" column (missing rows + NULL-field hours, clamped to the station's data range) opening a per-gap detail modal, plus a "Filled h" column. Fetch retry/backoff shipped earlier (V212). Additionally: explicit **gap filling by interpolation** (diurnal profile ±3 days, edge-blended, ≤7-day runs, values flagged `is_interpolated` via migration 030, measured values never overwritten) — `lib/WeatherGapFiller.php`, actions `get_weather_gaps` / `fill_weather_gaps`.
-- [ ] **Default station = the open project's station** - When opening the Weather Station admin view, default the "Select Station" dropdown to the station linked to the currently open project (`pool_sites.weather_station_id` / `default_weather_station`) instead of the first station alphabetically.
+- [x] **Default station = the open project's station** — DONE (V214): the Weather Station view auto-selects the open project site's `weather_station_id` and loads its data.
 
 ### 2. Security & Permissions
 **Priority:** High

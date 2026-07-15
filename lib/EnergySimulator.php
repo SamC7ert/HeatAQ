@@ -175,6 +175,17 @@ class EnergySimulator {
      *
      * @param array $uiConfig Configuration object from UI
      */
+    /**
+     * Optional progress reporter: called as ($periodYm, $hoursDone, $hoursTotal)
+     * once per simulated month, so long multi-year runs can surface live
+     * progress ("simulating Jan 2017, 34%") instead of a static "Running...".
+     */
+    private $progressCallback = null;
+
+    public function setProgressCallback(callable $callback) {
+        $this->progressCallback = $callback;
+    }
+
     public function setConfigFromUI($uiConfig) {
         // Pool physical parameters
         if (isset($uiConfig['pool'])) {
@@ -667,10 +678,21 @@ class EnergySimulator {
         // Process each hour
         $hourIndex = 0;
         $lastSolarCheckDate = null;
+        $totalHours = count($weatherData);
+        $lastProgressMonth = null;
         foreach ($weatherData as $hour) {
             $timestamp = $hour['timestamp'];
             $date = substr($timestamp, 0, 10);
             $hourOfDay = (int) substr($timestamp, 11, 2);
+
+            // Report progress once per simulated month
+            if ($this->progressCallback !== null) {
+                $month = substr($timestamp, 0, 7);
+                if ($month !== $lastProgressMonth) {
+                    $lastProgressMonth = $month;
+                    ($this->progressCallback)($month, $hourIndex, $totalHours);
+                }
+            }
 
             // Count silent weather/solar fallbacks so data gaps show up in the
             // summary instead of being absorbed into plausible-looking numbers.

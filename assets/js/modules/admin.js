@@ -370,7 +370,17 @@ const AdminModule = {
                 this.weatherStations = stationsData.stations;
                 this.renderWeatherStations();
                 this.populateStationDropdown();
-                // Don't load data until station is selected
+
+                // Default to the station linked to the open project's site so
+                // the view opens on relevant data instead of an empty selector.
+                const select = document.getElementById('weather-station-select');
+                const projStation = (typeof ProjectModule !== 'undefined')
+                    ? ProjectModule.currentSite?.weather_station_id : null;
+                if (select && !select.value && projStation
+                    && this.weatherStations.some(s => s.station_id === projStation)) {
+                    select.value = projStation;
+                    await this.onStationChange();
+                }
             }
         } catch (err) {
             console.error('Failed to load weather stations:', err);

@@ -234,9 +234,27 @@ const SimulationsModule = {
         } catch (e) { /* ignore */ }
 
         if (statusEl) {
-            statusEl.textContent = `Starting simulation v${simVersion}...`;
+            statusEl.textContent = `Simulation v${simVersion} started — loading weather, solar and schedule data...`;
             statusEl.style.color = '#666';
         }
+
+        // Live progress: the run is one long POST, so poll the server-side
+        // progress (written once per simulated month) while it is in flight.
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        if (this._progressTimer) clearInterval(this._progressTimer);
+        this._progressTimer = setInterval(async () => {
+            try {
+                const r = await fetch('/api/simulation_api.php?action=get_run_progress');
+                const d = await r.json();
+                if (d.running && d.progress && d.progress.period && statusEl) {
+                    const [y, m] = d.progress.period.split('-');
+                    statusEl.textContent = `Simulating ${monthNames[parseInt(m, 10) - 1]} ${y}... (${d.progress.pct}% of period)`;
+                }
+            } catch (e) { /* polling is best-effort */ }
+        }, 1500);
+        const stopProgressPoll = () => {
+            if (this._progressTimer) { clearInterval(this._progressTimer); this._progressTimer = null; }
+        };
 
         try {
             // Build config override from override fields
@@ -267,6 +285,7 @@ const SimulationsModule = {
             });
 
             const data = await response.json();
+            stopProgressPoll();
 
             if (data.error) {
                 throw new Error(data.error);
@@ -319,6 +338,7 @@ const SimulationsModule = {
             }
 
         } catch (error) {
+            stopProgressPoll();
             if (statusEl) {
                 statusEl.textContent = `Error: ${error.message}`;
                 statusEl.style.color = '#dc3545';

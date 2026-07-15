@@ -62,6 +62,14 @@ if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
     // pool_site_id check moved to individual actions that require it
 }
 
+// Release the PHP session lock now that auth is done. A running simulation
+// holds this request open for a long time; with the lock held, the
+// get_run_progress polls (and every other request from the same browser)
+// would block until the run finishes.
+if (session_status() === PHP_SESSION_ACTIVE) {
+    session_write_close();
+}
+
 // Include required classes
 require_once __DIR__ . '/../lib/PoolScheduler.php';
 require_once __DIR__ . '/../lib/EnergySimulator.php';
@@ -412,6 +420,20 @@ try {
             // Update status to running
             updateRunStatus($pdo, $runId, 'running');
 
+            // Live progress: once per simulated month, store the current
+            // period + percent on the run row so the frontend can poll it
+            // (get_run_progress) while this request is still executing.
+            $progressStmt = $pdo->prepare(
+                "UPDATE simulation_runs SET summary_json = ? WHERE run_id = ?"
+            );
+            $simulator->setProgressCallback(function ($period, $done, $total) use ($progressStmt, $runId) {
+                $pct = $total > 0 ? (int) round(100 * $done / $total) : 0;
+                $progressStmt->execute([
+                    json_encode(['progress' => ['period' => $period, 'pct' => $pct]]),
+                    $runId
+                ]);
+            });
+
             try {
                 // Run simulation
                 $results = $simulator->runSimulation($startDate, $endDate);
@@ -444,6 +466,30 @@ try {
                 updateRunStatus($pdo, $runId, 'failed', ['error' => $e->getMessage()]);
                 throw $e;
             }
+            break;
+
+        case 'get_run_progress':
+            // Progress of the most recent still-running simulation (the
+            // frontend polls this while the run_simulation POST is in flight
+            // and doesn't yet know the run_id).
+            $stmt = $pdo->prepare("
+                SELECT run_id, status, summary_json
+                FROM simulation_runs
+                WHERE status = 'running'
+                ORDER BY run_id DESC
+                LIMIT 1
+            ");
+            $stmt->execute();
+            $running = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$running) {
+                sendResponse(['running' => false]);
+            }
+            $sj = json_decode($running['summary_json'] ?? '{}', true) ?: [];
+            sendResponse([
+                'running' => true,
+                'run_id' => (int) $running['run_id'],
+                'progress' => $sj['progress'] ?? null
+            ]);
             break;
 
         case 'get_runs':
