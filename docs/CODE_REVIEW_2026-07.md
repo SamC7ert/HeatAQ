@@ -35,7 +35,7 @@ Energy Analysis table (per-year / in-use / real thresholds).
 
 ## B. Flagged — recommend fixing, but needs your call / can't verify headless
 
-### B1. Config template silently overrides the pools table for cover / solar / wind / years — HIGH (latent)
+### B1. Config template silently overrides the pools table — **FIXED** (strip at read time, commit 3e8da2f)
 `api/simulation_api.php:308-314` strips only pool **dimensions** from the
 selected template's `json_config` before applying it *after* the pools-table
 config. It does **not** strip `pool.wind_exposure`, `pool.years_operating`,
@@ -54,7 +54,7 @@ table), which is supposed to be authoritative (migration 024 stripped these;
 - Not auto-applied: changes behaviour for any project whose template
   intentionally carries these — verify per project first.
 
-### B2. `unmet_kwh` over-counts intentional non-heating — HIGH (reporting only)
+### B2. `unmet_kwh` over-counts intentional non-heating — **FIXED** (requested_heat threading, commit ddb8ec1)
 `EnergySimulator.php:875` accrues `max(0, netRequirement − total_heat)` every
 hour, including hours the controller **deliberately** supplies less (water
 above target → heat credit zeroes the request; predictive coast; initial
@@ -78,7 +78,7 @@ need" is inflated and could drive a wrong "HP undersized" conclusion.
   floor/wall U-value), use tunnel temp only when `has_tunnel`. Needs a domain
   decision + a config field, so flagged not fixed.
 
-### B4. Pervasive silent weather/solar fallbacks feed the energy & cost numbers — HIGH (modeling / data integrity)
+### B4. Silent weather/solar fallbacks — **VISIBILITY FIXED** (counters + coverage + report warning, commit e0d5490; fail-fast semantics still open)
 The stated principle is "no silent fallbacks," but simulation inputs default
 silently in many places:
 - Hourly loop `:610-611` and result `:752-753`: `wind ?? 2.0`, `humidity ?? 70`.
@@ -99,7 +99,7 @@ silently in many places:
   distinguish "no data" from "zero irradiance." Flagged (changes failure
   semantics; verify against real runs).
 
-### B5. Weather-fetch error handling hides gaps — MED
+### B5. Weather-fetch error handling hides gaps — **FIXED** (upsert + retry/backoff + completeness + 502, commit 2f3ebe1)
 - `frost_api.php:451-475`: `INSERT IGNORE` conflates duplicate rows with
   silently-dropped bad rows (both counted as "skipped"); a year where every
   insert fails reports `success, skipped:8760`. Use
@@ -114,7 +114,7 @@ silently in many places:
   errors are swallowed with no retry (roadmap item). Add retry-with-backoff +
   re-queue years that come back short of ~8760 rows.
 
-### B6. `PoolScheduler` ignores project scoping; merges schedules by name across projects — HIGH (latent, multi-project)
+### B6. `PoolScheduler` project scoping — **FIXED** (template-derived project filter, commit e8c7738)
 `lib/PoolScheduler.php:89-92,99-152,171-219`: `getSiteFilter()` returns
 `1=1`; `loadDaySchedules`/`loadWeekSchedules` run with **no WHERE**, key day
 schedules by **name**, and append the periods of **all same-named schedules
@@ -127,7 +127,7 @@ a name.
   `simulation_api` never reads project_id at all — only `pool_site_id` — so
   the project must be derived from `pool_sites.project_id`.)
 
-### B7. Simulation starting inside a closed period never plans the first opening — MED
+### B7. Day-1 closed-start planning gap — **FIXED** (seed plan at hour 0, commit 8fb34a1)
 `EnergySimulator.php:633,698,721,2247-2249`: `planClosedPeriod` fires only on
 a close **transition** (`prevTargetTemp !== null && targetTemp === null`), and
 `prevTargetTemp` starts null. If the window begins while the pool is already

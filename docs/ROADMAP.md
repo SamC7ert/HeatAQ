@@ -41,13 +41,13 @@ Long-term architectural improvements and technical debt items.
 Fixed (V209): per-year summary cards, partial control-override no longer nulls
 target_temp, avg_cop over elec>0 hours, monthly-report label refresh, Schedules
 reload on project switch. **Flagged follow-ups (not yet done):**
-- [ ] Config template overriding pools-table cover/solar/wind/years (strip in `simulation_api`) — HIGH latent
-- [ ] `unmet_kwh` over-counts deliberate non-heating (reporting) — thread requested-heat
+- [x] Config template overriding pools-table cover/solar/wind/years — fixed (strip at read time)
+- [x] `unmet_kwh` over-counts deliberate non-heating — fixed (requested_heat threading)
 - [ ] Outdoor pool wall/floor loss vs 15°C tunnel / 5°C ground anchor — derive from soil temp — HIGH modeling
-- [ ] Silent weather/solar fallbacks (`wind ?? 2`, `humidity ?? 70`, NASA -999→0) + no coverage check — fail-fast/report
-- [ ] Weather-fetch error handling (INSERT IGNORE, 200-on-error, no completeness check, no retry)
-- [ ] `PoolScheduler` project scoping (loads/merges schedules globally by name) — HIGH latent multi-project
-- [ ] Sim starting inside a closed period never plans the first opening (day-1 no preheat)
+- [x] Silent weather/solar fallbacks — now counted + coverage% + report warning (fail-fast still open)
+- [x] Weather-fetch error handling — fixed (upsert, 502 on upstream error, completeness%, retry/backoff + requeue)
+- [x] `PoolScheduler` project scoping — fixed (filtered by template project)
+- [x] Sim starting inside a closed period — fixed (plan seeded at hour 0)
 - [ ] HP COP curve / sky-temp offset / cover-U / capacity defaults hardcoded — make config/derived
 
 ### Test suite design — see `docs/TEST_STRATEGY.md`
