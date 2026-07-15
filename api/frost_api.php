@@ -459,15 +459,19 @@ function fetchAndStoreYear($clientId) {
         // every row failed reported success. ON DUPLICATE KEY UPDATE re-fetches
         // cleanly (existing rows refreshed) and real errors now throw.
         // Note: solar_radiation not stored - weather_data table doesn't have this column
+        // is_interpolated is reset on every fetched row: values arriving from
+        // Frost are measurements, so a previously interpolated hour that the
+        // source can now supply loses its reconstruction flag automatically.
         $stmt = $db->prepare("
             INSERT INTO weather_data
-            (station_id, timestamp, temperature, wind_speed, wind_direction, humidity)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (station_id, timestamp, temperature, wind_speed, wind_direction, humidity, is_interpolated)
+            VALUES (?, ?, ?, ?, ?, ?, 0)
             ON DUPLICATE KEY UPDATE
                 temperature = VALUES(temperature),
                 wind_speed = VALUES(wind_speed),
                 wind_direction = VALUES(wind_direction),
-                humidity = VALUES(humidity)
+                humidity = VALUES(humidity),
+                is_interpolated = 0
         ");
 
         $inserted = 0;   // new rows
