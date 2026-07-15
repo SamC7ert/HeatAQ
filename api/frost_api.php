@@ -170,9 +170,18 @@ function checkStation($clientId) {
         $hasElements['solar'] = in_array('surface_downwelling_shortwave_flux_in_air', $availableElements);
 
         $result['available_elements'] = $hasElements;
-        $result['wind_levels'] = array_unique($windLevels);
+        $result['wind_levels'] = array_values(array_unique($windLevels));
         $result['data_range'] = $dateRange;
-        $result['recommended_wind_height'] = in_array(2, $windLevels) ? 2 : (in_array(10, $windLevels) ? 10 : 10);
+        // Prefer the meteorological standard 10 m; otherwise the highest reported
+        // level; null if the station reports no wind level (then a manual height is
+        // required — no silent fallback). See docs/WIND_CORRECTION.md.
+        if (in_array(10, $windLevels)) {
+            $result['recommended_wind_height'] = 10;
+        } elseif (!empty($windLevels)) {
+            $result['recommended_wind_height'] = max($windLevels);
+        } else {
+            $result['recommended_wind_height'] = null;
+        }
     }
 
     echo json_encode($result);
@@ -346,6 +355,33 @@ function fetchAndStoreYear($clientId) {
         $stationId = 'SN' . $stationId;
     }
     $stationId = strtoupper($stationId);
+
+    // Gate: don't import weather we can't correctly interpret. The station must
+    // have a valid wind height and terrain roughness (needed for the wind-profile
+    // transfer) before any records are stored. See docs/WIND_CORRECTION.md.
+    try {
+        $gateDb = Config::getDatabase();
+        $gateStmt = $gateDb->prepare(
+            "SELECT wind_height_m, terrain_roughness FROM weather_stations WHERE station_id = ?"
+        );
+        $gateStmt->execute([$stationId]);
+        $gateRow = $gateStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$gateRow) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Station not configured. Add the station before importing data.']);
+            return;
+        }
+        if ($gateRow['wind_height_m'] === null || (float)$gateRow['wind_height_m'] <= 0
+            || $gateRow['terrain_roughness'] === null || (float)$gateRow['terrain_roughness'] <= 0) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Set a wind height and terrain roughness for this station before importing weather data.']);
+            return;
+        }
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Could not verify station wind configuration: ' . $e->getMessage()]);
+        return;
+    }
 
     $startDate = $year . '-01-01';
     $endDate = $year . '-12-31';
