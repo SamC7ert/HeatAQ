@@ -633,6 +633,24 @@ class EnergySimulator {
             if ($controlStrategy === 'predictive') {
                 $currentTimestamp = new DateTime($timestamp);
 
+                // Seed a plan when the simulation STARTS inside a closed
+                // period: plans are otherwise only created on a close
+                // TRANSITION (open->closed), which never fires for the first
+                // closed stretch. Without this the pool coasts unheated until
+                // the first opening and gets no preheat for it (day-1 can open
+                // below target). Runs starting at midnight - the common case -
+                // almost always start closed.
+                if ($hourIndex === 0 && $targetTemp === null && $this->closedPlan === null) {
+                    $this->closedPlan = $this->planClosedPeriod(
+                        $currentTimestamp,
+                        $currentWaterTemp,
+                        $weatherArray,
+                        $hourIndex,
+                        $solarData
+                    );
+                    $this->closedPlanTimestamp = $currentTimestamp;
+                }
+
                 // Detect CLOSE transition (was open, now closed)
                 if ($prevTargetTemp !== null && $targetTemp === null) {
                     // CLOSE transition - create new closed plan, clear open plan
