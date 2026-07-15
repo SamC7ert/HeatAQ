@@ -303,15 +303,26 @@ try {
                 if ($configRow) {
                     $config = json_decode($configRow['json_config'] ?? '{}', true) ?: [];
 
-                    // IMPORTANT: Pool dimensions come ONLY from pools table (loaded above)
-                    // Remove any pool dimension overrides from config template
+                    // IMPORTANT: ALL pool physical properties come ONLY from the
+                    // pools table (loaded above): dimensions, wind exposure,
+                    // solar absorption, years operating, and the cover/solar
+                    // sections. Strip them from the template so a legacy
+                    // json_config with stale non-null values cannot silently
+                    // override the Pool editor (migration 024 removed these
+                    // sections, but old templates may still carry them).
                     if (isset($config['pool'])) {
                         unset($config['pool']['length_m']);
                         unset($config['pool']['width_m']);
                         unset($config['pool']['depth_m']);
                         unset($config['pool']['area_m2']);
                         unset($config['pool']['volume_m3']);
+                        unset($config['pool']['wind_exposure']);
+                        unset($config['pool']['years_operating']);
+                        unset($config['pool']['solar_absorption']);
+                        unset($config['pool']['has_tunnel']);
                     }
+                    unset($config['cover']);
+                    unset($config['solar']);
 
                     // Ensure nested arrays exist
                     if (!isset($config['equipment'])) $config['equipment'] = [];
