@@ -1,12 +1,12 @@
 # Database Schema
 
-Generated: 2025-12-03 09:28:25
+Generated: 2026-07-15 07:19:30
 
 Database: heataq_pool-353130302dd2
 
 ## audit_log
 
-Rows: 9368
+Rows: 17047
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -30,7 +30,7 @@ Rows: 9368
 
 ## calendar_date_ranges
 
-Rows: 3
+Rows: 10
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -108,7 +108,7 @@ Rows: 11
 
 ## config_templates
 
-Rows: 4
+Rows: 10
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -136,7 +136,7 @@ Rows: 4
 
 ## day_schedule_periods
 
-Rows: 8
+Rows: 14
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -156,13 +156,12 @@ Rows: 8
 
 ## day_schedules
 
-Rows: 12
+Rows: 17
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
 | day_schedule_id | int(11) | NO | PRI | NULL | auto_increment |
 | name | varchar(100) | NO | MUL | NULL |  |
-| site_id | varchar(50) | YES | MUL | NULL |  |
 | description | text | YES |  | NULL |  |
 | is_operating | tinyint(1) | YES |  | 1 |  |
 | created_at | timestamp | YES |  | current_timestamp() |  |
@@ -171,8 +170,7 @@ Rows: 12
 
 **Indexes:**
 - UNIQUE `PRIMARY` (day_schedule_id)
-- UNIQUE `unique_name_site` (name, site_id)
-- `site_id` (site_id)
+- UNIQUE `unique_name_project` (name, project_id)
 
 ## exception_days
 
@@ -293,13 +291,12 @@ Rows: 1
 
 ## pool_sites
 
-Rows: 1
+Rows: 3
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
 | id | int(11) | NO | PRI | NULL | auto_increment |
 | project_id | int(11) | YES | MUL | NULL |  |
-| site_id | varchar(50) | NO | UNI | NULL |  |
 | name | varchar(100) | NO |  | NULL |  |
 | latitude | decimal(10,6) | YES |  | NULL |  |
 | longitude | decimal(10,6) | YES |  | NULL |  |
@@ -312,16 +309,19 @@ Rows: 1
 | default_weather_station | varchar(50) | YES |  | NULL |  |
 | description | text | YES |  | NULL |  |
 | created_at | timestamp | YES |  | current_timestamp() |  |
+| hp_base_cost_nok | decimal(10,2) | YES |  | NULL |  |
+| hp_marginal_cost_per_kw | decimal(8,2) | YES |  | NULL |  |
+| boiler_base_cost_nok | decimal(10,2) | YES |  | NULL |  |
+| boiler_marginal_cost_per_kw | decimal(8,2) | YES |  | NULL |  |
 
 **Indexes:**
 - UNIQUE `PRIMARY` (id)
-- UNIQUE `idx_site_code` (site_id)
 - `idx_project_id` (project_id)
 - `idx_pool_sites_weather_station` (weather_station_id)
 
 ## pools
 
-Rows: 1
+Rows: 3
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -334,7 +334,7 @@ Rows: 1
 | depth_m | decimal(4,2) | YES |  | 2.00 |  |
 | area_m2 | decimal(8,2) | YES |  | 312.50 |  |
 | volume_m3 | decimal(10,2) | YES |  | 625.00 |  |
-| wind_exposure | decimal(4,3) | YES |  | 0.535 |  |
+| wind_exposure | decimal(4,3) | YES |  | 0.500 |  |
 | solar_absorption | decimal(4,1) | YES |  | 60.0 |  |
 | years_operating | int(11) | YES |  | 3 |  |
 | has_cover | tinyint(1) | YES |  | 1 |  |
@@ -354,7 +354,7 @@ Rows: 1
 
 ## projects
 
-Rows: 1
+Rows: 3
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -417,7 +417,7 @@ Rows: 0
 
 ## schedule_templates
 
-Rows: 4
+Rows: 7
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -437,7 +437,7 @@ Rows: 4
 
 ## simulation_daily_results
 
-Rows: 87368
+Rows: 236152
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -462,7 +462,7 @@ Rows: 87368
 
 ## simulation_hourly_results
 
-Rows: 2093771
+Rows: 3639067
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -493,7 +493,7 @@ Rows: 2093771
 
 ## simulation_runs
 
-Rows: 270
+Rows: 566
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -519,7 +519,7 @@ Rows: 270
 
 ## site_solar_daily
 
-Rows: 3653
+Rows: 7671
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -537,7 +537,7 @@ Rows: 3653
 
 ## site_solar_hourly
 
-Rows: 87672
+Rows: 184104
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -580,7 +580,7 @@ Rows: 50
 
 ## user_preferences
 
-Rows: 8
+Rows: 21
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -596,7 +596,7 @@ Rows: 8
 
 ## user_projects
 
-Rows: 5
+Rows: 6
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -614,7 +614,7 @@ Rows: 5
 
 ## user_sessions
 
-Rows: 25
+Rows: 65
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -657,7 +657,7 @@ Rows: 5
 
 ## weather_data
 
-Rows: 191146
+Rows: 293278
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -675,7 +675,7 @@ Rows: 191146
 
 ## weather_stations
 
-Rows: 2
+Rows: 3
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -698,14 +698,12 @@ Rows: 2
 
 ## week_schedules
 
-Rows: 6
+Rows: 12
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
 | week_schedule_id | int(11) | NO | PRI | NULL | auto_increment |
-| pool_site_id | int(11) | YES |  | NULL |  |
 | name | varchar(100) | NO | MUL | NULL |  |
-| site_id | varchar(50) | YES | MUL | NULL |  |
 | description | text | YES |  | NULL |  |
 | monday_schedule_id | int(11) | YES | MUL | NULL |  |
 | tuesday_schedule_id | int(11) | YES | MUL | NULL |  |
@@ -719,8 +717,7 @@ Rows: 6
 
 **Indexes:**
 - UNIQUE `PRIMARY` (week_schedule_id)
-- UNIQUE `unique_name_site` (name, site_id)
-- `site_id` (site_id)
+- UNIQUE `unique_name_project` (name, project_id)
 - `monday_schedule_id` (monday_schedule_id)
 - `tuesday_schedule_id` (tuesday_schedule_id)
 - `wednesday_schedule_id` (wednesday_schedule_id)
