@@ -1609,6 +1609,16 @@ class HeatAQAPI {
             return;
         }
 
+        // Verify existence explicitly. Don't infer it from UPDATE affected-rows:
+        // MySQL reports 0 affected rows for a no-op update (nothing changed),
+        // which previously surfaced as a spurious "Station not found" on re-save.
+        $exists = $this->db->prepare("SELECT 1 FROM weather_stations WHERE station_id = ?");
+        $exists->execute([$stationId]);
+        if (!$exists->fetch()) {
+            $this->sendError('Station not found');
+            return;
+        }
+
         $stmt = $this->db->prepare("
             UPDATE weather_stations SET
                 station_name = COALESCE(?, station_name),
@@ -1629,11 +1639,6 @@ class HeatAQAPI {
             $data['terrain_roughness'] ?? null,
             $stationId
         ]);
-
-        if ($stmt->rowCount() === 0) {
-            $this->sendError('Station not found');
-            return;
-        }
 
         $this->sendResponse(['success' => true]);
     }

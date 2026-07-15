@@ -39,6 +39,25 @@ const AdminModule = {
         return Number.isFinite(h) && h > 0 && Number.isFinite(z0) && z0 > 0;
     },
 
+    // Render a location map for the selected station (self-contained OSM embed,
+    // so it doesn't depend on the project module being loaded). Terrain-level
+    // zoom; longitude window widens toward the poles to stay roughly square.
+    renderStationMap: function(lat, lng) {
+        const el = document.getElementById('station-map');
+        if (!el) return;
+        const la = parseFloat(lat), lo = parseFloat(lng);
+        if (!Number.isFinite(la) || !Number.isFinite(lo)) {
+            el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--neutral-400);font-size:12px;">No coordinates</div>';
+            return;
+        }
+        const dLat = 0.06;
+        const cos = Math.max(Math.cos(la * Math.PI / 180), 0.15);
+        const dLng = dLat / cos;
+        const bbox = `${lo - dLng},${la - dLat},${lo + dLng},${la + dLat}`;
+        const url = `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${la},${lo}`;
+        el.innerHTML = `<iframe title="Station location" src="${url}" style="width:100%;height:100%;border:none;" loading="lazy"></iframe>`;
+    },
+
     // Initialize admin module
     init: function() {
         console.log('Admin module initialized');
@@ -470,10 +489,8 @@ const AdminModule = {
                 }
                 if (roughnessEl) roughnessEl.innerHTML = this.roughnessOptionsHtml(station.terrain_roughness);
 
-                // Location map (reuse the pool-site OpenStreetMap embed helper)
-                if (window.app && app.project && typeof app.project.updateMapPreview === 'function') {
-                    app.project.updateMapPreview('station-map', station.latitude, station.longitude);
-                }
+                // Location map
+                this.renderStationMap(station.latitude, station.longitude);
             }
         } else {
             // Hide details and button when no station selected
