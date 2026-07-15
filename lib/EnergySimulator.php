@@ -562,6 +562,16 @@ class EnergySimulator {
                 'min_water_temp_open' => 999,  // min during OPEN hours (in-use)
                 'max_water_temp_open' => -999, // max during OPEN hours (in-use)
                 'avg_water_temp_open' => 0,    // avg during OPEN hours (in-use)
+                // Data-quality counters: hours where a missing weather field was
+                // silently substituted (wind 2.0 m/s, humidity 70%, air->0), days
+                // with no solar rows (treated as 0 gain), and requested-span
+                // coverage. Surfaced in the report so gaps aren't invisible.
+                'weather_hours_missing_wind' => 0,
+                'weather_hours_missing_humidity' => 0,
+                'weather_hours_missing_air_temp' => 0,
+                'solar_days_missing' => 0,
+                'expected_hours' => 0,
+                'weather_coverage_pct' => null,
                 'days_below_27' => 0,
                 'days_below_26' => 0,
                 'avg_cop' => 0,
@@ -583,10 +593,25 @@ class EnergySimulator {
 
         // Process each hour
         $hourIndex = 0;
+        $lastSolarCheckDate = null;
         foreach ($weatherData as $hour) {
             $timestamp = $hour['timestamp'];
             $date = substr($timestamp, 0, 10);
             $hourOfDay = (int) substr($timestamp, 11, 2);
+
+            // Count silent weather/solar fallbacks so data gaps show up in the
+            // summary instead of being absorbed into plausible-looking numbers.
+            if (!isset($hour['wind_speed'])) $results['summary']['weather_hours_missing_wind']++;
+            if (!isset($hour['humidity'])) $results['summary']['weather_hours_missing_humidity']++;
+            if (!isset($hour['air_temperature'])) $results['summary']['weather_hours_missing_air_temp']++;
+            if (!empty($solarData) && $date !== $lastSolarCheckDate) {
+                $lastSolarCheckDate = $date;
+                // Daily data is keyed by date, hourly data by full timestamp -
+                // probe both shapes (noon is present in any complete hourly day).
+                if (!isset($solarData[$date]) && !isset($solarData[$date . ' 12:00:00'])) {
+                    $results['summary']['solar_days_missing']++;
+                }
+            }
 
             // Get target temperature from scheduler
             $targetTemp = null;
@@ -1001,6 +1026,15 @@ class EnergySimulator {
                 $results['summary']['avg_cop'] = $results['summary']['avg_cop'] / $hpHours;
             }
         }
+
+        // Weather coverage: hours simulated vs hours in the requested span.
+        // Missing weather rows simply don't appear in the loop, so a sparse
+        // period would otherwise silently simulate (and annualize) fewer hours.
+        $expectedHours = ((int) (($end->getTimestamp() - $start->getTimestamp()) / 86400) + 1) * 24;
+        $results['summary']['expected_hours'] = $expectedHours;
+        $results['summary']['weather_coverage_pct'] = $expectedHours > 0
+            ? round(100 * $results['summary']['total_hours'] / $expectedHours, 1)
+            : null;
 
         // Round summary values
         foreach ($results['summary'] as $key => $value) {

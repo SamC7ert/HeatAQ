@@ -547,6 +547,20 @@ const SimControlModule = {
         const scheduleName = results.meta?.schedule_template_name || '-';
         const hasOverrides = Object.keys(overrides).length > 0;
 
+        // Data-quality warning: surface weather/solar gaps and silent fallback
+        // usage reported by the simulator, so a run over patchy data can't
+        // masquerade as complete.
+        const dq = [];
+        const cov = summary.weather_coverage_pct;
+        if (cov !== undefined && cov !== null && cov < 99.5) dq.push(`weather covers only ${cov}% of the period`);
+        if (summary.weather_hours_missing_wind > 0) dq.push(`${summary.weather_hours_missing_wind} h missing wind (fallback 2.0 m/s)`);
+        if (summary.weather_hours_missing_humidity > 0) dq.push(`${summary.weather_hours_missing_humidity} h missing humidity (fallback 70%)`);
+        if (summary.weather_hours_missing_air_temp > 0) dq.push(`${summary.weather_hours_missing_air_temp} h missing air temp (treated as 0°C!)`);
+        if (summary.solar_days_missing > 0) dq.push(`${summary.solar_days_missing} days missing solar (treated as 0 gain)`);
+        const dqHtml = dq.length
+            ? `<div style="grid-column:1/-1;margin-top:8px;padding:6px 10px;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;color:#664d03;font-size:12px;"><strong>&#9888; Data quality:</strong> ${dq.join(' &middot; ')}</div>`
+            : '';
+
         // Build config HTML with clear sections
         const configHtml = `
             <div style="grid-column:1/-1;border-bottom:1px solid #dee2e6;padding-bottom:8px;margin-bottom:8px;">
@@ -565,6 +579,7 @@ const SimControlModule = {
             <div><strong>Solar abs:</strong> ${solarAbs}</div>
             <div><strong>Cover R:</strong> ${fmt(config.cover_r_value, ' m²K/W', 1)}</div>
             ${hasOverrides ? '<div style="grid-column:1/-1;margin-top:8px;padding-top:8px;border-top:1px solid #dee2e6;color:#0d6efd;font-size:12px;">✓ = Override value applied (from config overrides)</div>' : ''}
+            ${dqHtml}
         `;
         // Helper to set both main and debug elements
         const setEl = (id, value) => {
