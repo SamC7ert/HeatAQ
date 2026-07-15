@@ -117,6 +117,7 @@ contract tests. Build order: physics first.
 - [ ] Update DESIGN_GUIDE.md to V102
 - [ ] Update SESSION_SUMMARY.md (outdated at Nov 2024)
 - [ ] Create user guide for operators
+- [ ] **Fix energy-analysis report methodology text** - The pool control-strategy report (`Energianalyse Svømmebasseng`, most recent version) describes convection as `h = 3.1 + 4.1·v_eff` and evaporation as "VDI 2089, β-factor 5.5–10". The actual model (spreadsheet, Python `pool_v3_6_0_3_simulator.py`, and PHP `EnergySimulator.php`) uses **Inan & Atayilmaz (2022)** evaporation `(0.28 + 0.784·v)·Δp^0.695 / L_v` + **Bowen-ratio** convection. Radiation (T_sky = T_air − 10, ε 0.95) and wall U (0.58) already match. Correct the prose to match the code; confirm the wind-damping figure too (report says 25%, code configs vary).
 
 ### 4. Login Improvements (V104)
 **Priority:** Medium
