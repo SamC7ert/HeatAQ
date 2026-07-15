@@ -826,7 +826,9 @@ const ProjectModule = {
                     depth: parseFloat(dbPool.depth_m) || 2.0,
                     area: parseFloat(dbPool.area_m2) || 312.5,
                     volume: parseFloat(dbPool.volume_m3) || 625,
-                    wind_exposure: parseFloat(dbPool.wind_exposure) || 0.5,
+                    // NB: 0 is a legitimate value ("0 = sheltered") — use an
+                    // isFinite check, not ||, so 0 isn't replaced by the default.
+                    wind_exposure: Number.isFinite(parseFloat(dbPool.wind_exposure)) ? parseFloat(dbPool.wind_exposure) : 0.5,
                     solar_absorption: parseFloat(dbPool.solar_absorption) || 60,
                     has_cover: dbPool.has_cover == 1,
                     cover_u_value: parseFloat(dbPool.cover_r_value) || 5.0,
@@ -959,7 +961,8 @@ const ProjectModule = {
             length_m: length,
             width_m: width,
             depth_m: depth,
-            wind_exposure: parseFloat(document.getElementById('edit-pool-wind')?.value) || 0.5,
+            // NB: 0 is legitimate ("0 = sheltered") — don't let || replace it.
+            wind_exposure: Number.isFinite(parseFloat(document.getElementById('edit-pool-wind')?.value)) ? parseFloat(document.getElementById('edit-pool-wind').value) : 0.5,
             solar_absorption: parseFloat(document.getElementById('edit-pool-solar')?.value) || 60,
             has_cover: document.getElementById('edit-pool-has-cover')?.value === '1',
             cover_r_value: parseFloat(document.getElementById('edit-pool-cover-u')?.value) || 5.0,
