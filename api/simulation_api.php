@@ -731,15 +731,10 @@ try {
                     'weather_range' => $range
                 ]);
             } catch (Exception $e) {
-                sendResponse([
-                    'pool_site_id' => $currentPoolSiteId,
-                    'weather_range' => [
-                        'min_date' => '2014-01-01',
-                        'max_date' => '2023-12-31'
-                    ],
-                    'note' => 'Using default range',
-                    'error' => $e->getMessage()
-                ]);
+                // No silent fallbacks: a made-up 2014-2023 range let the date
+                // picker offer periods with no data behind them.
+                sendError('Could not determine available weather range: ' . $e->getMessage()
+                    . '. Retry, and check the database connection / weather_data table.', 500);
             }
             break;
 
@@ -966,6 +961,7 @@ try {
                     timestamp,
                     air_temp,
                     wind_speed,
+                    humidity,
                     water_temp,
                     is_open,
                     total_loss_kw,
@@ -999,6 +995,7 @@ try {
                     'hour' => $i,
                     'air_temp' => (float)$row['air_temp'],
                     'wind_speed' => (float)$row['wind_speed'],
+                    'humidity' => $row['humidity'] !== null ? (float)$row['humidity'] : null,
                     'water_temp' => (float)$row['water_temp'],
                     'total_loss' => (float)$row['total_loss_kw'],
                     'net_demand' => $netDemand,

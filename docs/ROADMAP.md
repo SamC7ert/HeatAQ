@@ -44,7 +44,7 @@ reload on project switch. **Flagged follow-ups (not yet done):**
 - [x] Config template overriding pools-table cover/solar/wind/years — fixed (strip at read time)
 - [x] `unmet_kwh` over-counts deliberate non-heating — fixed (requested_heat threading)
 - [ ] Outdoor pool wall/floor loss vs 15°C tunnel / 5°C ground anchor — derive from soil temp — HIGH modeling
-- [x] Silent weather/solar fallbacks — now counted + coverage% + report warning (fail-fast still open)
+- [x] Silent weather/solar fallbacks — STRICT: simulation stops with actionable error on any missing field/hour/solar day; Frost end-exclusive fetch fixed (Dec-31 root cause)
 - [x] Weather-fetch error handling — fixed (upsert, 502 on upstream error, completeness%, retry/backoff + requeue)
 - [x] `PoolScheduler` project scoping — fixed (filtered by template project)
 - [x] Sim starting inside a closed period — fixed (plan seeded at hour 0)

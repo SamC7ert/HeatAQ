@@ -78,7 +78,7 @@ need" is inflated and could drive a wrong "HP undersized" conclusion.
   floor/wall U-value), use tunnel temp only when `has_tunnel`. Needs a domain
   decision + a config field, so flagged not fixed.
 
-### B4. Silent weather/solar fallbacks — **VISIBILITY FIXED** (counters + coverage + report warning, commit e0d5490; fail-fast semantics still open)
+### B4. Silent weather/solar fallbacks — **FIXED: STRICT FAIL-FAST** (per user decision; runs STOP with actionable errors on any missing weather field, missing hour, or missing solar day. Full-array validation, replay uses stored humidity, Frost end-exclusive fetch fixed so re-fetch heals Dec-31 holes, NASA -999 days reported, weather-range fallback removed.)
 The stated principle is "no silent fallbacks," but simulation inputs default
 silently in many places:
 - Hourly loop `:610-611` and result `:752-753`: `wind ?? 2.0`, `humidity ?? 70`.

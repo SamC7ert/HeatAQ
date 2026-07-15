@@ -461,36 +461,80 @@ class EnergySimulator {
      * @param array $weatherData Weather data array
      * @throws InvalidArgumentException if required weather fields are missing
      */
-    private function validateWeatherData($weatherData) {
+    private function validateWeatherData($weatherData, $startDate, $endDate) {
         if (empty($weatherData)) {
             throw new InvalidArgumentException('No weather data available for simulation period');
         }
 
         // Sample first few records to validate structure
-        $missingFields = [];
-        $sampleSize = min(24, count($weatherData));
-        $windMissing = 0;
-        $humidityMissing = 0;
+        // STRICT validation - no silent fallbacks (project principle).
+        // The old version sampled only the first 24 rows and merely logged a
+        // warning, so a gap at hour 5000 sailed through and the loop quietly
+        // substituted wind=2.0 / humidity=70 straight into the energy and cost
+        // figures. Now the WHOLE array is scanned and any missing field or
+        // missing hour stops the run with an actionable message.
+        $remedy = 'Fix: Admin -> Weather Stations -> select the station -> Update Data '
+            . '(the fetch retries transient failures and now also fills the previously '
+            . 'missing Dec 31 hours), then re-run the simulation.';
 
-        for ($i = 0; $i < $sampleSize; $i++) {
-            $hour = $weatherData[$i];
-            if (!isset($hour['air_temperature'])) {
-                throw new InvalidArgumentException('Weather data missing air_temperature field');
-            }
-            if (!isset($hour['wind_speed']) || $hour['wind_speed'] === null) {
-                $windMissing++;
-            }
-            if (!isset($hour['humidity']) || $hour['humidity'] === null) {
-                $humidityMissing++;
-            }
+        $expectedHours = ((int) ((strtotime($endDate) - strtotime($startDate)) / 86400) + 1) * 24;
+
+        if (count($weatherData) === 0) {
+            throw new RuntimeException(
+                "No weather data found for {$startDate}..{$endDate} (expected {$expectedHours} hourly rows). {$remedy}"
+            );
         }
 
-        // Warn about missing optional fields (but don't fail)
-        if ($windMissing > 0) {
-            error_log("[EnergySimulator] WARNING: {$windMissing}/{$sampleSize} weather records missing wind_speed - using 2.0 m/s fallback");
+        // 1) Field completeness across ALL rows
+        $missing = ['air_temperature' => [], 'wind_speed' => [], 'humidity' => []];
+        foreach ($weatherData as $hour) {
+            foreach ($missing as $field => $_) {
+                if (!isset($hour[$field])) {
+                    $missing[$field][] = $hour['timestamp'] ?? '(no timestamp)';
+                }
+            }
         }
-        if ($humidityMissing > 0) {
-            error_log("[EnergySimulator] WARNING: {$humidityMissing}/{$sampleSize} weather records missing humidity - using 70% fallback");
+        $problems = [];
+        foreach ($missing as $field => $timestamps) {
+            $n = count($timestamps);
+            if ($n > 0) {
+                $examples = implode(', ', array_slice($timestamps, 0, 3));
+                $problems[] = "{$field} is NULL for {$n} hour(s) (e.g. {$examples})";
+            }
+        }
+        if ($problems) {
+            throw new RuntimeException(
+                'Weather data is incomplete - simulation stopped (no silent fallbacks): '
+                . implode('; ', $problems) . '. ' . $remedy
+            );
+        }
+
+        // 2) Hour coverage of the requested span. Missing rows would otherwise
+        //    silently shorten the simulated period and skew the per-year figures.
+        $actual = count($weatherData);
+        if ($actual < $expectedHours) {
+            $gaps = [];
+            $rows = array_values($weatherData);
+            $prev = strtotime($startDate . ' 00:00:00') - 3600; // expect first row at 00:00
+            foreach ($rows as $hour) {
+                $ts = strtotime($hour['timestamp']);
+                $delta = (int) round(($ts - $prev) / 3600);
+                if ($delta > 1) {
+                    $gaps[] = ($delta - 1) . ' h after ' . date('Y-m-d H:i', $prev);
+                    if (count($gaps) >= 5) break;
+                }
+                $prev = $ts;
+            }
+            $tailEnd = strtotime($endDate . ' 23:00:00');
+            if (count($gaps) < 5 && $prev < $tailEnd) {
+                $gaps[] = ((int) round(($tailEnd - $prev) / 3600)) . ' h after ' . date('Y-m-d H:i', $prev);
+            }
+            $missingTotal = $expectedHours - $actual;
+            throw new RuntimeException(
+                "Weather data covers only {$actual} of {$expectedHours} hours in {$startDate}..{$endDate} "
+                . "({$missingTotal} h missing; first gaps: " . implode(', ', $gaps) . '). '
+                . 'Simulation stopped (no silent fallbacks). ' . $remedy
+            );
         }
     }
 
@@ -513,10 +557,39 @@ class EnergySimulator {
         $weatherData = $this->getWeatherData($startDate, $endDate);
 
         // Validate weather data structure
-        $this->validateWeatherData($weatherData);
+        $this->validateWeatherData($weatherData, $startDate, $endDate);
 
         // Get solar data for period
         $solarData = $this->getSolarData($startDate, $endDate);
+
+        // STRICT: when the site has solar data, it must cover every day of the
+        // run - a partially covered period would silently contribute 0 solar
+        // gain on the missing days and overstate heating demand. A site with
+        // NO solar data at all runs explicitly (and visibly) without solar.
+        if (!empty($solarData)) {
+            $missingDays = [];
+            $cursor = new DateTime($startDate);
+            $last = new DateTime($endDate);
+            while ($cursor <= $last) {
+                $day = $cursor->format('Y-m-d');
+                // Daily data is keyed by date, hourly by full timestamp
+                if (!isset($solarData[$day]) && !isset($solarData[$day . ' 12:00:00'])) {
+                    $missingDays[] = $day;
+                }
+                $cursor->modify('+1 day');
+            }
+            if ($missingDays) {
+                $n = count($missingDays);
+                $examples = implode(', ', array_slice($missingDays, 0, 3));
+                throw new RuntimeException(
+                    "Solar data is missing for {$n} day(s) in {$startDate}..{$endDate} (e.g. {$examples}). "
+                    . 'Simulation stopped (no silent fallbacks - missing days would count as 0 solar gain). '
+                    . 'Fix: re-fetch NASA solar data for the site (Project -> Edit Site -> Fetch Solar Data); '
+                    . 'NASA marks not-yet-processed recent days as missing, so very recent dates may need a '
+                    . 'shorter simulation period. Alternatively delete the site solar data to run explicitly without solar.'
+                );
+            }
+        }
 
         // Initialize results
         $results = [
@@ -633,11 +706,13 @@ class EnergySimulator {
             // Calculate heat losses
             $waterTempStart = $currentWaterTemp;  // Store before any changes
             $tunnelTemp = isset($hour['tunnel_temperature']) ? (float) $hour['tunnel_temperature'] : null;
+            // Direct reads - validateWeatherData() has already guaranteed every
+            // row carries all three fields (strict, no silent fallbacks).
             $losses = $this->calculateHeatLosses(
                 $currentWaterTemp,
                 (float) $hour['air_temperature'],
-                (float) ($hour['wind_speed'] ?? 2.0),
-                (float) ($hour['humidity'] ?? 70),
+                (float) $hour['wind_speed'],
+                (float) $hour['humidity'],
                 $targetTemp !== null, // is pool open?
                 $tunnelTemp
             );
@@ -796,8 +871,8 @@ class EnergySimulator {
                 'timestamp' => $timestamp,
                 'weather' => [
                     'air_temp' => (float) $hour['air_temperature'],
-                    'wind_speed' => (float) ($hour['wind_speed'] ?? 2.0),
-                    'humidity' => (float) ($hour['humidity'] ?? 70),
+                    'wind_speed' => (float) $hour['wind_speed'],
+                    'humidity' => (float) $hour['humidity'],
                     'solar_kwh_m2' => $hourlySolar,
                 ],
                 'pool' => [
@@ -1620,9 +1695,10 @@ class EnergySimulator {
             }
 
             $hour = $weatherData[$idx];
-            $airTemp = (float)($hour['air_temperature'] ?? 15);
-            $windSpeed = (float)($hour['wind_speed'] ?? 2.0);
-            $humidity = (float)($hour['humidity'] ?? 70);
+            // Rows come from the validated run weather array - direct reads.
+            $airTemp = (float)$hour['air_temperature'];
+            $windSpeed = (float)$hour['wind_speed'];
+            $humidity = (float)$hour['humidity'];
             $tunnelTemp = isset($hour['tunnel_temperature']) ? (float)$hour['tunnel_temperature'] : null;
 
             // Calculate losses at simulated temperature (pool open)
@@ -1699,11 +1775,12 @@ class EnergySimulator {
             $idx = $currentIdx + $i;
             if ($idx >= count($weatherData)) break;
             $h = $weatherData[$idx];
-            $air = (float)($h['air_temperature'] ?? 10);
+            // Validated run weather array - direct reads (no silent fallbacks)
+            $air = (float)$h['air_temperature'];
             $loss = $this->calculateHeatLosses(
                 $target, $air,
-                (float)($h['wind_speed'] ?? 2),
-                (float)($h['humidity'] ?? 70),
+                (float)$h['wind_speed'],
+                (float)$h['humidity'],
                 false, // cover on
                 isset($h['tunnel_temperature']) ? (float)$h['tunnel_temperature'] : null
             );
@@ -1723,11 +1800,12 @@ class EnergySimulator {
             if ($k > 0) $dt->modify("+{$k} hours");
             if ($this->scheduler->getCurrentPeriod($dt) === null) break; // closed again
             $h = $weatherData[$idx];
-            $air = (float)($h['air_temperature'] ?? 10);
+            // Validated run weather array - direct reads (no silent fallbacks)
+            $air = (float)$h['air_temperature'];
             $loss = $this->calculateHeatLosses(
                 $target, $air,
-                (float)($h['wind_speed'] ?? 2),
-                (float)($h['humidity'] ?? 70),
+                (float)$h['wind_speed'],
+                (float)$h['humidity'],
                 true, // cover off
                 isset($h['tunnel_temperature']) ? (float)$h['tunnel_temperature'] : null
             );
@@ -1989,6 +2067,22 @@ class EnergySimulator {
         $lowerTol = $this->equipment['lower_tolerance'] ?? 2.0;
         $hpCapacity = $this->equipment['heat_pump']['capacity_kw'] ?? 0;
 
+        // Strict accessor for stored inputs - no silent fallbacks. Older runs
+        // that lack a field fail with instructions rather than replaying
+        // against invented weather (previously air defaulted to 10 degC, wind
+        // to 2 m/s and humidity was a hard-coded 70 ignoring stored data).
+        $req = function (array $row, string $key) {
+            if (!isset($row[$key])) {
+                $ts = $row['timestamp'] ?? '(unknown hour)';
+                throw new RuntimeException(
+                    "Stored hourly data is missing '{$key}' at {$ts} - cannot replay scheduling "
+                    . 'without real inputs (no silent fallbacks). Re-run the simulation with '
+                    . '"Store hourly data" enabled to regenerate complete hourly rows.'
+                );
+            }
+            return (float)$row[$key];
+        };
+
         $n = count($rows);
         $prevIsOpen = null;
         $prevWaterTemp = null;
@@ -2022,8 +2116,8 @@ class EnergySimulator {
                 $closedLoss = [];
                 $closedHpOut = [];
                 for ($j = $i; $j < $nextOpenIdx; $j++) {
-                    $air = (float)($rows[$j]['air_temp'] ?? 10);
-                    $loss = $this->calculateHeatLosses($cycleTarget, $air, (float)($rows[$j]['wind_speed'] ?? 2), 70, false, null);
+                    $air = $req($rows[$j], 'air_temp');
+                    $loss = $this->calculateHeatLosses($cycleTarget, $air, $req($rows[$j], 'wind_speed'), $req($rows[$j], 'humidity'), false, null);
                     // Net = losses - stored solar gain (matches run())
                     $closedLoss[] = $loss['total'] - (float)($rows[$j]['solar_gain_kw'] ?? 0);
                     $closedHpOut[] = $this->applyHeatPump($hpCapacity, $air)['heat'];
@@ -2031,8 +2125,8 @@ class EnergySimulator {
                 $openDemand = 0.0;
                 $openHpDeliver = 0.0;
                 for ($j = $nextOpenIdx; $j < $n && (bool)$rows[$j]['is_open']; $j++) {
-                    $air = (float)($rows[$j]['air_temp'] ?? 10);
-                    $loss = $this->calculateHeatLosses($cycleTarget, $air, (float)($rows[$j]['wind_speed'] ?? 2), 70, true, null);
+                    $air = $req($rows[$j], 'air_temp');
+                    $loss = $this->calculateHeatLosses($cycleTarget, $air, $req($rows[$j], 'wind_speed'), $req($rows[$j], 'humidity'), true, null);
                     $openDemand += $loss['total'] - (float)($rows[$j]['solar_gain_kw'] ?? 0);
                     $openHpDeliver += $this->applyHeatPump($hpCapacity, $air)['heat'];
                 }
@@ -2131,11 +2225,12 @@ class EnergySimulator {
             if ($currentIdx + $i >= count($weatherData)) break;
 
             $weather = $weatherData[$currentIdx + $i];
+            // Validated run weather array - direct reads (no silent fallbacks)
             $losses = $this->calculateHeatLosses(
                 $waterTemp,
-                $weather['air_temperature'] ?? 15,  // Fixed: was 'air_temp'
-                $weather['wind_speed'] ?? 2,
-                $weather['humidity'] ?? 70,
+                $weather['air_temperature'],
+                $weather['wind_speed'],
+                $weather['humidity'],
                 true,  // is_open
                 null   // tunnelTemp
             );
@@ -2625,10 +2720,19 @@ class EnergySimulator {
         // Use provided water temp or default
         $poolTemp = $waterTemp ?? 28.59;
 
-        // Extract weather values
+        // Extract weather values - strict, no silent fallbacks: a missing field
+        // stops with instructions rather than debugging against invented weather.
+        foreach (['air_temperature', 'wind_speed', 'humidity'] as $reqField) {
+            if (!isset($weather[$reqField])) {
+                throw new RuntimeException(
+                    "Weather row for {$timestamp} is missing '{$reqField}' - cannot compute debug hour "
+                    . '(no silent fallbacks). Fix: Admin -> Weather Stations -> Update Data for the station, then retry.'
+                );
+            }
+        }
         $airTemp = (float) $weather['air_temperature'];
-        $windSpeed = (float) ($weather['wind_speed'] ?? 2.0);
-        $humidity = (float) ($weather['humidity'] ?? 70);
+        $windSpeed = (float) $weather['wind_speed'];
+        $humidity = (float) $weather['humidity'];
         $tunnelTemp = $weather['tunnel_temp'] ? (float) $weather['tunnel_temp'] : null;
 
         // Solar irradiance - already calculated above ($hourlySolar in kWh/m²)

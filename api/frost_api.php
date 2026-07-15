@@ -240,7 +240,10 @@ function fetchWeatherData($clientId) {
     $params = [
         'sources' => $stationId,
         'elements' => implode(',', $elements),
-        'referencetime' => $startDate . '/' . $endDate,
+        // Frost's referencetime range is END-EXCLUSIVE: start/end fetches up to
+        // 23:00 the day BEFORE end. Add one day so endDate itself is included
+        // (this was the root cause of every station missing Dec 31 each year).
+        'referencetime' => $startDate . '/' . date('Y-m-d', strtotime($endDate) + 86400),
         'timeresolutions' => 'PT1H'
     ];
 
@@ -368,7 +371,9 @@ function fetchAndStoreYear($clientId) {
     $params = [
         'sources' => $stationId,
         'elements' => implode(',', $elements),
-        'referencetime' => $startDate . '/' . $endDate,
+        // Frost's referencetime range is END-EXCLUSIVE - add one day so the
+        // end date itself is included (root cause of the missing-Dec-31 holes).
+        'referencetime' => $startDate . '/' . date('Y-m-d', strtotime($endDate) + 86400),
         'timeresolutions' => 'PT1H'
     ];
 

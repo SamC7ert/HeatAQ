@@ -203,12 +203,19 @@ class NasaSolarFetcher {
         $hourlyCount = 0;
         $actualStartDate = null;
         $actualEndDate = null;
+        $skippedDays = [];  // NASA fill value -999 = missing day; must be visible, not silent
         $this->db->beginTransaction();
 
         try {
             foreach ($nasaData['all_sky'] as $dateStr => $dailyKwhM2) {
-                // Skip invalid values
-                if ($dailyKwhM2 < 0) continue;
+                // NASA uses -999 as its missing-data fill value. These days get
+                // NO rows (the simulator's strict solar check will then stop a
+                // run covering them) and are reported back to the caller.
+                if ($dailyKwhM2 < 0) {
+                    $d = DateTime::createFromFormat('Ymd', $dateStr);
+                    $skippedDays[] = $d ? $d->format('Y-m-d') : $dateStr;
+                    continue;
+                }
 
                 $date = DateTime::createFromFormat('Ymd', $dateStr);
                 if (!$date) continue;
@@ -276,7 +283,11 @@ class NasaSolarFetcher {
                 'success' => true,
                 'daily_records' => $dailyCount,
                 'hourly_records' => $hourlyCount,
-                'days_processed' => count($nasaData['all_sky']),
+                // days_processed previously counted the -999 days too, so the
+                // result claimed full success while silently leaving holes.
+                'days_processed' => $dailyCount,
+                'days_missing' => count($skippedDays),
+                'missing_dates_sample' => array_slice($skippedDays, 0, 10),
                 'date_range' => [
                     'start' => $actualStartDate ?? $startYear . '-01-01',
                     'end' => $actualEndDate ?? $endYear . '-12-31'
