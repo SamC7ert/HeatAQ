@@ -43,7 +43,7 @@ target_temp, avg_cop over elec>0 hours, monthly-report label refresh, Schedules
 reload on project switch. **Flagged follow-ups (not yet done):**
 - [x] Config template overriding pools-table cover/solar/wind/years — fixed (strip at read time)
 - [x] `unmet_kwh` over-counts deliberate non-heating — fixed (requested_heat threading)
-- [ ] Outdoor pool wall/floor loss vs 15°C tunnel / 5°C ground anchor — derive from soil temp — HIGH modeling
+- [ ] Outdoor pool wall/floor loss vs 15°C tunnel / 5°C ground anchor — PARKED as future improvement, see "Structural losses: ground temperature" under Data & Calculations
 - [x] Silent weather/solar fallbacks — STRICT: simulation stops with actionable error on any missing field/hour/solar day; Frost end-exclusive fetch fixed (Dec-31 root cause)
 - [x] Weather-fetch error handling — fixed (upsert, 502 on upstream error, completeness%, retry/backoff + requeue)
 - [x] `PoolScheduler` project scoping — fixed (filtered by template project)
@@ -242,6 +242,38 @@ HP share increased, because boiler heat (`price/efficiency`) looked cheaper
 per kWh of heat than HP heat (`price/COP`). That was an artifact of pricing
 an electric boiler as if it burned cheap gas. Interim fix: set the gas price
 equal to the electricity price when the boiler is electric.
+
+### Structural losses: ground temperature instead of tunnel/anchor assumptions
+**Priority:** Medium
+**Status:** Planned (parked Jul 2026 — deliberate decision to keep current behavior for now)
+
+The structural loss model assumes warm indoor-ish surroundings, which
+understates losses for a free-standing outdoor pool (e.g. Svalbard over
+permafrost):
+
+- **Walls** (`EnergySimulator.php` `calculateStructuralLosses`):
+  `tunnelRef = tunnelTemp ?? 15.0` — always computed, not gated on
+  `has_tunnel`. A no-tunnel outdoor pool is modeled against 15 °C; with
+  0 °C surroundings the ΔT (and wall loss) is roughly halved. This is the
+  last remaining silent physical default after the Jul 2026 strict-fallback
+  cleanup — kept deliberately because all current pools have `has_tunnel=1`.
+- **Floor**: fixed flux `Q_POOL_FLUX = 1.51 W/m²` scaled linearly and
+  anchored so loss → 0 at 5 °C water, implicitly assuming ground ≈ 5 °C.
+  Over permafrost the floor loss is understated.
+
+**Planned fix (needs a domain decision on values):**
+1. Add a `ground_temperature_c` field (pool_sites or pools table + Edit
+   Pool UI; consider seasonal or annual-mean value).
+2. Walls: use `tunnelTemp` only when `has_tunnel`; otherwise use the
+   configured ground temperature (strict — no silent default, consistent
+   with the no-fallbacks principle).
+3. Floor: replace the 5 °C anchor with the configured ground temperature
+   (flux or U-value × (T_water − T_ground)).
+4. Re-baseline: this increases losses for outdoor cold-climate pools, so
+   compare a Svalbard run before/after and note the shift.
+
+Impact today is small (structural losses <1 kW vs ~150 kW surface losses
+for the Svalbard case), which is why it is parked rather than rushed.
 
 ### Weather data source flexibility
 **Priority:** Low

@@ -66,7 +66,7 @@ need" is inflated and could drive a wrong "HP undersized" conclusion.
   the requested-heat value isn't currently returned by all control paths, so
   it needs care + a re-run to verify.
 
-### B3. Outdoor pool structural losses modelled against warm references — HIGH (modeling)
+### B3. Outdoor pool structural losses vs warm references — **PARKED** (deliberate, Jul 2026; design captured in ROADMAP "Structural losses: ground temperature". Impact today <1 kW since all current pools have has_tunnel=1.)
 - **Wall loss** `EnergySimulator.php:1424`: `tunnelRef = tunnelTemp ?? 15.0`.
   Wall loss is always computed (not gated on `has_tunnel`), so an **outdoor**
   pool with no tunnel is modelled against 15 °C — for a 27 °C pool where the
