@@ -18,6 +18,7 @@ class PoolScheduler {
     private $poolSiteId;  // Integer ID (preferred)
     private $templateId;
     private $template;
+    private $projectId;   // Project scope, derived from the schedule template
     private $schedules = [];
     private $weekSchedules = [];
     private $dateRanges = [];
@@ -46,6 +47,12 @@ class PoolScheduler {
         // Load configuration from database
         $this->template = $this->loadTemplate($templateId);
         $this->templateId = $this->template['template_id'];
+        // Scope all schedule loading to the template's project. Without this
+        // the day/week loaders read EVERY project's schedules and merge
+        // same-named day schedules across projects (periods appended into one
+        // list) - silently corrupting schedules once two projects reuse a name.
+        $this->projectId = isset($this->template['project_id']) && $this->template['project_id'] !== null
+            ? (int)$this->template['project_id'] : null;
 
         // Load all schedule data
         $this->schedules = $this->loadDaySchedules();
@@ -97,13 +104,18 @@ class PoolScheduler {
      * @return array Schedule data indexed by name
      */
     private function loadDaySchedules() {
-        // Load base schedules (project-level, no site filter)
+        // Load base schedules, scoped to the template's project. Schedules are
+        // keyed by name, so an unscoped load merges same-named schedules from
+        // other projects.
+        $where = $this->projectId !== null ? "WHERE project_id = ?" : "";
+        $params = $this->projectId !== null ? [$this->projectId] : [];
         $stmt = $this->db->prepare("
             SELECT day_schedule_id, name, description
             FROM day_schedules
+            $where
             ORDER BY name
         ");
-        $stmt->execute();
+        $stmt->execute($params);
         $rows = $stmt->fetchAll();
 
         $schedules = [];
@@ -127,9 +139,10 @@ class PoolScheduler {
                 dsp.period_order
             FROM day_schedule_periods dsp
             JOIN day_schedules ds ON dsp.day_schedule_id = ds.day_schedule_id
+            " . ($this->projectId !== null ? "WHERE ds.project_id = ?" : "") . "
             ORDER BY ds.name, dsp.period_order, dsp.start_time
         ");
-        $stmt->execute();
+        $stmt->execute($params);
         $periods = $stmt->fetchAll();
 
         foreach ($periods as $period) {
@@ -189,8 +202,9 @@ class PoolScheduler {
             LEFT JOIN day_schedules d5 ON ws.friday_schedule_id = d5.day_schedule_id
             LEFT JOIN day_schedules d6 ON ws.saturday_schedule_id = d6.day_schedule_id
             LEFT JOIN day_schedules d7 ON ws.sunday_schedule_id = d7.day_schedule_id
+            " . ($this->projectId !== null ? "WHERE ws.project_id = ?" : "") . "
         ");
-        $stmt->execute();
+        $stmt->execute($this->projectId !== null ? [$this->projectId] : []);
         $rows = $stmt->fetchAll();
 
         $weekSchedules = [];
