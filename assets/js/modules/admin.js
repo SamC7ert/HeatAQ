@@ -24,10 +24,18 @@ const AdminModule = {
         const sel = (selectedZ0 !== null && selectedZ0 !== undefined && selectedZ0 !== '')
             ? parseFloat(selectedZ0) : null;
         let html = `<option value="">-- Select terrain --</option>`;
+        let matched = false;
         this.ROUGHNESS_CLASSES.forEach(c => {
             const isSel = sel !== null && Math.abs(sel - c.z0) < 1e-6;
+            if (isSel) matched = true;
             html += `<option value="${c.z0}" ${isSel ? 'selected' : ''}>${c.label}</option>`;
         });
+        // Surface a stored value that maps to no class (legacy value, or one
+        // truncated by an un-widened DECIMAL column — e.g. 0.0002 -> 0.000 before
+        // migration 033) so it's visible instead of a silent blank.
+        if (sel !== null && Number.isFinite(sel) && !matched) {
+            html += `<option value="${sel}" selected>Current: ${sel} (not a standard class)</option>`;
+        }
         return html;
     },
 
