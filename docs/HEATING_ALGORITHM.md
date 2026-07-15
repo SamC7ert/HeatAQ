@@ -104,19 +104,22 @@ Power  = 2,616,000 / 3600 = 727 kW
 
 ### Heat Losses
 
-**Evaporation** (dominant):
+**Evaporation** (dominant) — Inan & Atayilmaz (2022):
 ```
-Q_evap = (25 + 19×v) × A × (P_water - φ×P_air) / 3600
+E      = (0.28 + 0.784×v_eff) × Δp^0.695 / L_v      [kg/(m²·s)],  L_v = 2 454 000 J/kg
+Q_evap = E × A × L_v / 1000                          [kW]
 ```
+where `Δp = P_water − φ×P_air` (Magnus formula), `v_eff = wind × exposure_factor`,
+and an activity factor is applied while the pool is open.
 
-**Convection**:
+**Convection** — Bowen ratio (coupled to evaporation):
 ```
-Q_conv = h × A × (T_water - T_air)
+Q_conv = Bo × Q_evap,   Bo = (c_p × p_atm × ΔT) / (0.622 × L_v × Δp)
 ```
 
 **Radiation**:
 ```
-Q_rad = ε × σ × A × (T_water⁴ - T_sky⁴)
+Q_rad = ε × σ × A × (T_water⁴ - T_sky⁴),   T_sky ≈ T_air − 10 °C,  ε = 0.95
 ```
 
 ### Cover Heat Loss Reduction
