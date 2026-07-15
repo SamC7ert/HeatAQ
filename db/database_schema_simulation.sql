@@ -118,7 +118,8 @@ CREATE TABLE IF NOT EXISTS simulation_hourly_results (
 
     -- Pool state
     target_temp DECIMAL(4,1) NULL,  -- NULL when closed
-    water_temp DECIMAL(5,2),
+    water_temp DECIMAL(5,2),                -- end-of-hour water temperature
+    water_temp_start DECIMAL(5,2) NULL,     -- start-of-hour temp used to compute this hour's losses
     is_open TINYINT(1) NOT NULL DEFAULT 0,
 
     -- Heat losses (kW)
