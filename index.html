@@ -1276,25 +1276,31 @@
 
                         <!-- Station details (shown when station selected) -->
                         <div id="station-details" style="display: none;">
-                            <table class="data-table compact" style="max-width: 500px;">
-                                <tr><td style="width: 140px;">Date Range</td><td id="weather-date-range">-</td></tr>
-                                <tr><td>Total Records</td><td id="weather-record-count">-</td></tr>
-                                <tr><td>Location</td><td id="station-location">-</td></tr>
-                                <tr>
-                                    <td>Wind Height (m)</td>
-                                    <td><input type="number" id="station-wind-height" class="form-control inline-edit" style="width: 80px;" step="0.1" value="10"></td>
-                                </tr>
-                                <tr>
-                                    <td>Roughness (z₀)</td>
-                                    <td>
-                                        <input type="number" id="station-roughness" class="form-control inline-edit" style="width: 80px;" step="0.001" value="0.03">
-                                        <small class="text-muted" style="margin-left: 8px;">0.03=open, 0.1=suburban</small>
-                                    </td>
-                                </tr>
-                            </table>
-                            <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: space-between; max-width: 500px;">
-                                <button class="btn btn-danger btn-sm" onclick="app.admin.deleteSelectedStation()">Delete</button>
-                                <button class="btn btn-primary btn-sm" onclick="app.admin.saveStationInline()">Save</button>
+                            <div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start;">
+                                <div style="flex: 1 1 460px; min-width: 320px;">
+                                    <table class="data-table compact" style="max-width: 500px;">
+                                        <tr><td style="width: 140px;">Date Range</td><td id="weather-date-range">-</td></tr>
+                                        <tr><td>Total Records</td><td id="weather-record-count">-</td></tr>
+                                        <tr><td>Location</td><td id="station-location">-</td></tr>
+                                        <tr>
+                                            <td>Wind Height (m)</td>
+                                            <td><input type="number" id="station-wind-height" class="form-control inline-edit" style="width: 80px;" step="0.1" placeholder="required"></td>
+                                        </tr>
+                                        <tr>
+                                            <td>Roughness (z₀)</td>
+                                            <td>
+                                                <select id="station-roughness" class="form-control inline-edit" style="width: 320px;"></select>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                    <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: space-between; max-width: 500px;">
+                                        <button class="btn btn-danger btn-sm" onclick="app.admin.deleteSelectedStation()">Delete</button>
+                                        <button class="btn btn-primary btn-sm" onclick="app.admin.saveStationInline()">Save</button>
+                                    </div>
+                                </div>
+                                <div style="flex: 1 1 300px; min-width: 260px;">
+                                    <div id="station-map" style="width: 100%; height: 260px; border: 1px solid var(--neutral-200); border-radius: 4px; overflow: hidden;"></div>
+                                </div>
                             </div>
                         </div>
 

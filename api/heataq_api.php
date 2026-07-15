@@ -1554,6 +1554,20 @@ class HeatAQAPI {
             return;
         }
 
+        // Wind height and terrain roughness are required — no silent defaults.
+        // They drive the wind-profile transfer (see docs/WIND_CORRECTION.md) and
+        // gate weather-data import.
+        $windHeight = $data['measurement_height_wind'] ?? null;
+        $roughness = $data['terrain_roughness'] ?? null;
+        if ($windHeight === null || $windHeight === '' || (float)$windHeight <= 0) {
+            $this->sendError('Wind height (m) is required');
+            return;
+        }
+        if ($roughness === null || $roughness === '' || (float)$roughness <= 0) {
+            $this->sendError('Terrain roughness (z₀) is required');
+            return;
+        }
+
         $stmt = $this->db->prepare("
             INSERT INTO weather_stations
             (station_id, station_name, latitude, longitude, elevation_m, wind_height_m, terrain_roughness)
@@ -1566,8 +1580,8 @@ class HeatAQAPI {
             $data['latitude'] ?? null,
             $data['longitude'] ?? null,
             $data['elevation'] ?? null,
-            $data['measurement_height_wind'] ?? 10,
-            $data['terrain_roughness'] ?? 0.03
+            (float)$windHeight,
+            (float)$roughness
         ]);
 
         $this->sendResponse(['success' => true, 'station_id' => $stationId]);
@@ -1579,6 +1593,19 @@ class HeatAQAPI {
         $stationId = $data['station_id'] ?? '';
         if (empty($stationId)) {
             $this->sendError('station_id is required');
+            return;
+        }
+
+        // If wind height / roughness are supplied, they must be valid (> 0).
+        // A COALESCE below keeps the existing value when a field is omitted.
+        if (isset($data['measurement_height_wind']) && $data['measurement_height_wind'] !== null
+            && ($data['measurement_height_wind'] === '' || (float)$data['measurement_height_wind'] <= 0)) {
+            $this->sendError('Wind height (m) must be greater than 0');
+            return;
+        }
+        if (isset($data['terrain_roughness']) && $data['terrain_roughness'] !== null
+            && ($data['terrain_roughness'] === '' || (float)$data['terrain_roughness'] <= 0)) {
+            $this->sendError('Terrain roughness (z₀) must be greater than 0');
             return;
         }
 

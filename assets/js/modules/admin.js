@@ -7,6 +7,38 @@ const AdminModule = {
     weatherStations: [],
     users: [],
 
+    // Davenport terrain roughness classes (z0 in m) for the wind-profile transfer.
+    // See docs/WIND_CORRECTION.md.
+    ROUGHNESS_CLASSES: [
+        { z0: 0.0002, label: 'Water / ice (0.0002)' },
+        { z0: 0.005,  label: 'Open sea, smooth (0.005)' },
+        { z0: 0.03,   label: 'Open flat — grass, few obstacles (0.03)' },
+        { z0: 0.10,   label: 'Farmland, low crops (0.10)' },
+        { z0: 0.30,   label: 'Suburban — scattered buildings & trees (0.30)' },
+        { z0: 0.50,   label: 'Urban / dense (0.50)' }
+    ],
+
+    // Build <option>s for a roughness selector. Blank first option = no default;
+    // a terrain class must be chosen. selectedZ0 matches within tolerance.
+    roughnessOptionsHtml: function(selectedZ0) {
+        const sel = (selectedZ0 !== null && selectedZ0 !== undefined && selectedZ0 !== '')
+            ? parseFloat(selectedZ0) : null;
+        let html = `<option value="">-- Select terrain --</option>`;
+        this.ROUGHNESS_CLASSES.forEach(c => {
+            const isSel = sel !== null && Math.abs(sel - c.z0) < 1e-6;
+            html += `<option value="${c.z0}" ${isSel ? 'selected' : ''}>${c.label}</option>`;
+        });
+        return html;
+    },
+
+    // Does a station have a valid wind config (height + roughness)?
+    stationWindConfigured: function(station) {
+        if (!station) return false;
+        const h = parseFloat(station.measurement_height_wind);
+        const z0 = parseFloat(station.terrain_roughness);
+        return Number.isFinite(h) && h > 0 && Number.isFinite(z0) && z0 > 0;
+    },
+
     // Initialize admin module
     init: function() {
         console.log('Admin module initialized');
@@ -426,11 +458,22 @@ const AdminModule = {
                     locationEl.textContent = '-';
                 }
 
-                // Editable fields
+                // Editable fields — no silent defaults; blank when unset so the
+                // user is obliged to supply them (see docs/WIND_CORRECTION.md).
                 const windHeightEl = document.getElementById('station-wind-height');
                 const roughnessEl = document.getElementById('station-roughness');
-                if (windHeightEl) windHeightEl.value = station.measurement_height_wind || 10;
-                if (roughnessEl) roughnessEl.value = station.terrain_roughness || 0.03;
+                if (windHeightEl) {
+                    windHeightEl.value = (station.measurement_height_wind !== null
+                        && station.measurement_height_wind !== undefined
+                        && station.measurement_height_wind !== '')
+                        ? station.measurement_height_wind : '';
+                }
+                if (roughnessEl) roughnessEl.innerHTML = this.roughnessOptionsHtml(station.terrain_roughness);
+
+                // Location map (reuse the pool-site OpenStreetMap embed helper)
+                if (window.app && app.project && typeof app.project.updateMapPreview === 'function') {
+                    app.project.updateMapPreview('station-map', station.latitude, station.longitude);
+                }
             }
         } else {
             // Hide details and button when no station selected
@@ -502,8 +545,12 @@ const AdminModule = {
                 ? `<a href="#" onclick="app.admin.openGoogleMaps(${lat}, ${lon}); return false;" title="Open in Google Maps" style="color: var(--primary);">📍 ${parseFloat(lat).toFixed(4)}, ${parseFloat(lon).toFixed(4)}</a>`
                 : '-';
 
-            const windHeight = station.measurement_height_wind ? `${station.measurement_height_wind}m` : '10m';
-            const roughness = station.terrain_roughness ?? '0.03';
+            const windHeight = station.measurement_height_wind
+                ? `${station.measurement_height_wind}m`
+                : '<span style="color: var(--danger);">—</span>';
+            const roughness = (station.terrain_roughness !== null && station.terrain_roughness !== undefined && station.terrain_roughness !== '')
+                ? station.terrain_roughness
+                : '<span style="color: var(--danger);">—</span>';
 
             html += `<tr>
                 <td>${station.name}</td>
@@ -599,12 +646,11 @@ const AdminModule = {
                         </div>
                         <div class="form-group">
                             <label>Wind Height (m)</label>
-                            <input type="number" id="station-wind-height-input" class="form-control" value="${existingStation?.measurement_height_wind || '10'}" step="0.1" placeholder="10">
+                            <input type="number" id="station-wind-height-input" class="form-control" value="${existingStation?.measurement_height_wind ?? ''}" step="0.1" placeholder="from Frost / required">
                         </div>
                         <div class="form-group">
                             <label>Roughness (z₀)</label>
-                            <input type="number" id="station-roughness-input" class="form-control" value="${existingStation?.terrain_roughness || '0.03'}" step="0.001" placeholder="0.03">
-                            <small class="text-muted">0.03=open, 0.1=suburban</small>
+                            <select id="station-roughness-input" class="form-control">${this.roughnessOptionsHtml(existingStation?.terrain_roughness)}</select>
                         </div>
                     </div>
                     ${!isEdit ? `
@@ -708,7 +754,9 @@ const AdminModule = {
                             humidity ${elements.relative_humidity ? '✓' : '✗'} |
                             solar ${elements.solar ? '✓' : '✗'}
                         </td></tr>
-                        ${windLevels.length > 0 ? `<tr><td>Wind Levels</td><td>${windLevels.map(l => l + 'm').join(', ')}</td></tr>` : ''}
+                        ${windLevels.length > 0
+                            ? `<tr><td>Wind Levels</td><td>${windLevels.map(l => l + 'm').join(', ')}${data.recommended_wind_height ? ` (using ${data.recommended_wind_height}m)` : ''}</td></tr>`
+                            : `<tr><td>Wind Levels</td><td style="color: var(--danger);">none reported — enter wind height manually</td></tr>`}
                     </table>
                 `;
             } else {
@@ -726,8 +774,8 @@ const AdminModule = {
         const latitude = document.getElementById('station-lat-input')?.value;
         const longitude = document.getElementById('station-lon-input')?.value;
         const elevation = document.getElementById('station-elevation-input')?.value;
-        const windHeight = document.getElementById('station-wind-height-input')?.value || '10';
-        const roughness = document.getElementById('station-roughness-input')?.value || '0.03';
+        const windHeight = document.getElementById('station-wind-height-input')?.value || '';
+        const roughness = document.getElementById('station-roughness-input')?.value || '';
 
         // Get fetch options (only for new stations)
         const shouldFetch = !isEdit && document.getElementById('station-fetch-data')?.checked;
@@ -736,6 +784,14 @@ const AdminModule = {
 
         if (!stationId || !name) {
             alert('Station ID and Name are required');
+            return;
+        }
+        if (!windHeight || parseFloat(windHeight) <= 0) {
+            alert('Wind height (m) is required. If Frost reported none, enter it manually.');
+            return;
+        }
+        if (!roughness || parseFloat(roughness) <= 0) {
+            alert('Select a terrain roughness class.');
             return;
         }
 
@@ -785,6 +841,13 @@ const AdminModule = {
 
         const station = this.weatherStations.find(s => s.station_id === this.selectedStationId);
         if (!station) return;
+
+        // Gate: don't import weather we can't correctly interpret. Wind height and
+        // terrain roughness must be set first (see docs/WIND_CORRECTION.md).
+        if (!this.stationWindConfigured(station)) {
+            alert('Set a wind height and terrain roughness for this station, then Save, before importing weather data.');
+            return;
+        }
 
         // Create modal with loading state
         let html = `
@@ -1072,8 +1135,17 @@ const AdminModule = {
         const station = this.weatherStations.find(s => s.station_id === this.selectedStationId);
         if (!station) return;
 
-        const windHeight = document.getElementById('station-wind-height')?.value || '10';
-        const roughness = document.getElementById('station-roughness')?.value || '0.03';
+        const windHeight = document.getElementById('station-wind-height')?.value || '';
+        const roughness = document.getElementById('station-roughness')?.value || '';
+
+        if (!windHeight || parseFloat(windHeight) <= 0) {
+            alert('Wind height (m) is required.');
+            return;
+        }
+        if (!roughness || parseFloat(roughness) <= 0) {
+            alert('Select a terrain roughness class.');
+            return;
+        }
 
         try {
             const response = await fetch('./api/heataq_api.php', {
