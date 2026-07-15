@@ -894,7 +894,13 @@ class EnergySimulator {
             // Heating delivered (thermal)
             $results['summary']['hp_thermal_kwh'] += $heating['hp_heat'];
             $results['summary']['boiler_thermal_kwh'] += $heating['boiler_heat'];
-            $results['summary']['unmet_kwh'] += max(0, $netRequirement - $heating['total_heat']);
+            // Unmet = heat that was REQUESTED but could not be delivered
+            // (capacity-limited). Hours where the controller deliberately
+            // supplies less than the loss (above target, coasting, closed
+            // waiting) request 0 and are not comfort failures. Previously this
+            // accrued netRequirement - delivered every hour, booking hundreds
+            // of phantom "unmet" kWh for a system that never failed.
+            $results['summary']['unmet_kwh'] += max(0, ($heating['requested_heat'] ?? 0) - $heating['total_heat']);
 
             // Energy consumed
             $results['summary']['total_hp_energy_kwh'] += $heating['hp_electricity'];
@@ -1834,6 +1840,9 @@ class EnergySimulator {
             'boiler_fuel' => 0,
             'total_heat' => $hp['heat'],
             'cost' => $hp['cost'],
+            // Requested = heat to hold/reach holdTemp this hour. Coast hours
+            // above the hold level request 0 and never count as unmet.
+            'requested_heat' => $requiredHeat,
         ];
     }
 
@@ -1853,6 +1862,13 @@ class EnergySimulator {
             $boilerReq = $afterHp + max(0.0, ($targetTemp - $waterTemp) * $tmr);
             $boiler = $this->applyBoiler($boilerReq);
         }
+        // Requested = what is needed to HOLD TARGET, not the opportunistic
+        // full-HP buffer top-up. While coasting above target the buffer is
+        // covering demand by design, so nothing is "unmet"; once the water is
+        // at/below target the requirement is losses + raise-to-target.
+        $requested = $waterTemp <= $targetTemp + 0.01
+            ? max(0.0, $netRequirement + max(0.0, ($targetTemp - $waterTemp) * $tmr))
+            : 0.0;
         return [
             'hp_heat' => $hp['heat'],
             'hp_electricity' => $hp['electricity'],
@@ -1861,6 +1877,7 @@ class EnergySimulator {
             'boiler_fuel' => $boiler['fuel'],
             'total_heat' => $hp['heat'] + $boiler['heat'],
             'cost' => $hp['cost'] + $boiler['cost'],
+            'requested_heat' => $requested,
         ];
     }
 
@@ -2255,6 +2272,11 @@ class EnergySimulator {
             'boiler_fuel' => 0,
             'total_heat' => 0,
             'cost' => 0,
+            // Heat actually REQUESTED this hour (to reach/hold the target).
+            // 0 when no heating is wanted (above target / closed waiting).
+            // unmet_kwh accrues from requested - delivered, so deliberate
+            // non-heating hours are not booked as unmet.
+            'requested_heat' => 0,
         ];
 
         // Determine control strategy: only 'reactive' or 'predictive'
@@ -2307,6 +2329,7 @@ class EnergySimulator {
             return $result;
         }
 
+        $result['requested_heat'] = $requiredHeat;
         $remainingHeat = $requiredHeat;
 
         // ALWAYS prioritize heat pump (more efficient)
