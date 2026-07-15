@@ -1,5 +1,5 @@
 {
-    "generated_at": "2025-12-03 09:28:25",
+    "generated_at": "2026-07-15 07:19:30",
     "database": "heataq_pool-353130302dd2",
     "tables": {
         "audit_log": {
@@ -124,7 +124,7 @@
                     ]
                 }
             ],
-            "row_count": 9368
+            "row_count": 17047
         },
         "calendar_date_ranges": {
             "name": "calendar_date_ranges",
@@ -256,7 +256,7 @@
                     ]
                 }
             ],
-            "row_count": 3
+            "row_count": 10
         },
         "calendar_exception_days": {
             "name": "calendar_exception_days",
@@ -702,7 +702,7 @@
                     ]
                 }
             ],
-            "row_count": 4
+            "row_count": 10
         },
         "day_schedule_periods": {
             "name": "day_schedule_periods",
@@ -797,7 +797,7 @@
                     ]
                 }
             ],
-            "row_count": 8
+            "row_count": 14
         },
         "day_schedules": {
             "name": "day_schedules",
@@ -814,14 +814,6 @@
                     "name": "name",
                     "type": "varchar(100)",
                     "null": "NO",
-                    "key": "MUL",
-                    "default": null,
-                    "extra": ""
-                },
-                {
-                    "name": "site_id",
-                    "type": "varchar(50)",
-                    "null": "YES",
                     "key": "MUL",
                     "default": null,
                     "extra": ""
@@ -876,22 +868,15 @@
                     ]
                 },
                 {
-                    "name": "unique_name_site",
+                    "name": "unique_name_project",
                     "unique": true,
                     "columns": [
                         "name",
-                        "site_id"
-                    ]
-                },
-                {
-                    "name": "site_id",
-                    "unique": false,
-                    "columns": [
-                        "site_id"
+                        "project_id"
                     ]
                 }
             ],
-            "row_count": 12
+            "row_count": 17
         },
         "exception_days": {
             "name": "exception_days",
@@ -1389,14 +1374,6 @@
                     "extra": ""
                 },
                 {
-                    "name": "site_id",
-                    "type": "varchar(50)",
-                    "null": "NO",
-                    "key": "UNI",
-                    "default": null,
-                    "extra": ""
-                },
-                {
                     "name": "name",
                     "type": "varchar(100)",
                     "null": "NO",
@@ -1491,6 +1468,38 @@
                     "key": "",
                     "default": "current_timestamp()",
                     "extra": ""
+                },
+                {
+                    "name": "hp_base_cost_nok",
+                    "type": "decimal(10,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "hp_marginal_cost_per_kw",
+                    "type": "decimal(8,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "boiler_base_cost_nok",
+                    "type": "decimal(10,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "boiler_marginal_cost_per_kw",
+                    "type": "decimal(8,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
                 }
             ],
             "indexes": [
@@ -1499,13 +1508,6 @@
                     "unique": true,
                     "columns": [
                         "id"
-                    ]
-                },
-                {
-                    "name": "idx_site_code",
-                    "unique": true,
-                    "columns": [
-                        "site_id"
                     ]
                 },
                 {
@@ -1523,7 +1525,7 @@
                     ]
                 }
             ],
-            "row_count": 1
+            "row_count": 3
         },
         "pools": {
             "name": "pools",
@@ -1605,7 +1607,7 @@
                     "type": "decimal(4,3)",
                     "null": "YES",
                     "key": "",
-                    "default": "0.535",
+                    "default": "0.500",
                     "extra": ""
                 },
                 {
@@ -1720,7 +1722,7 @@
                     ]
                 }
             ],
-            "row_count": 1
+            "row_count": 3
         },
         "projects": {
             "name": "projects",
@@ -1783,7 +1785,7 @@
                     ]
                 }
             ],
-            "row_count": 1
+            "row_count": 3
         },
         "reference_day_dates": {
             "name": "reference_day_dates",
@@ -2056,7 +2058,7 @@
                     ]
                 }
             ],
-            "row_count": 4
+            "row_count": 7
         },
         "simulation_daily_results": {
             "name": "simulation_daily_results",
@@ -2189,7 +2191,7 @@
                     ]
                 }
             ],
-            "row_count": 87368
+            "row_count": 236152
         },
         "simulation_hourly_results": {
             "name": "simulation_hourly_results",
@@ -2370,7 +2372,7 @@
                     ]
                 }
             ],
-            "row_count": 2093771
+            "row_count": 3639067
         },
         "simulation_runs": {
             "name": "simulation_runs",
@@ -2510,7 +2512,7 @@
                     ]
                 }
             ],
-            "row_count": 270
+            "row_count": 566
         },
         "site_solar_daily": {
             "name": "site_solar_daily",
@@ -2588,7 +2590,7 @@
                     ]
                 }
             ],
-            "row_count": 3653
+            "row_count": 7671
         },
         "site_solar_hourly": {
             "name": "site_solar_hourly",
@@ -2650,7 +2652,7 @@
                     ]
                 }
             ],
-            "row_count": 87672
+            "row_count": 184104
         },
         "solar_daily_data": {
             "name": "solar_daily_data",
@@ -2802,7 +2804,7 @@
                     ]
                 }
             ],
-            "row_count": 8
+            "row_count": 21
         },
         "user_projects": {
             "name": "user_projects",
@@ -2879,7 +2881,7 @@
                     ]
                 }
             ],
-            "row_count": 5
+            "row_count": 6
         },
         "user_sessions": {
             "name": "user_sessions",
@@ -2979,7 +2981,7 @@
                     ]
                 }
             ],
-            "row_count": 25
+            "row_count": 65
         },
         "users": {
             "name": "users",
@@ -3167,7 +3169,7 @@
                     ]
                 }
             ],
-            "row_count": 191146
+            "row_count": 293278
         },
         "weather_stations": {
             "name": "weather_stations",
@@ -3286,7 +3288,7 @@
                     ]
                 }
             ],
-            "row_count": 2
+            "row_count": 3
         },
         "week_schedules": {
             "name": "week_schedules",
@@ -3300,25 +3302,9 @@
                     "extra": "auto_increment"
                 },
                 {
-                    "name": "pool_site_id",
-                    "type": "int(11)",
-                    "null": "YES",
-                    "key": "",
-                    "default": null,
-                    "extra": ""
-                },
-                {
                     "name": "name",
                     "type": "varchar(100)",
                     "null": "NO",
-                    "key": "MUL",
-                    "default": null,
-                    "extra": ""
-                },
-                {
-                    "name": "site_id",
-                    "type": "varchar(50)",
-                    "null": "YES",
                     "key": "MUL",
                     "default": null,
                     "extra": ""
@@ -3413,18 +3399,11 @@
                     ]
                 },
                 {
-                    "name": "unique_name_site",
+                    "name": "unique_name_project",
                     "unique": true,
                     "columns": [
                         "name",
-                        "site_id"
-                    ]
-                },
-                {
-                    "name": "site_id",
-                    "unique": false,
-                    "columns": [
-                        "site_id"
+                        "project_id"
                     ]
                 },
                 {
@@ -3477,7 +3456,7 @@
                     ]
                 }
             ],
-            "row_count": 6
+            "row_count": 12
         }
     }
 }
