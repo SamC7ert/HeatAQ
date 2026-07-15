@@ -818,8 +818,14 @@ try {
                 sendError("No stored data found for $timestamp in run $runId", 404);
             }
 
-            // Use stored water temp unless overridden
-            $waterTemp = $waterTempOverride ? (float)$waterTempOverride : (float)$stored['water_temp'];
+            // Use stored water temp unless overridden.
+            // Prefer the START-of-hour temp (what the simulation used to compute this
+            // hour's losses) so the debug recompute reconciles with stored total_loss_kw.
+            // Falls back to water_temp (end-of-hour) for runs predating migration 029.
+            $storedStartTemp = isset($stored['water_temp_start']) && $stored['water_temp_start'] !== null
+                ? (float)$stored['water_temp_start']
+                : (float)$stored['water_temp'];
+            $waterTemp = $waterTempOverride ? (float)$waterTempOverride : $storedStartTemp;
 
             // Load config_snapshot from the simulation run to use the same settings
             $configStmt = $pdo->prepare("SELECT config_snapshot FROM simulation_runs WHERE run_id = ?");
@@ -856,6 +862,15 @@ try {
                 'hp_heat_kw' => (float)$stored['hp_heat_kw'],
                 'boiler_heat_kw' => (float)$stored['boiler_heat_kw'],
                 'hp_cop' => (float)$stored['hp_cop'],
+                // calc block lets the reconciler compare like-for-like: the losses
+                // were computed at the start-of-hour temp, so surface that (not the
+                // stored end-of-hour water_temp) as the comparison temperature.
+                'calc' => [
+                    'water_temp_start' => $storedStartTemp,
+                    'losses_total_kw' => (float)$stored['total_loss_kw'],
+                    'solar_gain_kw' => (float)$stored['solar_gain_kw'],
+                    'net_requirement_kw' => (float)$stored['total_loss_kw'] - (float)$stored['solar_gain_kw'],
+                ],
             ];
 
             // Check session cache for open_plan/heating_mode (populated by debug_week)
@@ -1205,7 +1220,7 @@ function storeSimulationResults($pdo, $runId, $results, $storeHourly = true) {
             $values = [];
 
             foreach ($batch as $hour) {
-                $placeholders[] = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $placeholders[] = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                 $values = array_merge($values, [
                     $runId,
                     $hour['timestamp'],
@@ -1215,6 +1230,9 @@ function storeSimulationResults($pdo, $runId, $results, $storeHourly = true) {
                     $hour['weather']['solar_kwh_m2'],
                     $hour['pool']['target_temp'],
                     $hour['pool']['water_temp'],
+                    // Start-of-hour temp drives this hour's losses; persist it so the
+                    // single-hour debug view can recompute at the same temperature.
+                    $hour['calc']['water_temp_start'] ?? $hour['pool']['water_temp'],
                     $hour['pool']['is_open'] ? 1 : 0,
                     $hour['losses']['total_kw'],
                     $hour['gains']['solar_kw'],
@@ -1229,7 +1247,7 @@ function storeSimulationResults($pdo, $runId, $results, $storeHourly = true) {
 
             $sql = "INSERT INTO simulation_hourly_results
                     (run_id, timestamp, air_temp, wind_speed, humidity, solar_kwh_m2,
-                     target_temp, water_temp, is_open, total_loss_kw, solar_gain_kw,
+                     target_temp, water_temp, water_temp_start, is_open, total_loss_kw, solar_gain_kw,
                      hp_heat_kw, boiler_heat_kw, hp_electricity_kwh, boiler_fuel_kwh, hp_cop, cost)
                     VALUES " . implode(", ", $placeholders);
 
