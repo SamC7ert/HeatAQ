@@ -2872,9 +2872,19 @@ class HeatAQAPI {
             return;
         }
 
-        // Security: only allow claude/ branches
-        if (strpos($branch, 'claude/') !== 0) {
-            $this->sendError('Only claude/* branches can be merged');
+        // Security: the branch name is used in git commands. It used to be
+        // interpolated into shell_exec() after only a 'claude/' prefix check,
+        // so "claude/x; <command>" ran arbitrary commands on the server.
+        // Now: strict git-safe charset, no '..', no option-like or ref-breaking
+        // shapes, must exist on origin, and every use is escapeshellarg()'d.
+        if (!is_string($branch)
+            || strlen($branch) > 200
+            || !preg_match('#^claude/[A-Za-z0-9][A-Za-z0-9._/-]*$#', $branch)
+            || strpos($branch, '..') !== false
+            || strpos($branch, '//') !== false
+            || substr($branch, -1) === '/'
+            || substr($branch, -5) === '.lock') {
+            $this->sendError('Invalid branch name - only existing claude/* branches can be merged');
             return;
         }
 
@@ -2889,9 +2899,19 @@ class HeatAQAPI {
         $log[] = "Fetching all branches...";
         $log[] = trim(shell_exec('git fetch --all --prune 2>&1'));
 
+        // The branch must exist on origin (exact match against the remote list)
+        $remoteBranches = array_map('trim', explode("\n", (string) shell_exec('git branch -r 2>&1')));
+        if (!in_array('origin/' . $branch, $remoteBranches, true)) {
+            chdir($oldDir);
+            $this->sendError("Branch not found on origin: $branch");
+            return;
+        }
+        $branchArg = escapeshellarg($branch);
+        $remoteRefArg = escapeshellarg('origin/' . $branch);
+
         // Pull latest from the selected branch (update remote tracking)
         $log[] = "Pulling latest from $branch...";
-        $pullBranchOutput = shell_exec("git fetch origin $branch 2>&1");
+        $pullBranchOutput = shell_exec("git fetch origin $branchArg 2>&1");
         $log[] = trim($pullBranchOutput);
 
         // Ensure we're on master
@@ -2907,7 +2927,7 @@ class HeatAQAPI {
 
         // Merge the branch
         $log[] = "Merging origin/$branch...";
-        $mergeOutput = shell_exec("git merge origin/$branch -m 'Merge $branch' 2>&1");
+        $mergeOutput = shell_exec("git merge $remoteRefArg -m " . escapeshellarg("Merge $branch") . " 2>&1");
         $log[] = trim($mergeOutput);
 
         // Check if merge was successful
