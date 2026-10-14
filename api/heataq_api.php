@@ -3778,70 +3778,39 @@ class HeatAQAPI {
      * Admin -> System "Export schema" / "Export & Push": run db/dump_schema.php
      * on the command line (it refuses web requests) and return its JSON.
      */
+    /**
+     * Dump the schema to db/schema.json + schema.md (optionally commit and
+     * push). Runs in-process: the host's command-line PHP has no PDO, so the
+     * old `shell_exec('php dump_schema.php')` failed with "Class PDO not found".
+     */
     private function dumpSchema() {
         $input = $this->getPostInput();
-        $script = realpath(__DIR__ . '/../db/dump_schema.php');
-        if (!$script) {
-            $this->sendError('Schema dump script not found', 500);
+        require_once __DIR__ . '/../lib/SchemaDumper.php';
+        try {
+            $this->sendResponse(SchemaDumper::dump($this->db, !empty($input['push'])));
+        } catch (Throwable $e) {
+            $this->sendError('Schema export failed: ' . RequestGuard::publicMessage($e->getMessage()), 500);
         }
-        $cmd = 'php ' . escapeshellarg($script) . ' --json' . (!empty($input['push']) ? ' --push' : '') . ' 2>&1';
-        $output = (string) shell_exec($cmd);
-        $data = json_decode($output, true);
-        if (!is_array($data)) {
-            $this->sendError('Schema export failed: ' . substr(trim($output), 0, 300), 500);
-        }
-        $this->sendResponse($data);
     }
 
     /**
-     * Export current database schema
+     * Export current database schema (older action name; same as dump_schema
+     * without the git push)
      */
     private function exportSchema() {
-        $dbDir = realpath(__DIR__ . '/../db');
-        $dumpScript = $dbDir . '/dump_schema.php';
-
-        if (!file_exists($dumpScript)) {
-            $this->sendError('Schema dump script not found');
-            return;
-        }
-
-        $log = [];
-        $oldDir = getcwd();
-        chdir($dbDir);
-
+        require_once __DIR__ . '/../lib/SchemaDumper.php';
         try {
-            // Run the dump script as separate PHP process
-            $log[] = "Running schema export...";
-            $output = shell_exec('php dump_schema.php 2>&1');
-            $log[] = $output ?: "Export completed (no output)";
-
-            // Check if files were updated recently (within last 30 seconds)
-            $schemaJsonTime = file_exists($dbDir . '/schema.json') ? filemtime($dbDir . '/schema.json') : 0;
-            $schemaMdTime = file_exists($dbDir . '/schema.md') ? filemtime($dbDir . '/schema.md') : 0;
-            $now = time();
-
-            $jsonUpdated = ($now - $schemaJsonTime) < 30;
-            $mdUpdated = ($now - $schemaMdTime) < 30;
-
-            $log[] = "schema.json: " . ($jsonUpdated ? 'updated' : 'not updated');
-            $log[] = "schema.md: " . ($mdUpdated ? 'updated' : 'not updated');
-
-            chdir($oldDir);
+            $result = SchemaDumper::dump($this->db, false);
             $this->sendResponse([
-                'success' => $jsonUpdated && $mdUpdated,
-                'files' => [
-                    'schema.json' => $jsonUpdated,
-                    'schema.md' => $mdUpdated
-                ],
-                'log' => $log
+                'success' => true,
+                'files' => ['schema.json' => true, 'schema.md' => true],
+                'log' => ["Schema exported: {$result['tables']} tables"]
             ]);
-
-        } catch (Exception $e) {
-            chdir($oldDir);
+        } catch (Throwable $e) {
             $this->sendResponse([
                 'success' => false,
-                'error' => $e->getMessage(),
-                'log' => $log
+                'error' => RequestGuard::publicMessage($e->getMessage()),
+                'log' => []
             ]);
         }
     }
