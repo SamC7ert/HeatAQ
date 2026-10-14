@@ -165,7 +165,7 @@ const EnergyAnalysis = {
             if (data.sites && data.sites.length > 0) {
                 this.sites = data.sites;
                 select.innerHTML = data.sites.map(s =>
-                    `<option value="${s.id}">${s.name}</option>`
+                    `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`
                 ).join('');
 
                 // Restore saved value if exists
@@ -227,7 +227,7 @@ const EnergyAnalysis = {
 
             if (data.pools && data.pools.length > 0) {
                 select.innerHTML = data.pools.map(p =>
-                    `<option value="${p.pool_id}">${p.name}</option>`
+                    `<option value="${escapeHtml(p.pool_id)}">${escapeHtml(p.name)}</option>`
                 ).join('');
 
                 // Restore saved value if exists
@@ -263,7 +263,7 @@ const EnergyAnalysis = {
 
             if (data.configs && data.configs.length > 0) {
                 select.innerHTML = data.configs.map(c =>
-                    `<option value="${c.template_id}">${c.name}</option>`
+                    `<option value="${escapeHtml(c.template_id)}">${escapeHtml(c.name)}</option>`
                 ).join('');
 
                 // Restore saved value if exists
@@ -307,7 +307,7 @@ const EnergyAnalysis = {
 
             if (data.templates && data.templates.length > 0) {
                 select.innerHTML = data.templates.map(t =>
-                    `<option value="${t.template_id}">${t.name}</option>`
+                    `<option value="${escapeHtml(t.template_id)}">${escapeHtml(t.name)}</option>`
                 ).join('');
 
                 // Restore saved value if exists
@@ -808,15 +808,15 @@ const EnergyAnalysis = {
      */
     buildRow: function(label, unit, values, formatNum, isBold) {
         let html = `<tr>`;
-        html += `<td${isBold ? ' style="font-weight: bold;"' : ''}>${label}</td>`;
-        html += `<td style="color: #666; font-size: 12px;">${unit}</td>`;
+        html += `<td${isBold ? ' style="font-weight: bold;"' : ''}>${escapeHtml(label)}</td>`;
+        html += `<td style="color: #666; font-size: 12px;">${escapeHtml(unit)}</td>`;
 
         values.forEach(v => {
             let displayVal = v;
             if (typeof v === 'number' && formatNum) {
                 displayVal = v.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
             }
-            html += `<td style="text-align: right;${isBold ? ' font-weight: bold;' : ''}">${displayVal}</td>`;
+            html += `<td style="text-align: right;${isBold ? ' font-weight: bold;' : ''}">${escapeHtml(displayVal)}</td>`;
         });
 
         html += '</tr>';
@@ -828,15 +828,15 @@ const EnergyAnalysis = {
      */
     buildTotalElectricRow: function(label, unit, values) {
         let html = `<tr style="font-weight: bold;">`;
-        html += `<td>${label}</td>`;
-        html += `<td style="font-size: 12px;">${unit}</td>`;
+        html += `<td>${escapeHtml(label)}</td>`;
+        html += `<td style="font-size: 12px;">${escapeHtml(unit)}</td>`;
 
         values.forEach(v => {
             let displayVal = v;
             if (typeof v === 'number') {
                 displayVal = v.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
             }
-            html += `<td style="text-align: right;">${displayVal !== null ? displayVal : '-'}</td>`;
+            html += `<td style="text-align: right;">${displayVal !== null ? escapeHtml(displayVal) : '-'}</td>`;
         });
 
         html += '</tr>';
@@ -857,15 +857,15 @@ const EnergyAnalysis = {
         if (styles.paddingLeft) labelStyle.push(`padding-left: ${styles.paddingLeft}`);
 
         let html = `<tr${rowStyle.length ? ` style="${rowStyle.join('; ')}"` : ''}>`;
-        html += `<td${labelStyle.length ? ` style="${labelStyle.join('; ')}"` : ''}>${label}</td>`;
-        html += `<td style="color: #666; font-size: ${styles.fontSize || '12px'};">${unit}</td>`;
+        html += `<td${labelStyle.length ? ` style="${labelStyle.join('; ')}"` : ''}>${escapeHtml(label)}</td>`;
+        html += `<td style="color: #666; font-size: ${styles.fontSize || '12px'};">${escapeHtml(unit)}</td>`;
 
         values.forEach(v => {
             let displayVal = v;
             if (typeof v === 'number' && formatNum) {
                 displayVal = v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
             }
-            html += `<td style="text-align: right;">${displayVal}</td>`;
+            html += `<td style="text-align: right;">${escapeHtml(displayVal)}</td>`;
         });
 
         html += '</tr>';
@@ -877,8 +877,8 @@ const EnergyAnalysis = {
      */
     buildDiffRow: function(label, unit, values, isNegativeGood) {
         let html = `<tr style="font-style: italic; color: #28a745;">`;
-        html += `<td style="padding-left: 20px;">↳ ${label}</td>`;
-        html += `<td style="font-size: 12px;">${unit}</td>`;
+        html += `<td style="padding-left: 20px;">↳ ${escapeHtml(label)}</td>`;
+        html += `<td style="font-size: 12px;">${escapeHtml(unit)}</td>`;
 
         values.forEach((v, i) => {
             if (i === 0 || v === null) {
@@ -898,8 +898,8 @@ const EnergyAnalysis = {
      */
     buildPaybackRowPlain: function(label, unit, values) {
         let html = `<tr style="border-bottom: 2px solid #999;">`;
-        html += `<td>${label}</td>`;
-        html += `<td style="font-size: 12px; color: #666;">${unit}</td>`;
+        html += `<td>${escapeHtml(label)}</td>`;
+        html += `<td style="font-size: 12px; color: #666;">${escapeHtml(unit)}</td>`;
 
         values.forEach((v, i) => {
             if (i === 0 || v === null || v === Infinity || v < 0) {
@@ -918,8 +918,8 @@ const EnergyAnalysis = {
      */
     buildPaybackRowStyled: function(label, unit, values) {
         let html = `<tr style="background: #e8f5e9; font-weight: bold; border-bottom: 2px solid #999;">`;
-        html += `<td>${label}</td>`;
-        html += `<td style="font-size: 12px;">${unit}</td>`;
+        html += `<td>${escapeHtml(label)}</td>`;
+        html += `<td style="font-size: 12px;">${escapeHtml(unit)}</td>`;
 
         values.forEach((v, i) => {
             if (i === 0 || v === null || v === Infinity || v < 0) {

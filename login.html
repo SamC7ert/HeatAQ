@@ -427,8 +427,10 @@
                         // AUTO-SELECT: If only ONE project, skip the dropdown
                         if (data.projects.length === 1) {
                             // Automatically submit with the single project
-                            document.getElementById('project').innerHTML =
-                                `<option value="${data.projects[0].project_id}" selected>${data.projects[0].project_name}</option>`;
+                            const onlyProject = data.projects[0];
+                            const projectSelect = document.getElementById('project');
+                            projectSelect.innerHTML = '';
+                            projectSelect.appendChild(new Option(onlyProject.project_name, onlyProject.project_id, true, true));
                             showSuccess('Logging in to ' + data.projects[0].project_name + '...');
 
                             // Re-submit by calling handleLogin directly (not via untrusted event)

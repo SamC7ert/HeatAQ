@@ -63,7 +63,7 @@ const calendar = {
                 <select id="default-week-schedule" class="form-control" style="width: 100%;" onchange="app.calendar.saveDefaultSchedule()">
                     <option value="">-- Select week schedule --</option>
                     ${this.weekSchedules.map(ws =>
-                        `<option value="${ws.week_schedule_id}" ${defaultRange && defaultRange.week_schedule_id == ws.week_schedule_id ? 'selected' : ''}>${ws.name}</option>`
+                        `<option value="${escapeHtml(ws.week_schedule_id)}" ${defaultRange && defaultRange.week_schedule_id == ws.week_schedule_id ? 'selected' : ''}>${escapeHtml(ws.name)}</option>`
                     ).join('')}
                 </select>
             </div>
@@ -89,11 +89,11 @@ const calendar = {
                 const startDate = this.formatDateShort(range.start_date);
                 const endDate = this.formatDateShort(range.end_date);
                 html += `
-                    <tr data-range-id="${range.range_id || range.id}">
-                        <td>${startDate} - ${endDate}</td>
-                        <td>${range.week_schedule_name || 'Normal'}</td>
+                    <tr data-range-id="${escapeHtml(range.range_id || range.id)}">
+                        <td>${escapeHtml(startDate)} - ${escapeHtml(endDate)}</td>
+                        <td>${escapeHtml(range.week_schedule_name || 'Normal')}</td>
                         <td>
-                            <button class="btn btn-danger btn-xs" onclick="app.calendar.deleteRange(${range.range_id || range.id})" title="Delete">×</button>
+                            <button class="btn btn-danger btn-xs" onclick="app.calendar.deleteRange(${escapeJsArg(range.range_id || range.id)})" title="Delete">×</button>
                         </td>
                     </tr>
                 `;
@@ -116,7 +116,7 @@ const calendar = {
                     <input type="date" id="new-range-end" class="form-control form-control-sm" style="width: 130px;" />
                     <select id="new-range-week-schedule" class="form-control form-control-sm" style="width: 140px;">
                         ${this.weekSchedules.map(ws =>
-                            `<option value="${ws.week_schedule_id}">${ws.name}</option>`
+                            `<option value="${escapeHtml(ws.week_schedule_id)}">${escapeHtml(ws.name)}</option>`
                         ).join('')}
                     </select>
                     <button class="btn btn-sm" style="background: #90EE90; color: #000;" onclick="app.calendar.addDateRange()">+ New</button>
@@ -176,16 +176,16 @@ const calendar = {
                 const currentDayScheduleId = exception.day_schedule_id;
 
                 html += `
-                    <tr data-exception-day-id="${exception.exception_day_id}" data-link-id="${exception.link_id || ''}" data-index="${index}">
-                        <td>${exception.name}</td>
-                        <td>${dateRef}</td>
+                    <tr data-exception-day-id="${escapeHtml(exception.exception_day_id)}" data-link-id="${escapeHtml(exception.link_id || '')}" data-index="${index}">
+                        <td>${escapeHtml(exception.name)}</td>
+                        <td>${escapeHtml(dateRef)}</td>
                         <td>
                             <select class="form-control form-control-sm exception-day-select"
                                     data-index="${index}"
                                     onchange="app.calendar.updateExceptionSchedule(${index}, this.value)">
                                 <option value="" ${!currentDayScheduleId ? 'selected' : ''}>No Exception</option>
                                 ${this.daySchedules.map(ds =>
-                                    `<option value="${ds.day_schedule_id}" ${ds.day_schedule_id == currentDayScheduleId ? 'selected' : ''}>${ds.name}</option>`
+                                    `<option value="${escapeHtml(ds.day_schedule_id)}" ${ds.day_schedule_id == currentDayScheduleId ? 'selected' : ''}>${escapeHtml(ds.name)}</option>`
                                 ).join('')}
                             </select>
                         </td>

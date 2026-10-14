@@ -10,6 +10,23 @@ function getVersionFromScripts() {
     return 'V???';
 }
 
+// Escape a value for use in HTML text or inside a quoted attribute.
+// Every string that comes from the database or a user must go through this
+// before it is put into innerHTML (names are editable by operators and some,
+// like exception days, are shared by all projects).
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+}
+
+// Same, for a value placed inside an inline event handler string argument,
+// e.g. onclick="fn(${escapeJsArg(name)})": JSON-quote it for JS, then
+// escape for the HTML attribute.
+function escapeJsArg(value) {
+    return escapeHtml(JSON.stringify(value ?? ''));
+}
+
 const config = {
     // App version - auto-detected from script tags
     APP_VERSION: getVersionFromScripts(),

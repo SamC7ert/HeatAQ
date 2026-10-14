@@ -107,7 +107,7 @@ const SimControlModule = {
 
             // Populate dropdown with project's sites
             select.innerHTML = data.sites.map(site =>
-                `<option value="${site.id}" ${site.id === projectSiteId ? 'selected' : ''}>${site.name}</option>`
+                `<option value="${escapeHtml(site.id)}" ${site.id === projectSiteId ? 'selected' : ''}>${escapeHtml(site.name)}</option>`
             ).join('');
 
             this.currentSiteId = projectSiteId;
@@ -120,7 +120,7 @@ const SimControlModule = {
 
         } catch (err) {
             console.error('[SimControl] Failed to load sites:', err);
-            select.innerHTML = '<option value="">ERROR: ' + err.message + '</option>';
+            select.innerHTML = '<option value="">ERROR: ' + escapeHtml(err.message) + '</option>';
         }
     },
 
@@ -150,7 +150,7 @@ const SimControlModule = {
                 this.pools = data.pools;
 
                 select.innerHTML = data.pools.map(pool =>
-                    `<option value="${pool.pool_id}">${pool.name}</option>`
+                    `<option value="${escapeHtml(pool.pool_id)}">${escapeHtml(pool.name)}</option>`
                 ).join('');
 
                 // Priority: 1) Project's pool, 2) Saved preference, 3) First pool
@@ -331,7 +331,7 @@ const SimControlModule = {
             const select = document.getElementById('sim-ohc-select');
             if (select && data.templates) {
                 select.innerHTML = data.templates.map(t =>
-                    `<option value="${t.template_id}">${t.name}</option>`
+                    `<option value="${escapeHtml(t.template_id)}">${escapeHtml(t.name)}</option>`
                 ).join('');
 
                 // Restore saved selection (from server or localStorage)
@@ -373,7 +373,7 @@ const SimControlModule = {
 
             const optionsHtml = '<option value="">-- Use Project Config --</option>' +
                 data.configs.map(c =>
-                    `<option value="${c.template_id}">${c.name}</option>`
+                    `<option value="${escapeHtml(c.template_id)}">${escapeHtml(c.name)}</option>`
                 ).join('');
 
             // Populate config dropdown (simulation only - debug uses run info)
@@ -485,7 +485,7 @@ const SimControlModule = {
         const fmt = (value, unit = '', decimals = 1) => {
             if (value === undefined || value === null || value === 'not set') return '-';
             const num = typeof value === 'number' ? value.toFixed(decimals) : value;
-            return `${num}${unit}`;
+            return escapeHtml(`${num}${unit}`);
         };
 
         const withOverride = (baseValue, overrideValue, unit = '', decimals = 1) => {
@@ -580,23 +580,23 @@ const SimControlModule = {
         if (summary.weather_hours_missing_air_temp > 0) dq.push(`${summary.weather_hours_missing_air_temp} h missing air temp (treated as 0°C!)`);
         if (summary.solar_days_missing > 0) dq.push(`${summary.solar_days_missing} days missing solar (treated as 0 gain)`);
         const dqHtml = dq.length
-            ? `<div style="grid-column:1/-1;margin-top:8px;padding:6px 10px;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;color:#664d03;font-size:12px;"><strong>&#9888; Data quality:</strong> ${dq.join(' &middot; ')}</div>`
+            ? `<div style="grid-column:1/-1;margin-top:8px;padding:6px 10px;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;color:#664d03;font-size:12px;"><strong>&#9888; Data quality:</strong> ${dq.map(d => escapeHtml(d)).join(' &middot; ')}</div>`
             : '';
 
         // Build config HTML with clear sections
         const configHtml = `
             <div style="grid-column:1/-1;border-bottom:1px solid #dee2e6;padding-bottom:8px;margin-bottom:8px;">
-                <strong>Period:</strong> ${startDate} to ${endDate} (${days} days, ${hours.toLocaleString()} hours)
+                <strong>Period:</strong> ${escapeHtml(startDate)} to ${escapeHtml(endDate)} (${days} days, ${escapeHtml(hours.toLocaleString())} hours)
             </div>
-            <div><strong>Pool:</strong> ${area} m², ${volume} m³, ${depth}m deep</div>
+            <div><strong>Pool:</strong> ${escapeHtml(area)} m², ${escapeHtml(volume)} m³, ${escapeHtml(depth)}m deep</div>
             <div><strong>Heat Pump:</strong> ${hpKw}, COP ${hpCop}</div>
             <div><strong>Boiler:</strong> ${boilerKw}, ${boilerEff} eff</div>
             <div><strong>Target:</strong> ${targetTemp}</div>
             <div><strong>Tolerance:</strong> +${upperTol} / -${lowerTol}</div>
-            <div><strong>Strategy:</strong> ${strategy}</div>
+            <div><strong>Strategy:</strong> ${escapeHtml(strategy)}</div>
             <div><strong>Bathers/day:</strong> ${bathersPerDay}</div>
             <div><strong>Activity:</strong> ${activityFactor}</div>
-            <div><strong>Schedule:</strong> ${scheduleName}</div>
+            <div><strong>Schedule:</strong> ${escapeHtml(scheduleName)}</div>
             <div><strong>Wind exp:</strong> ${windExp}</div>
             <div><strong>Solar abs:</strong> ${solarAbs}</div>
             <div><strong>Cover R:</strong> ${fmt(config.cover_r_value, ' m²K/W', 1)}</div>
@@ -765,7 +765,7 @@ const SimControlModule = {
             const years = [...new Set(monthlyResults.map(r => r.year))].sort();
 
             // Build header (left-aligned)
-            thead.innerHTML = `<tr><th style="width: 60px; text-align: left;">Month</th>${years.map(y => `<th style="text-align: left; padding-left: 15px;">${y}</th>`).join('')}</tr>`;
+            thead.innerHTML = `<tr><th style="width: 60px; text-align: left;">Month</th>${years.map(y => `<th style="text-align: left; padding-left: 15px;">${escapeHtml(y)}</th>`).join('')}</tr>`;
 
             // Month names
             const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

@@ -132,19 +132,19 @@ const SimulationsModule = {
                         const isSelected = this.selectedRunId === run.run_id;
 
                         return `
-                            <tr class="run-row ${run.status}${isSelected ? ' selected' : ''}"
-                                data-run-id="${run.run_id}"
+                            <tr class="run-row ${escapeHtml(run.status)}${isSelected ? ' selected' : ''}"
+                                data-run-id="${escapeHtml(run.run_id)}"
                                 onclick="SimulationsModule.selectRun(${run.run_id})"
                                 style="cursor: pointer;">
                                 <td class="run-name">${this.escapeHtml(run.scenario_name)}</td>
-                                <td class="run-dates">${run.start_date.substring(5)} - ${run.end_date.substring(5)}</td>
+                                <td class="run-dates">${escapeHtml(run.start_date.substring(5))} - ${escapeHtml(run.end_date.substring(5))}</td>
                                 <td class="run-schedule" title="${this.escapeHtml(scheduleName)}">${this.escapeHtml(scheduleName.substring(0, 15))}</td>
-                                <td>${hpCap}</td>
-                                <td>${boilerCap}</td>
+                                <td>${escapeHtml(hpCap)}</td>
+                                <td>${escapeHtml(boilerCap)}</td>
                                 <td>${elecMwh}</td>
-                                <td class="${days1 > 10 ? 'bad' : days1 > 0 ? 'warning' : ''}">${days1}</td>
-                                <td class="${days2 > 5 ? 'bad' : days2 > 0 ? 'warning' : ''}">${days2}</td>
-                                <td><span class="status-badge status-${run.status}">${run.status}</span></td>
+                                <td class="${days1 > 10 ? 'bad' : days1 > 0 ? 'warning' : ''}">${escapeHtml(days1)}</td>
+                                <td class="${days2 > 5 ? 'bad' : days2 > 0 ? 'warning' : ''}">${escapeHtml(days2)}</td>
+                                <td><span class="status-badge status-${escapeHtml(run.status)}">${escapeHtml(run.status)}</span></td>
                             </tr>
                         `;
                     }).join('')}
@@ -396,7 +396,7 @@ const SimulationsModule = {
             <div class="run-detail-info">
                 <div class="info-row">
                     <span class="label">Period:</span>
-                    <span class="value">${run.start_date} to ${run.end_date}</span>
+                    <span class="value">${escapeHtml(run.start_date)} to ${escapeHtml(run.end_date)}</span>
                 </div>
                 <div class="info-row">
                     <span class="label">Schedule:</span>
@@ -404,11 +404,11 @@ const SimulationsModule = {
                 </div>
                 <div class="info-row">
                     <span class="label">Status:</span>
-                    <span class="value status-${run.status}">${run.status}</span>
+                    <span class="value status-${escapeHtml(run.status)}">${escapeHtml(run.status)}</span>
                 </div>
                 <div class="info-row">
                     <span class="label">Created:</span>
-                    <span class="value">${this.formatDate(run.created_at)}</span>
+                    <span class="value">${escapeHtml(this.formatDate(run.created_at))}</span>
                 </div>
             </div>
 
@@ -605,8 +605,8 @@ const SimulationsModule = {
                     <tbody>
                         ${first10.map(d => `
                             <tr>
-                                <td>${d.date}</td>
-                                <td>${d.open_hours}</td>
+                                <td>${escapeHtml(d.date)}</td>
+                                <td>${escapeHtml(d.open_hours)}</td>
                                 <td>${parseFloat(d.avg_water_temp).toFixed(1)}°C</td>
                                 <td>${parseFloat(d.total_loss_kwh).toFixed(1)}</td>
                                 <td>${parseFloat(d.hp_thermal_kwh || d.total_hp_kwh).toFixed(1)}</td>
@@ -621,8 +621,8 @@ const SimulationsModule = {
                         ` : ''}
                         ${last10.map(d => `
                             <tr>
-                                <td>${d.date}</td>
-                                <td>${d.open_hours}</td>
+                                <td>${escapeHtml(d.date)}</td>
+                                <td>${escapeHtml(d.open_hours)}</td>
                                 <td>${parseFloat(d.avg_water_temp).toFixed(1)}°C</td>
                                 <td>${parseFloat(d.total_loss_kwh).toFixed(1)}</td>
                                 <td>${parseFloat(d.hp_thermal_kwh || d.total_hp_kwh).toFixed(1)}</td>
@@ -707,9 +707,7 @@ const SimulationsModule = {
 
     // Utility functions
     escapeHtml: function(text) {
-        const div = document.createElement('div');
-        div.textContent = text || '';
-        return div.innerHTML;
+        return escapeHtml(text);  // shared helper (config.js); also escapes quotes
     },
 
     formatDate: function(dateStr) {
@@ -787,7 +785,7 @@ const SimulationsModule = {
 
                 if (data.runs) {
                     const optionsHtml = data.runs.map(run =>
-                        `<option value="${run.run_id}">${this.escapeHtml(run.scenario_name)} (${run.start_date} - ${run.end_date})</option>`
+                        `<option value="${escapeHtml(run.run_id)}">${this.escapeHtml(run.scenario_name)} (${escapeHtml(run.start_date)} - ${escapeHtml(run.end_date)})</option>`
                     ).join('');
 
                     select1.innerHTML = '<option value="">Select Run 1...</option>' + optionsHtml;
@@ -811,7 +809,7 @@ const SimulationsModule = {
 
             if (data.templates && data.templates.length > 0) {
                 const optionsHtml = data.templates.map(t =>
-                    `<option value="${t.template_id}">${this.escapeHtml(t.name)}</option>`
+                    `<option value="${escapeHtml(t.template_id)}">${this.escapeHtml(t.name)}</option>`
                 ).join('');
 
                 // Populate all 5 analyse schedule dropdowns
@@ -1362,7 +1360,7 @@ const SimulationsModule = {
             this.renderComparison(data1, data2);
 
         } catch (error) {
-            resultsDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            resultsDiv.innerHTML = `<p class="error">Error: ${escapeHtml(error.message)}</p>`;
         }
     },
 
@@ -1400,8 +1398,8 @@ const SimulationsModule = {
                     <tbody>
                         <tr>
                             <td>Period</td>
-                            <td>${run1.start_date} - ${run1.end_date}</td>
-                            <td>${run2.start_date} - ${run2.end_date}</td>
+                            <td>${escapeHtml(run1.start_date)} - ${escapeHtml(run1.end_date)}</td>
+                            <td>${escapeHtml(run2.start_date)} - ${escapeHtml(run2.end_date)}</td>
                             <td>-</td>
                         </tr>
                         <tr>
@@ -1523,7 +1521,7 @@ const SimulationsModule = {
             // Show error in summary card without destroying structure
             const summaryEl = document.getElementById('debug-summary');
             if (summaryEl) {
-                summaryEl.innerHTML = `<p class="error" style="color: #dc3545;">Error: ${error.message}</p>`;
+                summaryEl.innerHTML = `<p class="error" style="color: #dc3545;">Error: ${escapeHtml(error.message)}</p>`;
             }
             // Error - button red (needs recalculation)
             this.setDebugButtonState('changed');
@@ -1655,7 +1653,7 @@ const SimulationsModule = {
                 if (typeof value === 'object' && value !== null) continue;
                 const displayKey = key.replace(/_/g, ' ');
                 const displayVal = typeof value === 'number' ? value.toLocaleString() : value;
-                html += `<tr><td>${displayKey}</td><td><code>${displayVal}</code></td></tr>`;
+                html += `<tr><td>${escapeHtml(displayKey)}</td><td><code>${escapeHtml(displayVal)}</code></td></tr>`;
             }
             html += '</table>';
             return html;
@@ -1732,25 +1730,25 @@ const SimulationsModule = {
             if (ohcDisplay) {
                 const periods = schedDebug.periods || [];
                 const periodsStr = periods.map(p => `${p.from}:00-${p.to}:00`).join(', ') || 'Closed';
-                ohcDisplay.innerHTML = `${schedDebug.template_name || 'Default'} <span style="font-size:11px;color:#666;">(${periodsStr}, ${schedDebug.open_hours}h)</span>`;
+                ohcDisplay.innerHTML = `${escapeHtml(schedDebug.template_name || 'Default')} <span style="font-size:11px;color:#666;">(${escapeHtml(periodsStr)}, ${escapeHtml(schedDebug.open_hours)}h)</span>`;
             }
         }
 
         // Update chart comparison display with stored run info
         const comparisonEl = document.getElementById('chart-data-comparison');
         if (comparisonEl && stored.run_id) {
-            comparisonEl.innerHTML = `<strong>From Run #${stored.run_id}:</strong> ${isOpen ? 'Open' : 'Closed'}, ` +
+            comparisonEl.innerHTML = `<strong>From Run #${escapeHtml(stored.run_id)}:</strong> ${isOpen ? 'Open' : 'Closed'}, ` +
                 `Loss: ${stored.total_loss_kw?.toFixed(1)} kW, HP: ${stored.hp_heat_kw?.toFixed(1)} kW, ` +
                 `Boiler: ${stored.boiler_heat_kw?.toFixed(1)} kW` +
-                (data.validation_warning ? ` <span style="color: orange;">⚠ ${data.validation_warning}</span>` : '');
+                (data.validation_warning ? ` <span style="color: orange;">⚠ ${escapeHtml(data.validation_warning)}</span>` : '');
         }
 
         // ===== Populate Detail Cards =====
         const windPct = inp.config?.wind_factor ? (inp.config.wind_factor * 100).toFixed(1) + '%' : '-';
         setHtml('debug-input', `
-            <strong>Weather:</strong> ${inp.weather?.air_temp_c}°C, Wind: ${inp.weather?.wind_speed_ms} m/s, RH: ${inp.weather?.humidity_pct}%<br>
-            <strong>Pool:</strong> ${inp.pool?.water_temp_c}°C, ${inp.pool?.area_m2} m²<br>
-            <strong>Config:</strong> Wind: ${windPct} exposure, has_cover: ${inp.config?.has_cover}, is_covered: ${data.cover?.is_covered}
+            <strong>Weather:</strong> ${escapeHtml(inp.weather?.air_temp_c)}°C, Wind: ${escapeHtml(inp.weather?.wind_speed_ms)} m/s, RH: ${escapeHtml(inp.weather?.humidity_pct)}%<br>
+            <strong>Pool:</strong> ${escapeHtml(inp.pool?.water_temp_c)}°C, ${escapeHtml(inp.pool?.area_m2)} m²<br>
+            <strong>Config:</strong> Wind: ${escapeHtml(windPct)} exposure, has_cover: ${escapeHtml(inp.config?.has_cover)}, is_covered: ${escapeHtml(data.cover?.is_covered)}
         `);
         setHtml('debug-evaporation', renderTable(data.evaporation));
         setHtml('debug-convection', renderTable(data.convection));
@@ -1762,21 +1760,21 @@ const SimulationsModule = {
         // Heat pump detail
         setHtml('debug-heatpump', `
             <table class="data-table compact" style="font-size: 11px;">
-                <tr><td>Strategy</td><td><code>${hp.strategy || 'reactive'}</code></td></tr>
-                <tr><td>Capacity</td><td><code>${hp.capacity_kw} kW</code></td></tr>
-                <tr><td>COP @ ${inp.weather?.air_temp_c}°C</td><td><code>${hp.cop}</code></td></tr>
-                <tr><td>Output</td><td><code><strong>${hp.output_kw} kW</strong></code></td></tr>
-                <tr><td>Electricity</td><td><code>${hp.electricity_kw} kW</code></td></tr>
+                <tr><td>Strategy</td><td><code>${escapeHtml(hp.strategy || 'reactive')}</code></td></tr>
+                <tr><td>Capacity</td><td><code>${escapeHtml(hp.capacity_kw)} kW</code></td></tr>
+                <tr><td>COP @ ${escapeHtml(inp.weather?.air_temp_c)}°C</td><td><code>${escapeHtml(hp.cop)}</code></td></tr>
+                <tr><td>Output</td><td><code><strong>${escapeHtml(hp.output_kw)} kW</strong></code></td></tr>
+                <tr><td>Electricity</td><td><code>${escapeHtml(hp.electricity_kw)} kW</code></td></tr>
             </table>
         `);
 
         // Boiler detail
         setHtml('debug-boiler', `
             <table class="data-table compact" style="font-size: 11px;">
-                <tr><td>Capacity</td><td><code>${boiler.capacity_kw} kW</code></td></tr>
+                <tr><td>Capacity</td><td><code>${escapeHtml(boiler.capacity_kw)} kW</code></td></tr>
                 <tr><td>Efficiency</td><td><code>${((boiler.efficiency || 0.92) * 100).toFixed(0)}%</code></td></tr>
-                <tr><td>Output</td><td><code><strong>${boiler.output_kw} kW</strong></code></td></tr>
-                <tr><td>Fuel input</td><td><code>${boiler.fuel_kw} kW</code></td></tr>
+                <tr><td>Output</td><td><code><strong>${escapeHtml(boiler.output_kw)} kW</strong></code></td></tr>
+                <tr><td>Fuel input</td><td><code>${escapeHtml(boiler.fuel_kw)} kW</code></td></tr>
             </table>
         `);
 
@@ -1800,16 +1798,16 @@ const SimulationsModule = {
                         <tr style="background:#fff3e0;"><td colspan="2"><strong>Closed-period plan</strong></td></tr>
                         <tr><td>Preheat needed</td><td><code>${plan.preheat ? 'YES' : 'no'}</code></td></tr>
                         ${plan.preheat ? `
-                        <tr><td>Required temp</td><td><code>${plan.t_req}°C</code> (cap ${plan.max_temp}°C)</td></tr>
-                        <tr><td>Buffer energy</td><td><code>${plan.buffer_energy} kWh</code></td></tr>
-                        <tr><td>Open demand / HP</td><td><code>${plan.open_demand} / ${plan.open_hp_deliver} kWh</code></td></tr>
-                        ` : `<tr><td>Action</td><td><code>hold at target ${effectiveTarget ?? ''}°C</code></td></tr>`}
+                        <tr><td>Required temp</td><td><code>${escapeHtml(plan.t_req)}°C</code> (cap ${escapeHtml(plan.max_temp)}°C)</td></tr>
+                        <tr><td>Buffer energy</td><td><code>${escapeHtml(plan.buffer_energy)} kWh</code></td></tr>
+                        <tr><td>Open demand / HP</td><td><code>${escapeHtml(plan.open_demand)} / ${escapeHtml(plan.open_hp_deliver)} kWh</code></td></tr>
+                        ` : `<tr><td>Action</td><td><code>hold at target ${escapeHtml(effectiveTarget ?? '')}°C</code></td></tr>`}
                     `;
                 } else if (plan && plan.type === 'open') {
                     planInfo = `
                         <tr style="background:#e3f2fd;"><td colspan="2"><strong>Open-period plan</strong></td></tr>
                         <tr><td>Preheated</td><td><code>${plan.preheat ? 'YES — HP full, buffer coasts to target' : 'no — hold target'}</code></td></tr>
-                        <tr><td>Max cap</td><td><code>${plan.max_temp}°C</code></td></tr>
+                        <tr><td>Max cap</td><td><code>${escapeHtml(plan.max_temp)}°C</code></td></tr>
                     `;
                 }
 
@@ -1818,7 +1816,7 @@ const SimulationsModule = {
                     <table class="data-table compact" style="font-size: 11px;">
                         <tr><td>Strategy</td><td><code style="color:#9c27b0;"><strong>PREDICTIVE</strong></code></td></tr>
                         <tr><td>Pool State</td><td><code>${isOpen ? 'OPEN' : 'CLOSED'}</code></td></tr>
-                        <tr><td>Mode</td><td><code>${mode}</code></td></tr>
+                        <tr><td>Mode</td><td><code>${escapeHtml(mode)}</code></td></tr>
                         <tr><td>HP Output</td><td><code>${actualHP.toFixed(1)} kW</code></td></tr>
                         ${planInfo}
                     </table>
@@ -1843,15 +1841,15 @@ const SimulationsModule = {
         const coverLoss = sum.cover_loss_kw || 0;
         setHtml('debug-summary', `
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
-                <div>Evap: <strong>${sum.evaporation_kw}</strong> kW</div>
-                <div>Conv: <strong>${sum.convection_kw}</strong> kW</div>
-                <div>Rad: <strong>${sum.radiation_kw}</strong> kW</div>
-                <div>Cover: <strong>${coverLoss.toFixed ? coverLoss.toFixed(3) : coverLoss}</strong> kW</div>
+                <div>Evap: <strong>${escapeHtml(sum.evaporation_kw)}</strong> kW</div>
+                <div>Conv: <strong>${escapeHtml(sum.convection_kw)}</strong> kW</div>
+                <div>Rad: <strong>${escapeHtml(sum.radiation_kw)}</strong> kW</div>
+                <div>Cover: <strong>${coverLoss.toFixed ? coverLoss.toFixed(3) : escapeHtml(coverLoss)}</strong> kW</div>
                 <div>Cond: <strong>${(sum.wall_loss_kw + sum.floor_loss_kw).toFixed(3)}</strong> kW</div>
-                <div>Solar: <strong>-${sum.solar_gain_kw}</strong> kW</div>
-                <div><strong>Net: ${sum.net_requirement_kw} kW</strong></div>
-                <div style="color: #2196F3;">HP: <strong>${hs.hp_output_kw}</strong> kW</div>
-                <div style="color: #ff9800;">Boiler: <strong>${hs.boiler_output_kw}</strong> kW</div>
+                <div>Solar: <strong>-${escapeHtml(sum.solar_gain_kw)}</strong> kW</div>
+                <div><strong>Net: ${escapeHtml(sum.net_requirement_kw)} kW</strong></div>
+                <div style="color: #2196F3;">HP: <strong>${escapeHtml(hs.hp_output_kw)}</strong> kW</div>
+                <div style="color: #ff9800;">Boiler: <strong>${escapeHtml(hs.boiler_output_kw)}</strong> kW</div>
             </div>
         `);
 
@@ -1881,7 +1879,7 @@ const SimulationsModule = {
         const comparisonCard = document.getElementById('debug-comparison');
         if (comparisonCard) {
             comparisonCard.innerHTML = `
-                <h4 style="margin: 0 0 8px 0; font-size: 12px;">Stored vs Calculated vs Planned <span style="font-weight:normal;color:#666;">(Run #${stored.run_id || '?'} v${stored.simulator_version || '?'})</span></h4>
+                <h4 style="margin: 0 0 8px 0; font-size: 12px;">Stored vs Calculated vs Planned <span style="font-weight:normal;color:#666;">(Run #${escapeHtml(stored.run_id || '?')} v${escapeHtml(stored.simulator_version || '?')})</span></h4>
                 <table class="data-table compact" style="font-size: 11px; width: 100%;">
                     <tr style="background: #f5f5f5;">
                         <th></th>
@@ -1936,9 +1934,9 @@ const SimulationsModule = {
                 ${diffHP && diffHP > 5 ? '<div style="color:red;font-size:10px;margin-top:6px;padding:4px;background:#fff0f0;border-radius:3px;"><strong>⚠ HP not using planned rate!</strong> Stored=' + (stored.hp_heat_kw||0).toFixed(0) + ' but Plan=' + plannedHP.toFixed(0) + '</div>' : ''}
                 ${diffNet > 5 ? '<div style="color:#996600;font-size:10px;margin-top:4px;padding:4px;background:#fff8e0;border-radius:3px;">Net demand differs by ' + diffNet.toFixed(1) + ' kW - check water temp and losses</div>' : ''}
                 <div style="font-size:10px;margin-top:6px;padding:4px;background:#f0f0f0;border-radius:3px;">
-                    <strong>Sim mode:</strong> ${stored.heating_mode || '?'}
-                    | <strong>Debug mode:</strong> ${hs.debug_mode || '?'}
-                    ${storedOpenPlan ? ' | hp_rate=' + (storedOpenPlan.hp_rate||0).toFixed(0) + ' (case ' + (storedOpenPlan.case||'?') + ', buffer=' + (storedOpenPlan.buffer_kwh||storedOpenPlan.energy_buffer||0).toFixed(0) + 'kWh)' : ''}
+                    <strong>Sim mode:</strong> ${escapeHtml(stored.heating_mode || '?')}
+                    | <strong>Debug mode:</strong> ${escapeHtml(hs.debug_mode || '?')}
+                    ${storedOpenPlan ? ' | hp_rate=' + (storedOpenPlan.hp_rate||0).toFixed(0) + ' (case ' + escapeHtml(storedOpenPlan.case||'?') + ', buffer=' + (storedOpenPlan.buffer_kwh||storedOpenPlan.energy_buffer||0).toFixed(0) + 'kWh)' : ''}
                     ${storedOpenPlan?.transition_water_temp ? '<br>OPEN transition temp: <strong>' + storedOpenPlan.transition_water_temp.toFixed(2) + '°C</strong>' : ''}
                     ${stored.cache_source === 'session' ? ' <span style="color:green;">✓cached</span>' : ' <span style="color:orange;">(reload week to cache)</span>'}
                 </div>
@@ -2006,7 +2004,7 @@ const SimulationsModule = {
         } catch (error) {
             console.error('Failed to load weekly data:', error);
             if (placeholder) {
-                placeholder.innerHTML = `<span style="color: #dc3545;">Error: ${error.message}</span>`;
+                placeholder.innerHTML = `<span style="color: #dc3545;">Error: ${escapeHtml(error.message)}</span>`;
             }
         }
     },
@@ -2061,7 +2059,7 @@ const SimulationsModule = {
             const hour = dt.getHours().toString().padStart(2, '0');
             const displayDate = `${day}.${month}`;
             const kw = d.net_demand.toFixed(1);
-            return `<a href="#" onclick="app.simulations.jumpToTime('${d.timestamp}'); return false;"
+            return `<a href="#" onclick="app.simulations.jumpToTime(${escapeJsArg(d.timestamp)}); return false;"
                        style="color: #1976d2; text-decoration: none; margin-left: ${i > 0 ? '10px' : '5px'};"
                        title="Click to analyze this hour">${displayDate} ${hour}h (${kw} kW)</a>`;
         });

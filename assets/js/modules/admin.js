@@ -113,27 +113,27 @@ const AdminModule = {
 
             // Reference day dropdown options
             const refOptions = this.referenceDays.map(rd =>
-                `<option value="${rd.id}" ${rd.id == def.reference_day_id ? 'selected' : ''}>${rd.name}</option>`
+                `<option value="${escapeHtml(rd.id)}" ${rd.id == def.reference_day_id ? 'selected' : ''}>${escapeHtml(rd.name)}</option>`
             ).join('');
 
-            html += `<tr data-id="${def.id}">
-                <td><input type="text" class="inline-edit" value="${def.name || ''}"
-                    onchange="app.admin.updateHolidayField('${def.id}', 'name', this.value)"></td>
-                <td><select class="inline-edit" onchange="app.admin.updateHolidayType('${def.id}', this.value)">
+            html += `<tr data-id="${escapeHtml(def.id)}">
+                <td><input type="text" class="inline-edit" value="${escapeHtml(def.name || '')}"
+                    onchange="app.admin.updateHolidayField(${escapeJsArg(def.id)}, 'name', this.value)"></td>
+                <td><select class="inline-edit" onchange="app.admin.updateHolidayType(${escapeJsArg(def.id)}, this.value)">
                     <option value="fixed" ${isFixed ? 'selected' : ''}>Fixed</option>
                     <option value="relative" ${!isFixed ? 'selected' : ''}>Relative</option>
                 </select></td>
                 <td>${isFixed
-                    ? `<input type="date" class="inline-edit" value="2000-${dateValue}"
-                        onchange="app.admin.updateHolidayDate('${def.id}', this.value)">`
-                    : `<input type="number" class="inline-edit" style="width:50px" value="${def.offset_days || 0}"
-                        onchange="app.admin.updateHolidayField('${def.id}', 'offset_days', this.value)">
+                    ? `<input type="date" class="inline-edit" value="2000-${escapeHtml(dateValue)}"
+                        onchange="app.admin.updateHolidayDate(${escapeJsArg(def.id)}, this.value)">`
+                    : `<input type="number" class="inline-edit" style="width:50px" value="${escapeHtml(def.offset_days || 0)}"
+                        onchange="app.admin.updateHolidayField(${escapeJsArg(def.id)}, 'offset_days', this.value)">
                        <span style="margin:0 4px">days from</span>
-                       <select class="inline-edit" onchange="app.admin.updateHolidayField('${def.id}', 'reference_day_id', this.value)">
+                       <select class="inline-edit" onchange="app.admin.updateHolidayField(${escapeJsArg(def.id)}, 'reference_day_id', this.value)">
                         ${refOptions}
                        </select>`
                 }</td>
-                <td><button class="btn btn-xs btn-danger" onclick="app.admin.deleteHolidayDefinition('${def.id}')" title="Delete">×</button></td>
+                <td><button class="btn btn-xs btn-danger" onclick="app.admin.deleteHolidayDefinition(${escapeJsArg(def.id)})" title="Delete">×</button></td>
             </tr>`;
         });
 
@@ -222,7 +222,7 @@ const AdminModule = {
 
         // Reference day dropdown options
         const refOptions = this.referenceDays.map(rd =>
-            `<option value="${rd.id}" ${rd.id == existingDef?.reference_day_id ? 'selected' : ''}>${rd.name}</option>`
+            `<option value="${escapeHtml(rd.id)}" ${rd.id == existingDef?.reference_day_id ? 'selected' : ''}>${escapeHtml(rd.name)}</option>`
         ).join('');
 
         const html = `
@@ -230,12 +230,12 @@ const AdminModule = {
                 <div class="modal-content" onclick="event.stopPropagation()">
                     <h3>${title}</h3>
                     <form id="holiday-form">
-                        <input type="hidden" id="holiday-id" value="${existingDef?.id || ''}">
+                        <input type="hidden" id="holiday-id" value="${escapeHtml(existingDef?.id || '')}">
 
                         <div class="form-group">
                             <label>Name</label>
                             <input type="text" id="holiday-name" class="form-control" required
-                                value="${existingDef?.name || ''}" placeholder="e.g., Langfredag">
+                                value="${escapeHtml(existingDef?.name || '')}" placeholder="e.g., Langfredag">
                         </div>
 
                         <div class="form-group">
@@ -251,12 +251,12 @@ const AdminModule = {
                                 <div class="form-group">
                                     <label>Day</label>
                                     <input type="number" id="holiday-day" class="form-control" min="1" max="31"
-                                        value="${existingDef?.fixed_day || 1}">
+                                        value="${escapeHtml(existingDef?.fixed_day || 1)}">
                                 </div>
                                 <div class="form-group">
                                     <label>Month</label>
                                     <input type="number" id="holiday-month" class="form-control" min="1" max="12"
-                                        value="${existingDef?.fixed_month || 1}">
+                                        value="${escapeHtml(existingDef?.fixed_month || 1)}">
                                 </div>
                             </div>
                         </div>
@@ -271,7 +271,7 @@ const AdminModule = {
                             <div class="form-group">
                                 <label>Offset (days)</label>
                                 <input type="number" id="holiday-offset" class="form-control" min="-100" max="100"
-                                    value="${existingDef?.offset_days || 0}">
+                                    value="${escapeHtml(existingDef?.offset_days || 0)}">
                                 <small class="text-muted">Negative = before, Positive = after. E.g., -2 for Good Friday</small>
                             </div>
                         </div>
@@ -397,8 +397,8 @@ const AdminModule = {
 
         this.referenceDays.forEach(ref => {
             html += `<tr>
-                <td>${ref.year}</td>
-                <td>${ref.easter_date}</td>
+                <td>${escapeHtml(ref.year)}</td>
+                <td>${escapeHtml(ref.easter_date)}</td>
             </tr>`;
         });
 
@@ -421,7 +421,7 @@ const AdminModule = {
             if (stationsData.error) {
                 console.error('Weather stations API error:', stationsData.error);
                 document.getElementById('weather-stations-list').innerHTML =
-                    `<p class="error">Error: ${stationsData.error}</p>`;
+                    `<p class="error">Error: ${escapeHtml(stationsData.error)}</p>`;
                 return;
             }
 
@@ -456,7 +456,7 @@ const AdminModule = {
 
         select.innerHTML = '<option value="">-- Select Station --</option>' +
             this.weatherStations.map(s =>
-                `<option value="${s.station_id}">${s.name}</option>`
+                `<option value="${escapeHtml(s.station_id)}">${escapeHtml(s.name)}</option>`
             ).join('');
     },
 
@@ -482,7 +482,7 @@ const AdminModule = {
                 // Location with Google Maps link
                 const locationEl = document.getElementById('station-location');
                 if (locationEl && station.latitude && station.longitude) {
-                    locationEl.innerHTML = `<a href="#" onclick="app.admin.openGoogleMaps(${station.latitude}, ${station.longitude}); return false;" style="color: var(--primary);">📍 ${parseFloat(station.latitude).toFixed(4)}, ${parseFloat(station.longitude).toFixed(4)}</a>`;
+                    locationEl.innerHTML = `<a href="#" onclick="app.admin.openGoogleMaps(${escapeJsArg(parseFloat(station.latitude))}, ${escapeJsArg(parseFloat(station.longitude))}); return false;" style="color: var(--primary);">📍 ${parseFloat(station.latitude).toFixed(4)}, ${parseFloat(station.longitude).toFixed(4)}</a>`;
                 } else if (locationEl) {
                     locationEl.textContent = '-';
                 }
@@ -577,24 +577,24 @@ const AdminModule = {
             const lon = station.longitude;
             const hasLocation = lat && lon;
             const locationHtml = hasLocation
-                ? `<a href="#" onclick="app.admin.openGoogleMaps(${lat}, ${lon}); return false;" title="Open in Google Maps" style="color: var(--primary);">📍 ${parseFloat(lat).toFixed(4)}, ${parseFloat(lon).toFixed(4)}</a>`
+                ? `<a href="#" onclick="app.admin.openGoogleMaps(${escapeJsArg(parseFloat(lat))}, ${escapeJsArg(parseFloat(lon))}); return false;" title="Open in Google Maps" style="color: var(--primary);">📍 ${parseFloat(lat).toFixed(4)}, ${parseFloat(lon).toFixed(4)}</a>`
                 : '-';
 
             const windHeight = station.measurement_height_wind
-                ? `${station.measurement_height_wind}m`
+                ? `${escapeHtml(station.measurement_height_wind)}m`
                 : '<span style="color: var(--danger);">—</span>';
             const roughness = (station.terrain_roughness !== null && station.terrain_roughness !== undefined && station.terrain_roughness !== '')
-                ? station.terrain_roughness
+                ? escapeHtml(station.terrain_roughness)
                 : '<span style="color: var(--danger);">—</span>';
 
             html += `<tr>
-                <td>${station.name}</td>
-                <td><code>${station.station_id}</code></td>
+                <td>${escapeHtml(station.name)}</td>
+                <td><code>${escapeHtml(station.station_id)}</code></td>
                 <td>${locationHtml}</td>
                 <td>${windHeight}</td>
                 <td>${roughness}</td>
                 <td>
-                    <button class="btn btn-xs btn-primary" onclick="app.admin.editWeatherStation('${station.station_id}')">Edit</button>
+                    <button class="btn btn-xs btn-primary" onclick="app.admin.editWeatherStation(${escapeJsArg(station.station_id)})">Edit</button>
                 </td>
             </tr>`;
         });
@@ -657,31 +657,31 @@ const AdminModule = {
                     ` : `
                     <div class="form-group">
                         <label>Station ID</label>
-                        <input type="text" class="form-control" value="${existingStation.station_id}" disabled>
+                        <input type="text" class="form-control" value="${escapeHtml(existingStation.station_id)}" disabled>
                     </div>
                     `}
                     <div class="form-group">
                         <label>Station Name</label>
-                        <input type="text" id="station-name-input" class="form-control" value="${existingStation?.name || ''}" placeholder="Station name">
+                        <input type="text" id="station-name-input" class="form-control" value="${escapeHtml(existingStation?.name || '')}" placeholder="Station name">
                     </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label>Latitude</label>
-                            <input type="number" id="station-lat-input" class="form-control" value="${existingStation?.latitude || ''}" step="0.0001" placeholder="58.3397">
+                            <input type="number" id="station-lat-input" class="form-control" value="${escapeHtml(existingStation?.latitude || '')}" step="0.0001" placeholder="58.3397">
                         </div>
                         <div class="form-group">
                             <label>Longitude</label>
-                            <input type="number" id="station-lon-input" class="form-control" value="${existingStation?.longitude || ''}" step="0.0001" placeholder="8.5194">
+                            <input type="number" id="station-lon-input" class="form-control" value="${escapeHtml(existingStation?.longitude || '')}" step="0.0001" placeholder="8.5194">
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label>Elevation (m)</label>
-                            <input type="number" id="station-elevation-input" class="form-control" value="${existingStation?.elevation || ''}" placeholder="7">
+                            <input type="number" id="station-elevation-input" class="form-control" value="${escapeHtml(existingStation?.elevation || '')}" placeholder="7">
                         </div>
                         <div class="form-group">
                             <label>Wind Height (m)</label>
-                            <input type="number" id="station-wind-height-input" class="form-control" value="${existingStation?.measurement_height_wind ?? ''}" step="0.1" placeholder="from Frost / required">
+                            <input type="number" id="station-wind-height-input" class="form-control" value="${escapeHtml(existingStation?.measurement_height_wind ?? '')}" step="0.1" placeholder="from Frost / required">
                         </div>
                         <div class="form-group">
                             <label>Roughness (z₀)</label>
@@ -708,8 +708,8 @@ const AdminModule = {
                     ` : ''}
                     <div class="form-actions">
                         <button class="btn btn-secondary" onclick="app.admin.closeStationModal()">Cancel</button>
-                        ${isEdit ? `<button class="btn btn-danger" onclick="app.admin.deleteWeatherStation('${existingStation.station_id}')" style="margin-right: auto;">Delete</button>` : ''}
-                        <button class="btn ${isEdit ? 'btn-primary' : ''}" ${isEdit ? '' : 'style="background: #90EE90; color: #000;"'} onclick="app.admin.saveStation('${existingStation?.station_id || ''}')">${isEdit ? 'Save' : '+ Add Station'}</button>
+                        ${isEdit ? `<button class="btn btn-danger" onclick="app.admin.deleteWeatherStation(${escapeJsArg(existingStation.station_id)})" style="margin-right: auto;">Delete</button>` : ''}
+                        <button class="btn ${isEdit ? 'btn-primary' : ''}" ${isEdit ? '' : 'style="background: #90EE90; color: #000;"'} onclick="app.admin.saveStation(${escapeJsArg(existingStation?.station_id || '')})">${isEdit ? 'Save' : '+ Add Station'}</button>
                     </div>
                 </div>
             </div>
@@ -778,11 +778,11 @@ const AdminModule = {
                 if (fetchEndEl) fetchEndEl.value = fetchEnd > today ? today : fetchEnd;
 
                 resultDiv.innerHTML = `
-                    <div style="color: var(--success); font-weight: 500; margin-bottom: 8px;">✓ Station Found: ${data.name}</div>
+                    <div style="color: var(--success); font-weight: 500; margin-bottom: 8px;">✓ Station Found: ${escapeHtml(data.name)}</div>
                     <table class="data-table compact" style="font-size: 12px;">
-                        <tr><td>Location</td><td>${data.latitude?.toFixed(4) || '-'}°N, ${data.longitude?.toFixed(4) || '-'}°E, ${data.elevation || '-'}m</td></tr>
-                        <tr><td>Municipality</td><td>${data.municipality || '-'}, ${data.county || '-'}</td></tr>
-                        <tr><td>Data Range</td><td>${dateRange.from || '?'} → ${dateRange.to || 'now'}</td></tr>
+                        <tr><td>Location</td><td>${escapeHtml(data.latitude?.toFixed(4) || '-')}°N, ${escapeHtml(data.longitude?.toFixed(4) || '-')}°E, ${escapeHtml(data.elevation || '-')}m</td></tr>
+                        <tr><td>Municipality</td><td>${escapeHtml(data.municipality || '-')}, ${escapeHtml(data.county || '-')}</td></tr>
+                        <tr><td>Data Range</td><td>${escapeHtml(dateRange.from || '?')} → ${escapeHtml(dateRange.to || 'now')}</td></tr>
                         <tr><td>Elements</td><td>
                             temp ${elements.air_temperature ? '✓' : '✗'} |
                             wind ${elements.wind_speed ? '✓' : '✗'} |
@@ -790,15 +790,15 @@ const AdminModule = {
                             solar ${elements.solar ? '✓' : '✗'}
                         </td></tr>
                         ${windLevels.length > 0
-                            ? `<tr><td>Wind Levels</td><td>${windLevels.map(l => l + 'm').join(', ')}${data.recommended_wind_height ? ` (using ${data.recommended_wind_height}m)` : ''}</td></tr>`
+                            ? `<tr><td>Wind Levels</td><td>${escapeHtml(windLevels.map(l => l + 'm').join(', '))}${data.recommended_wind_height ? ` (using ${escapeHtml(data.recommended_wind_height)}m)` : ''}</td></tr>`
                             : `<tr><td>Wind Levels</td><td style="color: var(--danger);">none reported — enter wind height manually</td></tr>`}
                     </table>
                 `;
             } else {
-                resultDiv.innerHTML = `<div style="color: var(--danger);">✗ Station not found: ${data.error || 'Unknown error'}</div>`;
+                resultDiv.innerHTML = `<div style="color: var(--danger);">✗ Station not found: ${escapeHtml(data.error || 'Unknown error')}</div>`;
             }
         } catch (err) {
-            resultDiv.innerHTML = `<div style="color: var(--danger);">✗ Error checking station: ${err.message}</div>`;
+            resultDiv.innerHTML = `<div style="color: var(--danger);">✗ Error checking station: ${escapeHtml(err.message)}</div>`;
         }
     },
 
@@ -888,7 +888,7 @@ const AdminModule = {
         let html = `
             <div class="modal-overlay" onclick="app.admin.closeStationModal()">
                 <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 500px;">
-                    <h3>Update Weather Data - ${station.name}</h3>
+                    <h3>Update Weather Data - ${escapeHtml(station.name)}</h3>
                     <div id="update-data-content">
                         <p class="text-muted">Checking available data from Frost API...</p>
                     </div>
@@ -916,9 +916,9 @@ const AdminModule = {
                 contentDiv.innerHTML = `
                     <p style="color: var(--danger);">Station not found in Frost API</p>
                     <p class="text-muted" style="font-size: 11px;">
-                        Station ID used: ${frostData.station_id_used || this.selectedStationId}<br>
-                        ${frostData.error || ''}<br>
-                        ${frostData.http_code ? 'HTTP: ' + frostData.http_code : ''}
+                        Station ID used: ${escapeHtml(frostData.station_id_used || this.selectedStationId)}<br>
+                        ${escapeHtml(frostData.error || '')}<br>
+                        ${frostData.http_code ? 'HTTP: ' + escapeHtml(frostData.http_code) : ''}
                     </p>
                     <button class="btn btn-secondary" onclick="app.admin.closeStationModal()">Close</button>
                 `;
@@ -943,8 +943,8 @@ const AdminModule = {
 
             contentDiv.innerHTML = `
                 <table class="data-table compact" style="font-size: 13px; margin-bottom: 15px;">
-                    <tr><td style="width: 140px;">Current Data</td><td>${currentRange} (${currentCount} records)</td></tr>
-                    <tr><td>Frost API Range</td><td>${frostStart} → ${frostEnd}</td></tr>
+                    <tr><td style="width: 140px;">Current Data</td><td>${escapeHtml(currentRange)} (${escapeHtml(currentCount)} records)</td></tr>
+                    <tr><td>Frost API Range</td><td>${escapeHtml(frostStart)} → ${escapeHtml(frostEnd)}</td></tr>
                 </table>
                 <div style="margin-bottom: 12px; font-size: 13px;">
                     <label style="display:block; margin-bottom:6px; cursor:pointer;">
@@ -963,11 +963,11 @@ const AdminModule = {
                 <div id="update-full-range" class="form-row" style="margin-bottom: 12px; display: none;">
                     <div class="form-group">
                         <label>Fetch From</label>
-                        <input type="date" id="update-fetch-start" class="form-control" value="${frostStart}">
+                        <input type="date" id="update-fetch-start" class="form-control" value="${escapeHtml(frostStart)}">
                     </div>
                     <div class="form-group">
                         <label>To</label>
-                        <input type="date" id="update-fetch-end" class="form-control" value="${frostEnd}">
+                        <input type="date" id="update-fetch-end" class="form-control" value="${escapeHtml(frostEnd)}">
                     </div>
                 </div>
                 <p id="update-plan-preview" style="font-size: 13px; margin-bottom: 8px;"></p>
@@ -984,7 +984,7 @@ const AdminModule = {
             const contentDiv = document.getElementById('update-data-content');
             if (contentDiv) {
                 contentDiv.innerHTML = `
-                    <p style="color: var(--danger);">Error checking Frost API: ${err.message}</p>
+                    <p style="color: var(--danger);">Error checking Frost API: ${escapeHtml(err.message)}</p>
                     <button class="btn btn-secondary" onclick="app.admin.closeStationModal()">Close</button>
                 `;
             }
@@ -1189,9 +1189,9 @@ const AdminModule = {
         if (progressBar) progressBar.style.width = '100%';
         if (statusEl) {
             if (errors.length > 0) {
-                statusEl.innerHTML = `<span style="color: var(--danger);">Completed with ${errors.length} FAILED year(s): ${failedYears.join(', ')} - re-run Update Data to fill the gap</span>`;
+                statusEl.innerHTML = `<span style="color: var(--danger);">Completed with ${errors.length} FAILED year(s): ${escapeHtml(failedYears.join(', '))} - re-run Update Data to fill the gap</span>`;
             } else if (warnings.length > 0) {
-                statusEl.innerHTML = `<span style="color: var(--warning);">Completed with warnings: ${warnings.join(' | ')}</span>`;
+                statusEl.innerHTML = `<span style="color: var(--warning);">Completed with warnings: ${escapeHtml(warnings.join(' | '))}</span>`;
             } else {
                 statusEl.innerHTML = `<span style="color: var(--success);">✓ Completed successfully!</span>`;
             }
@@ -1353,20 +1353,20 @@ const AdminModule = {
             let missCell = '-';
             if (inc !== undefined && inc !== null) {
                 missCell = inc > 0
-                    ? `<a href="#" onclick="app.admin.showWeatherGaps(${row.year}); return false;"
-                         style="color: var(--danger); font-weight: bold;">${inc} ⚠</a>`
+                    ? `<a href="#" onclick="app.admin.showWeatherGaps(${escapeJsArg(parseInt(row.year, 10))}); return false;"
+                         style="color: var(--danger); font-weight: bold;">${escapeHtml(inc)} ⚠</a>`
                     : '<span style="color: var(--success);">0 ✓</span>';
             }
             const interp = (row.interpolated_hours !== undefined && row.interpolated_hours !== null)
-                ? (Number(row.interpolated_hours) > 0 ? `<span style="color: #b8860b;">${row.interpolated_hours}</span>` : '0')
+                ? (Number(row.interpolated_hours) > 0 ? `<span style="color: #b8860b;">${escapeHtml(row.interpolated_hours)}</span>` : '0')
                 : '-';
             html += `<tr>
-                <td>${row.year}</td>
-                <td>${row.avg_temp}</td>
-                <td>${row.min_temp}</td>
-                <td>${row.max_temp}</td>
-                <td>${row.avg_wind}</td>
-                <td>${row.avg_humidity}</td>
+                <td>${escapeHtml(row.year)}</td>
+                <td>${escapeHtml(row.avg_temp)}</td>
+                <td>${escapeHtml(row.min_temp)}</td>
+                <td>${escapeHtml(row.max_temp)}</td>
+                <td>${escapeHtml(row.avg_wind)}</td>
+                <td>${escapeHtml(row.avg_humidity)}</td>
                 <td style="text-align: right;">${missCell}</td>
                 <td style="text-align: right;">${interp}</td>
             </tr>`;
@@ -1390,7 +1390,7 @@ const AdminModule = {
         }
         modal.style.display = 'block';
         modal.innerHTML = `<div class="modal-content" style="max-width:640px; margin:8% auto; background:#fff; border-radius:6px; padding:20px; max-height:75vh; overflow-y:auto;">
-            <h3 style="margin-top:0;">${title}</h3>
+            <h3 style="margin-top:0;">${escapeHtml(title)}</h3>
             <div id="weather-gaps-body">Loading...</div>
         </div>`;
         modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
@@ -1448,12 +1448,12 @@ const AdminModule = {
             patched ${patched.toLocaleString()} NULL-field hour(s) across ${targets.length} year(s). All flagged as interpolated.</p>`;
         if (skipped.length > 0) {
             html += `<p style="color: var(--danger);">Skipped ${skipped.length} gap(s) too long to interpolate — re-fetch these instead:</p><ul style="font-size:12px;">`;
-            skipped.slice(0, 50).forEach(r => { html += `<li>${r.start} → ${r.end} (${r.hours} h)</li>`; });
+            skipped.slice(0, 50).forEach(r => { html += `<li>${escapeHtml(r.start)} → ${escapeHtml(r.end)} (${escapeHtml(r.hours)} h)</li>`; });
             if (skipped.length > 50) html += `<li>… and ${skipped.length - 50} more</li>`;
             html += '</ul>';
         }
         if (errors.length > 0) {
-            html += `<p style="color: var(--danger);">Errors: ${errors.join(' | ')}</p>`;
+            html += `<p style="color: var(--danger);">Errors: ${escapeHtml(errors.join(' | '))}</p>`;
         }
         html += `<div style="margin-top:12px; text-align:right;">
             <button class="btn btn-primary btn-sm" onclick="document.getElementById('weather-gaps-modal').style.display='none'">Close</button></div>`;
@@ -1477,8 +1477,8 @@ const AdminModule = {
 
             const runs = data.runs || [];
             let html = `<p style="font-size:13px; color:#555;">
-                Expected ${data.expected_hours} h in the station's data range ·
-                ${data.missing_rows} missing row(s) · ${data.null_field_hours} h with NULL fields</p>`;
+                Expected ${escapeHtml(data.expected_hours)} h in the station's data range ·
+                ${escapeHtml(data.missing_rows)} missing row(s) · ${escapeHtml(data.null_field_hours)} h with NULL fields</p>`;
             if (runs.length === 0) {
                 html += '<p style="color: var(--success);">✓ No gaps in this year.</p>';
             } else {
@@ -1486,7 +1486,7 @@ const AdminModule = {
                     <thead><tr><th>From</th><th>To</th><th>Hours</th><th>Problem</th></tr></thead><tbody>`;
                 runs.forEach(r => {
                     const what = r.kind === 'missing_rows' ? 'rows missing' : `NULL: ${r.fields.join(', ')}`;
-                    html += `<tr><td>${r.start}</td><td>${r.end}</td><td style="text-align:right;">${r.hours}</td><td>${what}</td></tr>`;
+                    html += `<tr><td>${escapeHtml(r.start)}</td><td>${escapeHtml(r.end)}</td><td style="text-align:right;">${escapeHtml(r.hours)}</td><td>${escapeHtml(what)}</td></tr>`;
                 });
                 html += '</tbody></table>';
                 html += `<div style="margin-top:14px; padding:10px; background:#fff8e6; border:1px solid #e6c200; border-radius:4px; font-size:12px;">
@@ -1498,12 +1498,12 @@ const AdminModule = {
                     is for hours the source genuinely lacks.</div>
                 <div style="margin-top:12px; text-align:right;">
                     <button class="btn btn-secondary btn-sm" onclick="document.getElementById('weather-gaps-modal').style.display='none'">Close</button>
-                    <button class="btn btn-primary btn-sm" onclick="app.admin.fillWeatherGaps('${stationId}', ${year})">Fill gaps by interpolation</button>
+                    <button class="btn btn-primary btn-sm" onclick="app.admin.fillWeatherGaps(${escapeJsArg(stationId)}, ${escapeJsArg(year)})">Fill gaps by interpolation</button>
                 </div>`;
             }
             body().innerHTML = html;
         } catch (err) {
-            body().innerHTML = `<p style="color: var(--danger);">Error: ${err.message}</p>`;
+            body().innerHTML = `<p style="color: var(--danger);">Error: ${escapeHtml(err.message)}</p>`;
         }
     },
 
@@ -1519,11 +1519,11 @@ const AdminModule = {
             const data = await resp.json();
             if (data.error) throw new Error(data.error);
 
-            let html = `<p style="color: var(--success);">✓ Filled ${data.filled_hours} missing hour(s),
-                patched ${data.patched_hours} NULL-field hour(s). All flagged as interpolated.</p>`;
+            let html = `<p style="color: var(--success);">✓ Filled ${escapeHtml(data.filled_hours)} missing hour(s),
+                patched ${escapeHtml(data.patched_hours)} NULL-field hour(s). All flagged as interpolated.</p>`;
             if (data.skipped_runs && data.skipped_runs.length > 0) {
                 html += '<p style="color: var(--danger);">Skipped (too long to interpolate — re-fetch instead):</p><ul style="font-size:12px;">';
-                data.skipped_runs.forEach(r => { html += `<li>${r.start} → ${r.end} (${r.hours} h)</li>`; });
+                data.skipped_runs.forEach(r => { html += `<li>${escapeHtml(r.start)} → ${escapeHtml(r.end)} (${escapeHtml(r.hours)} h)</li>`; });
                 html += '</ul>';
             }
             html += `<div style="margin-top:12px; text-align:right;">
@@ -1533,7 +1533,7 @@ const AdminModule = {
             // Refresh the yearly table so Missing/Filled columns update
             await this.onStationChange();
         } catch (err) {
-            if (body) body.innerHTML = `<p style="color: var(--danger);">Error: ${err.message}</p>
+            if (body) body.innerHTML = `<p style="color: var(--danger);">Error: ${escapeHtml(err.message)}</p>
                 <div style="margin-top:12px; text-align:right;">
                 <button class="btn btn-secondary btn-sm" onclick="document.getElementById('weather-gaps-modal').style.display='none'">Close</button></div>`;
         }
@@ -1560,12 +1560,12 @@ const AdminModule = {
 
         data.forEach(row => {
             html += `<tr>
-                <td>${row.month_name}</td>
-                <td>${row.avg_temp}</td>
-                <td>${row.min_temp}</td>
-                <td>${row.max_temp}</td>
-                <td>${row.avg_wind}</td>
-                <td>${row.avg_humidity}</td>
+                <td>${escapeHtml(row.month_name)}</td>
+                <td>${escapeHtml(row.avg_temp)}</td>
+                <td>${escapeHtml(row.min_temp)}</td>
+                <td>${escapeHtml(row.max_temp)}</td>
+                <td>${escapeHtml(row.avg_wind)}</td>
+                <td>${escapeHtml(row.avg_humidity)}</td>
             </tr>`;
         });
 
@@ -1639,12 +1639,12 @@ const AdminModule = {
             const roleLabel = user.role === 'admin' ? 'Admin' : 'Operator';
             const projectNames = user.project_names || '-';
             html += `<tr>
-                <td>${user.email}</td>
-                <td>${user.name || '-'}</td>
+                <td>${escapeHtml(user.email)}</td>
+                <td>${escapeHtml(user.name || '-')}</td>
                 <td>${roleLabel}</td>
-                <td>${projectNames}</td>
+                <td>${escapeHtml(projectNames)}</td>
                 <td>
-                    <button class="btn btn-xs btn-secondary" onclick="app.admin.editUser(${user.user_id})">Edit</button>
+                    <button class="btn btn-xs btn-secondary" onclick="app.admin.editUser(${escapeJsArg(user.user_id)})">Edit</button>
                 </td>
             </tr>`;
         });
@@ -1672,10 +1672,10 @@ const AdminModule = {
         // Build project checkboxes with aligned layout
         const projectCheckboxes = this.projects.map(p => `
             <label style="display: flex; align-items: center; gap: 8px; margin: 6px 0; cursor: pointer;">
-                <input type="checkbox" name="user-projects" value="${p.project_id}"
+                <input type="checkbox" name="user-projects" value="${escapeHtml(p.project_id)}"
                     style="width: 16px; height: 16px; margin: 0; flex-shrink: 0;"
                     ${userProjectIds.includes(p.project_id) ? 'checked' : ''}>
-                <span>${p.project_name}</span>
+                <span>${escapeHtml(p.project_name)}</span>
             </label>
         `).join('');
 
@@ -1684,18 +1684,18 @@ const AdminModule = {
                 <div class="modal-content" onclick="event.stopPropagation()">
                     <h3>${title}</h3>
                     <form id="user-form">
-                        <input type="hidden" id="user-id" value="${existingUser?.user_id || ''}">
+                        <input type="hidden" id="user-id" value="${escapeHtml(existingUser?.user_id || '')}">
 
                         <div class="form-group">
                             <label>Email</label>
                             <input type="email" id="user-email" class="form-control" required
-                                value="${existingUser?.email || ''}" ${isEdit ? 'readonly' : ''}>
+                                value="${escapeHtml(existingUser?.email || '')}" ${isEdit ? 'readonly' : ''}>
                         </div>
 
                         <div class="form-group">
                             <label>Name</label>
                             <input type="text" id="user-name" class="form-control"
-                                value="${existingUser?.name || ''}">
+                                value="${escapeHtml(existingUser?.name || '')}">
                         </div>
 
                         ${!isEdit ? `
@@ -1892,13 +1892,13 @@ const AdminModule = {
                 if (data.git) {
                     if (data.git.pushed) {
                         if (gitResult) {
-                            gitResult.innerHTML = `<strong style="color: green;">Pushed to branch: ${data.git.branch}</strong><br>
+                            gitResult.innerHTML = `<strong style="color: green;">Pushed to branch: ${escapeHtml(data.git.branch)}</strong><br>
                                 <small>You can now create a PR to merge this branch.</small>`;
                         }
                     } else {
                         if (gitResult) {
                             gitResult.innerHTML = `<strong style="color: red;">Git push failed</strong><br>
-                                <small>${data.git.output || 'Unknown error'}</small>`;
+                                <small>${escapeHtml(data.git.output || 'Unknown error')}</small>`;
                         }
                     }
                 }
@@ -1953,23 +1953,23 @@ const AdminModule = {
             const data = await response.json();
 
             if (data.error) {
-                container.innerHTML = `<p class="error">${data.error}</p>`;
+                container.innerHTML = `<p class="error">${escapeHtml(data.error)}</p>`;
                 return;
             }
 
             let html = '<table class="data-table compact">';
-            html += `<tr><td><strong>Branch</strong></td><td>${data.branch}</td></tr>`;
-            html += `<tr><td><strong>App Version</strong></td><td>${data.app_version || 'Unknown'}</td></tr>`;
-            html += `<tr><td><strong>Commit</strong></td><td><code>${data.head_short}</code></td></tr>`;
-            html += `<tr><td><strong>Behind Origin</strong></td><td>${data.behind_origin > 0 ? `<span style="color:orange">${data.behind_origin} commits</span>` : '<span style="color:green">Up to date</span>'}</td></tr>`;
-            html += `<tr><td><strong>Ahead of Origin</strong></td><td>${data.ahead_origin > 0 ? `<span style="color:blue">${data.ahead_origin} commits</span>` : '0'}</td></tr>`;
+            html += `<tr><td><strong>Branch</strong></td><td>${escapeHtml(data.branch)}</td></tr>`;
+            html += `<tr><td><strong>App Version</strong></td><td>${escapeHtml(data.app_version || 'Unknown')}</td></tr>`;
+            html += `<tr><td><strong>Commit</strong></td><td><code>${escapeHtml(data.head_short)}</code></td></tr>`;
+            html += `<tr><td><strong>Behind Origin</strong></td><td>${data.behind_origin > 0 ? `<span style="color:orange">${escapeHtml(data.behind_origin)} commits</span>` : '<span style="color:green">Up to date</span>'}</td></tr>`;
+            html += `<tr><td><strong>Ahead of Origin</strong></td><td>${data.ahead_origin > 0 ? `<span style="color:blue">${escapeHtml(data.ahead_origin)} commits</span>` : '0'}</td></tr>`;
             html += '</table>';
 
             // Recent commits
             if (data.last_commits && data.last_commits.length > 0) {
                 html += '<h4>Recent Commits</h4><ul class="commit-list">';
                 data.last_commits.forEach(c => {
-                    html += `<li><code>${c}</code></li>`;
+                    html += `<li><code>${escapeHtml(c)}</code></li>`;
                 });
                 html += '</ul>';
             }
@@ -1979,10 +1979,10 @@ const AdminModule = {
                 (data.modified_files && data.modified_files.length > 0)) {
                 html += '<h4>Local Changes</h4>';
                 if (data.untracked_files && data.untracked_files.length > 0) {
-                    html += '<p><strong>Untracked:</strong> ' + data.untracked_files.join(', ') + '</p>';
+                    html += '<p><strong>Untracked:</strong> ' + escapeHtml(data.untracked_files.join(', ')) + '</p>';
                 }
                 if (data.modified_files && data.modified_files.length > 0) {
-                    html += '<p><strong>Modified:</strong> ' + data.modified_files.join(', ') + '</p>';
+                    html += '<p><strong>Modified:</strong> ' + escapeHtml(data.modified_files.join(', ')) + '</p>';
                 }
             }
 
@@ -2003,7 +2003,7 @@ const AdminModule = {
                 html += '<select id="merge-branch-select" style="margin: 0 0.5rem;">';
                 data.remote_branches.forEach(b => {
                     const selected = b === defaultBranch ? 'selected' : '';
-                    html += `<option value="${b}" ${selected}>${b}</option>`;
+                    html += `<option value="${escapeHtml(b)}" ${selected}>${escapeHtml(b)}</option>`;
                 });
                 html += '</select>';
                 html += '<button class="btn btn-primary" onclick="AdminModule.mergeBranch()">Merge & Deploy</button>';
@@ -2015,7 +2015,7 @@ const AdminModule = {
             container.innerHTML = html;
         } catch (err) {
             console.error('Failed to load deploy status:', err);
-            container.innerHTML = `<p class="error">Failed to load: ${err.message}</p>`;
+            container.innerHTML = `<p class="error">Failed to load: ${escapeHtml(err.message)}</p>`;
         }
     },
 
@@ -2038,7 +2038,7 @@ const AdminModule = {
 
         const logContainer = document.getElementById('deploy-log');
         if (logContainer) {
-            logContainer.innerHTML = `<p>Merging ${branch}...</p>`;
+            logContainer.innerHTML = `<p>Merging ${escapeHtml(branch)}...</p>`;
         }
 
         try {
@@ -2050,7 +2050,7 @@ const AdminModule = {
             const data = await response.json();
 
             if (data.error) {
-                if (logContainer) logContainer.innerHTML = `<p class="error">${data.error}</p>`;
+                if (logContainer) logContainer.innerHTML = `<p class="error">${escapeHtml(data.error)}</p>`;
                 return;
             }
 
@@ -2058,7 +2058,7 @@ const AdminModule = {
             html += `<p><strong>Result:</strong> ${data.success ? '<span style="color:green">Success</span>' : '<span style="color:red">Failed</span>'}</p>`;
             if (data.log) {
                 html += '<pre class="deploy-log">';
-                data.log.forEach(line => { html += line + '\n'; });
+                data.log.forEach(line => { html += escapeHtml(line) + '\n'; });
                 html += '</pre>';
             }
             html += '</div>';
@@ -2071,7 +2071,7 @@ const AdminModule = {
             }
         } catch (err) {
             console.error('Merge failed:', err);
-            if (logContainer) logContainer.innerHTML = `<p class="error">Failed: ${err.message}</p>`;
+            if (logContainer) logContainer.innerHTML = `<p class="error">Failed: ${escapeHtml(err.message)}</p>`;
         }
     },
 
@@ -2086,17 +2086,17 @@ const AdminModule = {
             const data = await response.json();
 
             if (data.error) {
-                if (logContainer) logContainer.innerHTML = `<p class="error">${data.error}</p>`;
+                if (logContainer) logContainer.innerHTML = `<p class="error">${escapeHtml(data.error)}</p>`;
                 return;
             }
 
             let html = '<div class="deploy-result">';
             html += `<p><strong>Result:</strong> ${data.success ? '<span style="color:green">Success</span>' : '<span style="color:red">Failed</span>'}</p>`;
-            html += `<p><strong>Version:</strong> ${data.app_version}</p>`;
-            html += `<p><strong>Commit:</strong> <code>${data.head}</code></p>`;
+            html += `<p><strong>Version:</strong> ${escapeHtml(data.app_version)}</p>`;
+            html += `<p><strong>Commit:</strong> <code>${escapeHtml(data.head)}</code></p>`;
             html += '<h4>Log</h4><pre class="deploy-log">';
             data.log.forEach(line => {
-                html += line + '\n';
+                html += escapeHtml(line) + '\n';
             });
             html += '</pre>';
             html += '<p><strong>Refresh the page to see changes.</strong></p>';
@@ -2105,7 +2105,7 @@ const AdminModule = {
             if (logContainer) logContainer.innerHTML = html;
         } catch (err) {
             console.error('Deploy pull failed:', err);
-            if (logContainer) logContainer.innerHTML = `<p class="error">Failed: ${err.message}</p>`;
+            if (logContainer) logContainer.innerHTML = `<p class="error">Failed: ${escapeHtml(err.message)}</p>`;
         }
     },
 
@@ -2140,7 +2140,7 @@ const AdminModule = {
             console.log('checkMigrations: data', data);
 
             if (data.error) {
-                listEl.innerHTML = `<p class="error">${data.error}</p>`;
+                listEl.innerHTML = `<p class="error">${escapeHtml(data.error)}</p>`;
                 return;
             }
 
@@ -2160,15 +2160,15 @@ const AdminModule = {
                 const descId = 'desc-migrate-' + m.filename.replace(/[^a-z0-9]/gi, '-');
                 const actionsId = 'actions-migrate-' + m.filename.replace(/[^a-z0-9]/gi, '-');
                 html += `<tr id="${rowId}">`;
-                html += `<td><code>${m.filename}</code></td>`;
+                html += `<td><code>${escapeHtml(m.filename)}</code></td>`;
 
                 // Show log link if log file exists
                 if (m.has_log && m.log_file) {
                     const logColor = m.log_success ? 'green' : 'red';
                     const logIcon = m.log_success ? '✓' : '✗';
-                    html += `<td id="${descId}"><a href="db/migrations/${m.log_file}" target="_blank" style="color: ${logColor};">${logIcon} View log</a></td>`;
+                    html += `<td id="${descId}"><a href="db/migrations/${escapeHtml(m.log_file)}" target="_blank" style="color: ${logColor};">${logIcon} View log</a></td>`;
                 } else {
-                    html += `<td id="${descId}">${m.description || '-'}</td>`;
+                    html += `<td id="${descId}">${escapeHtml(m.description || '-')}</td>`;
                 }
 
                 // Show Done + Archive if log exists and was successful
@@ -2178,16 +2178,16 @@ const AdminModule = {
                     if (m.log_success) {
                         html += `<td id="${actionsId}">
                             <button class="btn btn-sm btn-success" disabled>✓ Done</button>
-                            <button class="btn btn-sm btn-secondary" onclick="AdminModule.archiveMigration('${m.filename}')" style="margin-left: 5px;">Archive</button>
+                            <button class="btn btn-sm btn-secondary" onclick="AdminModule.archiveMigration(${escapeJsArg(m.filename)})" style="margin-left: 5px;">Archive</button>
                         </td>`;
                     } else {
                         html += `<td id="${actionsId}">
-                            <button class="btn btn-sm btn-primary" onclick="AdminModule.runMigration('${m.filename}', this)">Run</button>
-                            <button class="btn btn-sm btn-secondary" onclick="AdminModule.archiveMigration('${m.filename}')" style="margin-left: 5px;">Archive</button>
+                            <button class="btn btn-sm btn-primary" onclick="AdminModule.runMigration(${escapeJsArg(m.filename)}, this)">Run</button>
+                            <button class="btn btn-sm btn-secondary" onclick="AdminModule.archiveMigration(${escapeJsArg(m.filename)})" style="margin-left: 5px;">Archive</button>
                         </td>`;
                     }
                 } else {
-                    html += `<td id="${actionsId}"><button class="btn btn-sm btn-primary" onclick="AdminModule.runMigration('${m.filename}', this)">Run</button></td>`;
+                    html += `<td id="${actionsId}"><button class="btn btn-sm btn-primary" onclick="AdminModule.runMigration(${escapeJsArg(m.filename)}, this)">Run</button></td>`;
                 }
                 html += '</tr>';
             });
@@ -2197,13 +2197,13 @@ const AdminModule = {
 
         } catch (err) {
             console.error('Check migrations failed:', err);
-            if (listEl) listEl.innerHTML = `<p class="error">Failed to check: ${err.message}</p>`;
+            if (listEl) listEl.innerHTML = `<p class="error">Failed to check: ${escapeHtml(err.message)}</p>`;
         }
     },
 
     runMigration: async function(filename, btn) {
         const resultEl = document.getElementById('migration-result');
-        if (resultEl) resultEl.innerHTML = `<p>Running ${filename}...</p>`;
+        if (resultEl) resultEl.innerHTML = `<p>Running ${escapeHtml(filename)}...</p>`;
 
         // Disable button and show running state
         if (btn) {
@@ -2243,31 +2243,31 @@ const AdminModule = {
 
             let resultHtml = '';
             if (data.success) {
-                resultHtml += `<p style="color: green; font-weight: bold;">✓ SUCCESS: ${filename}</p>`;
-                resultHtml += `<p>${data.statements} statements executed</p>`;
+                resultHtml += `<p style="color: green; font-weight: bold;">✓ SUCCESS: ${escapeHtml(filename)}</p>`;
+                resultHtml += `<p>${escapeHtml(data.statements)} statements executed</p>`;
                 if (data.tables_created && data.tables_created.length > 0) {
-                    resultHtml += `<p>Tables: ${data.tables_created.join(', ')}</p>`;
+                    resultHtml += `<p>Tables: ${escapeHtml(data.tables_created.join(', '))}</p>`;
                 }
 
                 // Update description to log link
                 if (descEl) {
-                    descEl.innerHTML = `<a href="db/migrations/${logFile}" target="_blank" style="color: green;">✓ View log</a>`;
+                    descEl.innerHTML = `<a href="db/migrations/${escapeHtml(logFile)}" target="_blank" style="color: green;">✓ View log</a>`;
                 }
 
                 // Update actions: green Done button + Archive button
                 if (actionsEl) {
                     actionsEl.innerHTML = `
                         <button class="btn btn-sm" style="background-color: #28a745; color: white;" disabled>✓ Done</button>
-                        <button class="btn btn-sm btn-secondary" onclick="AdminModule.archiveMigration('${filename}')" style="margin-left: 5px;">Archive</button>
+                        <button class="btn btn-sm btn-secondary" onclick="AdminModule.archiveMigration(${escapeJsArg(filename)})" style="margin-left: 5px;">Archive</button>
                     `;
                 }
             } else {
-                resultHtml += `<p style="color: red; font-weight: bold;">✗ FAILED: ${filename}</p>`;
-                resultHtml += `<p class="error">${data.error || 'Unknown error'}</p>`;
+                resultHtml += `<p style="color: red; font-weight: bold;">✗ FAILED: ${escapeHtml(filename)}</p>`;
+                resultHtml += `<p class="error">${escapeHtml(data.error || 'Unknown error')}</p>`;
 
                 // Update description to error log link
                 if (descEl) {
-                    descEl.innerHTML = `<a href="db/migrations/${logFile}" target="_blank" style="color: red;">✗ View error log</a>`;
+                    descEl.innerHTML = `<a href="db/migrations/${escapeHtml(logFile)}" target="_blank" style="color: red;">✗ View error log</a>`;
                 }
 
                 // Red button, allow retry
@@ -2281,7 +2281,7 @@ const AdminModule = {
             // Expandable log in result area
             if (data.log && data.log.length > 0) {
                 resultHtml += '<details><summary>Show log output</summary><pre class="deploy-log" style="max-height: 200px; overflow: auto; font-size: 11px;">';
-                data.log.forEach(line => { resultHtml += line + '\n'; });
+                data.log.forEach(line => { resultHtml += escapeHtml(line) + '\n'; });
                 resultHtml += '</pre></details>';
             }
 
@@ -2289,7 +2289,7 @@ const AdminModule = {
 
         } catch (err) {
             console.error('Run migration failed:', err);
-            if (resultEl) resultEl.innerHTML = `<p class="error">Failed: ${err.message}</p>`;
+            if (resultEl) resultEl.innerHTML = `<p class="error">Failed: ${escapeHtml(err.message)}</p>`;
             if (btn) {
                 btn.textContent = '✗ Error';
                 btn.style.backgroundColor = '#dc3545';
@@ -2303,7 +2303,7 @@ const AdminModule = {
         const rowId = 'row-migrate-' + filename.replace(/[^a-z0-9]/gi, '-');
         const row = document.getElementById(rowId);
 
-        if (resultEl) resultEl.innerHTML = `<p>Archiving ${filename}...</p>`;
+        if (resultEl) resultEl.innerHTML = `<p>Archiving ${escapeHtml(filename)}...</p>`;
 
         try {
             const response = await fetch('./api/heataq_api.php?action=archive_migration', {
@@ -2324,7 +2324,7 @@ const AdminModule = {
                 }
 
                 if (resultEl) {
-                    let html = `<p style="color: green; font-weight: bold;">✓ Archived ${filename}</p>`;
+                    let html = `<p style="color: green; font-weight: bold;">✓ Archived ${escapeHtml(filename)}</p>`;
                     html += '<ul style="margin: 0.5rem 0; padding-left: 1.5rem; color: #666;">';
                     html += '<li>Moved to old_migrations/</li>';
                     html += '<li>Schema exported</li>';
@@ -2334,12 +2334,12 @@ const AdminModule = {
                 }
             } else {
                 if (resultEl) {
-                    resultEl.innerHTML = `<p class="error">Archive failed: ${data.error || 'Unknown error'}</p>`;
+                    resultEl.innerHTML = `<p class="error">Archive failed: ${escapeHtml(data.error || 'Unknown error')}</p>`;
                 }
             }
         } catch (err) {
             console.error('Archive migration failed:', err);
-            if (resultEl) resultEl.innerHTML = `<p class="error">Archive failed: ${err.message}</p>`;
+            if (resultEl) resultEl.innerHTML = `<p class="error">Archive failed: ${escapeHtml(err.message)}</p>`;
         }
     },
 
