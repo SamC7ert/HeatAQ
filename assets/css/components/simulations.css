@@ -400,19 +400,23 @@ p.loading {
 }
 
 .data-table.form-table td:first-child {
-    width: 50%;
+    /* Label column as wide as its text, field right next to it */
+    width: 1%;
+    white-space: nowrap;
+    padding-right: 1.5rem;
     font-weight: 500;
     color: #555;
 }
 
 .data-table.form-table td:last-child {
-    width: 50%;
+    width: auto;
 }
 
 .data-table.form-table input,
 .data-table.form-table textarea,
 .data-table.form-table select {
     width: 100%;
+    max-width: 26rem;  /* fields sized to their content, not the card */
     padding: 8px 10px;
     border: 1px solid #ddd;
     border-radius: 4px;
@@ -444,6 +448,7 @@ p.loading {
 /* Override Table (Config | Override columns) */
 #sim-override-table {
     font-size: 13px;
+    width: auto;  /* columns sized to their content instead of spread over the card */
 }
 
 #sim-override-table th {
@@ -454,9 +459,9 @@ p.loading {
     border-bottom: 2px solid #dee2e6;
 }
 
-#sim-override-table th:nth-child(1) { width: 45%; }
-#sim-override-table th:nth-child(2) { width: 25%; text-align: center; }
-#sim-override-table th:nth-child(3) { width: 30%; }
+#sim-override-table th:nth-child(1) { padding-right: 2rem; }
+#sim-override-table th:nth-child(2) { width: 6rem; text-align: center; }
+#sim-override-table th:nth-child(3) { width: 8rem; }
 
 #sim-override-table td:nth-child(2) {
     text-align: center;
@@ -465,8 +470,12 @@ p.loading {
     background: #f8f9fa;
 }
 
+#sim-override-table td:first-child {
+    width: auto;  /* no % widths here: they stretch an auto-width table to the card */
+}
+
 #sim-override-table td:nth-child(3) input {
-    width: 100%;
+    width: 7rem;
     padding: 6px 8px;
     border: 1px solid #ddd;
     border-radius: 4px;
