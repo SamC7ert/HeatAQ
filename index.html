@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HeatAQ Schedule Management</title>
     <link rel="icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="./assets/css/main.css?v=239">
-    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=239">
-    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=239">
-    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=239">
-    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=239">
-    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=239">
+    <link rel="stylesheet" href="./assets/css/main.css?v=240">
+    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=240">
+    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=240">
+    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=240">
+    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=240">
+    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=240">
     <style>
         /* Logout button styles */
         .user-info {
@@ -650,6 +650,14 @@
                                         <label style="font-size: 12px; color: #666;">End Date</label>
                                         <input type="date" id="sim-end-date" class="form-control" value="2024-12-31">
                                     </div>
+                                    <div>
+                                        <label style="font-size: 12px; color: #666;" title="PHP runs on the server; TypeScript runs in this browser; Compare runs PHP, then TypeScript on the same inputs, and reports differences">Engine</label>
+                                        <select id="sim-engine" class="form-control">
+                                            <option value="php">PHP (server)</option>
+                                            <option value="compare">Compare PHP + TypeScript</option>
+                                            <option value="typescript">TypeScript (browser)</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <div style="margin-top: 10px;">
                                     <label style="display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: #666; cursor: pointer;">
@@ -664,6 +672,7 @@
                                 </button>
                                 <span id="simulation-status" style="font-size: 12px; color: #28a745;"></span>
                             </div>
+                            <div id="engine-compare-report" style="margin-top: 10px;"></div>
                         </div>
 
                         <!-- Configuration with Override option -->
@@ -1740,18 +1749,19 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=239"></script>
+    <script src="./assets/js/config.js?v=240"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=239"></script>
-    <script src="./assets/js/modules/navigation.js?v=239"></script>
-    <script src="./assets/js/modules/schedules.js?v=239"></script>
-    <script src="./assets/js/modules/calendar.js?v=239"></script>
-    <script src="./assets/js/modules/simulations.js?v=239"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=239"></script>
-    <script src="./assets/js/modules/configuration.js?v=239"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=239"></script>
-    <script src="./assets/js/modules/admin.js?v=239"></script>
-    <script src="./assets/js/modules/project.js?v=239"></script>
-    <script src="./assets/js/app.js?v=239"></script>
+    <script src="./assets/js/modules/api.js?v=240"></script>
+    <script src="./assets/js/modules/navigation.js?v=240"></script>
+    <script src="./assets/js/modules/schedules.js?v=240"></script>
+    <script src="./assets/js/modules/calendar.js?v=240"></script>
+    <script src="./assets/js/modules/simengine.js?v=240"></script>
+    <script src="./assets/js/modules/simulations.js?v=240"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=240"></script>
+    <script src="./assets/js/modules/configuration.js?v=240"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=240"></script>
+    <script src="./assets/js/modules/admin.js?v=240"></script>
+    <script src="./assets/js/modules/project.js?v=240"></script>
+    <script src="./assets/js/app.js?v=240"></script>
 </body>
 </html>

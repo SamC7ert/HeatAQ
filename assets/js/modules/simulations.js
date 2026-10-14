@@ -252,6 +252,12 @@ const SimulationsModule = {
             return;
         }
 
+        // Engine: php (server), compare (PHP, then TypeScript on the same
+        // inputs), typescript (simulated in this browser) - see simengine.js
+        const engine = document.getElementById('sim-engine')?.value || 'php';
+        const compareEl = document.getElementById('engine-compare-report');
+        if (compareEl) compareEl.innerHTML = '';
+
         // Disable button and show progress
         const btn = document.getElementById('run-simulation-btn');
         btn.disabled = true;
@@ -309,7 +315,8 @@ const SimulationsModule = {
                     template_id: ohcId,
                     pool_id: poolId,
                     config_override: configOverride,
-                    store_hourly: storeHourly
+                    store_hourly: storeHourly,
+                    engine: engine === 'typescript' ? 'typescript' : 'php'
                 })
             });
 
@@ -318,6 +325,20 @@ const SimulationsModule = {
 
             if (data.error) {
                 throw new Error(data.error);
+            }
+
+            // TypeScript engine: the server prepared the run and sent its
+            // inputs; simulate here and submit the results.
+            if (data.status === 'prepared') {
+                const setStatus = (t) => { if (statusEl) { statusEl.textContent = t; statusEl.style.color = '#666'; } };
+                setStatus('TypeScript engine running in this browser...');
+                const { result, ms } = await SimEngine.run(data.inputs, (period, pct) => {
+                    const [y, m] = period.split('-');
+                    setStatus(`TypeScript: simulating ${monthNames[parseInt(m, 10) - 1]} ${y}... (${pct}%)`);
+                });
+                await SimEngine.submit(data.run_id, result, data.store_hourly, setStatus);
+                data.simulator_version = (data.inputs.simulator_version || '') + ' (TypeScript, ' + ms + ' ms)';
+                data.summary = result.summary;
             }
 
             // DEBUG: Log schedule resolution info
@@ -338,6 +359,22 @@ const SimulationsModule = {
             if (statusEl) {
                 statusEl.textContent = `Simulation v${version} completed ${dateStr} - ${timeStr}`;
                 statusEl.style.color = '#28a745';
+            }
+
+            // Compare: run TypeScript on this run's inputs and report differences
+            if (engine === 'compare' && data.run_id && compareEl) {
+                compareEl.innerHTML = '<p class="text-muted" style="font-size:12px;">Comparing with the TypeScript engine...</p>';
+                try {
+                    const [inp, dailyRes] = await Promise.all([
+                        SimEngine.api(`get_sim_inputs&run_id=${encodeURIComponent(data.run_id)}`),
+                        fetch(`/api/simulation_api.php?action=get_daily_results&run_id=${encodeURIComponent(data.run_id)}`).then(r => r.json())
+                    ]);
+                    const { result, ms } = await SimEngine.run(inp.inputs);
+                    const report = SimEngine.compare(data.summary, dailyRes.daily_results || [], result);
+                    compareEl.innerHTML = SimEngine.renderComparison(report, data.summary, result, ms);
+                } catch (err) {
+                    compareEl.innerHTML = `<p class="error">Comparison failed: ${escapeHtml(err.message)}</p>`;
+                }
             }
 
             // Show the new run in the Simulate tab: report, summary cards and
@@ -1067,7 +1104,7 @@ const SimulationsModule = {
         const fields = [
             'sim-hp-override', 'sim-boiler-override', 'sim-target-offset',
             'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
-            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy'
+            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-engine'
         ];
 
         // Try loading from server first
@@ -1116,7 +1153,7 @@ const SimulationsModule = {
         const fields = [
             'sim-hp-override', 'sim-boiler-override', 'sim-target-offset',
             'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
-            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy'
+            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-engine'
         ];
         const overrides = {};
         fields.forEach(id => {
@@ -1147,7 +1184,7 @@ const SimulationsModule = {
         const ids = [
             'sim-hp-override', 'sim-boiler-override', 'sim-target-offset',
             'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
-            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy'
+            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-engine'
         ];
         ids.forEach(id => {
             const el = document.getElementById(id);

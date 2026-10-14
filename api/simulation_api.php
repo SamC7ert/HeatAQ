@@ -218,6 +218,13 @@ try {
             $templateId = getParam('template_id', null);
             $poolId = getParam('pool_id', null);
 
+            // Engine: 'php' (run here), or 'typescript' (prepare the run and
+            // return its inputs; the browser simulates and submits results)
+            $engine = getParam('engine', 'php');
+            if (!in_array($engine, ['php', 'typescript'], true)) {
+                sendError('Invalid engine');
+            }
+
             // Store hourly data? Default true for backward compatibility
             // Set to false for faster analysis runs that only need summary
             $storeHourly = getParam('store_hourly', true);
@@ -484,8 +491,34 @@ try {
                     // Copy of the schedule as used, so the run can be re-run
                     // exactly (recreate_hourly) after the schedule is edited
                     'schedule_state' => $scheduler->exportState(),
+                    'engine' => $engine,
+                    'store_hourly' => $storeHourly,
                 ]),
             ]);
+
+            if ($engine === 'typescript') {
+                // Same setup and validation as a PHP run; the browser runs the
+                // TypeScript engine on these inputs and posts the results back
+                // (submit_ts_hourly, submit_ts_results).
+                updateRunStatus($pdo, $runId, 'running');
+                try {
+                    $inputs = $simulator->exportRunInputs($startDate, $endDate);
+                } catch (Throwable $e) {
+                    updateRunStatus($pdo, $runId, 'failed', ['error' => $e->getMessage()]);
+                    throw $e;
+                }
+                sendResponse([
+                    'status' => 'prepared',
+                    'run_id' => $runId,
+                    'store_hourly' => $storeHourly,
+                    'inputs' => $inputs,
+                    'meta' => [
+                        'schedule_template_id' => $scheduleTemplate['template_id'] ?? null,
+                        'schedule_template_name' => $scheduleTemplate['name'] ?? null,
+                        'config_template_name' => $configTemplateName,
+                    ],
+                ]);
+            }
 
             try {
                 $results = executeRun($pdo, $simulator, $runId, $startDate, $endDate, $storeHourly);
@@ -606,6 +639,69 @@ try {
                 'warnings' => $warnings,
                 'simulator_version' => EnergySimulator::getVersion(),
             ]);
+            break;
+
+        case 'get_sim_inputs':
+            // Inputs of a run for the TypeScript engine (Compare mode): the
+            // simulator rebuilt from the run's saved state, as recreate_hourly.
+            RequestGuard::requireRole($auth, 'operator');
+            $runId = (int) getParam('run_id');
+            $stmt = $pdo->prepare("SELECT * FROM simulation_runs WHERE run_id = ? AND pool_site_id = ?");
+            $stmt->execute([$runId, $currentPoolSiteId]);
+            $runRow = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$runRow) {
+                sendError('Simulation run not found', 404);
+            }
+            $snap = json_decode($runRow['config_snapshot'] ?? '', true) ?: [];
+            if (empty($snap['schedule_state']) || empty($snap['equipment']) || empty($snap['pool_config'])) {
+                sendError('This run has no saved inputs (runs from before V239)', 400);
+            }
+            $simulator = new EnergySimulator($pdo, $currentPoolSiteId, PoolScheduler::fromState($snap['schedule_state']));
+            $simulator->setPoolConfig($snap['pool_config']);
+            $simulator->setEquipment($snap['equipment']);
+            sendResponse(['run_id' => $runId, 'inputs' => $simulator->exportRunInputs($runRow['start_date'], $runRow['end_date'])]);
+            break;
+
+        case 'submit_ts_hourly':
+        case 'submit_ts_results':
+            // Results of a TypeScript-engine run (prepared by run_simulation
+            // with engine=typescript). Only for that run while it is running.
+            RequestGuard::requireWriteRequest();
+            RequestGuard::requireRole($auth, 'operator');
+            $runId = (int) getParam('run_id');
+            $stmt = $pdo->prepare("SELECT status, config_snapshot FROM simulation_runs WHERE run_id = ? AND pool_site_id = ?");
+            $stmt->execute([$runId, $currentPoolSiteId]);
+            $runRow = $stmt->fetch(PDO::FETCH_ASSOC);
+            $snap = $runRow ? (json_decode($runRow['config_snapshot'] ?? '', true) ?: []) : [];
+            if (!$runRow || $runRow['status'] !== 'running' || ($snap['engine'] ?? 'php') !== 'typescript') {
+                sendError('No TypeScript run in progress with this id', 409);
+            }
+
+            if ($action === 'submit_ts_hourly') {
+                $rows = getParam('rows', []);
+                if (!is_array($rows) || count($rows) > 20000) {
+                    sendError('rows must be a list of at most 20000 hours');
+                }
+                storeHourlyRows($pdo, $runId, $rows);
+                sendResponse(['success' => true, 'stored' => count($rows)]);
+            }
+
+            $summary = getParam('summary', null);
+            $daily = getParam('daily', null);
+            if (!is_array($summary) || !is_array($daily)) {
+                sendError('summary and daily are required');
+            }
+            $summary['engine'] = 'typescript';
+            storeSimulationResults($pdo, $runId, ['daily' => sanitizeDaily($daily), 'hourly' => []], false);
+            updateRunStatus($pdo, $runId, 'completed', $summary);
+            if (!empty($snap['store_hourly'])) {
+                try {
+                    RunRetention::purgeHourly($pdo, $currentPoolSiteId, 5);
+                } catch (Throwable $e) {
+                    error_log('[SimAPI] hourly retention failed: ' . $e->getMessage());
+                }
+            }
+            sendResponse(['status' => 'success', 'run_id' => $runId]);
             break;
 
         case 'get_run_progress':
@@ -1293,7 +1389,7 @@ try {
             break;
 
         default:
-            sendError('Invalid action. Valid actions: run_simulation, set_baseline, recreate_hourly, get_runs, get_run, get_summary, get_daily_results, get_results, delete_run, get_weather_range, get_version, debug_hour, debug_week');
+            sendError('Invalid action. Valid actions: run_simulation, get_sim_inputs, submit_ts_hourly, submit_ts_results, set_baseline, recreate_hourly, get_runs, get_run, get_summary, get_daily_results, get_results, delete_run, get_weather_range, get_version, debug_hour, debug_week');
     }
 
 } catch (PDOException $e) {
@@ -1352,6 +1448,53 @@ function updateRunStatus($pdo, $runId, $status, $summary = null) {
             UPDATE simulation_runs SET status = ? WHERE run_id = ?
         ");
         $stmt->execute([$status, $runId]);
+    }
+}
+
+/** Daily rows from the TypeScript engine, cast to the stored types. */
+function sanitizeDaily(array $daily) {
+    $out = [];
+    foreach ($daily as $d) {
+        if (!is_array($d) || !isset($d['date']) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $d['date'])) {
+            sendError('Invalid daily row');
+        }
+        $row = ['date' => $d['date']];
+        foreach (['hours', 'open_hours'] as $k) $row[$k] = (int) ($d[$k] ?? 0);
+        foreach (['avg_air_temp', 'avg_water_temp', 'total_loss_kwh', 'total_solar_kwh', 'total_hp_kwh',
+                  'total_boiler_kwh', 'hp_thermal_kwh', 'boiler_thermal_kwh', 'total_cost'] as $k) {
+            $row[$k] = (float) ($d[$k] ?? 0);
+        }
+        $out[] = $row;
+    }
+    return $out;
+}
+
+/**
+ * Store compact hourly rows from the TypeScript engine:
+ * [timestamp, air, wind, humidity, solar_kwh_m2, target_temp, water_temp,
+ *  water_temp_start, is_open, total_loss_kw, solar_gain_kw, hp_heat_kw,
+ *  boiler_heat_kw, hp_electricity_kwh, boiler_fuel_kwh, hp_cop, cost, ...]
+ */
+function storeHourlyRows($pdo, $runId, array $rows) {
+    foreach (array_chunk($rows, 500) as $batch) {
+        $placeholders = [];
+        $values = [];
+        foreach ($batch as $r) {
+            if (!is_array($r) || count($r) < 17 || !preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', (string) $r[0])) {
+                sendError('Invalid hourly row');
+            }
+            $placeholders[] = "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            array_push($values, $runId, $r[0], (float) $r[1], (float) $r[2], (float) $r[3], (float) $r[4],
+                $r[5] === null ? null : (float) $r[5], (float) $r[6], (float) $r[7], $r[8] ? 1 : 0,
+                (float) $r[9], (float) $r[10], (float) $r[11], (float) $r[12], (float) $r[13],
+                (float) $r[14], (float) $r[15], (float) $r[16]);
+        }
+        $stmt = $pdo->prepare("INSERT INTO simulation_hourly_results
+            (run_id, timestamp, air_temp, wind_speed, humidity, solar_kwh_m2,
+             target_temp, water_temp, water_temp_start, is_open, total_loss_kw, solar_gain_kw,
+             hp_heat_kw, boiler_heat_kw, hp_electricity_kwh, boiler_fuel_kwh, hp_cop, cost)
+            VALUES " . implode(", ", $placeholders));
+        $stmt->execute($values);
     }
 }
 

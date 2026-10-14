@@ -306,8 +306,8 @@ class PoolScheduler {
                         'is_recurring' => true
                     ];
                 } else {
-                    $startDate = new DateTime($row['start_date']);
-                    $endDate = new DateTime($row['end_date']);
+                    $startDate = new DateTime($row['start_date'], self::wallClock());
+                    $endDate = new DateTime($row['end_date'], self::wallClock());
 
                     $dateRanges[] = [
                         'id' => $row['id'],
@@ -405,7 +405,7 @@ class PoolScheduler {
                 if (!isset($holidays[$refId])) {
                     $holidays[$refId] = [];
                 }
-                $holidays[$refId][$year] = new DateTime($row['date']);
+                $holidays[$refId][$year] = new DateTime($row['date'], self::wallClock());
             }
 
             // For backward compatibility, also index by year for reference_day_id=1 (Easter)
@@ -450,7 +450,7 @@ class PoolScheduler {
         $month = intdiv($h + $l - 7 * $m + 114, 31);
         $day = (($h + $l - 7 * $m + 114) % 31) + 1;
 
-        return new DateTime("$year-$month-$day");
+        return new DateTime("$year-$month-$day", self::wallClock());
     }
 
     /**
@@ -462,7 +462,7 @@ class PoolScheduler {
      */
     public function getScheduleForDate($date) {
         if (is_string($date)) {
-            $date = new DateTime($date);
+            $date = new DateTime($date, self::wallClock());
         }
 
         $dateStr = $date->format('Y-m-d');
@@ -604,7 +604,7 @@ class PoolScheduler {
      */
     public function getPeriods($date) {
         if (is_string($date)) {
-            $date = new DateTime($date);
+            $date = new DateTime($date, self::wallClock());
         }
 
         $scheduleName = $this->getScheduleForDate($date);
@@ -625,7 +625,7 @@ class PoolScheduler {
      */
     public function getCurrentTemperature($datetime) {
         if (is_string($datetime)) {
-            $datetime = new DateTime($datetime);
+            $datetime = new DateTime($datetime, self::wallClock());
         }
 
         $hour = (int) $datetime->format('G');
@@ -671,7 +671,7 @@ class PoolScheduler {
      */
     public function getDailyTransitions($date) {
         if (is_string($date)) {
-            $date = new DateTime($date);
+            $date = new DateTime($date, self::wallClock());
         }
 
         $periods = $this->getPeriods($date);
@@ -714,7 +714,7 @@ class PoolScheduler {
      */
     public function findNextOpening($datetime) {
         if (is_string($datetime)) {
-            $datetime = new DateTime($datetime);
+            $datetime = new DateTime($datetime, self::wallClock());
         }
 
         $currentDate = clone $datetime;
@@ -763,7 +763,7 @@ class PoolScheduler {
      */
     public function getCurrentPeriod($datetime) {
         if (is_string($datetime)) {
-            $datetime = new DateTime($datetime);
+            $datetime = new DateTime($datetime, self::wallClock());
         }
 
         $hour = (int) $datetime->format('G');
@@ -835,6 +835,19 @@ class PoolScheduler {
         return ['default' => $this->defaultTarget, 'offset' => $this->targetOffset];
     }
 
+
+    /**
+     * Local clock times ('Y-m-d H:i:s' in the site's time zone) are handled
+     * as wall-clock values in a fixed zone (UTC), so date arithmetic does not
+     * depend on the server's default time zone (it used to: on a non-UTC
+     * server the hours to the next opening on a DST night differed by one).
+     * The TypeScript engine (assets/js/sim) uses the same rule.
+     */
+    private static function wallClock() {
+        static $utc = null;
+        return $utc ??= new DateTimeZone('UTC');
+    }
+
     public function getTemplate() {
         return $this->template;
     }
@@ -885,7 +898,7 @@ class PoolScheduler {
         $s->holidayDates = [];
         foreach ($state['holiday_dates'] ?? [] as $refId => $years) {
             foreach ($years as $year => $date) {
-                $s->holidayDates[(int) $refId][(int) $year] = new DateTime($date);
+                $s->holidayDates[(int) $refId][(int) $year] = new DateTime($date, self::wallClock());
             }
         }
         // Same Easter shortcut as loadHolidayDates()
@@ -939,8 +952,8 @@ class PoolScheduler {
      * @return array
      */
     public function getScheduleRange($startDate, $endDate) {
-        $start = new DateTime($startDate);
-        $end = new DateTime($endDate);
+        $start = new DateTime($startDate, self::wallClock());
+        $end = new DateTime($endDate, self::wallClock());
         $results = [];
 
         $current = clone $start;
@@ -971,7 +984,7 @@ class PoolScheduler {
      * @return array Debug information
      */
     public function getScheduleDebugInfo($date) {
-        $dateObj = new DateTime($date);
+        $dateObj = new DateTime($date, self::wallClock());
         $scheduleName = $this->getScheduleForDate($dateObj);
         $periods = $this->getPeriods($dateObj);
 
