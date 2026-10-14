@@ -205,6 +205,7 @@ const ConfigurationModule = {
                 this.setVal('cfg-lower-tolerance', config.control.temp_tolerance);
             }
             this.setVal('cfg-strategy', config.control.strategy);
+            this.setVal('cfg-standby-temp', config.control.standby_temp ?? '');
         }
 
         // Bather Load
@@ -394,7 +395,9 @@ const ConfigurationModule = {
                 target_temp: parseFloat(this.getVal('cfg-target-temp')),
                 upper_tolerance: parseFloat(this.getVal('cfg-upper-tolerance')),
                 lower_tolerance: parseFloat(this.getVal('cfg-lower-tolerance')),
-                strategy: this.getVal('cfg-strategy')
+                strategy: this.getVal('cfg-strategy'),
+                // Blank = no standby minimum (null)
+                standby_temp: this.getVal('cfg-standby-temp') === '' ? null : parseFloat(this.getVal('cfg-standby-temp'))
             },
             bathers: {
                 per_day: parseInt(this.getVal('cfg-bathers')),

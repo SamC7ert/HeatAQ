@@ -167,7 +167,9 @@ hour from `water_temp − target`.
 | `T_req` exceeds `max_temp` | Cap at `max_temp`. Buffer will be insufficient; boiler backstops during the open period. |
 | Closed period too short to reach `T_req` | Heat as high as the heat pump can; boiler backstops during the open period. |
 | Coast would drop below `min_temp` | Heat pump holds `min_temp` until the late-start ramp begins. |
-| Boiler during a closed period | **Never.** Buffer is heat-pump-only. |
+| Boiler during a closed period | **Never** for buffer. Only to hold the standby temperature (below). |
+| Long closure (next opening > 30 days ahead) | No plan can be made. The pool holds the **standby temperature** (`control.standby_temp`; heat pump first, boiler backstop) or, if none is set, is unheated (it cannot cool below the 5 °C floor, and no losses are counted below it). Once a day the simulator estimates how long the heat pump needs from the current water temperature to the next opening's target; when that time (+12 h) has come, the normal closed-period plan starts. |
+| No heat pump | Predictive cannot build a buffer, so the run uses reactive control (`strategy_used` in the summary). |
 
 ---
 
@@ -260,6 +262,7 @@ demands it (Regime A holds at target).
 | `target_offset` | SimControl adjustment added to every resolved target (−5…+5 °C). |
 | `max_temp` | Hard cap on preheat temperature. |
 | `min_temp` | Floor the water may coast to while closed. |
+| `standby_temp` | Minimum water temperature during long closures (blank = none). |
 | `hp_capacity_kw` | Determines whether a given open period needs preheat. |
 | `boiler_capacity_kw` | Open-period backstop only. |
 | thermal mass (from pool volume) | Converts °C of buffer ↔ kWh of stored energy. |
