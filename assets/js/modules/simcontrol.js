@@ -555,9 +555,9 @@ const SimControlModule = {
 
         // Pool/environment values
         const windExp = withOverride(
-            config.wind_exposure_factor,
-            overrides.pool?.wind_exposure,
-            '', 2
+            config.wind_exposure_factor != null ? config.wind_exposure_factor * 100 : null,
+            overrides.pool?.wind_exposure != null ? overrides.pool.wind_exposure * 100 : undefined,
+            '%', 1
         );
         const solarAbs = withOverride(
             config.solar_absorption ? config.solar_absorption * 100 : null,

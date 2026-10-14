@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.12.4';   // unmet_kwh = uncovered loss at/below hold level (no phantom ramp unmet); debug replay seeds closed start, uses stored targets
+    const VERSION = '3.12.5';   // Wind exposure override above 1 is a percentage (40 -> 0.40), was used as a 40x factor
     const TARGET_OFFSET_LIMIT = 5.0;  // °C, max |offset| accepted from SimControl
 
     private $db;
@@ -213,7 +213,13 @@ class EnergySimulator {
                 $this->poolConfig['volume_m3'] = $uiConfig['pool']['volume_m3'] ?? $this->poolConfig['volume_m3'];
             }
 
-            $this->poolConfig['wind_exposure_factor'] = $uiConfig['pool']['wind_exposure'] ?? $this->poolConfig['wind_exposure_factor'];
+            // Wind exposure is a fraction (0.5 = 50 %). SimControl's override is
+            // typed as a percentage, so a value above 1 is read as percent -
+            // previously "40" became a 40x factor on evaporation/convection.
+            if (isset($uiConfig['pool']['wind_exposure'])) {
+                $wind = (float) $uiConfig['pool']['wind_exposure'];
+                $this->poolConfig['wind_exposure_factor'] = $wind > 1 ? $wind / 100 : $wind;
+            }
             $this->poolConfig['years_operating'] = $uiConfig['pool']['years_operating'] ?? $this->poolConfig['years_operating'];
             $this->poolConfig['has_tunnel'] = $uiConfig['pool']['has_tunnel'] ?? $this->poolConfig['has_tunnel'];
 
