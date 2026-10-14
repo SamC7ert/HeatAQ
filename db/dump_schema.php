@@ -1,10 +1,11 @@
 <?php
 /**
- * Database Schema Dump Script
- * Generates a complete schema description and saves to db/schema.json
+ * Database Schema Dump Script (command line)
+ * Generates a complete schema description and saves to db/schema.json / schema.md
  *
  * Usage: php db/dump_schema.php [--push] [--json]
- * From the app: Admin -> System runs it through heataq_api (action dump_schema).
+ * From the app: Admin -> System runs the same code in-process
+ * (heataq_api action dump_schema -> lib/SchemaDumper.php).
  */
 
 // Command line only: this script must never run from a web request.
@@ -14,167 +15,27 @@ if (PHP_SAPI !== 'cli') {
 }
 
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../lib/SchemaDumper.php';
+
+$args = $argv ?? [];
+$asJson = in_array('--json', $args, true);
 
 try {
-    $pdo = Config::getDatabase();
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $result = SchemaDumper::dump(Config::getDatabase(), in_array('--push', $args, true));
 
-    // Get database name from connection
-    $dbName = $pdo->query("SELECT DATABASE()")->fetchColumn();
-
-    $schema = [
-        'generated_at' => date('Y-m-d H:i:s'),
-        'database' => $dbName,
-        'tables' => []
-    ];
-
-    // Get all tables
-    $tables = $pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN);
-
-    foreach ($tables as $table) {
-        $tableInfo = [
-            'name' => $table,
-            'columns' => [],
-            'indexes' => [],
-            'row_count' => 0
-        ];
-
-        // Get column info
-        $columns = $pdo->query("DESCRIBE `$table`")->fetchAll(PDO::FETCH_ASSOC);
-        foreach ($columns as $col) {
-            $tableInfo['columns'][] = [
-                'name' => $col['Field'],
-                'type' => $col['Type'],
-                'null' => $col['Null'],
-                'key' => $col['Key'],
-                'default' => $col['Default'],
-                'extra' => $col['Extra']
-            ];
-        }
-
-        // Get indexes
-        $indexes = $pdo->query("SHOW INDEX FROM `$table`")->fetchAll(PDO::FETCH_ASSOC);
-        $indexMap = [];
-        foreach ($indexes as $idx) {
-            $keyName = $idx['Key_name'];
-            if (!isset($indexMap[$keyName])) {
-                $indexMap[$keyName] = [
-                    'name' => $keyName,
-                    'unique' => !$idx['Non_unique'],
-                    'columns' => []
-                ];
-            }
-            $indexMap[$keyName]['columns'][] = $idx['Column_name'];
-        }
-        $tableInfo['indexes'] = array_values($indexMap);
-
-        // Get row count
-        $count = $pdo->query("SELECT COUNT(*) FROM `$table`")->fetchColumn();
-        $tableInfo['row_count'] = (int)$count;
-
-        $schema['tables'][$table] = $tableInfo;
-    }
-
-    // Save to JSON file
-    $jsonPath = __DIR__ . '/schema.json';
-    file_put_contents($jsonPath, json_encode($schema, JSON_PRETTY_PRINT));
-
-    // Also create a readable markdown version
-    $md = "# Database Schema\n\n";
-    $md .= "Generated: {$schema['generated_at']}\n\n";
-    $md .= "Database: {$schema['database']}\n\n";
-
-    foreach ($schema['tables'] as $tableName => $table) {
-        $md .= "## $tableName\n\n";
-        $md .= "Rows: {$table['row_count']}\n\n";
-        $md .= "| Column | Type | Null | Key | Default | Extra |\n";
-        $md .= "|--------|------|------|-----|---------|-------|\n";
-        foreach ($table['columns'] as $col) {
-            $default = $col['default'] ?? 'NULL';
-            $md .= "| {$col['name']} | {$col['type']} | {$col['null']} | {$col['key']} | $default | {$col['extra']} |\n";
-        }
-        $md .= "\n";
-
-        if (!empty($table['indexes'])) {
-            $md .= "**Indexes:**\n";
-            foreach ($table['indexes'] as $idx) {
-                $unique = $idx['unique'] ? 'UNIQUE ' : '';
-                $cols = implode(', ', $idx['columns']);
-                $md .= "- {$unique}`{$idx['name']}` ($cols)\n";
-            }
-            $md .= "\n";
-        }
-    }
-
-    $mdPath = __DIR__ . '/schema.md';
-    file_put_contents($mdPath, $md);
-
-    // Check if git push requested
-    $args = $argv ?? [];
-    $pushToGit = in_array('--push', $args, true);
-    $gitResult = null;
-
-    if ($pushToGit) {
-        $projectRoot = dirname(__DIR__);
-        $branch = 'db-schema-update';  // Fixed branch name - no more timestamp proliferation
-        $commitMsg = 'Update database schema ' . date('Y-m-d H:i');
-
-        // Run git commands:
-        // 1. Commit to schema branch
-        // 2. Push schema branch
-        // 3. Merge into master
-        // 4. Push master
-        $commands = [
-            "cd " . escapeshellarg($projectRoot),
-            "git checkout " . escapeshellarg($branch) . " 2>/dev/null || git checkout -b " . escapeshellarg($branch),
-            "git add db/schema.json db/schema.md",
-            "git commit -m " . escapeshellarg($commitMsg) . " || echo 'No changes to commit'",
-            "git push -u origin " . escapeshellarg($branch),
-            "git checkout master",
-            "git merge " . escapeshellarg($branch) . " -m " . escapeshellarg("Merge $branch: $commitMsg"),
-            "git push origin master"
-        ];
-
-        $fullCommand = implode(' && ', $commands) . ' 2>&1';
-        $output = shell_exec($fullCommand);
-
-        $merged = strpos($output, 'fatal') === false && strpos($output, 'CONFLICT') === false;
-        $gitResult = [
-            'pushed' => $merged,
-            'merged' => $merged,
-            'branch' => $branch,
-            'output' => $output
-        ];
-    }
-
-    // Output result (--json: for the API action that runs this script)
-    if (!in_array('--json', $args, true)) {
+    if ($asJson) {
+        echo json_encode($result);
+    } else {
         echo "Schema dumped to:\n";
-        echo "  - $jsonPath\n";
-        echo "  - $mdPath\n";
-        echo "\nTables found: " . count($schema['tables']) . "\n";
-        if ($gitResult) {
-            echo "\nGit: " . ($gitResult['merged'] ? "Pushed and merged to master" : "Failed") . "\n";
-            echo $gitResult['output'] . "\n";
+        echo "  - db/schema.json\n";
+        echo "  - db/schema.md\n";
+        echo "\nTables found: " . $result['tables'] . "\n";
+        if (!empty($result['git'])) {
+            echo "\nGit: " . ($result['git']['merged'] ? "Pushed and merged to master" : "Failed") . "\n";
+            echo $result['git']['output'] . "\n";
         }
-    } else {
-        $response = [
-            'status' => 'success',
-            'tables' => count($schema['tables']),
-            'json_path' => 'db/schema.json',
-            'md_path' => 'db/schema.md'
-        ];
-        if ($gitResult) {
-            $response['git'] = $gitResult;
-        }
-        echo json_encode($response);
     }
-
 } catch (Exception $e) {
-    if (!in_array('--json', $argv ?? [], true)) {
-        echo "Error: " . $e->getMessage() . "\n";
-    } else {
-        echo json_encode(['error' => $e->getMessage()]);
-    }
+    echo $asJson ? json_encode(['error' => $e->getMessage()]) : "Error: " . $e->getMessage() . "\n";
     exit(1);
 }
