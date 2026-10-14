@@ -1,5 +1,5 @@
 {
-    "generated_at": "2026-07-15 07:19:30",
+    "generated_at": "2026-10-14 19:36:18",
     "database": "heataq_pool-353130302dd2",
     "tables": {
         "audit_log": {
@@ -124,7 +124,7 @@
                     ]
                 }
             ],
-            "row_count": 17047
+            "row_count": 18747
         },
         "calendar_date_ranges": {
             "name": "calendar_date_ranges",
@@ -256,7 +256,7 @@
                     ]
                 }
             ],
-            "row_count": 10
+            "row_count": 11
         },
         "calendar_exception_days": {
             "name": "calendar_exception_days",
@@ -569,7 +569,7 @@
                     "name": "template_name",
                     "type": "varchar(100)",
                     "null": "NO",
-                    "key": "MUL",
+                    "key": "",
                     "default": null,
                     "extra": ""
                 },
@@ -585,7 +585,7 @@
                     "name": "project_id",
                     "type": "int(11)",
                     "null": "YES",
-                    "key": "",
+                    "key": "MUL",
                     "default": null,
                     "extra": ""
                 },
@@ -687,9 +687,10 @@
                     ]
                 },
                 {
-                    "name": "unique_name_version",
+                    "name": "unique_project_name_version",
                     "unique": true,
                     "columns": [
+                        "project_id",
                         "template_name",
                         "template_version"
                     ]
@@ -702,7 +703,7 @@
                     ]
                 }
             ],
-            "row_count": 10
+            "row_count": 11
         },
         "day_schedule_periods": {
             "name": "day_schedule_periods",
@@ -797,7 +798,7 @@
                     ]
                 }
             ],
-            "row_count": 14
+            "row_count": 16
         },
         "day_schedules": {
             "name": "day_schedules",
@@ -876,7 +877,7 @@
                     ]
                 }
             ],
-            "row_count": 17
+            "row_count": 19
         },
         "exception_days": {
             "name": "exception_days",
@@ -1199,6 +1200,69 @@
             ],
             "row_count": 101
         },
+        "login_attempts": {
+            "name": "login_attempts",
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": "auto_increment"
+                },
+                {
+                    "name": "email",
+                    "type": "varchar(255)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "ip_address",
+                    "type": "varchar(45)",
+                    "null": "NO",
+                    "key": "MUL",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "attempted_at",
+                    "type": "timestamp",
+                    "null": "NO",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "id"
+                    ]
+                },
+                {
+                    "name": "idx_login_attempts_email",
+                    "unique": false,
+                    "columns": [
+                        "email",
+                        "attempted_at"
+                    ]
+                },
+                {
+                    "name": "idx_login_attempts_ip",
+                    "unique": false,
+                    "columns": [
+                        "ip_address",
+                        "attempted_at"
+                    ]
+                }
+            ],
+            "row_count": 0
+        },
         "password_reset_attempts": {
             "name": "password_reset_attempts",
             "columns": [
@@ -1260,7 +1324,7 @@
                     ]
                 }
             ],
-            "row_count": 2
+            "row_count": 3
         },
         "password_reset_tokens": {
             "name": "password_reset_tokens",
@@ -1525,7 +1589,7 @@
                     ]
                 }
             ],
-            "row_count": 3
+            "row_count": 4
         },
         "pools": {
             "name": "pools",
@@ -1608,6 +1672,30 @@
                     "null": "YES",
                     "key": "",
                     "default": "0.500",
+                    "extra": ""
+                },
+                {
+                    "name": "wind_reference_height_m",
+                    "type": "decimal(4,1)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "terrain_roughness",
+                    "type": "decimal(6,4)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "fence_wind_transmission",
+                    "type": "decimal(4,3)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
                     "extra": ""
                 },
                 {
@@ -1722,7 +1810,7 @@
                     ]
                 }
             ],
-            "row_count": 3
+            "row_count": 4
         },
         "projects": {
             "name": "projects",
@@ -1785,7 +1873,7 @@
                     ]
                 }
             ],
-            "row_count": 3
+            "row_count": 4
         },
         "reference_day_dates": {
             "name": "reference_day_dates",
@@ -1981,7 +2069,7 @@
                     "name": "name",
                     "type": "varchar(100)",
                     "null": "NO",
-                    "key": "MUL",
+                    "key": "",
                     "default": null,
                     "extra": ""
                 },
@@ -2029,7 +2117,7 @@
                     "name": "project_id",
                     "type": "int(11)",
                     "null": "NO",
-                    "key": "",
+                    "key": "MUL",
                     "default": null,
                     "extra": ""
                 }
@@ -2043,9 +2131,10 @@
                     ]
                 },
                 {
-                    "name": "unique_name_version",
+                    "name": "unique_project_name_version",
                     "unique": true,
                     "columns": [
+                        "project_id",
                         "name",
                         "version"
                     ]
@@ -2055,6 +2144,53 @@
                     "unique": false,
                     "columns": [
                         "base_week_schedule_id"
+                    ]
+                }
+            ],
+            "row_count": 8
+        },
+        "schema_migrations": {
+            "name": "schema_migrations",
+            "columns": [
+                {
+                    "name": "filename",
+                    "type": "varchar(255)",
+                    "null": "NO",
+                    "key": "PRI",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "applied_at",
+                    "type": "timestamp",
+                    "null": "NO",
+                    "key": "",
+                    "default": "current_timestamp()",
+                    "extra": ""
+                },
+                {
+                    "name": "statements",
+                    "type": "int(11)",
+                    "null": "NO",
+                    "key": "",
+                    "default": "0",
+                    "extra": ""
+                },
+                {
+                    "name": "applied_by",
+                    "type": "int(11)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                }
+            ],
+            "indexes": [
+                {
+                    "name": "PRIMARY",
+                    "unique": true,
+                    "columns": [
+                        "filename"
                     ]
                 }
             ],
@@ -2152,6 +2288,22 @@
                     "extra": ""
                 },
                 {
+                    "name": "hp_thermal_kwh",
+                    "type": "decimal(10,3)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "boiler_thermal_kwh",
+                    "type": "decimal(10,3)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
                     "name": "total_cost",
                     "type": "decimal(10,2)",
                     "null": "NO",
@@ -2191,7 +2343,7 @@
                     ]
                 }
             ],
-            "row_count": 236152
+            "row_count": 303716
         },
         "simulation_hourly_results": {
             "name": "simulation_hourly_results",
@@ -2262,6 +2414,14 @@
                 },
                 {
                     "name": "water_temp",
+                    "type": "decimal(5,2)",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
+                    "name": "water_temp_start",
                     "type": "decimal(5,2)",
                     "null": "YES",
                     "key": "",
@@ -2372,7 +2532,7 @@
                     ]
                 }
             ],
-            "row_count": 3639067
+            "row_count": 4568275
         },
         "simulation_runs": {
             "name": "simulation_runs",
@@ -2512,7 +2672,7 @@
                     ]
                 }
             ],
-            "row_count": 566
+            "row_count": 620
         },
         "site_solar_daily": {
             "name": "site_solar_daily",
@@ -2590,7 +2750,7 @@
                     ]
                 }
             ],
-            "row_count": 7671
+            "row_count": 11324
         },
         "site_solar_hourly": {
             "name": "site_solar_hourly",
@@ -2652,7 +2812,7 @@
                     ]
                 }
             ],
-            "row_count": 184104
+            "row_count": 271776
         },
         "solar_daily_data": {
             "name": "solar_daily_data",
@@ -2804,7 +2964,7 @@
                     ]
                 }
             ],
-            "row_count": 21
+            "row_count": 29
         },
         "user_projects": {
             "name": "user_projects",
@@ -2881,7 +3041,7 @@
                     ]
                 }
             ],
-            "row_count": 6
+            "row_count": 7
         },
         "user_sessions": {
             "name": "user_sessions",
@@ -2981,7 +3141,7 @@
                     ]
                 }
             ],
-            "row_count": 65
+            "row_count": 17
         },
         "users": {
             "name": "users",
@@ -3150,6 +3310,14 @@
                     "key": "",
                     "default": null,
                     "extra": ""
+                },
+                {
+                    "name": "is_interpolated",
+                    "type": "tinyint(1)",
+                    "null": "NO",
+                    "key": "",
+                    "default": "0",
+                    "extra": ""
                 }
             ],
             "indexes": [
@@ -3169,7 +3337,7 @@
                     ]
                 }
             ],
-            "row_count": 293278
+            "row_count": 406664
         },
         "weather_stations": {
             "name": "weather_stations",
@@ -3272,10 +3440,10 @@
                 },
                 {
                     "name": "terrain_roughness",
-                    "type": "decimal(5,3)",
+                    "type": "decimal(6,4)",
                     "null": "YES",
                     "key": "",
-                    "default": "0.030",
+                    "default": "0.0300",
                     "extra": ""
                 }
             ],
@@ -3288,7 +3456,7 @@
                     ]
                 }
             ],
-            "row_count": 3
+            "row_count": 4
         },
         "week_schedules": {
             "name": "week_schedules",
@@ -3456,7 +3624,7 @@
                     ]
                 }
             ],
-            "row_count": 12
+            "row_count": 13
         }
     }
 }

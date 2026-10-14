@@ -1,12 +1,12 @@
 # Database Schema
 
-Generated: 2026-07-15 07:19:30
+Generated: 2026-10-14 19:36:18
 
 Database: heataq_pool-353130302dd2
 
 ## audit_log
 
-Rows: 17047
+Rows: 18747
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -30,7 +30,7 @@ Rows: 17047
 
 ## calendar_date_ranges
 
-Rows: 10
+Rows: 11
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -108,15 +108,15 @@ Rows: 11
 
 ## config_templates
 
-Rows: 10
+Rows: 11
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
 | template_id | int(11) | NO | PRI | NULL | auto_increment |
 | pool_site_id | int(11) | YES |  | NULL |  |
-| template_name | varchar(100) | NO | MUL | NULL |  |
+| template_name | varchar(100) | NO |  | NULL |  |
 | template_version | varchar(20) | YES |  | v1.0 |  |
-| project_id | int(11) | YES |  | NULL |  |
+| project_id | int(11) | YES | MUL | NULL |  |
 | pool_id | int(11) | YES | MUL | NULL |  |
 | hp_capacity_kw | decimal(6,2) | YES |  | NULL |  |
 | boiler_capacity_kw | decimal(6,2) | YES |  | NULL |  |
@@ -131,12 +131,12 @@ Rows: 10
 
 **Indexes:**
 - UNIQUE `PRIMARY` (template_id)
-- UNIQUE `unique_name_version` (template_name, template_version)
+- UNIQUE `unique_project_name_version` (project_id, template_name, template_version)
 - `idx_config_pool` (pool_id)
 
 ## day_schedule_periods
 
-Rows: 14
+Rows: 16
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -156,7 +156,7 @@ Rows: 14
 
 ## day_schedules
 
-Rows: 17
+Rows: 19
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -253,9 +253,25 @@ Rows: 101
 - `idx_year` (year)
 - `idx_country` (country)
 
+## login_attempts
+
+Rows: 0
+
+| Column | Type | Null | Key | Default | Extra |
+|--------|------|------|-----|---------|-------|
+| id | int(11) | NO | PRI | NULL | auto_increment |
+| email | varchar(255) | NO | MUL | NULL |  |
+| ip_address | varchar(45) | NO | MUL | NULL |  |
+| attempted_at | timestamp | NO |  | current_timestamp() |  |
+
+**Indexes:**
+- UNIQUE `PRIMARY` (id)
+- `idx_login_attempts_email` (email, attempted_at)
+- `idx_login_attempts_ip` (ip_address, attempted_at)
+
 ## password_reset_attempts
 
-Rows: 2
+Rows: 3
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -291,7 +307,7 @@ Rows: 1
 
 ## pool_sites
 
-Rows: 3
+Rows: 4
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -321,7 +337,7 @@ Rows: 3
 
 ## pools
 
-Rows: 3
+Rows: 4
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -335,6 +351,9 @@ Rows: 3
 | area_m2 | decimal(8,2) | YES |  | 312.50 |  |
 | volume_m3 | decimal(10,2) | YES |  | 625.00 |  |
 | wind_exposure | decimal(4,3) | YES |  | 0.500 |  |
+| wind_reference_height_m | decimal(4,1) | YES |  | NULL |  |
+| terrain_roughness | decimal(6,4) | YES |  | NULL |  |
+| fence_wind_transmission | decimal(4,3) | YES |  | NULL |  |
 | solar_absorption | decimal(4,1) | YES |  | 60.0 |  |
 | years_operating | int(11) | YES |  | 3 |  |
 | has_cover | tinyint(1) | YES |  | 1 |  |
@@ -354,7 +373,7 @@ Rows: 3
 
 ## projects
 
-Rows: 3
+Rows: 4
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -417,27 +436,41 @@ Rows: 0
 
 ## schedule_templates
 
-Rows: 7
+Rows: 8
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
 | template_id | int(11) | NO | PRI | NULL | auto_increment |
-| name | varchar(100) | NO | MUL | NULL |  |
+| name | varchar(100) | NO |  | NULL |  |
 | version | varchar(20) | YES |  | v1.0 |  |
 | base_week_schedule_id | int(11) | YES | MUL | NULL |  |
 | description | text | YES |  | NULL |  |
 | created_at | timestamp | YES |  | current_timestamp() |  |
 | created_by | varchar(100) | YES |  | NULL |  |
-| project_id | int(11) | NO |  | NULL |  |
+| project_id | int(11) | NO | MUL | NULL |  |
 
 **Indexes:**
 - UNIQUE `PRIMARY` (template_id)
-- UNIQUE `unique_name_version` (name, version)
+- UNIQUE `unique_project_name_version` (project_id, name, version)
 - `base_week_schedule_id` (base_week_schedule_id)
+
+## schema_migrations
+
+Rows: 7
+
+| Column | Type | Null | Key | Default | Extra |
+|--------|------|------|-----|---------|-------|
+| filename | varchar(255) | NO | PRI | NULL |  |
+| applied_at | timestamp | NO |  | current_timestamp() |  |
+| statements | int(11) | NO |  | 0 |  |
+| applied_by | int(11) | YES |  | NULL |  |
+
+**Indexes:**
+- UNIQUE `PRIMARY` (filename)
 
 ## simulation_daily_results
 
-Rows: 236152
+Rows: 303716
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -452,6 +485,8 @@ Rows: 236152
 | total_solar_kwh | decimal(10,3) | NO |  | 0.000 |  |
 | total_hp_kwh | decimal(10,3) | NO |  | 0.000 |  |
 | total_boiler_kwh | decimal(10,3) | NO |  | 0.000 |  |
+| hp_thermal_kwh | decimal(10,3) | YES |  | NULL |  |
+| boiler_thermal_kwh | decimal(10,3) | YES |  | NULL |  |
 | total_cost | decimal(10,2) | NO |  | 0.00 |  |
 
 **Indexes:**
@@ -462,7 +497,7 @@ Rows: 236152
 
 ## simulation_hourly_results
 
-Rows: 3639067
+Rows: 4568275
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -475,6 +510,7 @@ Rows: 3639067
 | solar_kwh_m2 | decimal(8,5) | YES |  | NULL |  |
 | target_temp | decimal(4,1) | YES |  | NULL |  |
 | water_temp | decimal(5,2) | YES |  | NULL |  |
+| water_temp_start | decimal(5,2) | YES |  | NULL |  |
 | is_open | tinyint(1) | NO |  | 0 |  |
 | total_loss_kw | decimal(8,3) | YES |  | NULL |  |
 | solar_gain_kw | decimal(8,3) | YES |  | NULL |  |
@@ -493,7 +529,7 @@ Rows: 3639067
 
 ## simulation_runs
 
-Rows: 566
+Rows: 620
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -519,7 +555,7 @@ Rows: 566
 
 ## site_solar_daily
 
-Rows: 7671
+Rows: 11324
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -537,7 +573,7 @@ Rows: 7671
 
 ## site_solar_hourly
 
-Rows: 184104
+Rows: 271776
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -580,7 +616,7 @@ Rows: 50
 
 ## user_preferences
 
-Rows: 21
+Rows: 29
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -596,7 +632,7 @@ Rows: 21
 
 ## user_projects
 
-Rows: 6
+Rows: 7
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -614,7 +650,7 @@ Rows: 6
 
 ## user_sessions
 
-Rows: 65
+Rows: 17
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -657,7 +693,7 @@ Rows: 5
 
 ## weather_data
 
-Rows: 293278
+Rows: 406664
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -668,6 +704,7 @@ Rows: 293278
 | wind_direction | int(11) | YES |  | NULL |  |
 | humidity | int(11) | YES |  | NULL |  |
 | tunnel_temp | decimal(5,2) | YES |  | NULL |  |
+| is_interpolated | tinyint(1) | NO |  | 0 |  |
 
 **Indexes:**
 - UNIQUE `PRIMARY` (station_id, timestamp)
@@ -675,7 +712,7 @@ Rows: 293278
 
 ## weather_stations
 
-Rows: 3
+Rows: 4
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -691,14 +728,14 @@ Rows: 3
 | active_to | date | YES |  | NULL |  |
 | notes | text | YES |  | NULL |  |
 | created_at | timestamp | YES |  | current_timestamp() |  |
-| terrain_roughness | decimal(5,3) | YES |  | 0.030 |  |
+| terrain_roughness | decimal(6,4) | YES |  | 0.0300 |  |
 
 **Indexes:**
 - UNIQUE `PRIMARY` (station_id)
 
 ## week_schedules
 
-Rows: 12
+Rows: 13
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
