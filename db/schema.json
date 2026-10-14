@@ -1,5 +1,5 @@
 {
-    "generated_at": "2026-10-14 19:36:18",
+    "generated_at": "2026-10-14 20:10:39",
     "database": "heataq_pool-353130302dd2",
     "tables": {
         "audit_log": {
@@ -124,7 +124,7 @@
                     ]
                 }
             ],
-            "row_count": 18747
+            "row_count": 18783
         },
         "calendar_date_ranges": {
             "name": "calendar_date_ranges",
@@ -2194,7 +2194,7 @@
                     ]
                 }
             ],
-            "row_count": 7
+            "row_count": 8
         },
         "simulation_daily_results": {
             "name": "simulation_daily_results",
@@ -2343,7 +2343,7 @@
                     ]
                 }
             ],
-            "row_count": 303716
+            "row_count": 307369
         },
         "simulation_hourly_results": {
             "name": "simulation_hourly_results",
@@ -2368,7 +2368,7 @@
                     "name": "timestamp",
                     "type": "datetime",
                     "null": "NO",
-                    "key": "MUL",
+                    "key": "",
                     "default": null,
                     "extra": ""
                 },
@@ -2510,20 +2510,6 @@
                     ]
                 },
                 {
-                    "name": "idx_run_id",
-                    "unique": false,
-                    "columns": [
-                        "run_id"
-                    ]
-                },
-                {
-                    "name": "idx_timestamp",
-                    "unique": false,
-                    "columns": [
-                        "timestamp"
-                    ]
-                },
-                {
                     "name": "idx_run_timestamp",
                     "unique": false,
                     "columns": [
@@ -2532,7 +2518,7 @@
                     ]
                 }
             ],
-            "row_count": 4568275
+            "row_count": 4655947
         },
         "simulation_runs": {
             "name": "simulation_runs",
@@ -2610,6 +2596,22 @@
                     "extra": ""
                 },
                 {
+                    "name": "is_baseline",
+                    "type": "tinyint(1)",
+                    "null": "NO",
+                    "key": "",
+                    "default": "0",
+                    "extra": ""
+                },
+                {
+                    "name": "hourly_purged_at",
+                    "type": "datetime",
+                    "null": "YES",
+                    "key": "",
+                    "default": null,
+                    "extra": ""
+                },
+                {
                     "name": "created_at",
                     "type": "datetime",
                     "null": "NO",
@@ -2672,7 +2674,7 @@
                     ]
                 }
             ],
-            "row_count": 620
+            "row_count": 621
         },
         "site_solar_daily": {
             "name": "site_solar_daily",
