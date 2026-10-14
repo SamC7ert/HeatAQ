@@ -565,7 +565,11 @@ const SimControlModule = {
             '%', 1
         );
 
-        const strategy = equip.control_strategy || config.control_strategy || 'reactive';
+        let strategy = summary.strategy_used || equip.control_strategy || config.control_strategy || 'reactive';
+        if (summary.strategy_requested && summary.strategy_used && summary.strategy_requested !== summary.strategy_used) {
+            // e.g. predictive without a heat pump runs reactive
+            strategy = `${summary.strategy_used} (${summary.strategy_requested} needs a heat pump)`;
+        }
         const scheduleName = results.meta?.schedule_template_name || '-';
         const hasOverrides = Object.keys(overrides).length > 0;
 

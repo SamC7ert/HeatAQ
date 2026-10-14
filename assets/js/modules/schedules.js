@@ -369,8 +369,8 @@ const schedules = {
                 html += `
                     <tr data-index="${index}">
                         <td>${index + 1}</td>
-                        <td><input type="text" class="form-control form-control-sm period-start" value="${escapeHtml(startTime)}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" style="width: 70px;" /></td>
-                        <td><input type="text" class="form-control form-control-sm period-end" value="${escapeHtml(endTime)}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" style="width: 70px;" /></td>
+                        <td><input type="text" class="form-control form-control-sm period-start" value="${escapeHtml(startTime)}" pattern="[0-2][0-9]:00" placeholder="HH:00" title="Whole hours, e.g. 06:00" style="width: 70px;" /></td>
+                        <td><input type="text" class="form-control form-control-sm period-end" value="${escapeHtml(endTime)}" pattern="[0-2][0-9]:00" placeholder="HH:00" title="Whole hours, e.g. 06:00" style="width: 70px;" /></td>
                         <td><input type="number" class="form-control form-control-sm period-target" value="${escapeHtml(target)}" step="0.5" min="20" max="35" placeholder="default" title="Blank = use the configuration's default target" style="width: 70px;" /></td>
                         <td>
                             <button class="btn btn-danger btn-xs" onclick="app.schedules.removePeriod(${index})" title="Remove period" style="padding: 1px 6px;">×</button>
@@ -682,6 +682,14 @@ const schedules = {
             const targetInput = row.querySelector('.period-target');
 
             if (startInput && endInput && targetInput) {
+                // Whole hours only: the simulator works hour by hour
+                const start = startInput.value.trim(), end = endInput.value.trim();
+                if (!/^([01]\d|2[0-3]):00$/.test(start) || !/^(([01]\d|2[0-3]):00|24:00)$/.test(end)) {
+                    throw new Error(`Period ${index + 1}: use whole hours (HH:00), e.g. 06:00-22:00`);
+                }
+                if (end !== '24:00' && end <= start) {
+                    throw new Error(`Period ${index + 1}: the end must be after the start`);
+                }
                 // Blank target = use the configuration's default target
                 const raw = targetInput.value.trim();
                 const target = raw === '' ? null : parseFloat(raw);
@@ -713,7 +721,13 @@ const schedules = {
         // An open day with no periods is closed in the simulator anyway, so
         // offer to save it as closed rather than storing an inconsistent pair.
         let closed = !!this.editClosed;
-        const periods = closed ? [] : this.collectPeriodsFromTable();
+        let periods;
+        try {
+            periods = closed ? [] : this.collectPeriodsFromTable();
+        } catch (err) {
+            api.utils.showError(err.message);  // was thrown uncaught: no message shown
+            return;
+        }
         if (!closed && periods.length === 0) {
             if (!confirm('This schedule has no open periods. Save it as a closed day?')) return;
             closed = true;

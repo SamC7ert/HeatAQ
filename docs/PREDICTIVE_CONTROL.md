@@ -201,6 +201,14 @@ mistaken for the intended design.
    `poolConfig['min_temp']` / `['max_temp']` fields
    (`EnergySimulator.php:1530`). These two representations need to be reconciled
    into one source of truth.
+3. **Bather loads are not in the heat balance (decided: leave for now, do
+   not forget).** Bathers/day, refill water and shower water are config
+   inputs, and the simulator computes `kwh_per_visit` from them, but no
+   result uses it: neither the hourly heat balance nor the planner adds the
+   refill/shower load, so changing the bather count does not change any
+   result. Only `activity_factor` (evaporation multiplier) has an effect.
+   Modelling the refill (cold make-up water heated to pool temperature) and
+   optional shower heating in the hourly balance is a separate change.
 
 ---
 
