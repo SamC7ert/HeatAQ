@@ -1,5 +1,34 @@
 // API module - Handles all server communication
 
+// The host's rate limiter answers HTTP 429 when requests come too fast. It
+// rejects the request before PHP runs, so nothing was saved and resending is
+// safe. Wrap fetch once (this file loads before every other module) so all
+// API calls wait and retry instead of failing: Retry-After if the host sends
+// it (capped), else 1s, 2s, 4s. auth_api is excluded: its own 429 is a real
+// password-reset limit that a quick retry would only hit again.
+(function () {
+    if (typeof window === 'undefined' || typeof window.fetch !== 'function') return;
+    const nativeFetch = window.fetch.bind(window);
+    const RETRIES = 3;
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+    window.fetch = async function (input, init) {
+        const url = typeof input === 'string' ? input : (input && input.url) || '';
+        const isOwnApi = url.includes('/api/') && !url.includes('auth_api.php')
+            && (!/^https?:\/\//i.test(url) || url.startsWith(window.location.origin));
+        if (!isOwnApi) return nativeFetch(input, init);
+
+        for (let attempt = 0; ; attempt++) {
+            const response = await nativeFetch(input, init);
+            if (response.status !== 429 || attempt >= RETRIES) return response;
+            const retryAfter = parseInt(response.headers.get('Retry-After'), 10);
+            const delay = Number.isFinite(retryAfter) ? Math.min(retryAfter, 10) * 1000 : 1000 * Math.pow(2, attempt);
+            console.warn(`[api] HTTP 429 from host for ${url} — retrying in ${delay / 1000}s (attempt ${attempt + 1}/${RETRIES})`);
+            await sleep(delay);
+        }
+    };
+})();
+
 const api = {
     // Parse a response as JSON. When the server sends something else (a host
     // error page, a resource-limit 503/508 page, a firewall block), the plain

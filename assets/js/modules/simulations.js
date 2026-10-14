@@ -251,7 +251,7 @@ const SimulationsModule = {
                     statusEl.textContent = `Simulating ${monthNames[parseInt(m, 10) - 1]} ${y}... (${d.progress.pct}% of period)`;
                 }
             } catch (e) { /* polling is best-effort */ }
-        }, 1500);
+        }, 3000);  // progress is written once per simulated month; 3s keeps request rate low
         const stopProgressPoll = () => {
             if (this._progressTimer) { clearInterval(this._progressTimer); this._progressTimer = null; }
         };
