@@ -1180,6 +1180,19 @@ const ProjectModule = {
                 this.projects = data.projects || [];
                 console.log('[Project] Parsed projects array:', this.projects.length, 'projects');
 
+                // Take the current project's name from the server list
+                const current = Array.isArray(this.projects)
+                    ? this.projects.find(p => (p.project_id || p.id) == this.currentProject?.id)
+                    : null;
+                const currentName = current && (current.project_name || current.name);
+                if (currentName && currentName !== this.currentProject.name) {
+                    this.currentProject.name = currentName;
+                    this.currentProject.description = current.description || '';
+                    localStorage.setItem('heataq_project_name', currentName);
+                    localStorage.setItem('heataq_project_desc', this.currentProject.description);
+                    this.updateDisplay();
+                }
+
                 if (dropdown && Array.isArray(this.projects) && this.projects.length > 0) {
                     dropdown.innerHTML = this.projects.map(project => {
                         const projectId = project.project_id || project.id;
@@ -1456,44 +1469,16 @@ const ProjectModule = {
 
                 console.log('New project created:', name);
             } else {
-                // Backend might not support project creation yet
-                // Create locally only
-                const localId = 'local_' + Date.now();
-                localStorage.setItem('heataq_project', localId);
-                localStorage.setItem('heataq_project_name', name);
-                localStorage.setItem('heataq_project_desc', description);
-                document.cookie = `heataq_project=${localId}; path=/; max-age=31536000`;
-
-                this.currentProject = {
-                    id: localId,
-                    name: name,
-                    description: description
-                };
-
-                this.hideNewProjectModal();
-                this.updateDisplay();
-                this.loadProjectsList();
-
-                console.log('New project created locally:', name);
+                // Show the server's reason and stay in the current project.
+                // (A failed create used to switch to a fake 'local_...' project
+                // that, after a reload, showed another project's site.)
+                let msg = `HTTP ${response.status}`;
+                try { msg = (await response.json()).error || msg; } catch (e) {}
+                alert('Could not create the project: ' + msg);
             }
         } catch (error) {
             console.error('Error creating project:', error);
-            // Create locally as fallback
-            const localId = 'local_' + Date.now();
-            localStorage.setItem('heataq_project', localId);
-            localStorage.setItem('heataq_project_name', name);
-            localStorage.setItem('heataq_project_desc', description);
-            document.cookie = `heataq_project=${localId}; path=/; max-age=31536000`;
-
-            this.currentProject = {
-                id: localId,
-                name: name,
-                description: description
-            };
-
-            this.hideNewProjectModal();
-            this.updateDisplay();
-            this.loadProjectsList();
+            alert('Could not create the project: ' + error.message);
         }
     },
 
@@ -1510,6 +1495,28 @@ const ProjectModule = {
             if (project) {
                 const pId = project.project_id || project.id;
                 const pName = project.project_name || project.name;
+
+                // Switch the server session FIRST and only continue if it
+                // worked. The backend takes the project from the session, so
+                // switching only the browser (the old code ignored a failed
+                // switch) sent the next saves to the previous project.
+                let switchError = null;
+                try {
+                    const resp = await fetch(`${config.API_BASE_URL}?action=switch_project`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ project_id: pId })
+                    });
+                    const data = await resp.json().catch(() => ({}));
+                    if (!resp.ok || !data.success) switchError = data.error || `HTTP ${resp.status}`;
+                } catch (e) {
+                    switchError = e.message;
+                }
+                if (switchError) {
+                    alert('Could not switch project: ' + switchError);
+                    await this.loadProjectsList();  // dropdown back to the current project
+                    return;
+                }
 
                 // Clear old project's site/pool data from localStorage
                 localStorage.removeItem('heataq_site');
@@ -1530,20 +1537,6 @@ const ProjectModule = {
                     name: pName,
                     description: project.description
                 };
-
-                // Persist the switch on the server session BEFORE reloading
-                // data. The backend derives the current project from the
-                // session (not the cookie) in production, so this must complete
-                // first or the reloads below read the previous project.
-                try {
-                    await fetch(`${config.API_BASE_URL}?action=switch_project`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ project_id: pId })
-                    });
-                } catch (e) {
-                    console.error('[Project] switch_project failed:', e);
-                }
 
                 // Clear current site/pool (will be reloaded from API)
                 this.currentSite = null;
@@ -1574,6 +1567,15 @@ const ProjectModule = {
                 // showing (and editing against) the previous project's templates,
                 // day/week schedules and calendar until a full page reload.
                 window.schedulesLoaded = false;
+                // ...and forget the previous project's selected schedules, which
+                // the editors otherwise re-open and save back by id.
+                if (typeof app !== 'undefined' && app.schedules && app.schedules.resetProjectState) {
+                    app.schedules.resetProjectState();
+                }
+                // SimControl reloads its project-dependent data next time it opens
+                if (typeof SimControlModule !== 'undefined') {
+                    SimControlModule.projectChanged = true;
+                }
 
                 // Update projects dropdown to show new selection
                 await this.loadProjectsList();

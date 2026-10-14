@@ -2,12 +2,21 @@
 // REVERTED to match original single-file version exactly
 
 const schedules = {
-    currentTemplate: 1,
+    currentTemplate: null,
     daySchedules: [],
     weekSchedules: [],
     selectedDaySchedule: null,
     selectedWeekSchedule: null,
     
+    // Called on a project switch: the selected schedules belong to the old
+    // project (the editors used to re-open and save them back by id).
+    resetProjectState() {
+        this.selectedDaySchedule = null;
+        this.selectedWeekSchedule = null;
+        this.currentPeriods = null;
+        this.currentTemplate = null;
+    },
+
     async init() {
         // Load templates list first, then load the selected template
         await this.loadTemplatesSelector();
@@ -32,11 +41,12 @@ const schedules = {
     async loadTemplate() {
         const selector = document.getElementById('ohc-selector');
         if (!selector) {
-            // OHC selector not on current page, use default
-            this.currentTemplate = 1;
+            this.currentTemplate = null;
             return;
         }
-        this.currentTemplate = selector.value;
+        // No templates in this project -> no template (never another
+        // project's "template 1")
+        this.currentTemplate = selector.value || null;
 
         // Update description from stored templates
         const descriptionEl = document.getElementById('ohc-description');
@@ -125,7 +135,11 @@ const schedules = {
 
         container.innerHTML = html;
 
-        // Re-select if we had one selected
+        // Re-select if we had one selected - and it is in this list
+        if (this.selectedDaySchedule && !this.daySchedules.some(d => d.day_schedule_id == this.selectedDaySchedule.day_schedule_id)) {
+            this.selectedDaySchedule = null;
+            this.currentPeriods = null;
+        }
         if (this.selectedDaySchedule) {
             const selector = document.getElementById('day-schedule-selector');
             if (selector) {
@@ -452,6 +466,9 @@ const schedules = {
 
         // Re-select if we had one selected, otherwise auto-select first
         const selector = document.getElementById('week-schedule-selector');
+        if (this.selectedWeekSchedule && !this.weekSchedules.some(w => w.week_schedule_id == this.selectedWeekSchedule.week_schedule_id)) {
+            this.selectedWeekSchedule = null;  // from another project / deleted
+        }
         if (this.selectedWeekSchedule) {
             if (selector) {
                 selector.value = this.selectedWeekSchedule.week_schedule_id;
@@ -837,8 +854,8 @@ const schedules = {
     },
 
     async deleteOHC() {
-        if (this.currentTemplate == 1) {
-            api.utils.showError('Cannot delete the default template');
+        if (!this.currentTemplate) {
+            api.utils.showError('No template selected');
             return;
         }
 
@@ -849,12 +866,9 @@ const schedules = {
         try {
             await api.templates.delete(this.currentTemplate);
             api.utils.showSuccess('Template deleted');
-            // Reload templates and select first one
+            // Reload templates; the first remaining one is selected (or none)
+            this.currentTemplate = null;
             await this.loadTemplatesSelector();
-            const selector = document.getElementById('ohc-selector');
-            if (selector) {
-                selector.value = 1;
-            }
             await this.loadTemplate();
         } catch (err) {
             api.utils.showError('Failed to delete: ' + err.message);
@@ -895,8 +909,11 @@ const schedules = {
                 nameInput.value = '';
                 descInput.value = '';
                 this.toggleNewOHCForm();
-                // Reload templates selector
+                // Reload templates and switch to the new one (the selector
+                // used to show one template while the calendar edited another)
+                this.currentTemplate = result.template_id;
                 await this.loadTemplatesSelector();
+                await this.loadTemplate();
             }
         } catch (err) {
             api.utils.showError('Failed to create template: ' + err.message);
@@ -914,18 +931,22 @@ const schedules = {
             // Store templates for description lookup
             this.templates = data.templates || [];
 
+            const options = this.templates.length
+                ? this.templates.map(t => `<option value="${escapeHtml(t.template_id)}">${escapeHtml(t.name)}</option>`).join('')
+                : '<option value="">-- No schedule templates --</option>';
+            const has = id => this.templates.some(t => String(t.template_id) === String(id));
             const selector = document.getElementById('ohc-selector');
-            if (selector && data.templates) {
-                selector.innerHTML = data.templates.map(t =>
-                    `<option value="${escapeHtml(t.template_id)}">${escapeHtml(t.name)}</option>`
-                ).join('');
+            if (selector) {
+                selector.innerHTML = options;
+                // Keep the current template when it is still there, else the first
+                if (has(this.currentTemplate)) selector.value = this.currentTemplate;
             }
-            // Also update sim-ohc-select
+            // Also update sim-ohc-select, keeping SimControl's choice
             const simSelector = document.getElementById('sim-ohc-select');
-            if (simSelector && data.templates) {
-                simSelector.innerHTML = data.templates.map(t =>
-                    `<option value="${escapeHtml(t.template_id)}">${escapeHtml(t.name)}</option>`
-                ).join('');
+            if (simSelector) {
+                const previous = simSelector.value;
+                simSelector.innerHTML = options;
+                if (has(previous)) simSelector.value = previous;
             }
         } catch (error) {
             console.error('Failed to load templates:', error);

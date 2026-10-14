@@ -8,7 +8,7 @@ const calendar = {
     dateRanges: [],
     weekSchedules: [],
     daySchedules: [],
-    currentTemplateId: 1,
+    currentTemplateId: null,
     loaded: false,  // set once calendar data is loaded; schedules.js re-renders only then
 
     async loadCalendarData(templateId) {
@@ -30,8 +30,16 @@ const calendar = {
     },
 
     async loadCalendarRules(templateId) {
-        // Use default template if not specified
-        const tid = templateId || this.currentTemplateId || 1;
+        // No template (e.g. a new project): show an empty calendar rather than
+        // falling back to template 1, which belongs to another project.
+        const tid = templateId || this.currentTemplateId;
+        if (!tid) {
+            this.dateRanges = [];
+            this.exceptionDays = [];
+            this.renderDateRanges();
+            this.renderExceptionDays();
+            return;
+        }
         try {
             const data = await api.calendar.getRules(tid);
             this.dateRanges = data.rules || [];
