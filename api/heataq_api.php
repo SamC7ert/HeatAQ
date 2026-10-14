@@ -1018,7 +1018,14 @@ class HeatAQAPI {
                 INSERT INTO schedule_templates (project_id, name, version, description, base_week_schedule_id)
                 VALUES (?, ?, ?, ?, ?)
             ");
-            $stmt->execute([$projectId, $name, $nextVer, $description, $baseWeekScheduleId]);
+            try {
+                $stmt->execute([$projectId, $name, $nextVer, $description, $baseWeekScheduleId]);
+            } catch (PDOException $e) {
+                if (($e->errorInfo[1] ?? null) == 1062) {
+                    $this->sendError("A schedule template named \"$name\" ($nextVer) already exists. Choose another name.", 409);
+                }
+                throw $e;
+            }
             $templateId = $this->db->lastInsertId();
         }
 
@@ -1323,13 +1330,41 @@ class HeatAQAPI {
         }
         $this->requireDaySchedule($scheduleId);
 
-        // Delete periods first
-        $stmt = $this->db->prepare("DELETE FROM day_schedule_periods WHERE day_schedule_id = ?");
+        // Refuse while still in use: a week schedule pointing at a deleted day
+        // schedule silently simulated that weekday as closed.
+        $users = [];
+        $stmt = $this->db->prepare("
+            SELECT name FROM week_schedules
+            WHERE ? IN (monday_schedule_id, tuesday_schedule_id, wednesday_schedule_id, thursday_schedule_id,
+                        friday_schedule_id, saturday_schedule_id, sunday_schedule_id)
+        ");
         $stmt->execute([$scheduleId]);
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $n) {
+            $users[] = "week schedule \"$n\"";
+        }
+        $stmt = $this->db->prepare("
+            SELECT DISTINCT t.name FROM schedule_template_exceptions e
+            JOIN schedule_templates t ON t.template_id = e.template_id
+            WHERE e.day_schedule_id = ?
+        ");
+        $stmt->execute([$scheduleId]);
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $n) {
+            $users[] = "exception days in template \"$n\"";
+        }
+        if ($users) {
+            $this->sendError('This day schedule is still used by ' . implode(', ', $users) . '. Change those first.', 409);
+        }
 
-        // Delete the schedule
-        $stmt = $this->db->prepare("DELETE FROM day_schedules WHERE day_schedule_id = ?");
-        $stmt->execute([$scheduleId]);
+        // Periods and schedule together, or neither
+        $this->db->beginTransaction();
+        try {
+            $this->db->prepare("DELETE FROM day_schedule_periods WHERE day_schedule_id = ?")->execute([$scheduleId]);
+            $this->db->prepare("DELETE FROM day_schedules WHERE day_schedule_id = ?")->execute([$scheduleId]);
+            $this->db->commit();
+        } catch (Throwable $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
 
         $this->sendResponse(['success' => true]);
     }
@@ -1342,6 +1377,23 @@ class HeatAQAPI {
             $this->sendError('Invalid schedule ID');
         }
         $this->requireWeekSchedule($scheduleId);
+
+        // Refuse while still in use by a template's calendar or as its base week
+        $users = [];
+        $stmt = $this->db->prepare("
+            SELECT DISTINCT t.name FROM calendar_date_ranges r
+            JOIN schedule_templates t ON t.template_id = r.schedule_template_id
+            WHERE r.week_schedule_id = ?
+            UNION
+            SELECT name FROM schedule_templates WHERE base_week_schedule_id = ?
+        ");
+        $stmt->execute([$scheduleId, $scheduleId]);
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $n) {
+            $users[] = "template \"$n\"";
+        }
+        if ($users) {
+            $this->sendError('This week schedule is still used by ' . implode(', ', $users) . '. Change those first.', 409);
+        }
 
         // Delete the week schedule
         $stmt = $this->db->prepare("DELETE FROM week_schedules WHERE week_schedule_id = ?");
@@ -2496,69 +2548,76 @@ class HeatAQAPI {
             $this->sendError('Name is required');
         }
         $this->requireProjectAccess($projectId);
-        if ($configId) {
-            $this->requireConfig($configId);
-        }
-
-        $configJson = json_encode($configData);
-
-        // Extract individual values from config for legacy columns
-        $hpCapacity = $configData['equipment']['hp_capacity_kw'] ?? null;
-        $boilerCapacity = $configData['equipment']['boiler_capacity_kw'] ?? null;
-        $targetTemp = $configData['control']['target_temp'] ?? null;
-        $controlStrategy = $configData['control']['strategy'] ?? null;
-
-        // Check if columns exist
-        $hasConfigJson = $this->columnExists('config_templates', 'json_config');
-        $hasUpdatedAt = $this->columnExists('config_templates', 'updated_at');
-
-        // Get current user for audit
-        $updatedBy = $this->userId ?? 'system';
-
-        if ($configId) {
-            // Update existing - include legacy columns
-            if ($hasConfigJson && $hasUpdatedAt) {
-                $stmt = $this->db->prepare("
-                    UPDATE config_templates
-                    SET template_name = ?, json_config = ?,
-                        hp_capacity_kw = ?, boiler_capacity_kw = ?, target_temp = ?, control_strategy = ?,
-                        updated_at = NOW(), updated_by = ?
-                    WHERE template_id = ?
-                ");
-                $stmt->execute([$name, $configJson, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy, $updatedBy, $configId]);
-            } elseif ($hasConfigJson) {
-                $stmt = $this->db->prepare("
-                    UPDATE config_templates
-                    SET template_name = ?, json_config = ?,
-                        hp_capacity_kw = ?, boiler_capacity_kw = ?, target_temp = ?, control_strategy = ?
-                    WHERE template_id = ?
-                ");
-                $stmt->execute([$name, $configJson, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy, $configId]);
-            } else {
-                $stmt = $this->db->prepare("
-                    UPDATE config_templates
-                    SET template_name = ?,
-                        hp_capacity_kw = ?, boiler_capacity_kw = ?, target_temp = ?, control_strategy = ?
-                    WHERE template_id = ?
-                ");
-                $stmt->execute([$name, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy, $configId]);
+        try {
+            if ($configId) {
+                $this->requireConfig($configId);
             }
-        } else {
-            // Insert new
-            if ($hasConfigJson) {
-                $stmt = $this->db->prepare("
-                    INSERT INTO config_templates (project_id, template_name, json_config, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ");
-                $stmt->execute([$projectId, $name, $configJson, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy]);
+
+            $configJson = json_encode($configData);
+
+            // Extract individual values from config for legacy columns
+            $hpCapacity = $configData['equipment']['hp_capacity_kw'] ?? null;
+            $boilerCapacity = $configData['equipment']['boiler_capacity_kw'] ?? null;
+            $targetTemp = $configData['control']['target_temp'] ?? null;
+            $controlStrategy = $configData['control']['strategy'] ?? null;
+
+            // Check if columns exist
+            $hasConfigJson = $this->columnExists('config_templates', 'json_config');
+            $hasUpdatedAt = $this->columnExists('config_templates', 'updated_at');
+
+            // Get current user for audit
+            $updatedBy = $this->userId ?? 'system';
+
+            if ($configId) {
+                // Update existing - include legacy columns
+                if ($hasConfigJson && $hasUpdatedAt) {
+                    $stmt = $this->db->prepare("
+                        UPDATE config_templates
+                        SET template_name = ?, json_config = ?,
+                            hp_capacity_kw = ?, boiler_capacity_kw = ?, target_temp = ?, control_strategy = ?,
+                            updated_at = NOW(), updated_by = ?
+                        WHERE template_id = ?
+                    ");
+                    $stmt->execute([$name, $configJson, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy, $updatedBy, $configId]);
+                } elseif ($hasConfigJson) {
+                    $stmt = $this->db->prepare("
+                        UPDATE config_templates
+                        SET template_name = ?, json_config = ?,
+                            hp_capacity_kw = ?, boiler_capacity_kw = ?, target_temp = ?, control_strategy = ?
+                        WHERE template_id = ?
+                    ");
+                    $stmt->execute([$name, $configJson, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy, $configId]);
+                } else {
+                    $stmt = $this->db->prepare("
+                        UPDATE config_templates
+                        SET template_name = ?,
+                            hp_capacity_kw = ?, boiler_capacity_kw = ?, target_temp = ?, control_strategy = ?
+                        WHERE template_id = ?
+                    ");
+                    $stmt->execute([$name, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy, $configId]);
+                }
             } else {
-                $stmt = $this->db->prepare("
-                    INSERT INTO config_templates (project_id, template_name, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ");
-                $stmt->execute([$projectId, $name, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy]);
+                // Insert new
+                if ($hasConfigJson) {
+                    $stmt = $this->db->prepare("
+                        INSERT INTO config_templates (project_id, template_name, json_config, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ");
+                    $stmt->execute([$projectId, $name, $configJson, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy]);
+                } else {
+                    $stmt = $this->db->prepare("
+                        INSERT INTO config_templates (project_id, template_name, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    ");
+                    $stmt->execute([$projectId, $name, $hpCapacity, $boilerCapacity, $targetTemp, $controlStrategy]);
+                }
+                $configId = $this->db->lastInsertId();
             }
-            $configId = $this->db->lastInsertId();
+        } catch (PDOException $e) {
+            if (($e->errorInfo[1] ?? null) == 1062) {
+                $this->sendError("A configuration named \"$name\" already exists in this project. Choose another name.", 409);
+            }
+            throw $e;
         }
 
         $response = ['success' => true, 'config_id' => $configId];
