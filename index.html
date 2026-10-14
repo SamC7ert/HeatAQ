@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HeatAQ Schedule Management</title>
     <link rel="icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="./assets/css/main.css?v=230">
-    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=230">
-    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=230">
-    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=230">
-    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=230">
-    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=230">
+    <link rel="stylesheet" href="./assets/css/main.css?v=231">
+    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=231">
+    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=231">
+    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=231">
+    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=231">
+    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=231">
     <style>
         /* Logout button styles */
         .user-info {
@@ -465,6 +465,10 @@
                                 <tr class="calculated">
                                     <td>Allowed Range</td>
                                     <td id="cfg-temp-range">26 - 29°C</td>
+                                </tr>
+                                <tr>
+                                    <td><label for="cfg-standby-temp">Standby Temp (°C)</label></td>
+                                    <td><input type="number" id="cfg-standby-temp" step="0.5" min="5" max="30" placeholder="none" title="Minimum water temperature during long closures (predictive control). Blank = no minimum: the pool is unheated until the heat pump must start for the next opening."></td>
                                 </tr>
                                 <tr>
                                     <td><label for="cfg-strategy">Strategy</label></td>
@@ -1708,18 +1712,18 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=230"></script>
+    <script src="./assets/js/config.js?v=231"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=230"></script>
-    <script src="./assets/js/modules/navigation.js?v=230"></script>
-    <script src="./assets/js/modules/schedules.js?v=230"></script>
-    <script src="./assets/js/modules/calendar.js?v=230"></script>
-    <script src="./assets/js/modules/simulations.js?v=230"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=230"></script>
-    <script src="./assets/js/modules/configuration.js?v=230"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=230"></script>
-    <script src="./assets/js/modules/admin.js?v=230"></script>
-    <script src="./assets/js/modules/project.js?v=230"></script>
-    <script src="./assets/js/app.js?v=230"></script>
+    <script src="./assets/js/modules/api.js?v=231"></script>
+    <script src="./assets/js/modules/navigation.js?v=231"></script>
+    <script src="./assets/js/modules/schedules.js?v=231"></script>
+    <script src="./assets/js/modules/calendar.js?v=231"></script>
+    <script src="./assets/js/modules/simulations.js?v=231"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=231"></script>
+    <script src="./assets/js/modules/configuration.js?v=231"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=231"></script>
+    <script src="./assets/js/modules/admin.js?v=231"></script>
+    <script src="./assets/js/modules/project.js?v=231"></script>
+    <script src="./assets/js/app.js?v=231"></script>
 </body>
 </html>

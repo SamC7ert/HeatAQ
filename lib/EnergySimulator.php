@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.13.0';   // Predictive without a heat pump runs reactive (strategy_used); whole-hour schedules
+    const VERSION = '3.14.0';   // Standby temperature for long closures; plan starts when the HP needs to; no losses below the 5 C floor
     const TARGET_OFFSET_LIMIT = 5.0;  // °C, max |offset| accepted from SimControl
 
     private $db;
@@ -51,6 +51,8 @@ class EnergySimulator {
     private $thermalMassRate = null;     // kWh/°C - energy to raise pool 1°C
     private $closedPlan = null;          // Current plan for closed period
     private $closedPlanTimestamp = null; // When plan was created
+    private $standbyCheckDate = null;    // Long closures: date of the last "start planning yet?" check
+    private $standbyPlanAt = null;       // Long closures: unix time to start the closed-period plan
     private $openPlan = null;            // Current plan for open period
     private $openPlanTimestamp = null;   // When open plan was created
     private $lastPreheatCalc = [];       // Debug info for preheating
@@ -285,6 +287,12 @@ class EnergySimulator {
             // Config stores upper/lower tolerance separately
             $this->equipment['upper_tolerance'] = $uiConfig['control']['upper_tolerance'] ?? $this->equipment['upper_tolerance'] ?? null;
             $this->equipment['lower_tolerance'] = $uiConfig['control']['lower_tolerance'] ?? $this->equipment['lower_tolerance'] ?? null;
+            // Standby temperature: system-wide minimum water temperature during
+            // long closures (predictive). Blank/null = no minimum.
+            if (array_key_exists('standby_temp', $uiConfig['control'])) {
+                $sb = $uiConfig['control']['standby_temp'];
+                $this->equipment['standby_temp'] = ($sb === null || $sb === '' || !is_numeric($sb)) ? null : (float) $sb;
+            }
             // For backward compat, also check temp_tolerance
             if (isset($uiConfig['control']['temp_tolerance'])) {
                 $this->equipment['upper_tolerance'] = $uiConfig['control']['temp_tolerance'];
@@ -913,6 +921,29 @@ class EnergySimulator {
                     $this->openPlanTimestamp = null;
                 }
 
+                // Long closure: no plan exists because the next opening is
+                // beyond the 30-day look-ahead. The pool then sits at the
+                // standby temperature (if configured). Once a day, check
+                // whether the coming opening is near enough that the heat pump
+                // must start; from then on the normal closed-period plan runs.
+                if ($targetTemp === null && $this->closedPlan === null) {
+                    if ($this->standbyCheckDate !== $date) {
+                        $this->standbyCheckDate = $date;
+                        $this->standbyPlanAt = $this->standbyPlanStart($currentTimestamp, $currentWaterTemp, $weatherArray, $hourIndex);
+                    }
+                    if ($this->standbyPlanAt !== null && $currentTimestamp->getTimestamp() >= $this->standbyPlanAt) {
+                        $this->closedPlan = $this->planClosedPeriod(
+                            $currentTimestamp,
+                            $currentWaterTemp,
+                            $weatherArray,
+                            $hourIndex,
+                            $solarData
+                        );
+                        $this->closedPlanTimestamp = $currentTimestamp;
+                        $this->standbyPlanAt = null;
+                    }
+                }
+
                 // Detect OPEN transition (was closed, now open)
                 if ($prevTargetTemp === null && $targetTemp !== null) {
                     // OPEN transition - carry the preheat flag from the closed plan
@@ -988,6 +1019,12 @@ class EnergySimulator {
                 $effectiveTarget = $targetTemp;
                 $isPreheat = ($currentWaterTemp > $targetTemp + 0.1); // coasting on buffer
                 $heating = $this->openPreheatHeating($targetTemp, $maxTemp, $netRequirement, $airTemp, $currentWaterTemp, $tmr);
+            } elseif ($controlStrategy === 'predictive' && $targetTemp === null && $this->closedPlan === null
+                      && ($this->equipment['standby_temp'] ?? null) !== null) {
+                // ---- Long closure, opening not yet near: hold the standby temperature ----
+                $heatingMode = 'standby';
+                $effectiveTarget = (float) $this->equipment['standby_temp'];
+                $heating = $this->standbyHeating($effectiveTarget, $netRequirement, $airTemp, $currentWaterTemp, $tmr);
             } else {
                 // Reactive, or open period with no preheat: modulate to target (HP first, boiler backstop)
                 if ($controlStrategy !== 'predictive') {
@@ -1009,6 +1046,18 @@ class EnergySimulator {
             // Update water temperature
             $heatBalance = $solarGain + $heating['total_heat'] - $losses['total'];
             $tempChange = $this->calculateTempChange($heatBalance, 1.0); // 1 hour
+
+            // The water cannot cool below the 5 °C floor, so heat that would
+            // have taken it lower never left: count only the loss that did.
+            // (Losses kept accruing at the floor, e.g. through a long
+            // unheated closure, inflating the totals.)
+            if ($currentWaterTemp + $tempChange < 5 && $losses['total'] > 0) {
+                $excess = min($losses['total'], (5 - ($currentWaterTemp + $tempChange)) * $tmr);
+                $scale = ($losses['total'] - $excess) / $losses['total'];
+                foreach (['evaporation', 'convection', 'radiation', 'cover', 'floor', 'walls', 'total'] as $k) {
+                    $losses[$k] *= $scale;
+                }
+            }
             $currentWaterTemp += $tempChange;
 
             // Clamp water temperature to reasonable range
@@ -2128,6 +2177,67 @@ class EnergySimulator {
             'requested_heat' => $requiredHeat,
             'unmet_heat' => $this->uncoveredLoss($holdTemp, $waterTemp, $netRequirement, $hp['heat']),
         ];
+    }
+
+    /**
+     * Long closure: hold the standby temperature - heat pump first, boiler for
+     * what the heat pump cannot cover (frost protection, not buffer building).
+     */
+    private function standbyHeating($standby, $netRequirement, $airTemp, $waterTemp, $tmr) {
+        $required = max(0.0, $netRequirement + ($standby - $waterTemp) * $tmr);
+        $hp = $this->applyHeatPump($required, $airTemp);
+        $boiler = ['heat' => 0, 'fuel' => 0, 'cost' => 0];
+        if ($required - $hp['heat'] > 0.001 && !empty($this->equipment['boiler']['enabled'])) {
+            $boiler = $this->applyBoiler($required - $hp['heat']);
+        }
+        $total = $hp['heat'] + $boiler['heat'];
+        return [
+            'hp_heat' => $hp['heat'],
+            'hp_electricity' => $hp['electricity'],
+            'hp_cop' => $hp['cop'],
+            'boiler_heat' => $boiler['heat'],
+            'boiler_fuel' => $boiler['fuel'],
+            'total_heat' => $total,
+            'cost' => $hp['cost'] + $boiler['cost'],
+            'requested_heat' => $required,
+            'unmet_heat' => $this->uncoveredLoss($standby, $waterTemp, $netRequirement, $total),
+        ];
+    }
+
+    /**
+     * During a long closure: when must the normal closed-period plan start so
+     * the heat pump can bring the water from its current temperature to the
+     * coming opening's target? Returns a unix time, or null while the opening
+     * is still beyond the 30-day look-ahead. Estimated by stepping the hours
+     * forward with the heat pump at full against the covered-pool losses;
+     * 12 h margin. If the heat pump cannot get there, start 14 days ahead and
+     * let the boiler cover the rest at opening.
+     */
+    private function standbyPlanStart(DateTime $now, $waterTemp, $weatherArray, $idx) {
+        if (!$this->scheduler) return null;
+        $next = $this->scheduler->findNextOpening($now);
+        if (empty($next['datetime'])) return null;
+
+        $target = $next['target_temp'] ?? $this->fallbackTarget();
+        $tmr = ($this->thermalMassRate && $this->thermalMassRate > 0) ? $this->thermalMassRate : 1.0;
+        $hpCap = (float) ($this->equipment['heat_pump']['capacity_kw'] ?? 0);
+        $openTs = $next['datetime']->getTimestamp();
+        $hoursToOpen = (int) floor(($openTs - $now->getTimestamp()) / 3600);
+
+        $needed = null;
+        $w = $waterTemp;
+        for ($k = 0; $k <= $hoursToOpen && $k < 14 * 24 && isset($weatherArray[$idx + $k]); $k++) {
+            if ($w >= $target) { $needed = $k; break; }
+            $h = $weatherArray[$idx + $k];
+            $air = (float) $h['air_temperature'];
+            $loss = $this->calculateHeatLosses($w, $air, (float) $h['wind_speed'], (float) $h['humidity'], false, null)['total'];
+            $gain = $hpCap > 0 ? $this->applyHeatPump($hpCap, $air)['heat'] : 0;
+            $w += ($gain - $loss) / $tmr;
+        }
+        if ($needed === null) {
+            $needed = 14 * 24;
+        }
+        return $openTs - ($needed + 12) * 3600;
     }
 
     /**
