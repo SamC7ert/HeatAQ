@@ -210,7 +210,7 @@ const ProjectModule = {
             const zoom = 17; // High zoom for good detail
             const bbox = this.calculateBbox(lat, lng, zoom);
             const embedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
-            container.innerHTML = `<iframe src="${embedUrl}" style="width:100%;height:100%;border:none;" loading="lazy"></iframe>`;
+            container.innerHTML = `<iframe src="${escapeHtml(embedUrl)}" style="width:100%;height:100%;border:none;" loading="lazy"></iframe>`;
         } else {
             container.innerHTML = `<div class="site-map-placeholder"><div>🗺️</div><div>Enter coordinates to show map</div></div>`;
         }
@@ -313,7 +313,7 @@ const ProjectModule = {
 
         if (pools.length > 0) {
             listEl.innerHTML = pools.map(pool =>
-                `<li>${pool.name} <span class="pool-volume">${pool.volume || '-'} m³</span></li>`
+                `<li>${escapeHtml(pool.name)} <span class="pool-volume">${escapeHtml(pool.volume || '-')} m³</span></li>`
             ).join('');
 
             // Update dashboard
@@ -388,7 +388,7 @@ const ProjectModule = {
             console.log('[Project] Populating weather stations:', this.weatherStations.length);
             this.weatherStations.forEach(ws => {
                 const selected = ws.station_id === site.weather_station_id ? 'selected' : '';
-                wsSelect.innerHTML += `<option value="${ws.station_id}" ${selected}>${ws.name || ws.station_name} (${ws.station_id})</option>`;
+                wsSelect.innerHTML += `<option value="${escapeHtml(ws.station_id)}" ${selected}>${escapeHtml(ws.name || ws.station_name)} (${escapeHtml(ws.station_id)})</option>`;
             });
         }
 
@@ -690,7 +690,7 @@ const ProjectModule = {
             wsSelect.innerHTML = '<option value="">-- Select Weather Station --</option>';
             this.weatherStations.forEach(ws => {
                 const selected = ws.station_id === selectedId ? 'selected' : '';
-                wsSelect.innerHTML += `<option value="${ws.station_id}" ${selected}>${ws.name || ws.station_name} (${ws.station_id})</option>`;
+                wsSelect.innerHTML += `<option value="${escapeHtml(ws.station_id)}" ${selected}>${escapeHtml(ws.name || ws.station_name)} (${escapeHtml(ws.station_id)})</option>`;
             });
         }
     },
@@ -1152,8 +1152,8 @@ const ProjectModule = {
                     container.innerHTML = recentRuns.map(run => {
                         const date = new Date(run.created_at).toLocaleDateString();
                         return `<div style="padding: 5px 0; border-bottom: 1px solid #eee;">
-                            <strong>${run.scenario_name || 'Run #' + run.id}</strong>
-                            <span style="color: #666; font-size: 12px; margin-left: 10px;">${date}</span>
+                            <strong>${escapeHtml(run.scenario_name || 'Run #' + run.id)}</strong>
+                            <span style="color: #666; font-size: 12px; margin-left: 10px;">${escapeHtml(date)}</span>
                         </div>`;
                     }).join('');
                 } else if (container) {
@@ -1186,19 +1186,19 @@ const ProjectModule = {
                         const projectName = project.project_name || project.name;
                         const isActive = projectId == this.currentProject?.id;
                         const desc = project.description ? ` - ${project.description}` : '';
-                        return `<option value="${projectId}" ${isActive ? 'selected' : ''}>${projectName || 'Unnamed Project'}${desc}</option>`;
+                        return `<option value="${escapeHtml(projectId)}" ${isActive ? 'selected' : ''}>${escapeHtml(projectName || 'Unnamed Project')}${escapeHtml(desc)}</option>`;
                     }).join('');
                 } else if (dropdown) {
-                    dropdown.innerHTML = `<option value="${this.currentProject?.id || ''}" selected>${this.currentProject?.name || 'Default Project'}</option>`;
+                    dropdown.innerHTML = `<option value="${escapeHtml(this.currentProject?.id || '')}" selected>${escapeHtml(this.currentProject?.name || 'Default Project')}</option>`;
                 }
             } else if (dropdown) {
-                dropdown.innerHTML = `<option value="${this.currentProject?.id || ''}" selected>${this.currentProject?.name || 'Default Project'}</option>`;
+                dropdown.innerHTML = `<option value="${escapeHtml(this.currentProject?.id || '')}" selected>${escapeHtml(this.currentProject?.name || 'Default Project')}</option>`;
             }
         } catch (error) {
             console.error('Error loading projects list:', error);
             const dropdown = document.getElementById('projects-dropdown');
             if (dropdown) {
-                dropdown.innerHTML = `<option value="${this.currentProject?.id || ''}" selected>${this.currentProject?.name || 'Default Project'}</option>`;
+                dropdown.innerHTML = `<option value="${escapeHtml(this.currentProject?.id || '')}" selected>${escapeHtml(this.currentProject?.name || 'Default Project')}</option>`;
             }
         }
     },
@@ -1367,7 +1367,7 @@ const ProjectModule = {
                 if (select) {
                     if (sites.length > 0) {
                         select.innerHTML = sites.map(site =>
-                            `<option value="${site.id}">${site.name} (${site.pool_count || 0} pools)</option>`
+                            `<option value="${escapeHtml(site.id)}">${escapeHtml(site.name)} (${escapeHtml(site.pool_count || 0)} pools)</option>`
                         ).join('');
                     } else {
                         select.innerHTML = '<option value="">No existing sites available</option>';

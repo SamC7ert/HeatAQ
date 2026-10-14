@@ -225,7 +225,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.innerHTML = `
                 <div style="padding: 50px; text-align: center;">
                     <h2>Failed to Initialize Application</h2>
-                    <p style="color: red;">${error.message}</p>
+                    <p style="color: red;">${escapeHtml(error.message)}</p>
                     <p>Please check the console for more details.</p>
                 </div>
             `;

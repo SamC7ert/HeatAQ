@@ -149,6 +149,30 @@ class HeatAQAPI {
         if (!$this->userRole) return false;
         return in_array($this->userRole, ['admin', 'owner']);
     }
+
+    private function isSuperAdmin() {
+        if (!Config::requiresAuth()) return true;
+        if (!$this->userId) return false;
+        $stmt = $this->db->prepare("SELECT is_super_admin FROM users WHERE user_id = ? LIMIT 1");
+        $stmt->execute([$this->userId]);
+        return (bool)$stmt->fetchColumn();
+    }
+
+    /** Shared tables (holiday definitions) affect every project: owners and super admins only. */
+    private function canEditShared() {
+        if (!Config::requiresAuth()) return true;
+        return $this->userRole === 'owner' || $this->isSuperAdmin();
+    }
+
+    /** Reject markup in names: they are shown in other users' screens. */
+    private function validateName($name, $label, $maxLength = 100) {
+        if (preg_match('/[<>]/', $name)) {
+            $this->sendError("$label cannot contain < or >");
+        }
+        if (mb_strlen($name) > $maxLength) {
+            $this->sendError("$label is too long (max $maxLength characters)");
+        }
+    }
     
     // ====================================
     // SITE FILTERING
@@ -326,14 +350,14 @@ class HeatAQAPI {
                     break;
 
                 case 'save_holiday_definition':
-                    if (!$this->canEdit()) {
+                    if (!$this->canEditShared()) {
                         $this->sendError('Permission denied', 403);
                     }
                     $this->saveHolidayDefinition();
                     break;
 
                 case 'delete_holiday_definition':
-                    if (!$this->canDelete()) {
+                    if (!$this->canEditShared()) {
                         $this->sendError('Permission denied', 403);
                     }
                     $this->deleteHolidayDefinition($_GET['id'] ?? 0);
@@ -1280,6 +1304,7 @@ class HeatAQAPI {
         if (empty($name)) {
             $this->sendError('Name is required');
         }
+        $this->validateName($name, 'Name');
 
         // Validate based on type
         if ($isFixed) {
@@ -1780,6 +1805,18 @@ class HeatAQAPI {
 
         if (!$projectId) {
             $this->sendError('Project ID is required');
+        }
+
+        // Only the project you are working in (super admins: any project).
+        if (Config::requiresAuth() && (int)$projectId !== (int)$this->projectId && !$this->isSuperAdmin()) {
+            $this->sendError('Access denied to this project', 403);
+        }
+        if ($name !== null) {
+            $name = trim($name);
+            if ($name === '') {
+                $this->sendError('Project name is required');
+            }
+            $this->validateName($name, 'Project name');
         }
 
         // Build update query dynamically based on what's provided

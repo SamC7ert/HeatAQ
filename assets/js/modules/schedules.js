@@ -87,7 +87,7 @@ const schedules = {
         let options = '<option value="">-- Select a schedule --</option>';
         this.daySchedules.forEach(schedule => {
             const hours = this.getDayScheduleHours(schedule);
-            options += `<option value="${schedule.day_schedule_id}">${schedule.name} (${hours})</option>`;
+            options += `<option value="${escapeHtml(schedule.day_schedule_id)}">${escapeHtml(schedule.name)} (${escapeHtml(hours)})</option>`;
         });
 
         let html = `
@@ -369,9 +369,9 @@ const schedules = {
                 html += `
                     <tr data-index="${index}">
                         <td>${index + 1}</td>
-                        <td><input type="text" class="form-control form-control-sm period-start" value="${startTime}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" style="width: 70px;" /></td>
-                        <td><input type="text" class="form-control form-control-sm period-end" value="${endTime}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" style="width: 70px;" /></td>
-                        <td><input type="number" class="form-control form-control-sm period-target" value="${target}" step="0.5" min="20" max="35" placeholder="default" title="Blank = use the configuration's default target" style="width: 70px;" /></td>
+                        <td><input type="text" class="form-control form-control-sm period-start" value="${escapeHtml(startTime)}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" style="width: 70px;" /></td>
+                        <td><input type="text" class="form-control form-control-sm period-end" value="${escapeHtml(endTime)}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" style="width: 70px;" /></td>
+                        <td><input type="number" class="form-control form-control-sm period-target" value="${escapeHtml(target)}" step="0.5" min="20" max="35" placeholder="default" title="Blank = use the configuration's default target" style="width: 70px;" /></td>
                         <td>
                             <button class="btn btn-danger btn-xs" onclick="app.schedules.removePeriod(${index})" title="Remove period" style="padding: 1px 6px;">×</button>
                         </td>
@@ -410,7 +410,7 @@ const schedules = {
         let options = '<option value="">-- Select a schedule --</option>';
         this.weekSchedules.forEach(schedule => {
             const hours = this.getWeekScheduleHours(schedule);
-            options += `<option value="${schedule.week_schedule_id}">${schedule.name} (${hours})</option>`;
+            options += `<option value="${escapeHtml(schedule.week_schedule_id)}">${escapeHtml(schedule.name)} (${escapeHtml(hours)})</option>`;
         });
 
         let html = `
@@ -546,7 +546,7 @@ const schedules = {
                         <select class="form-control form-control-sm week-day-select" data-day="${dayKey}">
                             <option value="">-- Not set --</option>
                             ${this.daySchedules.map(ds =>
-                                `<option value="${ds.day_schedule_id}" ${ds.day_schedule_id == currentScheduleId ? 'selected' : ''}>${ds.name}</option>`
+                                `<option value="${escapeHtml(ds.day_schedule_id)}" ${ds.day_schedule_id == currentScheduleId ? 'selected' : ''}>${escapeHtml(ds.name)}</option>`
                             ).join('')}
                         </select>
                     </td>
@@ -903,14 +903,14 @@ const schedules = {
             const selector = document.getElementById('ohc-selector');
             if (selector && data.templates) {
                 selector.innerHTML = data.templates.map(t =>
-                    `<option value="${t.template_id}">${t.name}</option>`
+                    `<option value="${escapeHtml(t.template_id)}">${escapeHtml(t.name)}</option>`
                 ).join('');
             }
             // Also update sim-ohc-select
             const simSelector = document.getElementById('sim-ohc-select');
             if (simSelector && data.templates) {
                 simSelector.innerHTML = data.templates.map(t =>
-                    `<option value="${t.template_id}">${t.name}</option>`
+                    `<option value="${escapeHtml(t.template_id)}">${escapeHtml(t.name)}</option>`
                 ).join('');
             }
         } catch (error) {
