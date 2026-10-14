@@ -1432,8 +1432,15 @@
         document.getElementById('current-project').textContent = projectName;
         document.getElementById('current-user').textContent = userName;
         
-        // Logout function
-        function logout() {
+        // Logout function: end the session on the server first (otherwise it
+        // stays valid until it expires), then clear the browser's copy.
+        async function logout() {
+            try {
+                await fetch('./api/heataq_api.php?action=logout', { method: 'POST' });
+            } catch (e) {
+                // Still log out locally if the server can't be reached
+            }
+
             // Clear local storage
             localStorage.removeItem('heataq_session');
             localStorage.removeItem('heataq_project');
@@ -1686,18 +1693,18 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=224"></script>
+    <script src="./assets/js/config.js?v=225"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=224"></script>
-    <script src="./assets/js/modules/navigation.js?v=224"></script>
-    <script src="./assets/js/modules/schedules.js?v=224"></script>
-    <script src="./assets/js/modules/calendar.js?v=224"></script>
-    <script src="./assets/js/modules/simulations.js?v=224"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=224"></script>
-    <script src="./assets/js/modules/configuration.js?v=224"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=224"></script>
-    <script src="./assets/js/modules/admin.js?v=224"></script>
-    <script src="./assets/js/modules/project.js?v=224"></script>
-    <script src="./assets/js/app.js?v=224"></script>
+    <script src="./assets/js/modules/api.js?v=225"></script>
+    <script src="./assets/js/modules/navigation.js?v=225"></script>
+    <script src="./assets/js/modules/schedules.js?v=225"></script>
+    <script src="./assets/js/modules/calendar.js?v=225"></script>
+    <script src="./assets/js/modules/simulations.js?v=225"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=225"></script>
+    <script src="./assets/js/modules/configuration.js?v=225"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=225"></script>
+    <script src="./assets/js/modules/admin.js?v=225"></script>
+    <script src="./assets/js/modules/project.js?v=225"></script>
+    <script src="./assets/js/app.js?v=225"></script>
 </body>
 </html>

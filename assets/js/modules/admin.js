@@ -350,7 +350,7 @@ const AdminModule = {
         if (!confirm('Delete this exception day?')) return;
 
         try {
-            const response = await fetch(`./api/heataq_api.php?action=delete_holiday_definition&id=${encodeURIComponent(id)}`);
+            const response = await fetch(`./api/heataq_api.php?action=delete_holiday_definition&id=${encodeURIComponent(id)}`, { method: 'POST' });
             const result = await response.json();
 
             if (result.success) {
@@ -1118,7 +1118,7 @@ const AdminModule = {
         // one-year hole in the data (e.g. Svalbard missing all of 2025).
         const sleep = (ms) => new Promise(r => setTimeout(r, ms));
         const fetchYearOnce = async (year) => {
-            const response = await fetch(`./api/frost_api.php?action=fetch_and_store_year&station_id=${encodeURIComponent(stationId)}&year=${year}`);
+            const response = await fetch(`./api/frost_api.php?action=fetch_and_store_year&station_id=${encodeURIComponent(stationId)}&year=${year}`, { method: 'POST' });
             // Read as text first: a PHP timeout/fatal returns an HTML page, and
             // response.json() then only says "Unexpected token..." — show what
             // the server actually sent instead.
@@ -1881,8 +1881,11 @@ const AdminModule = {
         if (gitResult) gitResult.textContent = '';
 
         try {
-            const url = pushToGit ? './db/dump_schema.php?push=1' : './db/dump_schema.php';
-            const response = await fetch(url);
+            const response = await fetch('./api/heataq_api.php?action=dump_schema', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'dump_schema', push: pushToGit })
+            });
             const data = await response.json();
 
             if (data.status === 'success') {
@@ -2082,7 +2085,7 @@ const AdminModule = {
         }
 
         try {
-            const response = await fetch('./api/heataq_api.php?action=deploy_pull');
+            const response = await fetch('./api/heataq_api.php?action=deploy_pull', { method: 'POST' });
             const data = await response.json();
 
             if (data.error) {

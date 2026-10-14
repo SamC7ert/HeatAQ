@@ -98,7 +98,7 @@ const api = {
     },
 
     // Generic API call function
-    async call(action, params = {}) {
+    async call(action, params = {}, method = 'GET') {
         try {
             // Build URL as string (no URL objects for compatibility)
             let urlString = config.API_BASE_URL + '?action=' + action;
@@ -110,7 +110,8 @@ const api = {
                 }
             }
             
-            const response = await fetch(urlString);
+            // Actions that change data must be POSTed (the server rejects GET)
+            const response = await fetch(urlString, method === 'GET' ? undefined : { method });
             const data = await api.parseJson(response);
 
             if (!response.ok) {
@@ -243,7 +244,7 @@ const api = {
         },
 
         async deleteDateRange(rangeId) {
-            return api.call('delete_date_range', { range_id: rangeId });
+            return api.call('delete_date_range', { range_id: rangeId }, 'POST');
         },
 
         // Exception Days
@@ -253,7 +254,7 @@ const api = {
         },
 
         async deleteExceptionDay(exceptionId) {
-            return api.call('delete_exception_day', { exception_id: exceptionId });
+            return api.call('delete_exception_day', { exception_id: exceptionId }, 'POST');
         },
 
         async testResolution(date, templateId) {

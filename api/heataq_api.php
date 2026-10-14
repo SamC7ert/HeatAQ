@@ -31,12 +31,15 @@ register_shutdown_function(function () {
             http_response_code(500);
             header('Content-Type: application/json');
         }
-        echo json_encode(['error' => 'Server fatal error: ' . $err['message']]);
+        // First line only, without file paths (details are in the error log)
+        $msg = trim(preg_replace('#\s+in\s+/\S+(:\d+)?#', '', strtok($err['message'], "\n")));
+        echo json_encode(['error' => 'Server fatal error: ' . $msg]);
     }
 });
 
 // Include configuration loader
 require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../lib/RequestGuard.php';
 
 // Include authentication if required
 $currentPoolSiteId = null;
@@ -235,6 +238,13 @@ class HeatAQAPI {
             }
         }
 
+        // Everything except reads changes data: it must be a POST sent by the
+        // app itself (blocks cross-site request forgery; see RequestGuard).
+        $isRead = preg_match('/^(get|check)_/', $action) || in_array($action, ['test_resolution', 'deploy_status'], true);
+        if (!$isRead && $action !== '') {
+            RequestGuard::requireWriteRequest();
+        }
+
         // Log API access if authenticated
         if (Config::requiresAuth() && class_exists('HeatAQAuth')) {
             HeatAQAuth::audit('api_access', 'endpoint', null, null, ['action' => $action]);
@@ -427,6 +437,13 @@ class HeatAQAPI {
                     $this->saveUser();
                     break;
 
+                case 'logout':
+                    if (Config::requiresAuth() && class_exists('HeatAQAuth')) {
+                        HeatAQAuth::logout();
+                    }
+                    $this->sendResponse(['success' => true]);
+                    break;
+
                 case 'get_current_user':
                     $this->getCurrentUser();
                     break;
@@ -561,6 +578,12 @@ class HeatAQAPI {
                         $this->sendError('Permission denied - admin only', 403);
                     }
                     $this->exportSchema();
+                    break;
+                case 'dump_schema':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied - admin only', 403);
+                    }
+                    $this->dumpSchema();
                     break;
 
                 // SITE AND POOL MANAGEMENT
@@ -3402,6 +3425,25 @@ class HeatAQAPI {
             'merged' => $merged,
             'log' => $log
         ]);
+    }
+
+    /**
+     * Admin -> System "Export schema" / "Export & Push": run db/dump_schema.php
+     * on the command line (it refuses web requests) and return its JSON.
+     */
+    private function dumpSchema() {
+        $input = $this->getPostInput();
+        $script = realpath(__DIR__ . '/../db/dump_schema.php');
+        if (!$script) {
+            $this->sendError('Schema dump script not found', 500);
+        }
+        $cmd = 'php ' . escapeshellarg($script) . ' --json' . (!empty($input['push']) ? ' --push' : '') . ' 2>&1';
+        $output = (string) shell_exec($cmd);
+        $data = json_decode($output, true);
+        if (!is_array($data)) {
+            $this->sendError('Schema export failed: ' . substr(trim($output), 0, 300), 500);
+        }
+        $this->sendResponse($data);
     }
 
     /**

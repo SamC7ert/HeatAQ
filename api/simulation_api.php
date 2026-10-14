@@ -11,7 +11,6 @@
  * - GET ?action=get_daily_results&run_id=123 - Get daily aggregated results
  * - GET ?action=get_summary&run_id=123 - Get run summary only
  * - DELETE ?action=delete_run&run_id=123 - Delete a simulation run
- * - GET ?action=get_pool_config - Get pool configuration and equipment
  * - GET ?action=get_weather_range - Get available weather data date range
  * - GET ?action=get_version - Get simulator version
  */
@@ -59,6 +58,7 @@ require_once __DIR__ . '/../config.php';
 // pool_site_id is now OPTIONAL at startup - individual actions check if they need it
 $currentPoolSiteId = null;
 $currentUserId = null;
+$auth = null;
 
 if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
     require_once __DIR__ . '/../auth.php';
@@ -86,6 +86,7 @@ if (session_status() === PHP_SESSION_ACTIVE) {
 }
 
 // Include required classes
+require_once __DIR__ . '/../lib/RequestGuard.php';
 require_once __DIR__ . '/../lib/PoolScheduler.php';
 require_once __DIR__ . '/../lib/EnergySimulator.php';
 
@@ -147,6 +148,8 @@ try {
 
     switch ($action) {
         case 'run_simulation':
+            RequestGuard::requireWriteRequest();
+            RequestGuard::requireRole($auth, 'operator');
             // Require pool_site_id for simulation
             if (!$currentPoolSiteId) {
                 sendResponse([
@@ -767,6 +770,8 @@ try {
             break;
 
         case 'delete_run':
+            RequestGuard::requireWriteRequest();
+            RequestGuard::requireRole($auth, 'admin');
             $runId = (int) getParam('run_id');
             if (!$runId) {
                 sendError('run_id parameter required');
@@ -809,27 +814,6 @@ try {
                 sendError('Could not determine available weather range: ' . $e->getMessage()
                     . '. Retry, and check the database connection / weather_data table.', 500);
             }
-            break;
-
-        case 'get_pool_config':
-            $poolSiteId = $currentPoolSiteId;
-            if (!$poolSiteId) {
-                sendResponse([
-                    'error' => 'No pool site configured',
-                    'code' => 'NO_POOL_SITE',
-                    'pool_config' => null,
-                    'equipment' => null
-                ], 400);
-            }
-
-            $scheduler = new PoolScheduler($pdo, $poolSiteId);
-            $simulator = new EnergySimulator($pdo, $poolSiteId, $scheduler);
-
-            sendResponse([
-                'simulator_version' => EnergySimulator::getVersion(),
-                'pool_config' => $simulator->getPoolConfig(),
-                'equipment' => $simulator->getEquipment()
-            ]);
             break;
 
         case 'get_version':
@@ -1169,7 +1153,7 @@ try {
             break;
 
         default:
-            sendError('Invalid action. Valid actions: run_simulation, get_runs, get_run, get_summary, get_daily_results, get_results, delete_run, get_weather_range, get_pool_config, get_version, debug_hour, debug_week');
+            sendError('Invalid action. Valid actions: run_simulation, get_runs, get_run, get_summary, get_daily_results, get_results, delete_run, get_weather_range, get_version, debug_hour, debug_week');
     }
 
 } catch (PDOException $e) {

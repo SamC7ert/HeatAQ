@@ -465,7 +465,7 @@ const ConfigurationModule = {
         }
 
         try {
-            const response = await fetch(`./api/heataq_api.php?action=delete_project_config&config_id=${this.currentConfigId}`);
+            const response = await fetch(`./api/heataq_api.php?action=delete_project_config&config_id=${encodeURIComponent(this.currentConfigId)}`, { method: 'POST' });
             const result = await response.json();
 
             if (result.success) {

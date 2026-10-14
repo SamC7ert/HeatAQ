@@ -1,4 +1,10 @@
 <?php
+// Command line only: this script must never run from a web request.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit;
+}
+
 require "/home/user/HeatAQ/lib/EnergySimulator.php";
 $tmr=100.0;$target=27.0;$min=25.0;$max=29.0;
 $pass=0;$fail=0;

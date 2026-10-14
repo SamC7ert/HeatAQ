@@ -343,13 +343,20 @@ class AuthAPI {
      * Send password reset email
      */
     private function sendResetEmail($user, $token) {
-        // Build reset URL
-        $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
-        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-        $basePath = dirname($_SERVER['REQUEST_URI'] ?? '/');
-        $basePath = rtrim($basePath, '/api');
-
-        $resetUrl = "{$protocol}://{$host}{$basePath}/reset_password.html?token={$token}";
+        // Build reset URL from the configured APP_BASE_URL. The request's Host
+        // header is chosen by whoever sends the request, so a link built from
+        // it could point the victim (and their reset token) at another site.
+        $baseUrl = self::configValue('APP_BASE_URL');
+        if ($baseUrl) {
+            $resetUrl = rtrim($baseUrl, '/') . "/reset_password.html?token={$token}";
+        } else {
+            error_log('[auth_api] APP_BASE_URL is not set in database.env - reset link built from the request Host header');
+            $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http';
+            $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+            $basePath = dirname($_SERVER['REQUEST_URI'] ?? '/');
+            $basePath = rtrim($basePath, '/api');
+            $resetUrl = "{$protocol}://{$host}{$basePath}/reset_password.html?token={$token}";
+        }
 
         $subject = "HeatAQ Password Reset";
         $message = "
@@ -411,11 +418,27 @@ HeatAQ System
         return $maskedName . '@' . $domain;
     }
 
+    /** A setting from database.env via Config, or null when unavailable. */
+    private static function configValue($key) {
+        try {
+            return method_exists('Config', 'get') ? (Config::get($key) ?: null) : null;
+        } catch (Throwable $e) {
+            return null;
+        }
+    }
+
     /**
      * Get client IP address
      */
     private function getClientIP() {
-        $headers = ['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'REMOTE_ADDR'];
+        // Forwarding headers can be set by anyone, so they are only believed
+        // when the request comes from a proxy listed in TRUSTED_PROXIES
+        // (comma-separated IPs in database.env); otherwise REMOTE_ADDR is used.
+        $remote = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+        $trusted = array_filter(array_map('trim', explode(',', (string) self::configValue('TRUSTED_PROXIES'))));
+        $headers = in_array($remote, $trusted, true)
+            ? ['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'REMOTE_ADDR']
+            : ['REMOTE_ADDR'];
 
         foreach ($headers as $header) {
             if (!empty($_SERVER[$header])) {

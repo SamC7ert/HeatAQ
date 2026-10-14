@@ -420,6 +420,13 @@
                         return false;
                     }
 
+                    // Password was just changed: continue with the new one (the
+                    // old one no longer matches for the project step).
+                    if (loginState.forcePasswordChange && newPassword) {
+                        document.getElementById('password').value = newPassword;
+                        loginState.forcePasswordChange = false;
+                    }
+
                     if (data.projects && data.projects.length > 0 && !projectId) {
                         // Store projects for later
                         loginState.projects = data.projects;
