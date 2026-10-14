@@ -1,12 +1,12 @@
 # Database Schema
 
-Generated: 2026-10-14 19:36:18
+Generated: 2026-10-14 20:10:39
 
 Database: heataq_pool-353130302dd2
 
 ## audit_log
 
-Rows: 18747
+Rows: 18783
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -456,7 +456,7 @@ Rows: 8
 
 ## schema_migrations
 
-Rows: 7
+Rows: 8
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -470,7 +470,7 @@ Rows: 7
 
 ## simulation_daily_results
 
-Rows: 303716
+Rows: 307369
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -497,13 +497,13 @@ Rows: 303716
 
 ## simulation_hourly_results
 
-Rows: 4568275
+Rows: 4655947
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
 | result_id | bigint(20) | NO | PRI | NULL | auto_increment |
 | run_id | int(11) | NO | MUL | NULL |  |
-| timestamp | datetime | NO | MUL | NULL |  |
+| timestamp | datetime | NO |  | NULL |  |
 | air_temp | decimal(5,2) | YES |  | NULL |  |
 | wind_speed | decimal(5,2) | YES |  | NULL |  |
 | humidity | decimal(5,2) | YES |  | NULL |  |
@@ -523,13 +523,11 @@ Rows: 4568275
 
 **Indexes:**
 - UNIQUE `PRIMARY` (result_id)
-- `idx_run_id` (run_id)
-- `idx_timestamp` (timestamp)
 - `idx_run_timestamp` (run_id, timestamp)
 
 ## simulation_runs
 
-Rows: 620
+Rows: 621
 
 | Column | Type | Null | Key | Default | Extra |
 |--------|------|------|-----|---------|-------|
@@ -542,6 +540,8 @@ Rows: 620
 | start_date | date | NO |  | NULL |  |
 | end_date | date | NO |  | NULL |  |
 | status | enum('pending','running','completed','failed') | NO | MUL | pending |  |
+| is_baseline | tinyint(1) | NO |  | 0 |  |
+| hourly_purged_at | datetime | YES |  | NULL |  |
 | created_at | datetime | NO | MUL | current_timestamp() |  |
 | completed_at | datetime | YES |  | NULL |  |
 | config_snapshot | longtext | YES |  | NULL |  |
