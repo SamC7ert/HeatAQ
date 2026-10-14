@@ -33,6 +33,12 @@ The core levers:
    reaches the required temperature by opening. This minimises the time spent
    hot, and therefore the loss.
 
+> **Local time.** Weather and solar data are stored in UTC. Schedules are
+> local clock times, so the simulator converts each weather hour to the site's
+> local time (zone read from the site's coordinates, `lib/SiteTimezone.php`)
+> for schedule lookups, daily totals and the hours it reports. Solar profiles
+> stay on the UTC hour.
+
 > **Open vs. closed, not day vs. night.** Closed periods are *not* only at
 > night — a pool may close midday. Everything here keys off the cover
 > (open/closed), never the time of day.
