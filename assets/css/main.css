@@ -34,7 +34,7 @@
     /* Layout */
     --sidebar-width: 240px;
     --header-height: 70px;
-    --content-max-width: 1200px;
+    --content-max-width: none;  /* use the full width next to the sidebar */
 
     /* Transitions */
     --transition-fast: 0.15s ease;

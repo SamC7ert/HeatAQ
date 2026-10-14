@@ -16,7 +16,8 @@
     position: relative;
 }
 
-.sidebar:hover {
+.sidebar:hover,
+.sidebar.pinned {
     width: var(--sidebar-width);  /* 240px expanded */
 }
 
@@ -37,7 +38,8 @@
     transition: opacity 0.2s ease 0.1s;
 }
 
-.sidebar:hover .sidebar-header h2 {
+.sidebar:hover .sidebar-header h2,
+.sidebar.pinned .sidebar-header h2 {
     opacity: 1;
 }
 
@@ -50,7 +52,9 @@
 }
 
 .sidebar:hover .sidebar-header p,
-.sidebar:hover .sidebar-header .subtitle {
+.sidebar.pinned .sidebar-header p,
+.sidebar:hover .sidebar-header .subtitle,
+.sidebar.pinned .sidebar-header .subtitle {
     opacity: 0.8;
 }
 
@@ -62,7 +66,8 @@
     text-align: center;
 }
 
-.sidebar:hover .sidebar-header::before {
+.sidebar:hover .sidebar-header::before,
+.sidebar.pinned .sidebar-header::before {
     display: none;
 }
 
@@ -88,7 +93,9 @@
 }
 
 .sidebar:hover .sidebar-section-title,
-.sidebar:hover .nav-section-header {
+.sidebar.pinned .sidebar-section-title,
+.sidebar:hover .nav-section-header,
+.sidebar.pinned .nav-section-header {
     opacity: 1;
 }
 
@@ -115,7 +122,8 @@
     background: rgba(255,255,255,0.12);
 }
 
-.sidebar:hover .nav-item:hover {
+.sidebar:hover .nav-item:hover,
+.sidebar.pinned .nav-item:hover {
     padding-left: 18px;
 }
 
@@ -141,7 +149,8 @@
     transition: opacity 0.2s ease;
 }
 
-.sidebar:hover .nav-item.active::after {
+.sidebar:hover .nav-item.active::after,
+.sidebar.pinned .nav-item.active::after {
     opacity: 1;
 }
 
@@ -162,12 +171,45 @@
     transition: opacity 0.2s ease 0.1s;
 }
 
-.sidebar:hover .nav-item span:last-child {
+.sidebar:hover .nav-item span:last-child,
+.sidebar.pinned .nav-item span:last-child {
     opacity: 1;
 }
 
 .nav-item {
     color: #ffffff;
+}
+
+/* Pin button: keeps the sidebar open (state remembered in localStorage) */
+.sidebar-pin {
+    position: absolute;
+    top: 10px;
+    right: 8px;
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 0.9rem;
+    cursor: pointer;
+    opacity: 0;
+    padding: 4px;
+    border-radius: 4px;
+    filter: grayscale(1);
+    transition: opacity 0.2s ease 0.1s;
+}
+
+.sidebar:hover .sidebar-pin,
+.sidebar.pinned .sidebar-pin {
+    opacity: 0.7;
+}
+
+.sidebar-pin:hover {
+    opacity: 1 !important;
+    background: rgba(255,255,255,0.15);
+}
+
+.sidebar.pinned .sidebar-pin {
+    filter: none;
+    opacity: 1;
 }
 
 /* Logo at bottom of sidebar */
@@ -188,7 +230,8 @@
     transition: opacity 0.2s ease 0.15s;
 }
 
-.sidebar:hover .sidebar-logo img {
+.sidebar:hover .sidebar-logo img,
+.sidebar.pinned .sidebar-logo img {
     opacity: 0.85;
 }
 
