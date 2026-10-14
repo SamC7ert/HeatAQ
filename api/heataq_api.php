@@ -162,12 +162,13 @@ class HeatAQAPI {
     }
 
     /**
-     * Database migrations change the whole database. An admin is admin of
-     * every project (save_user grants admins all projects), so admins may run
-     * them, as may owners and super admins - the same roles that can list
-     * them (check_migrations).
+     * System operations - deploy/merge/push, database migrations, schema
+     * export - affect the whole installation. An admin is admin of every
+     * project (save_user grants admins all projects), so admins may run
+     * them, as may owners and super admins (as before the scoping pass,
+     * which had narrowed them to owners).
      */
-    private function canRunMigrations() {
+    private function canManageSystem() {
         if (!Config::requiresAuth()) return true;
         return in_array($this->userRole, ['admin', 'owner'], true) || $this->isSuperAdmin();
     }
@@ -634,21 +635,21 @@ class HeatAQAPI {
                     $this->deployStatus();
                     break;
                 case 'deploy_pull':
-                    if (!$this->canEditShared()) {
-                        $this->sendError('Permission denied - owner only', 403);
+                    if (!$this->canManageSystem()) {
+                        $this->sendError('Permission denied - needs the admin or owner role, or super admin', 403);
                     }
                     $this->deployPull();
                     break;
 
                 case 'merge_branch':
-                    if (!$this->canEditShared()) {
-                        $this->sendError('Permission denied - owner only', 403);
+                    if (!$this->canManageSystem()) {
+                        $this->sendError('Permission denied - needs the admin or owner role, or super admin', 403);
                     }
                     $this->mergeBranch();
                     break;
                 case 'deploy_push':
-                    if (!$this->canEditShared()) {
-                        $this->sendError('Permission denied - owner only', 403);
+                    if (!$this->canManageSystem()) {
+                        $this->sendError('Permission denied - needs the admin or owner role, or super admin', 403);
                     }
                     $this->deployPush();
                     break;
@@ -661,26 +662,26 @@ class HeatAQAPI {
                     $this->checkMigrations();
                     break;
                 case 'run_migration':
-                    if (!$this->canRunMigrations()) {
+                    if (!$this->canManageSystem()) {
                         $this->sendError('Permission denied - running migrations needs the admin or owner role, or super admin', 403);
                     }
                     $this->runMigration();
                     break;
                 case 'archive_migration':
-                    if (!$this->canRunMigrations()) {
+                    if (!$this->canManageSystem()) {
                         $this->sendError('Permission denied - archiving migrations needs the admin or owner role, or super admin', 403);
                     }
                     $this->archiveMigration();
                     break;
                 case 'export_schema':
-                    if (!$this->canEditShared()) {
-                        $this->sendError('Permission denied - owner only', 403);
+                    if (!$this->canManageSystem()) {
+                        $this->sendError('Permission denied - needs the admin or owner role, or super admin', 403);
                     }
                     $this->exportSchema();
                     break;
                 case 'dump_schema':
-                    if (!$this->canEditShared()) {
-                        $this->sendError('Permission denied - owner only', 403);
+                    if (!$this->canManageSystem()) {
+                        $this->sendError('Permission denied - needs the admin or owner role, or super admin', 403);
                     }
                     $this->dumpSchema();
                     break;
