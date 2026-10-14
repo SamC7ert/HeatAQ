@@ -1050,6 +1050,7 @@ try {
                     air_temp,
                     wind_speed,
                     humidity,
+                    target_temp,
                     water_temp,
                     is_open,
                     total_loss_kw,

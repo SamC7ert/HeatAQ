@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.12.3';   // HP/boiler enabled follows capacity (overrides); partial bathers override keeps template values
+    const VERSION = '3.12.4';   // unmet_kwh = uncovered loss at/below hold level (no phantom ramp unmet); debug replay seeds closed start, uses stored targets
     const TARGET_OFFSET_LIMIT = 5.0;  // °C, max |offset| accepted from SimControl
 
     private $db;
@@ -1132,13 +1132,13 @@ class EnergySimulator {
             // Heating delivered (thermal)
             $results['summary']['hp_thermal_kwh'] += $heating['hp_heat'];
             $results['summary']['boiler_thermal_kwh'] += $heating['boiler_heat'];
-            // Unmet = heat that was REQUESTED but could not be delivered
-            // (capacity-limited). Hours where the controller deliberately
-            // supplies less than the loss (above target, coasting, closed
-            // waiting) request 0 and are not comfort failures. Previously this
-            // accrued netRequirement - delivered every hour, booking hundreds
-            // of phantom "unmet" kWh for a system that never failed.
-            $results['summary']['unmet_kwh'] += max(0, ($heating['requested_heat'] ?? 0) - $heating['total_heat']);
+            // Unmet = heat LOSS the plant could not cover while the water was
+            // at or below the level it was trying to hold (see uncoveredLoss).
+            // Each kWh of deficit is counted once, when it arises. Previously
+            // "requested - delivered" included the raise-to-target term, so a
+            // planned multi-hour preheat ramp (or recovering a 1 °C gap) was
+            // booked as unmet every hour - more than all heat delivered.
+            $results['summary']['unmet_kwh'] += $heating['unmet_heat'] ?? 0;
 
             // Energy consumed
             $results['summary']['total_hp_energy_kwh'] += $heating['hp_electricity'];
@@ -2110,7 +2110,20 @@ class EnergySimulator {
             // Requested = heat to hold/reach holdTemp this hour. Coast hours
             // above the hold level request 0 and never count as unmet.
             'requested_heat' => $requiredHeat,
+            'unmet_heat' => $this->uncoveredLoss($holdTemp, $waterTemp, $netRequirement, $hp['heat']),
         ];
+    }
+
+    /**
+     * Heat loss not covered this hour while the water is at or below the level
+     * being held (target, or a closed-period hold/ramp level). Above that level
+     * the controller lets the water coast on purpose, so nothing is unmet.
+     */
+    private function uncoveredLoss($holdTemp, $waterTemp, $netRequirement, $delivered) {
+        if ($holdTemp === null || $waterTemp > $holdTemp + 0.01) {
+            return 0.0;
+        }
+        return max(0.0, $netRequirement - $delivered);
     }
 
     /**
@@ -2145,6 +2158,7 @@ class EnergySimulator {
             'total_heat' => $hp['heat'] + $boiler['heat'],
             'cost' => $hp['cost'] + $boiler['cost'],
             'requested_heat' => $requested,
+            'unmet_heat' => $this->uncoveredLoss($targetTemp, $waterTemp, $netRequirement, $hp['heat'] + $boiler['heat']),
         ];
     }
 
@@ -2259,15 +2273,26 @@ class EnergySimulator {
             $waterTempEnd = (float)$row['water_temp'];
             $waterTempStart = ($i > 0 && $prevWaterTemp !== null) ? $prevWaterTemp : $waterTempEnd;
 
-            // CLOSE transition: reconstruct the closed-period plan (same math as run())
-            if ($prevIsOpen === true && $isOpen === false) {
+            // CLOSE transition: reconstruct the closed-period plan (same math as
+            // run()). Like run(), a window that starts closed is planned at i=0.
+            if ($isOpen === false && ($prevIsOpen === true || $i === 0)) {
                 $nextOpenIdx = $n;
                 for ($j = $i; $j < $n; $j++) {
                     if ((bool)$rows[$j]['is_open']) { $nextOpenIdx = $j; break; }
                 }
-                // Target for the coming open period from the stored schedule
-                $cycleTarget = ($nextOpenIdx < $n && isset($rows[$nextOpenIdx]['target_temp']) && $rows[$nextOpenIdx]['target_temp'] !== null)
-                    ? (float)$rows[$nextOpenIdx]['target_temp'] : $baseTarget;
+                // Target for the coming open period: the stored hourly target,
+                // else the scheduler's resolved target (as run()), else default.
+                $cycleTarget = $baseTarget;
+                if ($nextOpenIdx < $n) {
+                    if (isset($rows[$nextOpenIdx]['target_temp']) && $rows[$nextOpenIdx]['target_temp'] !== null) {
+                        $cycleTarget = (float)$rows[$nextOpenIdx]['target_temp'];
+                    } elseif ($this->scheduler) {
+                        $period = $this->scheduler->getCurrentPeriod(new DateTime($rows[$nextOpenIdx]['timestamp']));
+                        if ($period && $period['target_temp'] !== null) {
+                            $cycleTarget = (float)$period['target_temp'];
+                        }
+                    }
+                }
                 $cycleMax = $cycleTarget + $upperTol;
                 $cycleMin = $cycleTarget - $lowerTol;
 
@@ -2637,6 +2662,7 @@ class EnergySimulator {
         }
 
         $result['total_heat'] = $result['hp_heat'] + $result['boiler_heat'];
+        $result['unmet_heat'] = $this->uncoveredLoss($targetTemp, $currentWaterTemp, $netRequirement, $result['total_heat']);
 
         return $result;
     }
