@@ -167,6 +167,79 @@ class HeatAQAPI {
         return $this->userRole === 'owner' || $this->isSuperAdmin();
     }
 
+    // ====================================
+    // PROJECT SCOPING
+    // ====================================
+    // Every record a request names by id must belong to the project the
+    // caller is working in (the session's project); super admins may work in
+    // any project. Without these checks any logged-in user could read or
+    // change another project's templates, schedules, configs, sites or pools
+    // by sending its id.
+
+    private $superAdminCache = null;
+
+    private function isSuperAdminCached() {
+        if ($this->superAdminCache === null) {
+            $this->superAdminCache = $this->isSuperAdmin();
+        }
+        return $this->superAdminCache;
+    }
+
+    private function canAccessProject($projectId) {
+        if (!Config::requiresAuth()) return true;
+        if ($projectId !== null && $this->projectId && (int)$projectId === (int)$this->projectId) return true;
+        return $this->isSuperAdminCached();
+    }
+
+    private function requireProjectAccess($projectId) {
+        if (!$this->canAccessProject($projectId)) {
+            $this->sendError('Access denied to this project', 403);
+        }
+    }
+
+    /** $sql selects project_id for one id; the row must exist and be accessible. */
+    private function requireOwned($sql, $id, $what) {
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([$id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            $this->sendError("$what not found", 404);
+        }
+        $this->requireProjectAccess($row['project_id']);
+    }
+
+    private function requireTemplate($id) {
+        $this->requireOwned("SELECT project_id FROM schedule_templates WHERE template_id = ?", $id, 'Schedule template');
+    }
+
+    private function requireDaySchedule($id) {
+        $this->requireOwned("SELECT project_id FROM day_schedules WHERE day_schedule_id = ?", $id, 'Day schedule');
+    }
+
+    private function requireWeekSchedule($id) {
+        $this->requireOwned("SELECT project_id FROM week_schedules WHERE week_schedule_id = ?", $id, 'Week schedule');
+    }
+
+    private function requireDateRange($id) {
+        $this->requireOwned("SELECT t.project_id FROM calendar_date_ranges r JOIN schedule_templates t ON t.template_id = r.schedule_template_id WHERE r.id = ?", $id, 'Date range');
+    }
+
+    private function requireExceptionLink($id) {
+        $this->requireOwned("SELECT t.project_id FROM schedule_template_exceptions e JOIN schedule_templates t ON t.template_id = e.template_id WHERE e.id = ?", $id, 'Exception link');
+    }
+
+    private function requireConfig($id) {
+        $this->requireOwned("SELECT project_id FROM config_templates WHERE template_id = ?", $id, 'Configuration');
+    }
+
+    private function requireSite($id) {
+        $this->requireOwned("SELECT project_id FROM pool_sites WHERE id = ?", $id, 'Site');
+    }
+
+    private function requirePool($id) {
+        $this->requireOwned("SELECT s.project_id FROM pools p JOIN pool_sites s ON s.id = p.pool_site_id WHERE p.pool_id = ?", $id, 'Pool');
+    }
+
     /** Reject markup in names: they are shown in other users' screens. */
     private function validateName($name, $label, $maxLength = 100) {
         if (preg_match('/[<>]/', $name)) {
@@ -535,21 +608,21 @@ class HeatAQAPI {
                     $this->deployStatus();
                     break;
                 case 'deploy_pull':
-                    if (!$this->canDelete()) {
-                        $this->sendError('Permission denied - admin only', 403);
+                    if (!$this->canEditShared()) {
+                        $this->sendError('Permission denied - owner only', 403);
                     }
                     $this->deployPull();
                     break;
 
                 case 'merge_branch':
-                    if (!$this->canDelete()) {
-                        $this->sendError('Permission denied - admin only', 403);
+                    if (!$this->canEditShared()) {
+                        $this->sendError('Permission denied - owner only', 403);
                     }
                     $this->mergeBranch();
                     break;
                 case 'deploy_push':
-                    if (!$this->canDelete()) {
-                        $this->sendError('Permission denied - admin only', 403);
+                    if (!$this->canEditShared()) {
+                        $this->sendError('Permission denied - owner only', 403);
                     }
                     $this->deployPush();
                     break;
@@ -562,26 +635,26 @@ class HeatAQAPI {
                     $this->checkMigrations();
                     break;
                 case 'run_migration':
-                    if (!$this->canDelete()) {
-                        $this->sendError('Permission denied - admin only', 403);
+                    if (!$this->canEditShared()) {
+                        $this->sendError('Permission denied - owner only', 403);
                     }
                     $this->runMigration();
                     break;
                 case 'archive_migration':
-                    if (!$this->canDelete()) {
-                        $this->sendError('Permission denied - admin only', 403);
+                    if (!$this->canEditShared()) {
+                        $this->sendError('Permission denied - owner only', 403);
                     }
                     $this->archiveMigration();
                     break;
                 case 'export_schema':
-                    if (!$this->canDelete()) {
-                        $this->sendError('Permission denied - admin only', 403);
+                    if (!$this->canEditShared()) {
+                        $this->sendError('Permission denied - owner only', 403);
                     }
                     $this->exportSchema();
                     break;
                 case 'dump_schema':
-                    if (!$this->canDelete()) {
-                        $this->sendError('Permission denied - admin only', 403);
+                    if (!$this->canEditShared()) {
+                        $this->sendError('Permission denied - owner only', 403);
                     }
                     $this->dumpSchema();
                     break;
@@ -733,6 +806,7 @@ class HeatAQAPI {
         if (!$this->validateId($templateId)) {
             $this->sendError('Invalid template ID');
         }
+        $this->requireTemplate($templateId);
         
         $stmt = $this->db->prepare("
             SELECT 
@@ -753,6 +827,7 @@ class HeatAQAPI {
         if (!$this->validateId($templateId)) {
             $this->sendError('Invalid template ID');
         }
+        $this->requireTemplate($templateId);
 
         // Get all exception days (universal definitions) with template-specific assignments
         $stmt = $this->db->prepare("
@@ -825,6 +900,7 @@ class HeatAQAPI {
         }
         $date = $_GET['date'] ?? date('Y-m-d');
         $templateId = (int)$_GET['template_id'];
+        $this->requireTemplate($templateId);
 
         // Get template info
         $stmt = $this->db->prepare("
@@ -905,6 +981,12 @@ class HeatAQAPI {
         if (empty($name)) {
             $this->sendError('Template name is required');
         }
+        if ($templateId) {
+            $this->requireTemplate($templateId);
+        }
+        if ($baseWeekScheduleId) {
+            $this->requireWeekSchedule($baseWeekScheduleId);
+        }
 
         if ($templateId) {
             // Update existing
@@ -953,6 +1035,9 @@ class HeatAQAPI {
 
         if (empty($name)) {
             $this->sendError('Schedule name is required');
+        }
+        if ($scheduleId) {
+            $this->requireDaySchedule($scheduleId);
         }
 
         $this->db->beginTransaction();
@@ -1032,6 +1117,12 @@ class HeatAQAPI {
         $dayScheduleIds = [];
         foreach ($days as $day) {
             $dayScheduleIds[$day] = $input[$day . '_schedule_id'] ?? null;
+            if ($dayScheduleIds[$day]) {
+                $this->requireDaySchedule($dayScheduleIds[$day]);
+            }
+        }
+        if ($scheduleId) {
+            $this->requireWeekSchedule($scheduleId);
         }
 
         if ($scheduleId) {
@@ -1092,6 +1183,11 @@ class HeatAQAPI {
 
         if (!$weekScheduleId) {
             $this->sendError('Week schedule is required');
+        }
+        $this->requireTemplate($templateId);
+        $this->requireWeekSchedule($weekScheduleId);
+        if ($rangeId) {
+            $this->requireDateRange($rangeId);
         }
 
         // For year-round (default), use priority 0 and placeholder dates
@@ -1158,6 +1254,14 @@ class HeatAQAPI {
             }
         }
 
+        $this->requireTemplate($templateId);
+        if ($dayScheduleId !== null) {
+            $this->requireDaySchedule($dayScheduleId);
+        }
+        if ($linkId > 0) {
+            $this->requireExceptionLink($linkId);
+        }
+
         try {
             if ($dayScheduleId === null) {
                 // No schedule assigned - delete the link if it exists
@@ -1189,6 +1293,7 @@ class HeatAQAPI {
         if (!$this->validateId($rangeId)) {
             $this->sendError('Invalid range ID');
         }
+        $this->requireDateRange($rangeId);
 
         $stmt = $this->db->prepare("DELETE FROM calendar_date_ranges WHERE id = ?");
         $stmt->execute([$rangeId]);
@@ -1201,6 +1306,7 @@ class HeatAQAPI {
         if (!$this->validateId($linkId)) {
             $this->sendError('Invalid link ID');
         }
+        $this->requireExceptionLink($linkId);
 
         $stmt = $this->db->prepare("DELETE FROM schedule_template_exceptions WHERE id = ?");
         $stmt->execute([$linkId]);
@@ -1215,6 +1321,7 @@ class HeatAQAPI {
         if (!$this->validateId($scheduleId)) {
             $this->sendError('Invalid schedule ID');
         }
+        $this->requireDaySchedule($scheduleId);
 
         // Delete periods first
         $stmt = $this->db->prepare("DELETE FROM day_schedule_periods WHERE day_schedule_id = ?");
@@ -1234,6 +1341,7 @@ class HeatAQAPI {
         if (!$this->validateId($scheduleId)) {
             $this->sendError('Invalid schedule ID');
         }
+        $this->requireWeekSchedule($scheduleId);
 
         // Delete the week schedule
         $stmt = $this->db->prepare("DELETE FROM week_schedules WHERE week_schedule_id = ?");
@@ -1249,6 +1357,7 @@ class HeatAQAPI {
         if (!$this->validateId($templateId)) {
             $this->sendError('Invalid template ID');
         }
+        $this->requireTemplate($templateId);
 
         // Don't allow deleting template 1 (default)
         if ($templateId == 1) {
@@ -1804,12 +1913,24 @@ class HeatAQAPI {
     }
 
     private function getProjects() {
-        $stmt = $this->db->query("
-            SELECT project_id, project_name, description, is_active
-            FROM projects
-            WHERE is_active = 1
-            ORDER BY project_name
-        ");
+        if (Config::requiresAuth() && !$this->isSuperAdminCached()) {
+            // Only the projects this user belongs to
+            $stmt = $this->db->prepare("
+                SELECT p.project_id, p.project_name, p.description, p.is_active
+                FROM projects p
+                JOIN user_projects up ON up.project_id = p.project_id AND up.user_id = ?
+                WHERE p.is_active = 1
+                ORDER BY p.project_name
+            ");
+            $stmt->execute([$this->userId]);
+        } else {
+            $stmt = $this->db->query("
+                SELECT project_id, project_name, description, is_active
+                FROM projects
+                WHERE is_active = 1
+                ORDER BY project_name
+            ");
+        }
         $projects = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         $this->sendResponse(['projects' => $projects, 'count' => count($projects)]);
@@ -1878,6 +1999,9 @@ class HeatAQAPI {
         $name = $input['name'] ?? null;
         $description = $input['description'] ?? '';
         $sourcePoolSiteId = $input['source_pool_site_id'] ?? null;
+        if ($sourcePoolSiteId) {
+            $this->requireSite($sourcePoolSiteId);  // copy only from a site you can access
+        }
         $createDefaultSite = $input['create_default_site'] ?? true;
 
         if (!$name) {
@@ -2121,6 +2245,33 @@ class HeatAQAPI {
             $role = 'operator';
         }
 
+        // An admin is admin of every project, and saving rewrites all of a
+        // user's project roles. So only owners / super admins may create or
+        // edit admins, owners and super admins (an admin editing an owner used
+        // to silently demote them).
+        if (Config::requiresAuth() && !$this->canEditShared()) {
+            if ($role === 'admin') {
+                $this->sendError('Only an owner can grant the admin role', 403);
+            }
+            if ($userId) {
+                $stmt = $this->db->prepare("
+                    SELECT u.is_super_admin,
+                           SUM(up.role IN ('admin', 'owner')) AS elevated
+                    FROM users u LEFT JOIN user_projects up ON up.user_id = u.user_id
+                    WHERE u.user_id = ? GROUP BY u.user_id
+                ");
+                $stmt->execute([$userId]);
+                $target = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($target && ($target['is_super_admin'] || $target['elevated'] > 0)) {
+                    $this->sendError('Only an owner can change an admin or owner account', 403);
+                }
+            }
+            // Operators may only be given projects the caller works in
+            foreach ($projectIds as $pid) {
+                $this->requireProjectAccess($pid);
+            }
+        }
+
         if ($userId) {
             // Update existing user
             $stmt = $this->db->prepare("
@@ -2205,6 +2356,7 @@ class HeatAQAPI {
             $projectId = isset($_GET['project_id']) && !empty($_GET['project_id'])
                 ? (int)$_GET['project_id']
                 : $this->projectId;
+            $this->requireProjectAccess($projectId);
 
             // Include legacy columns to merge with json_config
             if ($projectId) {
@@ -2291,6 +2443,7 @@ class HeatAQAPI {
         if (!$this->validateId($configId)) {
             $this->sendError('Invalid config ID');
         }
+        $this->requireConfig($configId);
 
         try {
             $stmt = $this->db->prepare("
@@ -2341,6 +2494,10 @@ class HeatAQAPI {
 
         if (empty($name)) {
             $this->sendError('Name is required');
+        }
+        $this->requireProjectAccess($projectId);
+        if ($configId) {
+            $this->requireConfig($configId);
         }
 
         $configJson = json_encode($configData);
@@ -2415,6 +2572,7 @@ class HeatAQAPI {
         if (!$this->validateId($configId)) {
             $this->sendError('Invalid config ID');
         }
+        $this->requireConfig($configId);
 
         $stmt = $this->db->prepare("DELETE FROM config_templates WHERE template_id = ?");
         $stmt->execute([$configId]);
@@ -2428,7 +2586,9 @@ class HeatAQAPI {
 
     private function getSolarStatus() {
         // Get numeric pool_site_id
-        $poolSiteId = $this->getPoolSiteId();
+        // (Called a getPoolSiteId() method that does not exist, so this
+        // action failed on every call.)
+        $poolSiteId = $this->poolSiteId;
 
         if (!$poolSiteId) {
             $this->sendResponse([
@@ -3515,6 +3675,7 @@ class HeatAQAPI {
         $siteId = isset($_GET['pool_site_id']) ? (int)$_GET['pool_site_id'] : $this->poolSiteId;
 
         if ($siteId) {
+            $this->requireSite($siteId);
             $stmt = $this->db->prepare("
                 SELECT id, name, latitude, longitude, weather_station_id, description,
                        hp_base_cost_nok, hp_marginal_cost_per_kw,
@@ -3546,6 +3707,8 @@ class HeatAQAPI {
         $projectId = isset($_GET['project_id']) && !empty($_GET['project_id'])
             ? (int)$_GET['project_id']
             : $this->projectId;
+        // Without a project this listed every project's sites
+        $this->requireProjectAccess($projectId);
 
         // Check if pools table exists to avoid error on subquery
         $tableCheck = $this->db->query("SHOW TABLES LIKE 'pools'");
@@ -3623,6 +3786,10 @@ class HeatAQAPI {
         $longitude = $input['longitude'] ?? null;
         $weatherStationId = $input['weather_station_id'] ?? null;
         $projectId = $input['project_id'] ?? $this->projectId ?? null;
+        $this->requireProjectAccess($projectId);
+        if ($poolSiteId) {
+            $this->requireSite($poolSiteId);
+        }
         if (!$projectId) {
             $this->sendError('project_id is required');
         }
@@ -3691,6 +3858,9 @@ class HeatAQAPI {
     private function getPools() {
         // Prefer pool_site_id (INT), fall back to context
         $poolSiteId = isset($_GET['pool_site_id']) ? (int)$_GET['pool_site_id'] : $this->poolSiteId;
+        if ($poolSiteId) {
+            $this->requireSite($poolSiteId);
+        }
         if (!$poolSiteId) {
             $this->sendError('pool_site_id is required');
             return;
@@ -3747,6 +3917,7 @@ class HeatAQAPI {
         if (!$poolId) {
             $this->sendError('pool_id is required');
         }
+        $this->requirePool($poolId);
 
         $stmt = $this->db->prepare("
             SELECT
@@ -3776,6 +3947,12 @@ class HeatAQAPI {
         $poolId = $input['pool_id'] ?? null;
         // Use pool_site_id (INT) directly, fall back to context
         $poolSiteId = isset($input['pool_site_id']) ? (int)$input['pool_site_id'] : $this->poolSiteId;
+        if ($poolSiteId) {
+            $this->requireSite($poolSiteId);
+        }
+        if ($poolId) {
+            $this->requirePool($poolId);
+        }
         $name = $input['name'] ?? null;
         if (!$name) {
             $this->sendError('name is required for pool');
