@@ -551,22 +551,7 @@ const SimulationsModule = {
                     }
                 },
                 scales: {
-                    x: {
-                        display: true,
-                        ticks: {
-                            maxTicksLimit: 12,
-                            font: { size: 10 },
-                            callback: function(value, index) {
-                                // Format date labels as "Jan", "Feb", etc. or "Jan 15"
-                                const dateStr = this.getLabelForValue(value);
-                                if (!dateStr) return '';
-                                const date = new Date(dateStr);
-                                const day = date.getDate();
-                                const month = date.toLocaleDateString('en-US', { month: 'short' });
-                                return day === 1 ? month : `${month} ${day}`;
-                            }
-                        }
-                    },
+                    x: SimulationsModule.dateAxis(labels),
                     y: {
                         display: true,
                         stacked: true,
@@ -706,6 +691,48 @@ const SimulationsModule = {
     },
 
     // Utility functions
+    /**
+     * X axis for a chart with one point per day (labels 'YYYY-MM-DD...').
+     * Ticks sit on calendar boundaries chosen from the run length: every New
+     * Year for runs over 3 years ("Jan 2016"), half years over 1.5 years,
+     * quarters over ~13 months, months up to a year, weeks below 2 months.
+     * (A fixed 12 ticks used to give arbitrary dates such as "Sep 2", "Jul 4"
+     * on a 10-year run.)
+     */
+    dateAxis: function(labels) {
+        const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const days = labels.length;
+        const stepMonths = days > 3 * 366 ? 12 : days > 1.5 * 366 ? 6 : days > 400 ? 3 : days > 62 ? 1 : 0;
+        const parse = l => {
+            const t = String(l);
+            return { y: +t.slice(0, 4), m: +t.slice(5, 7), d: +t.slice(8, 10) };
+        };
+        const ticks = [];
+        labels.forEach((l, i) => {
+            const p = parse(l);
+            if (stepMonths ? (p.d === 1 && (p.m - 1) % stepMonths === 0) : i % 7 === 0) ticks.push(i);
+        });
+        const format = (i, first) => {
+            const p = parse(labels[i]);
+            if (!stepMonths) return `${MONTHS[p.m - 1]} ${p.d}`;
+            // Year on every tick for yearly ticks, otherwise on January and the first tick
+            return (stepMonths === 12 || p.m === 1 || first) ? `${MONTHS[p.m - 1]} ${p.y}` : MONTHS[p.m - 1];
+        };
+        return {
+            display: true,
+            afterBuildTicks: axis => { axis.ticks = ticks.map(v => ({ value: v })); },
+            ticks: {
+                autoSkip: false,
+                maxRotation: 0,
+                font: { size: 10 },
+                callback: value => {
+                    const k = ticks.indexOf(value);
+                    return k < 0 ? '' : format(value, k === 0);
+                }
+            }
+        };
+    },
+
     // A percentage field (e.g. wind exposure "40" or "40%") as a fraction (0.40).
     // Values up to 1 are taken as already being a fraction.
     percentToFraction: function(value) {
@@ -2818,22 +2845,7 @@ const SimulationsModule = {
                     }
                 },
                 scales: {
-                    x: {
-                        display: true,
-                        ticks: {
-                            maxTicksLimit: 12,
-                            font: { size: 10 },
-                            callback: function(value, index) {
-                                // Format date labels as "Jan", "Feb", etc. or "Jan 15"
-                                const dateStr = this.getLabelForValue(value);
-                                if (!dateStr) return '';
-                                const date = new Date(dateStr);
-                                const day = date.getDate();
-                                const month = date.toLocaleDateString('en-US', { month: 'short' });
-                                return day === 1 ? month : `${month} ${day}`;
-                            }
-                        }
-                    },
+                    x: SimulationsModule.dateAxis(labels),
                     y: {
                         display: true,
                         stacked: true,
