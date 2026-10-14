@@ -467,12 +467,14 @@ const AdminModule = {
         const detailsDiv = document.getElementById('station-details');
         const noStationMsg = document.getElementById('no-station-message');
         const updateDataBtn = document.getElementById('update-data-btn');
+        const interpolateBtn = document.getElementById('interpolate-missing-btn');
 
         if (this.selectedStationId) {
             // Show station details and update data button
             if (detailsDiv) detailsDiv.style.display = 'block';
             if (noStationMsg) noStationMsg.style.display = 'none';
             if (updateDataBtn) updateDataBtn.style.display = 'inline-block';
+            if (interpolateBtn) interpolateBtn.style.display = 'inline-block';
 
             // Populate fields from station data
             const station = this.weatherStations.find(s => s.station_id === this.selectedStationId);
@@ -505,6 +507,7 @@ const AdminModule = {
             if (detailsDiv) detailsDiv.style.display = 'none';
             if (noStationMsg) noStationMsg.style.display = 'block';
             if (updateDataBtn) updateDataBtn.style.display = 'none';
+            if (interpolateBtn) interpolateBtn.style.display = 'none';
         }
 
         await this.loadWeatherData();
@@ -514,6 +517,8 @@ const AdminModule = {
         // Only load data if a station is selected
         if (!this.selectedStationId) {
             // Clear the data displays
+            this.weatherSummary = {};
+            this.weatherYearly = [];
             this.renderWeatherSummary({});
             this.renderYearlyAverages([]);
             this.renderMonthlyAverages([]);
@@ -532,6 +537,11 @@ const AdminModule = {
             const summaryData = await summaryRes.json();
             const yearlyData = await yearlyRes.json();
             const monthlyData = await monthlyRes.json();
+
+            // Kept for the Update planner and Interpolate Missing (real data,
+            // not text scraped back out of the rendered panel).
+            this.weatherSummary = summaryData.summary || {};
+            this.weatherYearly = yearlyData.yearly_averages || [];
 
             if (summaryData.summary) {
                 this.renderWeatherSummary(summaryData.summary);
@@ -915,60 +925,61 @@ const AdminModule = {
                 return;
             }
 
-            // Get current data info from the displayed values
-            const currentDateRange = document.getElementById('weather-date-range')?.textContent || '-';
-            const currentRecordCount = document.getElementById('weather-record-count')?.textContent || '0';
+            // Current data comes from the loaded summary (not scraped from the
+            // panel text — the old "→" parse never matched the rendered "to",
+            // so every Update silently re-fetched from 2015).
+            const summary = this.weatherSummary || {};
+            const currentRange = summary.min_date && summary.max_date
+                ? `${summary.min_date} → ${summary.max_date}` : 'no data yet';
+            const currentCount = summary.record_count ? Number(summary.record_count).toLocaleString() : '0';
 
-            // Determine date range
             const frostDateRange = frostData.data_range || {};
             const today = new Date().toISOString().split('T')[0];
-            const frostStart = frostDateRange.from ? frostDateRange.from.split('T')[0] : '2015-01-01';
-            const frostEnd = frostDateRange.to ? frostDateRange.to.split('T')[0] : today;
-
-            // Parse existing data end date from currentDateRange (format: "2020-01-01 → 2024-12-31")
-            let existingEndDate = null;
-            if (currentDateRange && currentDateRange !== '-') {
-                const match = currentDateRange.match(/→\s*(\d{4}-\d{2}-\d{2})/);
-                if (match) {
-                    existingEndDate = match[1];
-                }
-            }
-
-            // Default start: day after existing data ends, or frost start if no existing data
-            let defaultStart;
-            if (existingEndDate) {
-                // Add one day to existing end date
-                const nextDay = new Date(existingEndDate);
-                nextDay.setDate(nextDay.getDate() + 1);
-                defaultStart = nextDay.toISOString().split('T')[0];
-            } else {
-                defaultStart = frostStart > '2015-01-01' ? frostStart : '2015-01-01';
-            }
-            const defaultEnd = frostEnd > today ? today : frostEnd;
+            const frostStartRaw = frostDateRange.from ? frostDateRange.from.split('T')[0] : '2015-01-01';
+            const frostStart = frostStartRaw > '2015-01-01' ? frostStartRaw : '2015-01-01';
+            const frostEndRaw = frostDateRange.to ? frostDateRange.to.split('T')[0] : today;
+            const frostEnd = frostEndRaw > today ? today : frostEndRaw;
+            this._updateFrostRange = { frostStart, frostEnd };
 
             contentDiv.innerHTML = `
                 <table class="data-table compact" style="font-size: 13px; margin-bottom: 15px;">
-                    <tr><td style="width: 140px;">Current Data</td><td>${currentDateRange} (${currentRecordCount})</td></tr>
+                    <tr><td style="width: 140px;">Current Data</td><td>${currentRange} (${currentCount} records)</td></tr>
                     <tr><td>Frost API Range</td><td>${frostStart} → ${frostEnd}</td></tr>
                 </table>
-                <div class="form-row" style="margin-bottom: 15px;">
+                <div style="margin-bottom: 12px; font-size: 13px;">
+                    <label style="display:block; margin-bottom:6px; cursor:pointer;">
+                        <input type="radio" name="update-mode" value="missing" checked onchange="app.admin.renderUpdatePlan()">
+                        <strong>Missing data only</strong> — new data since the last stored date, plus years with missing hours
+                    </label>
+                    <label style="display:block; margin-bottom:6px; cursor:pointer;">
+                        <input type="radio" name="update-mode" value="recheck" onchange="app.admin.renderUpdatePlan()">
+                        <strong>Missing + recheck interpolated</strong> — also re-fetch years with interpolated hours (Frost may have back-filled them)
+                    </label>
+                    <label style="display:block; cursor:pointer;">
+                        <input type="radio" name="update-mode" value="full" onchange="app.admin.renderUpdatePlan()">
+                        <strong>Full refresh</strong> — every year in a date range
+                    </label>
+                </div>
+                <div id="update-full-range" class="form-row" style="margin-bottom: 12px; display: none;">
                     <div class="form-group">
                         <label>Fetch From</label>
-                        <input type="date" id="update-fetch-start" class="form-control" value="${defaultStart}">
+                        <input type="date" id="update-fetch-start" class="form-control" value="${frostStart}">
                     </div>
                     <div class="form-group">
                         <label>To</label>
-                        <input type="date" id="update-fetch-end" class="form-control" value="${defaultEnd}">
+                        <input type="date" id="update-fetch-end" class="form-control" value="${frostEnd}">
                     </div>
                 </div>
+                <p id="update-plan-preview" style="font-size: 13px; margin-bottom: 8px;"></p>
                 <p class="text-muted" style="font-size: 12px; margin-bottom: 15px;">
-                    Existing records will be skipped (no duplicates created).
+                    Real Frost values replace interpolated ones; hours Frost leaves blank never overwrite stored values.
                 </p>
                 <div class="form-actions">
                     <button class="btn btn-secondary" onclick="app.admin.closeStationModal()">Cancel</button>
-                    <button class="btn btn-primary" onclick="app.admin.startUpdateDataFetch()">Fetch Data</button>
+                    <button class="btn btn-primary" id="update-fetch-btn" onclick="app.admin.startUpdateDataFetch()">Fetch Data</button>
                 </div>
             `;
+            this.renderUpdatePlan();
         } catch (err) {
             const contentDiv = document.getElementById('update-data-content');
             if (contentDiv) {
@@ -980,20 +991,92 @@ const AdminModule = {
         }
     },
 
+    // Years an Update should fetch. Frost is fetched a whole year at a time, so
+    // "missing" = the tail after the last stored date + years with missing hours
+    // + years inside the stored range with no rows at all. "recheck" also adds
+    // years containing interpolated hours. Years complete only thanks to
+    // interpolation are skipped by "missing" (keeps the default fast).
+    planUpdateYears: function(mode) {
+        const { frostStart, frostEnd } = this._updateFrostRange || {};
+        if (!frostStart || !frostEnd) return [];
+        const firstYear = parseInt(frostStart.slice(0, 4), 10);
+        const lastYear = parseInt(frostEnd.slice(0, 4), 10);
+        const years = new Set();
+
+        const summary = this.weatherSummary || {};
+        const yearly = this.weatherYearly || [];
+        if (!summary.max_date) {
+            for (let y = firstYear; y <= lastYear; y++) years.add(y);
+        } else {
+            // Tail: from the day after the last stored date
+            const next = new Date(summary.max_date + 'T00:00:00Z');
+            next.setUTCDate(next.getUTCDate() + 1);
+            for (let y = next.getUTCFullYear(); y <= lastYear; y++) years.add(y);
+
+            // Whole years absent inside the stored range (no yearly row at all)
+            const present = new Set(yearly.map(r => parseInt(r.year, 10)));
+            const minY = parseInt(summary.min_date.slice(0, 4), 10);
+            const maxY = parseInt(summary.max_date.slice(0, 4), 10);
+            for (let y = minY; y <= maxY; y++) if (!present.has(y)) years.add(y);
+
+            yearly.forEach(r => {
+                const y = parseInt(r.year, 10);
+                if (Number(r.incomplete_hours) > 0) years.add(y);
+                if (mode === 'recheck' && Number(r.interpolated_hours) > 0) years.add(y);
+            });
+        }
+        return [...years].filter(y => y >= firstYear && y <= lastYear).sort((a, b) => a - b);
+    },
+
+    // Preview of what the selected Update mode will fetch
+    renderUpdatePlan: function() {
+        const mode = document.querySelector('input[name="update-mode"]:checked')?.value || 'missing';
+        const rangeEl = document.getElementById('update-full-range');
+        const previewEl = document.getElementById('update-plan-preview');
+        const btn = document.getElementById('update-fetch-btn');
+        if (rangeEl) rangeEl.style.display = mode === 'full' ? 'flex' : 'none';
+        if (!previewEl) return;
+
+        if (mode === 'full') {
+            previewEl.textContent = 'Will fetch every year in the selected range.';
+            if (btn) btn.disabled = false;
+            return;
+        }
+        const years = this.planUpdateYears(mode);
+        if (years.length === 0) {
+            previewEl.innerHTML = '<span style="color: var(--success);">Nothing to fetch — data is complete'
+                + (mode === 'missing' ? ' (interpolated hours not rechecked)' : '') + '.</span>';
+            if (btn) btn.disabled = true;
+        } else {
+            previewEl.innerHTML = `Will fetch <strong>${years.length}</strong> year(s): ${years.join(', ')}`;
+            if (btn) btn.disabled = false;
+        }
+    },
+
     // Start fetching data from the update modal
     startUpdateDataFetch: async function() {
-        const startDate = document.getElementById('update-fetch-start')?.value;
-        const endDate = document.getElementById('update-fetch-end')?.value;
+        const mode = document.querySelector('input[name="update-mode"]:checked')?.value || 'missing';
 
-        if (!startDate || !endDate) {
-            alert('Please select a date range');
+        if (mode === 'full') {
+            const startDate = document.getElementById('update-fetch-start')?.value;
+            const endDate = document.getElementById('update-fetch-end')?.value;
+            if (!startDate || !endDate) {
+                alert('Please select a date range');
+                return;
+            }
+            await this.fetchWeatherDataForStation(this.selectedStationId, startDate, endDate);
             return;
         }
 
-        await this.fetchWeatherDataForStation(this.selectedStationId, startDate, endDate);
+        const years = this.planUpdateYears(mode);
+        if (years.length === 0) {
+            alert('Nothing to fetch — data is already complete.');
+            return;
+        }
+        await this.fetchWeatherYears(this.selectedStationId, years);
     },
 
-    // Fetch weather data year by year with progress
+    // Fetch weather data for a date range (all years in it)
     fetchWeatherDataForStation: async function(stationId, startDate, endDate) {
         const startYear = parseInt(startDate.split('-')[0]);
         const endYear = parseInt(endDate.split('-')[0]);
@@ -1001,7 +1084,11 @@ const AdminModule = {
         for (let y = startYear; y <= endYear; y++) {
             years.push(y);
         }
+        await this.fetchWeatherYears(stationId, years);
+    },
 
+    // Fetch weather data for an explicit list of years, with progress
+    fetchWeatherYears: async function(stationId, years) {
         // Update modal to show progress
         const modalContent = document.querySelector('#station-modal-container .modal-content');
         if (modalContent) {
@@ -1032,7 +1119,17 @@ const AdminModule = {
         const sleep = (ms) => new Promise(r => setTimeout(r, ms));
         const fetchYearOnce = async (year) => {
             const response = await fetch(`./api/frost_api.php?action=fetch_and_store_year&station_id=${encodeURIComponent(stationId)}&year=${year}`);
-            const data = await response.json();
+            // Read as text first: a PHP timeout/fatal returns an HTML page, and
+            // response.json() then only says "Unexpected token..." — show what
+            // the server actually sent instead.
+            const text = await response.text();
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                const snippet = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+                throw new Error(`HTTP ${response.status}, non-JSON response: ${snippet || '(empty response)'}`);
+            }
             if (data.error) throw new Error(data.error);
             return data;
         };
@@ -1120,6 +1217,16 @@ const AdminModule = {
         const select = document.getElementById('weather-station-select');
         if (select) select.value = stationId;
         await this.onStationChange();
+
+        // Point at the next step when gaps remain after the fetch
+        const remaining = (this.weatherYearly || []).reduce((s, r) => s + (Number(r.incomplete_hours) || 0), 0);
+        if (modalContent && remaining > 0) {
+            const hint = document.createElement('p');
+            hint.className = 'text-muted';
+            hint.style.cssText = 'font-size: 12px; margin-top: 10px;';
+            hint.textContent = `${remaining.toLocaleString()} hour(s) still missing. Use "Interpolate Missing" to fill short gaps.`;
+            modalContent.insertBefore(hint, modalContent.lastElementChild);
+        }
     },
 
     deleteWeatherStation: async function(stationId) {
@@ -1271,10 +1378,8 @@ const AdminModule = {
 
     // Show the missing/incomplete hour details for one station-year, with an
     // explicit "fill by interpolation" action (flagged, never silent).
-    showWeatherGaps: async function(year) {
-        const stationId = document.getElementById('weather-station-select')?.value;
-        if (!stationId) return;
-
+    // Shared dialog for gap inspection / interpolation results
+    openWeatherGapsModal: function(title) {
         let modal = document.getElementById('weather-gaps-modal');
         if (!modal) {
             modal = document.createElement('div');
@@ -1285,10 +1390,84 @@ const AdminModule = {
         }
         modal.style.display = 'block';
         modal.innerHTML = `<div class="modal-content" style="max-width:640px; margin:8% auto; background:#fff; border-radius:6px; padding:20px; max-height:75vh; overflow-y:auto;">
-            <h3 style="margin-top:0;">Missing weather data — ${stationId}, ${year}</h3>
+            <h3 style="margin-top:0;">${title}</h3>
             <div id="weather-gaps-body">Loading...</div>
         </div>`;
         modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+    },
+
+    // Interpolate short gaps in every year that has missing hours (station-wide
+    // version of the per-year "Fill gaps by interpolation"). Explicit action,
+    // every filled hour flagged is_interpolated; long gaps are skipped.
+    interpolateAllMissing: async function() {
+        const stationId = this.selectedStationId;
+        if (!stationId) return;
+
+        const targets = (this.weatherYearly || [])
+            .filter(r => Number(r.incomplete_hours) > 0)
+            .map(r => ({ year: parseInt(r.year, 10), hours: Number(r.incomplete_hours) }))
+            .sort((a, b) => a.year - b.year);
+        if (targets.length === 0) {
+            alert('No missing hours to interpolate.');
+            return;
+        }
+        const total = targets.reduce((s, t) => s + t.hours, 0);
+        if (!confirm(`Interpolate missing hours for ${stationId}?\n\n`
+            + `${total.toLocaleString()} incomplete hour(s) across ${targets.length} year(s): ${targets.map(t => t.year).join(', ')}.\n\n`
+            + `Short gaps are filled and flagged as interpolated; long gaps are skipped.\n`
+            + `Tip: run Update Data first so Frost supplies real values where it can.`)) {
+            return;
+        }
+
+        this.openWeatherGapsModal(`Interpolate missing — ${stationId}`);
+        const body = document.getElementById('weather-gaps-body');
+
+        let filled = 0, patched = 0;
+        const skipped = [];
+        const errors = [];
+        for (let i = 0; i < targets.length; i++) {
+            const { year } = targets[i];
+            if (body) body.textContent = `Interpolating ${year}... (${i + 1}/${targets.length})`;
+            try {
+                const resp = await fetch('./api/heataq_api.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'fill_weather_gaps', station_id: stationId, year: year })
+                });
+                const data = await resp.json();
+                if (data.error) throw new Error(data.error);
+                filled += Number(data.filled_hours) || 0;
+                patched += Number(data.patched_hours) || 0;
+                (data.skipped_runs || []).forEach(r => skipped.push(r));
+            } catch (err) {
+                errors.push(`${year}: ${err.message}`);
+            }
+        }
+
+        let html = `<p style="color: var(--success);">✓ Filled ${filled.toLocaleString()} missing hour(s),
+            patched ${patched.toLocaleString()} NULL-field hour(s) across ${targets.length} year(s). All flagged as interpolated.</p>`;
+        if (skipped.length > 0) {
+            html += `<p style="color: var(--danger);">Skipped ${skipped.length} gap(s) too long to interpolate — re-fetch these instead:</p><ul style="font-size:12px;">`;
+            skipped.slice(0, 50).forEach(r => { html += `<li>${r.start} → ${r.end} (${r.hours} h)</li>`; });
+            if (skipped.length > 50) html += `<li>… and ${skipped.length - 50} more</li>`;
+            html += '</ul>';
+        }
+        if (errors.length > 0) {
+            html += `<p style="color: var(--danger);">Errors: ${errors.join(' | ')}</p>`;
+        }
+        html += `<div style="margin-top:12px; text-align:right;">
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('weather-gaps-modal').style.display='none'">Close</button></div>`;
+        if (body) body.innerHTML = html;
+
+        // Refresh the yearly table so Missing/Filled columns update
+        await this.onStationChange();
+    },
+
+    showWeatherGaps: async function(year) {
+        const stationId = document.getElementById('weather-station-select')?.value;
+        if (!stationId) return;
+
+        this.openWeatherGapsModal(`Missing weather data — ${stationId}, ${year}`);
 
         const body = () => document.getElementById('weather-gaps-body');
         try {

@@ -11,6 +11,20 @@ ini_set('memory_limit', '512M');
 
 header('Content-Type: application/json');
 
+// A fatal error (max execution time, memory exhaustion) otherwise ends the
+// request with an HTML/empty body the browser can't parse as JSON, surfacing
+// only as a vague "Unexpected ..." error. Emit a JSON error naming the cause.
+register_shutdown_function(function () {
+    $err = error_get_last();
+    if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: application/json');
+        }
+        echo json_encode(['error' => 'Server fatal error: ' . $err['message']]);
+    }
+});
+
 /**
  * Check if a station exists and get its metadata
  */
@@ -495,19 +509,28 @@ function fetchAndStoreYear($clientId) {
         // every row failed reported success. ON DUPLICATE KEY UPDATE re-fetches
         // cleanly (existing rows refreshed) and real errors now throw.
         // Note: solar_radiation not stored - weather_data table doesn't have this column
-        // is_interpolated is reset on every fetched row: values arriving from
-        // Frost are measurements, so a previously interpolated hour that the
-        // source can now supply loses its reconstruction flag automatically.
+        //
+        // Merge rules for an existing hour:
+        // - A Frost NULL means "no data", never "erase": COALESCE keeps the
+        //   stored value (measured or interpolated) when Frost has nothing.
+        //   Previously a blank Frost element overwrote interpolated values with
+        //   NULL and cleared the flag, undoing gap-filling on every Update.
+        // - is_interpolated is per hour. It stays 1 while any field the gap
+        //   filler reconstructs (temperature, wind_speed, humidity — see
+        //   WeatherGapFiller::FIELDS) is still missing from Frost; it clears
+        //   only once Frost supplies all of them. The flag is assigned first,
+        //   before the value columns change.
         $stmt = $db->prepare("
             INSERT INTO weather_data
             (station_id, timestamp, temperature, wind_speed, wind_direction, humidity, is_interpolated)
             VALUES (?, ?, ?, ?, ?, ?, 0)
             ON DUPLICATE KEY UPDATE
-                temperature = VALUES(temperature),
-                wind_speed = VALUES(wind_speed),
-                wind_direction = VALUES(wind_direction),
-                humidity = VALUES(humidity),
-                is_interpolated = 0
+                is_interpolated = IF(weather_data.is_interpolated = 1
+                    AND (VALUES(temperature) IS NULL OR VALUES(wind_speed) IS NULL OR VALUES(humidity) IS NULL), 1, 0),
+                temperature = COALESCE(VALUES(temperature), weather_data.temperature),
+                wind_speed = COALESCE(VALUES(wind_speed), weather_data.wind_speed),
+                wind_direction = COALESCE(VALUES(wind_direction), weather_data.wind_direction),
+                humidity = COALESCE(VALUES(humidity), weather_data.humidity)
         ");
 
         $inserted = 0;   // new rows
@@ -549,9 +572,10 @@ function fetchAndStoreYear($clientId) {
             'completeness_pct' => $complete
         ]);
 
-    } catch (PDOException $e) {
+    } catch (Throwable $e) {
+        http_response_code(500);
         echo json_encode([
-            'error' => 'Database error: ' . $e->getMessage(),
+            'error' => ($e instanceof PDOException ? 'Database error: ' : 'Error: ') . $e->getMessage(),
             'fetched' => count($records)
         ]);
     }

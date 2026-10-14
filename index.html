@@ -1271,7 +1271,8 @@
                             <select id="weather-station-select" class="form-control" style="width: 250px;" onchange="app.admin.onStationChange()">
                                 <option value="">-- Select Station --</option>
                             </select>
-                            <button id="update-data-btn" class="btn btn-sm" onclick="app.admin.showUpdateDataModal()" style="display: none; background: #FFD700; color: #000; margin-left: 10px;">Update Data</button>
+                            <button id="interpolate-missing-btn" class="btn btn-sm btn-secondary" onclick="app.admin.interpolateAllMissing()" style="display: none; margin-left: 10px;" title="Fill short gaps in all years by interpolation (flagged as interpolated)">Interpolate Missing</button>
+                            <button id="update-data-btn" class="btn btn-sm" onclick="app.admin.showUpdateDataModal()" style="display: none; background: #FFD700; color: #000;">Update Data</button>
                         </div>
 
                         <!-- Station details (shown when station selected) -->
@@ -1679,18 +1680,18 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=216"></script>
+    <script src="./assets/js/config.js?v=217"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=216"></script>
-    <script src="./assets/js/modules/navigation.js?v=216"></script>
-    <script src="./assets/js/modules/schedules.js?v=216"></script>
-    <script src="./assets/js/modules/calendar.js?v=216"></script>
-    <script src="./assets/js/modules/simulations.js?v=216"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=216"></script>
-    <script src="./assets/js/modules/configuration.js?v=216"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=216"></script>
-    <script src="./assets/js/modules/admin.js?v=216"></script>
-    <script src="./assets/js/modules/project.js?v=216"></script>
-    <script src="./assets/js/app.js?v=216"></script>
+    <script src="./assets/js/modules/api.js?v=217"></script>
+    <script src="./assets/js/modules/navigation.js?v=217"></script>
+    <script src="./assets/js/modules/schedules.js?v=217"></script>
+    <script src="./assets/js/modules/calendar.js?v=217"></script>
+    <script src="./assets/js/modules/simulations.js?v=217"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=217"></script>
+    <script src="./assets/js/modules/configuration.js?v=217"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=217"></script>
+    <script src="./assets/js/modules/admin.js?v=217"></script>
+    <script src="./assets/js/modules/project.js?v=217"></script>
+    <script src="./assets/js/app.js?v=217"></script>
 </body>
 </html>
