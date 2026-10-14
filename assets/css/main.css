@@ -34,7 +34,7 @@
     /* Layout */
     --sidebar-width: 240px;
     --header-height: 70px;
-    --content-max-width: none;  /* use the full width next to the sidebar */
+    --content-max-width: 90rem;  /* in rem: scales with text size and zoom (~1440px at 16px) */
 
     /* Transitions */
     --transition-fast: 0.15s ease;
@@ -107,8 +107,17 @@ body {
 
 .content-wrapper > * {
     max-width: var(--content-max-width);
-    margin: 0 auto;
+    margin-left: 0;   /* next to the sidebar, not centred */
+    margin-right: 0;
     width: 100%;
+}
+
+/* Top bar: holds the user card, pinned to the content's right edge */
+.top-bar {
+    position: sticky;
+    top: 0;
+    height: 0;
+    z-index: 20;
 }
 
 /* Content Sections */
