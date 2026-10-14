@@ -353,6 +353,90 @@ function fetchWeatherData($clientId) {
 /**
  * Fetch one year of weather data from Frost API and store in database
  */
+/**
+ * Turn a Frost observations response into one record per hour.
+ * @return array ['records' => [...], 'wind_other_height' => hours where only
+ *               another wind height was available (wind left empty)]
+ */
+function parseFrostObservations($data, $windHeight) {
+    $records = [];
+    // Frost returns one observation per sensor level / time offset. Pick one
+    // deliberately instead of letting the last one win: wind at the station's
+    // configured height (a station with 2 m and 10 m sensors could otherwise
+    // store the 2 m wind labelled as 10 m), and the PT0H offset when several.
+    $score = function ($obs, $isWind) use ($windHeight) {
+        $s = 0;
+        if (($obs['timeOffset'] ?? 'PT0H') === 'PT0H') $s += 1;
+        if ($isWind) {
+            $lv = $obs['level']['value'] ?? null;
+            if ($lv !== null && abs((float)$lv - $windHeight) < 0.01) $s += 10;
+            elseif ($lv !== null) $s -= 10;  // another height: only if nothing else
+        }
+        return $s;
+    };
+    $windOtherHeight = 0;
+
+    if (isset($data['data'])) {
+        foreach ($data['data'] as $item) {
+            $time = $item['referenceTime'] ?? null;
+            if (!$time) continue;
+            // '2025-01-01T00:00:00.000Z' -> '2025-01-01 00:00:00' (UTC). The raw
+            // ISO string only worked on a non-strict SQL mode.
+            $ts = strtotime($time);
+            if ($ts === false) continue;
+
+            $record = [
+                'timestamp' => gmdate('Y-m-d H:i:s', $ts),
+                'temperature' => null,
+                'wind_speed' => null,
+                'wind_direction' => null,
+                'humidity' => null,
+                'solar_radiation' => null
+            ];
+
+            $best = [];
+            foreach ($item['observations'] ?? [] as $obs) {
+                $elementId = $obs['elementId'] ?? '';
+                $isWind = ($elementId === 'wind_speed' || $elementId === 'wind_from_direction');
+                $sc = $score($obs, $isWind);
+                if (!isset($best[$elementId]) || $sc > $best[$elementId][0]) {
+                    $best[$elementId] = [$sc, $obs];
+                }
+            }
+
+            foreach ($best as $elementId => [$sc, $obs]) {
+                $value = $obs['value'] ?? null;
+                if (($elementId === 'wind_speed' || $elementId === 'wind_from_direction') && $sc < 0) {
+                    if ($elementId === 'wind_speed') $windOtherHeight++;
+                    continue;  // only another height available: leave it empty
+                }
+
+                switch ($elementId) {
+                    case 'air_temperature':
+                        $record['temperature'] = $value;
+                        break;
+                    case 'wind_speed':
+                        $record['wind_speed'] = $value;
+                        break;
+                    case 'wind_from_direction':
+                        $record['wind_direction'] = $value;
+                        break;
+                    case 'relative_humidity':
+                        $record['humidity'] = $value;
+                        break;
+                    case 'surface_downwelling_shortwave_flux_in_air':
+                        $record['solar_radiation'] = $value;
+                        break;
+                }
+            }
+
+            $records[] = $record;
+        }
+    }
+
+    return ['records' => $records, 'wind_other_height' => $windOtherHeight];
+}
+
 function fetchAndStoreYear($clientId) {
     $stationId = $_GET['station_id'] ?? '';
     $year = $_GET['year'] ?? '';
@@ -460,46 +544,9 @@ function fetchAndStoreYear($clientId) {
     $data = json_decode($response, true);
     $records = [];
 
-    if (isset($data['data'])) {
-        foreach ($data['data'] as $item) {
-            $time = $item['referenceTime'] ?? null;
-            if (!$time) continue;
-
-            $record = [
-                'timestamp' => $time,
-                'temperature' => null,
-                'wind_speed' => null,
-                'wind_direction' => null,
-                'humidity' => null,
-                'solar_radiation' => null
-            ];
-
-            foreach ($item['observations'] ?? [] as $obs) {
-                $elementId = $obs['elementId'] ?? '';
-                $value = $obs['value'] ?? null;
-
-                switch ($elementId) {
-                    case 'air_temperature':
-                        $record['temperature'] = $value;
-                        break;
-                    case 'wind_speed':
-                        $record['wind_speed'] = $value;
-                        break;
-                    case 'wind_from_direction':
-                        $record['wind_direction'] = $value;
-                        break;
-                    case 'relative_humidity':
-                        $record['humidity'] = $value;
-                        break;
-                    case 'surface_downwelling_shortwave_flux_in_air':
-                        $record['solar_radiation'] = $value;
-                        break;
-                }
-            }
-
-            $records[] = $record;
-        }
-    }
+    $parsed = parseFrostObservations($data, (float)$gateRow['wind_height_m']);
+    $records = $parsed['records'];
+    $windOtherHeight = $parsed['wind_other_height'];
 
     // Store in database
     try {
@@ -570,7 +617,9 @@ function fetchAndStoreYear($clientId) {
             'updated' => $updated,
             'skipped' => $unchanged,
             'expected_hours' => $expectedHours,
-            'completeness_pct' => $complete
+            'completeness_pct' => $complete,
+            // hours with wind only at another height than the station's (left empty)
+            'wind_other_height_hours' => $windOtherHeight
         ]);
 
     } catch (Throwable $e) {

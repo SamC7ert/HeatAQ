@@ -147,6 +147,35 @@ class WeatherGapFiller {
     }
 
     /**
+     * Length in hours of the contiguous stretch around [$startTs, $endTs] in
+     * which $field is missing (no row, or NULL), regardless of row kind or
+     * year, within the station's data range.
+     */
+    private function outageHours($stationId, $field, $startTs, $endTs) {
+        $range = $this->stationRange($stationId);
+        if (!$range) return 0;
+        $limit = (self::MAX_FILL_HOURS + 1) * 3600;
+        $from = max($range[0], $startTs - $limit);
+        $to = min($range[1], $endTs + $limit);
+
+        $stmt = $this->db->prepare("
+            SELECT timestamp, $field AS v FROM weather_data
+            WHERE station_id = ? AND timestamp BETWEEN ? AND ?
+        ");
+        $stmt->execute([$stationId, gmdate('Y-m-d H:i:s', $from), gmdate('Y-m-d H:i:s', $to)]);
+        $have = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            if ($row['v'] !== null) $have[strtotime($row['timestamp'] . ' UTC')] = true;
+        }
+
+        $first = $startTs;
+        while ($first - 3600 >= $from && !isset($have[$first - 3600])) $first -= 3600;
+        $last = $endTs;
+        while ($last + 3600 <= $to && !isset($have[$last + 3600])) $last += 3600;
+        return (int) (($last - $first) / 3600) + 1;
+    }
+
+    /**
      * Fill all fillable incomplete hours for one station-year.
      * Never overwrites a measured value; every write sets is_interpolated = 1.
      *
@@ -182,6 +211,20 @@ class WeatherGapFiller {
             }
             $startTs = strtotime($run['start'] . ':00 UTC');
             $endTs = strtotime($run['end'] . ':00 UTC');
+
+            // The cap applies to the whole outage, not to this piece of it: a
+            // run ends where the row kind changes (missing row vs NULL field)
+            // or at the year boundary, so one long outage used to be split into
+            // pieces that each passed the cap and were all filled.
+            $longest = 0;
+            foreach ($run['fields'] as $field) {
+                $longest = max($longest, $this->outageHours($stationId, $field, $startTs, $endTs));
+            }
+            if ($longest > self::MAX_FILL_HOURS) {
+                $skipped[] = $run + ['reason' => "part of a {$longest} h outage (longer than "
+                    . self::MAX_FILL_HOURS . ' h) - re-fetch from Frost instead of interpolating'];
+                continue;
+            }
 
             // Context window for the diurnal profile
             $ctxFrom = gmdate('Y-m-d H:i:s', $startTs - self::CONTEXT_DAYS * 86400);
