@@ -371,15 +371,30 @@ const EnergyAnalysis = {
     /**
      * Get scenarios based on current mode and inputs
      */
+    /**
+     * Read a numeric scenario input. A typed 0 stays 0 (it used to become the
+     * default); text, a blank or an out-of-range value throws a readable error.
+     */
+    readScenarioInput: function(id, label, min, integer = false) {
+        const el = document.getElementById(id);
+        const raw = el ? el.value.trim().replace(',', '.') : '';
+        const v = raw === '' ? NaN : Number(raw);
+        if (!Number.isFinite(v) || v < min || (integer && !Number.isInteger(v))) {
+            throw new Error(`${label}: "${el?.value ?? ''}" is not valid (${integer ? 'whole number' : 'number'} ≥ ${min})`);
+        }
+        return v;
+    },
+
     getScenarios: function() {
         const isTotalMode = document.getElementById('analysis-mode-total')?.checked;
         const scenarios = [];
+        const num = (id, label, min, integer) => this.readScenarioInput(id, label, min, integer);
 
         if (isTotalMode) {
-            const fixedHp = parseFloat(document.getElementById('ea-fixed-hp')?.value) || 175;
-            const totalStart = parseFloat(document.getElementById('ea-total-start')?.value) || 250;
-            const totalStep = parseFloat(document.getElementById('ea-total-step')?.value) || 25;
-            const numCases = parseInt(document.getElementById('ea-total-cases')?.value) || 5;
+            const fixedHp = num('ea-fixed-hp', 'Fixed HP', 0);
+            const totalStart = num('ea-total-start', 'Total start', 0);
+            const totalStep = num('ea-total-step', 'Step', 0);
+            const numCases = num('ea-total-cases', 'Cases', 1, true);
 
             for (let i = 0; i < numCases; i++) {
                 const total = totalStart + (i * totalStep);
@@ -394,10 +409,10 @@ const EnergyAnalysis = {
                 }
             }
         } else {
-            const fixedTotal = parseFloat(document.getElementById('ea-fixed-total')?.value) || 325;
-            const hpStart = parseFloat(document.getElementById('ea-hp-start')?.value) || 125;
-            const hpStep = parseFloat(document.getElementById('ea-hp-step')?.value) || 25;
-            const numCases = parseInt(document.getElementById('ea-hp-cases')?.value) || 5;
+            const fixedTotal = num('ea-fixed-total', 'Fixed total', 0);
+            const hpStart = num('ea-hp-start', 'HP start', 0);
+            const hpStep = num('ea-hp-step', 'Step', 0);
+            const numCases = num('ea-hp-cases', 'Cases', 1, true);
 
             for (let i = 0; i < numCases; i++) {
                 const hp = hpStart + (i * hpStep);
@@ -420,11 +435,14 @@ const EnergyAnalysis = {
      * Update the preview text
      */
     updatePreview: function() {
-        const scenarios = this.getScenarios();
         const previewEl = document.getElementById('ea-preview');
-        if (previewEl) {
-            previewEl.textContent = scenarios.map(s => s.label).join(', ') || 'Invalid configuration';
+        let text;
+        try {
+            text = this.getScenarios().map(s => s.label).join(', ') || 'Invalid configuration';
+        } catch (error) {
+            text = error.message;
         }
+        if (previewEl) previewEl.textContent = text;
     },
 
     /**
@@ -433,7 +451,13 @@ const EnergyAnalysis = {
     run: async function() {
         if (this.isRunning) return;
 
-        const scenarios = this.getScenarios();
+        let scenarios;
+        try {
+            scenarios = this.getScenarios();
+        } catch (error) {
+            alert(error.message);
+            return;
+        }
         if (scenarios.length === 0) {
             alert('Invalid configuration - no valid scenarios');
             return;
@@ -512,8 +536,15 @@ const EnergyAnalysis = {
             }
         }
 
-        // Complete
-        this.updateProgress(scenarios.length, scenarios.length, 'Complete!');
+        // Complete - failed cases are listed, not hidden behind "Complete!"
+        const failed = this.results.filter(r => !r.success);
+        this.updateProgress(scenarios.length, scenarios.length,
+            failed.length ? `Completed with ${failed.length} error${failed.length > 1 ? 's' : ''}` : 'Complete!');
+        if (statusEl) {
+            statusEl.innerHTML = failed.map(r =>
+                `<span style="color:#dc3545;">Case ${escapeHtml(r.label)} failed: ${escapeHtml(r.error)}</span>`
+            ).join('<br>');
+        }
 
         // Render results
         this.renderResults();
@@ -554,9 +585,19 @@ const EnergyAnalysis = {
             })
         });
 
-        const data = await response.json();
+        // A shared-host timeout or PHP fatal returns an HTML page, not JSON
+        const text = await response.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            throw new Error(`Server returned HTTP ${response.status} without a result (possibly a timeout)`);
+        }
         if (data.error) {
             throw new Error(data.error);
+        }
+        if (!response.ok || !data.summary) {
+            throw new Error(`Server returned HTTP ${response.status} without a result`);
         }
         return data;
     },
@@ -582,7 +623,7 @@ const EnergyAnalysis = {
             const secs = Math.floor(remaining % 60);
             if (progressTime) progressTime.textContent = `~${mins}:${secs.toString().padStart(2, '0')} remaining`;
         } else if (completed >= total) {
-            if (progressTime) progressTime.textContent = 'Done!';
+            if (progressTime) progressTime.textContent = '';
         }
     },
 
@@ -677,27 +718,29 @@ const EnergyAnalysis = {
         // Per-result year count, so cumulative totals can be shown as true
         // per-year figures (summary.*_kwh / days are accumulated over the
         // whole simulated period, not per year).
-        const yearsOf = (r) => {
-            const h = r.summary?.total_hours || 0;
-            return h > 0 ? h / 8760 : 1;
-        };
+        // Shorter-than-a-year cases are shown as period totals (see annualBasis);
+        // the unit labels follow the first successful case (cases share a period).
+        const yearsOf = (r) => annualBasis(r.summary?.total_hours).divisor;
+        const firstOkCase = this.results.find(r => r.success);
+        const caseBasis = annualBasis(firstOkCase?.summary?.total_hours ?? 8760);
+        const sfx = caseBasis.suffix;
 
         // HP + Boiler row
         rows.push(this.buildRow('HP + Boiler', 'kW',
             this.results.map(r => r.label), false, false));
 
         // Net Heating Need - with thick bottom border to separate from electric section
-        rows.push(this.buildRowStyled('Net Heating Need', 'MWh/yr',
+        rows.push(this.buildRowStyled('Net Heating Need', 'MWh' + sfx,
             this.results.map(r => r.success ? ((r.summary?.hp_thermal_kwh || 0) + (r.summary?.boiler_thermal_kwh || 0)) / 1000 / yearsOf(r) : '-'),
             true, { borderBottom: '2px solid #999' }));
 
         // HP Electric (API uses total_hp_energy_kwh)
-        rows.push(this.buildRow('HP Electric', 'MWh/yr',
+        rows.push(this.buildRow('HP Electric', 'MWh' + sfx,
             this.results.map(r => r.success ? (r.summary?.total_hp_energy_kwh || 0) / 1000 / yearsOf(r) : '-'),
             true, false));
 
         // Boiler Electric (API uses total_boiler_energy_kwh)
-        rows.push(this.buildRow('Boiler Electric', 'MWh/yr',
+        rows.push(this.buildRow('Boiler Electric', 'MWh' + sfx,
             this.results.map(r => r.success ? (r.summary?.total_boiler_energy_kwh || 0) / 1000 / yearsOf(r) : '-'),
             true, false));
 
@@ -708,7 +751,7 @@ const EnergyAnalysis = {
             const boiler = r.summary?.total_boiler_energy_kwh || 0;
             return (hp + boiler) / 1000 / yearsOf(r);
         });
-        rows.push(this.buildTotalElectricRow('Total Electric', 'MWh/yr', totalElec));
+        rows.push(this.buildTotalElectricRow('Total Electric', 'MWh' + sfx, totalElec));
 
         // HP Share % - italic, indented, smaller font, with border below
         rows.push(this.buildRowStyled('HP Share', '%',
@@ -722,12 +765,12 @@ const EnergyAnalysis = {
 
         // Energy Cost
         const energyCosts = this.results.map(r => r.success ? (r.summary?.total_cost || 0) / 1000 / yearsOf(r) : null);
-        rows.push(this.buildRow('Energy Cost', 'kNOK/yr', energyCosts, true, false));
+        rows.push(this.buildRow('Energy Cost', 'kNOK' + sfx, energyCosts, true, false));
 
         // Energy Cost Diff vs Prev - only in HP Capacity mode
         if (!isTotalMode) {
             const energyDiffs = this.calcDiffsVsPrev(energyCosts);
-            rows.push(this.buildDiffRow('Diff vs prev', 'kNOK/yr', energyDiffs, true));
+            rows.push(this.buildDiffRow('Diff vs prev', 'kNOK' + sfx, energyDiffs, true));
         }
 
         // Investment (always show, dashes if no data configured)
@@ -753,8 +796,11 @@ const EnergyAnalysis = {
 
             // Payback vs Prev - only in HP Capacity mode
             if (!isTotalMode) {
-                const paybacks = this.calcPaybackVsPrev(investments, energyCosts);
-                rows.push(this.buildPaybackRowStyled('Payback vs prev', 'years', paybacks));
+                // Payback needs annual savings: not available for runs shorter than a year
+                const paybacks = caseBasis.perYear
+                    ? this.calcPaybackVsPrev(investments, energyCosts)
+                    : investments.map(() => null);
+                rows.push(this.buildPaybackRowStyled('Payback vs prev', caseBasis.perYear ? 'years' : 'needs 1-yr run', paybacks));
             }
         } catch (err) {
             console.error('[EnergyAnalysis] Error calculating investment rows:', err);
@@ -787,16 +833,16 @@ const EnergyAnalysis = {
 
         // Days below target-1 - highlight in Total Capacity mode
         if (isTotalMode) {
-            rows.push(this.buildRowStyled(daysLbl1, 'days/yr', daysBelow1, true, { background: '#e3f2fd' }));
+            rows.push(this.buildRowStyled(daysLbl1, 'days' + sfx, daysBelow1, true, { background: '#e3f2fd' }));
         } else {
-            rows.push(this.buildRow(daysLbl1, 'days/yr', daysBelow1, true, false));
+            rows.push(this.buildRow(daysLbl1, 'days' + sfx, daysBelow1, true, false));
         }
 
         // Days below target-2 - highlight in Total Capacity mode
         if (isTotalMode) {
-            rows.push(this.buildRowStyled(daysLbl2, 'days/yr', daysBelow2, true, { background: '#e3f2fd' }));
+            rows.push(this.buildRowStyled(daysLbl2, 'days' + sfx, daysBelow2, true, { background: '#e3f2fd' }));
         } else {
-            rows.push(this.buildRow(daysLbl2, 'days/yr', daysBelow2, true, false));
+            rows.push(this.buildRow(daysLbl2, 'days' + sfx, daysBelow2, true, false));
         }
 
         tbody.innerHTML = rows.join('');

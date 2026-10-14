@@ -644,7 +644,11 @@ const SimControlModule = {
         // Report headers read "MWh/year", but summary.*_kwh are cumulative
         // totals over the whole simulated period, so divide by the number of
         // years to get a true annual figure (matches the Python reference).
-        const years = hours > 0 ? hours / 8760 : 1;
+        const basis = annualBasis(hours);
+        const years = basis.divisor;
+        document.querySelectorAll('.bench-unit').forEach(el => {
+            el.textContent = basis.perYear ? 'MWh/year' : `MWh, whole ${days}-day period`;
+        });
         const toMWh = (val) => val ? (val / 1000 / years).toFixed(1) : '-';
 
         setEl('bench-evap', toMWh(summary.evaporation_kwh) || '-');
@@ -683,14 +687,14 @@ const SimControlModule = {
             // 1 / 2 °C below THAT hour's target (schedule or default, + offset)
             const d1 = summary.days_below_threshold1_delta ?? 1;
             const d2 = summary.days_below_threshold2_delta ?? 2;
-            setEl('bench-days-27-label', `Days/yr >${d1}°C below target`);
-            setEl('bench-days-26-label', `Days/yr >${d2}°C below target`);
+            setEl('bench-days-27-label', `Days${basis.suffix} >${d1}°C below target`);
+            setEl('bench-days-26-label', `Days${basis.suffix} >${d2}°C below target`);
         } else {
             // Older runs: fixed thresholds from the configured target
             const t1 = summary.days_below_threshold1_temp;
             const t2 = summary.days_below_threshold2_temp;
-            if (t1 !== undefined && t1 !== null) setEl('bench-days-27-label', `Days/yr < ${t1}°C`);
-            if (t2 !== undefined && t2 !== null) setEl('bench-days-26-label', `Days/yr < ${t2}°C`);
+            if (t1 !== undefined && t1 !== null) setEl('bench-days-27-label', `Days${basis.suffix} < ${t1}°C`);
+            if (t2 !== undefined && t2 !== null) setEl('bench-days-26-label', `Days${basis.suffix} < ${t2}°C`);
         }
         const daysPerYr = (v) => v ? (v / years).toFixed(1) : '0';
         setEl('bench-days-27', daysPerYr(summary.days_below_27));
@@ -725,7 +729,7 @@ const SimControlModule = {
 
         try {
             // Load simulation runs and get the latest one
-            const response = await fetch('./api/simulation_api.php?action=get_runs&limit=1');
+            const response = await fetch('./api/simulation_api.php?action=get_runs&status=completed&limit=1');
             console.log('[SimControl] get_runs response status:', response.status);
 
             if (!response.ok) {

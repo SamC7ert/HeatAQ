@@ -134,6 +134,28 @@ function getParam($name, $default = null) {
 /**
  * Validate date format
  */
+/**
+ * Default run for the Details tab when the UI sends no run_id: the newest
+ * completed run of this site that covers $date AND stored hourly rows
+ * (summary-only runs cannot be inspected). Used by debug_hour and debug_week.
+ */
+function defaultDebugRunId($pdo, $poolSiteId, $date) {
+    $stmt = $pdo->prepare("
+        SELECT r.run_id
+        FROM simulation_runs r
+        WHERE r.pool_site_id = ?
+          AND r.status = 'completed'
+          AND r.start_date <= ?
+          AND r.end_date >= ?
+          AND EXISTS (SELECT 1 FROM simulation_hourly_results h WHERE h.run_id = r.run_id)
+        ORDER BY r.created_at DESC, r.run_id DESC
+        LIMIT 1
+    ");
+    $stmt->execute([$poolSiteId, $date, $date]);
+    $runId = $stmt->fetchColumn();
+    return $runId ? (int) $runId : null;
+}
+
 function validateDate($date) {
     $d = DateTime::createFromFormat('Y-m-d', $date);
     return $d && $d->format('Y-m-d') === $date;
@@ -416,6 +438,10 @@ try {
                 // Apply control overrides via setConfigFromUI
                 $uiConfig = [];
                 if (isset($configOverride['control'])) {
+                    $strategy = $configOverride['control']['strategy'] ?? null;
+                    if ($strategy !== null && !in_array($strategy, ['predictive', 'reactive'], true)) {
+                        sendError('Run not started - Strategy must be predictive or reactive', 400);
+                    }
                     $uiConfig['control'] = $configOverride['control'];
                 }
                 if (isset($configOverride['pool'])) {
@@ -537,8 +563,26 @@ try {
 
         case 'get_runs':
             // Get all simulation runs for this site
-            $limit = (int) getParam('limit', 50);
-            $offset = (int) getParam('offset', 0);
+            $limit = max(1, min(500, (int) getParam('limit', 50)));
+            $offset = max(0, (int) getParam('offset', 0));
+            // Optional filters: status=completed (the "last results" views must
+            // not show a running or failed run as an all-zero result) and
+            // run_id (load one run in the same shape).
+            $statusFilter = getParam('status', null);
+            if ($statusFilter !== null && !in_array($statusFilter, ['completed', 'running', 'failed'], true)) {
+                sendError('Invalid status filter');
+            }
+            $runIdFilter = getParam('run_id', null);
+            $where = 'pool_site_id = ?';
+            $whereParams = [$currentPoolSiteId];
+            if ($statusFilter !== null) {
+                $where .= ' AND status = ?';
+                $whereParams[] = $statusFilter;
+            }
+            if ($runIdFilter !== null && $runIdFilter !== '') {
+                $where .= ' AND run_id = ?';
+                $whereParams[] = (int) $runIdFilter;
+            }
 
             // If no pool_site_id, return empty list (no runs possible without site)
             $poolSiteId = $currentPoolSiteId;
@@ -567,11 +611,11 @@ try {
                         summary_json,
                         config_snapshot
                     FROM simulation_runs
-                    WHERE pool_site_id = ?
-                    ORDER BY created_at DESC
+                    WHERE {$where}
+                    ORDER BY created_at DESC, run_id DESC
                     LIMIT {$limit} OFFSET {$offset}
                 ");
-                $stmt->execute([$poolSiteId]);
+                $stmt->execute($whereParams);
                 $runs = $stmt->fetchAll(PDO::FETCH_ASSOC);
             } catch (Exception $e) {
                 error_log("[SimAPI] get_runs query failed: " . $e->getMessage());
@@ -588,8 +632,8 @@ try {
             // Get total count
             $totalCount = 0;
             try {
-                $countStmt = $pdo->prepare("SELECT COUNT(*) FROM simulation_runs WHERE pool_site_id = ?");
-                $countStmt->execute([$poolSiteId]);
+                $countStmt = $pdo->prepare("SELECT COUNT(*) FROM simulation_runs WHERE {$where}");
+                $countStmt->execute($whereParams);
                 $totalCount = $countStmt->fetchColumn();
             } catch (Exception $e) {
                 error_log("[SimAPI] get_runs count query failed: " . $e->getMessage());
@@ -869,23 +913,10 @@ try {
             }
             if (!$runId) {
                 $poolSiteId = $currentPoolSiteId;
-                $stmt = $pdo->prepare("
-                    SELECT run_id, scenario_name
-                    FROM simulation_runs
-                    WHERE pool_site_id = ?
-                      AND status = 'completed'
-                      AND start_date <= ?
-                      AND end_date >= ?
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                ");
-                $stmt->execute([$poolSiteId, $date, $date]);
-                $run = $stmt->fetch();
-
-                if (!$run) {
-                    sendError("No simulation run found covering date $date. Run a simulation first.", 404);
+                $runId = defaultDebugRunId($pdo, $poolSiteId, $date);
+                if (!$runId) {
+                    sendError("No simulation run with stored hourly data covers $date. Run a simulation with 'Store hourly' on first.", 404);
                 }
-                $runId = $run['run_id'];
             }
 
             // Get stored hourly data for this timestamp
@@ -899,6 +930,11 @@ try {
             $stored = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if (!$stored) {
+                $anyStmt = $pdo->prepare("SELECT 1 FROM simulation_hourly_results WHERE run_id = ? LIMIT 1");
+                $anyStmt->execute([$runId]);
+                if (!$anyStmt->fetchColumn()) {
+                    sendError("Run $runId was saved without hourly data, so its hours cannot be inspected. Re-run it with 'Store hourly' on.", 404);
+                }
                 sendError("No stored data found for $timestamp in run $runId", 404);
             }
 
@@ -980,14 +1016,16 @@ try {
                 'schedule_template_name' => $configSnapshot['schedule_template_name'] ?? null,
                 'schedule_template_id_stored' => $configSnapshot['schedule_template_id'] ?? 'not stored',
                 'schedule_template_id_used' => $scheduler->getTemplate()['template_id'] ?? null,
-                'hp_capacity_kw' => $configSnapshot['equipment']['hp_capacity_kw'] ?? null,
-                'boiler_capacity_kw' => $configSnapshot['equipment']['boiler_capacity_kw'] ?? null,
+                'hp_capacity_kw' => $configSnapshot['equipment']['heat_pump']['capacity_kw'] ?? $configSnapshot['equipment']['hp_capacity_kw'] ?? null,
+                'boiler_capacity_kw' => $configSnapshot['equipment']['boiler']['capacity_kw'] ?? $configSnapshot['equipment']['boiler_capacity_kw'] ?? null,
             ];
             $debug['schedule_debug'] = $scheduleDebug;
 
             // Validation: check if recalc matches stored (warn if different)
             $storedNetDemand = (float)$stored['total_loss_kw'] - (float)$stored['solar_gain_kw'];
-            $recalcNetDemand = $debug['heating_summary']['net_demand_kw'] ?? 0;
+            // Compare signed values: net_demand_kw is clamped at 0, so every
+            // hour with a solar surplus used to warn although both matched.
+            $recalcNetDemand = $debug['summary']['net_requirement_kw'] ?? $debug['heating_summary']['net_requirement_kw'] ?? 0;
             $demandDiff = abs($storedNetDemand - $recalcNetDemand);
 
             if ($demandDiff > 1.0) { // More than 1 kW difference
@@ -1037,23 +1075,12 @@ try {
             }
             if (!$runId) {
                 $poolSiteId = $currentPoolSiteId;
-                $stmt = $pdo->prepare("
-                    SELECT run_id, scenario_name, start_date, end_date
-                    FROM simulation_runs
-                    WHERE pool_site_id = ?
-                      AND status = 'completed'
-                      AND start_date <= ?
-                      AND end_date >= ?
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                ");
-                $stmt->execute([$poolSiteId, $startDate, $endDate]);
-                $run = $stmt->fetch();
-
-                if (!$run) {
-                    sendError("No simulation run found covering dates $startDate to $endDate. Run a simulation first.", 404);
+                // Same rule as debug_hour (a run covering the selected date),
+                // so the week chart and the hour panel show the same run
+                $runId = defaultDebugRunId($pdo, $poolSiteId, $centerDate);
+                if (!$runId) {
+                    sendError("No simulation run with stored hourly data covers $centerDate. Run a simulation with 'Store hourly' on first.", 404);
                 }
-                $runId = $run['run_id'];
             }
 
             // Get hourly results from stored data

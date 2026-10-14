@@ -27,6 +27,18 @@ function escapeJsArg(value) {
     return escapeHtml(JSON.stringify(value ?? ''));
 }
 
+// How to show a run's cumulative totals. A run covering at least a year is
+// shown per year (totals / years). A shorter run is shown as period totals:
+// the pool's load is strongly seasonal, so stretching e.g. two January weeks
+// to twelve months would be far off.
+function annualBasis(totalHours) {
+    const h = Number(totalHours) || 0;
+    if (h >= 8760 - 24) {
+        return { divisor: h / 8760, perYear: true, suffix: '/yr', yearWord: 'year' };
+    }
+    return { divisor: 1, perYear: false, suffix: ' (period)', yearWord: 'period' };
+}
+
 const config = {
     // App version - auto-detected from script tags
     APP_VERSION: getVersionFromScripts(),

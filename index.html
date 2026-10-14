@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HeatAQ Schedule Management</title>
     <link rel="icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="./assets/css/main.css?v=233">
-    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=233">
-    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=233">
-    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=233">
-    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=233">
-    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=233">
+    <link rel="stylesheet" href="./assets/css/main.css?v=234">
+    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=234">
+    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=234">
+    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=234">
+    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=234">
+    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=234">
     <style>
         /* Logout button styles */
         .user-info {
@@ -618,6 +618,7 @@
                                     <div>
                                         <label style="font-size: 12px; color: #666;">Strategy</label>
                                         <select id="sim-strategy" class="form-control">
+                                            <option value="">From config</option>
                                             <option value="predictive">Predictive</option>
                                             <option value="reactive">Reactive</option>
                                         </select>
@@ -756,7 +757,7 @@
                             </div>
                             <div class="benchmark-grid">
                                 <div class="benchmark-section">
-                                    <h4>Thermal Losses (MWh/year)</h4>
+                                    <h4>Thermal Losses (<span class="bench-unit">MWh/year</span>)</h4>
                                     <table class="data-table compact">
                                         <tr><td>Evaporation</td><td id="bench-evap">-</td></tr>
                                         <tr><td>Convection</td><td id="bench-conv">-</td></tr>
@@ -769,7 +770,7 @@
                                     </table>
                                 </div>
                                 <div class="benchmark-section">
-                                    <h4>Heating Delivered (MWh/year)</h4>
+                                    <h4>Heating Delivered (<span class="bench-unit">MWh/year</span>)</h4>
                                     <table class="data-table compact">
                                         <tr><td>Heat pump thermal</td><td id="bench-hp-thermal">-</td></tr>
                                         <tr><td>Boiler thermal</td><td id="bench-boiler-thermal">-</td></tr>
@@ -778,7 +779,7 @@
                                     </table>
                                 </div>
                                 <div class="benchmark-section">
-                                    <h4>Electricity (MWh/year)</h4>
+                                    <h4>Electricity (<span class="bench-unit">MWh/year</span>)</h4>
                                     <table class="data-table compact">
                                         <tr><td>HP electricity</td><td id="bench-hp-elec">-</td></tr>
                                         <tr><td>Boiler electricity</td><td id="bench-boiler-fuel">-</td></tr>
@@ -1133,7 +1134,7 @@
                             </div>
                             <div class="benchmark-grid">
                                 <div class="benchmark-section">
-                                    <h4>Thermal Losses (MWh/year)</h4>
+                                    <h4>Thermal Losses (<span class="bench-unit">MWh/year</span>)</h4>
                                     <table class="data-table compact">
                                         <tr><td>Evaporation</td><td id="bench-evap-debug">-</td></tr>
                                         <tr><td>Convection</td><td id="bench-conv-debug">-</td></tr>
@@ -1146,7 +1147,7 @@
                                     </table>
                                 </div>
                                 <div class="benchmark-section">
-                                    <h4>Heating Delivered (MWh/year)</h4>
+                                    <h4>Heating Delivered (<span class="bench-unit">MWh/year</span>)</h4>
                                     <table class="data-table compact">
                                         <tr><td>Heat pump thermal</td><td id="bench-hp-thermal-debug">-</td></tr>
                                         <tr><td>Boiler thermal</td><td id="bench-boiler-thermal-debug">-</td></tr>
@@ -1155,7 +1156,7 @@
                                     </table>
                                 </div>
                                 <div class="benchmark-section">
-                                    <h4>Electricity (MWh/year)</h4>
+                                    <h4>Electricity (<span class="bench-unit">MWh/year</span>)</h4>
                                     <table class="data-table compact">
                                         <tr><td>HP electricity</td><td id="bench-hp-elec-debug">-</td></tr>
                                         <tr><td>Boiler electricity</td><td id="bench-boiler-fuel-debug">-</td></tr>
@@ -1715,18 +1716,18 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=233"></script>
+    <script src="./assets/js/config.js?v=234"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=233"></script>
-    <script src="./assets/js/modules/navigation.js?v=233"></script>
-    <script src="./assets/js/modules/schedules.js?v=233"></script>
-    <script src="./assets/js/modules/calendar.js?v=233"></script>
-    <script src="./assets/js/modules/simulations.js?v=233"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=233"></script>
-    <script src="./assets/js/modules/configuration.js?v=233"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=233"></script>
-    <script src="./assets/js/modules/admin.js?v=233"></script>
-    <script src="./assets/js/modules/project.js?v=233"></script>
-    <script src="./assets/js/app.js?v=233"></script>
+    <script src="./assets/js/modules/api.js?v=234"></script>
+    <script src="./assets/js/modules/navigation.js?v=234"></script>
+    <script src="./assets/js/modules/schedules.js?v=234"></script>
+    <script src="./assets/js/modules/calendar.js?v=234"></script>
+    <script src="./assets/js/modules/simulations.js?v=234"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=234"></script>
+    <script src="./assets/js/modules/configuration.js?v=234"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=234"></script>
+    <script src="./assets/js/modules/admin.js?v=234"></script>
+    <script src="./assets/js/modules/project.js?v=234"></script>
+    <script src="./assets/js/app.js?v=234"></script>
 </body>
 </html>

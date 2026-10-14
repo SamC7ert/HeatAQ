@@ -2483,30 +2483,9 @@ class HeatAQAPI {
 
             // Decode JSON and merge with legacy columns (legacy columns override)
             foreach ($configs as &$config) {
-                $jsonConfig = json_decode($config['json_config'] ?? '{}', true) ?: [];
-
-                // Ensure nested arrays exist
-                if (!isset($jsonConfig['equipment'])) $jsonConfig['equipment'] = [];
-                if (!isset($jsonConfig['control'])) $jsonConfig['control'] = [];
-
-                // Override with legacy column values if set
-                if ($config['hp_capacity_kw'] !== null) {
-                    $jsonConfig['equipment']['hp_capacity_kw'] = (float)$config['hp_capacity_kw'];
-                }
-                if ($config['boiler_capacity_kw'] !== null) {
-                    $jsonConfig['equipment']['boiler_capacity_kw'] = (float)$config['boiler_capacity_kw'];
-                }
-                if ($config['target_temp'] !== null) {
-                    $jsonConfig['control']['target_temp'] = (float)$config['target_temp'];
-                }
-                if ($config['control_strategy'] !== null) {
-                    $jsonConfig['control']['strategy'] = $config['control_strategy'];
-                }
-
-                $config['config'] = $jsonConfig;
-                unset($config['json_config'], $config['hp_capacity_kw'], $config['boiler_capacity_kw'],
-                      $config['target_temp'], $config['control_strategy']);
+                $config = $this->mergeConfigRow($config);
             }
+            unset($config);
 
             $this->sendResponse([
                 'configs' => $configs,
@@ -2544,6 +2523,35 @@ class HeatAQAPI {
         }
     }
 
+    /**
+     * A config_templates row as the API returns it: json_config decoded into
+     * 'config', with the legacy columns (hp/boiler capacity, target,
+     * strategy) taking precedence - the same rule run_simulation applies.
+     */
+    private function mergeConfigRow(array $row) {
+        $jsonConfig = json_decode($row['json_config'] ?? '{}', true) ?: [];
+        if (!isset($jsonConfig['equipment'])) $jsonConfig['equipment'] = [];
+        if (!isset($jsonConfig['control'])) $jsonConfig['control'] = [];
+
+        if (isset($row['hp_capacity_kw']) && $row['hp_capacity_kw'] !== null) {
+            $jsonConfig['equipment']['hp_capacity_kw'] = (float)$row['hp_capacity_kw'];
+        }
+        if (isset($row['boiler_capacity_kw']) && $row['boiler_capacity_kw'] !== null) {
+            $jsonConfig['equipment']['boiler_capacity_kw'] = (float)$row['boiler_capacity_kw'];
+        }
+        if (isset($row['target_temp']) && $row['target_temp'] !== null) {
+            $jsonConfig['control']['target_temp'] = (float)$row['target_temp'];
+        }
+        if (isset($row['control_strategy']) && $row['control_strategy'] !== null) {
+            $jsonConfig['control']['strategy'] = $row['control_strategy'];
+        }
+
+        $row['config'] = $jsonConfig;
+        unset($row['json_config'], $row['hp_capacity_kw'], $row['boiler_capacity_kw'],
+              $row['target_temp'], $row['control_strategy']);
+        return $row;
+    }
+
     private function getProjectConfig($configId) {
         if (!$this->validateId($configId)) {
             $this->sendError('Invalid config ID');
@@ -2552,7 +2560,8 @@ class HeatAQAPI {
 
         try {
             $stmt = $this->db->prepare("
-                SELECT template_id, template_name as name, json_config
+                SELECT template_id, template_name as name, json_config,
+                       hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy
                 FROM config_templates
                 WHERE template_id = ?
             ");
@@ -2563,8 +2572,9 @@ class HeatAQAPI {
                 $this->sendError('Configuration not found', 404);
             }
 
-            $config['config'] = json_decode($config['json_config'] ?? '{}', true);
-            unset($config['json_config']);
+            // Same merged view as get_project_configs and run_simulation, so
+            // SimControl's Config column shows what the run will use
+            $config = $this->mergeConfigRow($config);
 
             $this->sendResponse(['config' => $config]);
         } catch (PDOException $e) {
