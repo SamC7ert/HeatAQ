@@ -13,13 +13,13 @@
 --   E = transmission_loglaw(z_s,z0_s,z_p,z0_p) * fence_wind_transmission
 
 ALTER TABLE pools
-    ADD COLUMN wind_reference_height_m DECIMAL(4,1) DEFAULT NULL
+    ADD COLUMN IF NOT EXISTS wind_reference_height_m DECIMAL(4,1) DEFAULT NULL
         COMMENT 'z_p: height at the pool to transfer wind to (m)'
         AFTER wind_exposure,
-    ADD COLUMN terrain_roughness DECIMAL(6,4) DEFAULT NULL
+    ADD COLUMN IF NOT EXISTS terrain_roughness DECIMAL(6,4) DEFAULT NULL
         COMMENT 'z0_p: pool-site surface roughness length (m); same Davenport classes as weather_stations'
         AFTER wind_reference_height_m,
-    ADD COLUMN fence_wind_transmission DECIMAL(4,3) DEFAULT NULL
+    ADD COLUMN IF NOT EXISTS fence_wind_transmission DECIMAL(4,3) DEFAULT NULL
         COMMENT 'Fraction of wind passing the fence (0.6 = 60% through / 40% sheltered); NULL = 1.0 (no fence)'
         AFTER terrain_roughness;
 

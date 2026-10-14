@@ -3281,6 +3281,33 @@ class HeatAQAPI {
     /**
      * Check for pending migrations in db/migrations/
      */
+    /** Applied migrations recorded by runMigration: filename => applied_at. */
+    private function appliedMigrations() {
+        try {
+            $this->db->exec("
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    filename VARCHAR(255) PRIMARY KEY,
+                    applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    statements INT NOT NULL DEFAULT 0,
+                    applied_by INT NULL
+                )
+            ");
+            $rows = $this->db->query("SELECT filename, applied_at FROM schema_migrations")->fetchAll(PDO::FETCH_KEY_PAIR);
+            return $rows ?: [];
+        } catch (PDOException $e) {
+            return [];
+        }
+    }
+
+    private function recordMigration($filename, $statements) {
+        try {
+            $stmt = $this->db->prepare("REPLACE INTO schema_migrations (filename, statements, applied_by) VALUES (?, ?, ?)");
+            $stmt->execute([$filename, $statements, $this->userId]);
+        } catch (PDOException $e) {
+            error_log('[heataq_api] could not record migration ' . $filename . ': ' . $e->getMessage());
+        }
+    }
+
     private function checkMigrations() {
         $migrationsDir = realpath(__DIR__ . '/../db/migrations');
 
@@ -3294,6 +3321,7 @@ class HeatAQAPI {
 
         $files = glob($migrationsDir . '/*.sql');
         $pending = [];
+        $applied = $this->appliedMigrations();
 
         foreach ($files as $file) {
             $filename = basename($file);
@@ -3319,9 +3347,11 @@ class HeatAQAPI {
 
             if ($hasLog) {
                 $actualLogFile = $logFilename;
-                // Check if log indicates success
-                $logContent = file_get_contents($logPath);
-                $logSuccess = strpos($logContent, 'SUCCESS') !== false;
+                // runMigration only ever wrote _log.txt after every statement
+                // had run (failures go to _error.txt), so a log means applied.
+                // (It used to look for the word SUCCESS, which no log contained,
+                // so every applied migration showed as failed with a Run button.)
+                $logSuccess = true;
             } elseif ($hasError) {
                 $actualLogFile = $errorFilename;
                 $logSuccess = false;
@@ -3333,9 +3363,10 @@ class HeatAQAPI {
                 'description' => $description,
                 'size' => filesize($file),
                 'modified' => date('Y-m-d H:i:s', filemtime($file)),
-                'has_log' => $hasLog || $hasError,
+                'has_log' => $hasLog || $hasError || isset($applied[$filename]),
                 'log_file' => $actualLogFile,
-                'log_success' => $logSuccess
+                'log_success' => $logSuccess || isset($applied[$filename]),
+                'applied_at' => $applied[$filename] ?? null
             ];
         }
 
@@ -3376,6 +3407,12 @@ class HeatAQAPI {
             return;
         }
 
+        $applied = $this->appliedMigrations();
+        if (isset($applied[$filename])) {
+            $this->sendError("Migration $filename was already applied on {$applied[$filename]}");
+            return;
+        }
+
         $sql = file_get_contents($filepath);
         $log = [];
         $log[] = date('Y-m-d H:i:s') . " - Running migration: $filename";
@@ -3386,18 +3423,14 @@ class HeatAQAPI {
             $expectedTables = $matches[1];
         }
 
+        // Split respecting quotes and comments (a ';' inside a COMMENT '...'
+        // used to cut the statement in two, so 034 could never be applied)
+        require_once __DIR__ . '/../lib/SqlSplitter.php';
+        $statements = SqlSplitter::split($sql);
+        $executed = 0;
+
         try {
-            // Remove SQL comments first, then split by semicolons
-            $sqlNoComments = preg_replace('/--.*$/m', '', $sql);
-            $statements = array_filter(
-                array_map('trim', explode(';', $sqlNoComments)),
-                fn($s) => !empty($s)
-            );
-
-            $executed = 0;
             foreach ($statements as $stmt) {
-                if (empty(trim($stmt))) continue;
-
                 $log[] = "Executing: " . substr($stmt, 0, 80) . (strlen($stmt) > 80 ? '...' : '');
                 $this->db->exec($stmt);
                 $executed++;
@@ -3420,16 +3453,19 @@ class HeatAQAPI {
                 $log = array_merge($log, $verifyLog);
             }
 
+            if ($verified) {
+                $log[] = "✓ Migration verified";
+                $this->recordMigration($filename, $executed);
+                $log[] = "STATUS: SUCCESS";
+            } else {
+                $log[] = "✗ Verification failed";
+                $log[] = "STATUS: FAILED";
+            }
+
             // Save log file
             $logFilename = preg_replace('/\.sql$/', '_log.txt', $filename);
             $logPath = $migrationsDir . '/' . $logFilename;
             file_put_contents($logPath, implode("\n", $log));
-
-            if ($verified) {
-                $log[] = "✓ Migration verified - tables exist";
-            } else {
-                $log[] = "✗ Verification failed";
-            }
 
             $this->sendResponse([
                 'success' => $verified,
@@ -3443,6 +3479,10 @@ class HeatAQAPI {
 
         } catch (PDOException $e) {
             $log[] = "ERROR: " . $e->getMessage();
+            $total = count($statements);
+            $log[] = "Failed at statement " . ($executed + 1) . " of $total"
+                . ($executed > 0 ? " - statements 1-$executed were applied (DDL cannot be rolled back)" : " - nothing was applied");
+            $log[] = "STATUS: FAILED";
 
             // Save error log
             $logFilename = preg_replace('/\.sql$/', '_error.txt', $filename);
@@ -3486,6 +3526,17 @@ class HeatAQAPI {
             return;
         }
 
+        // The archive is committed to master from this checkout. Switching
+        // branches (and stashing) in the live web root is not safe, so only
+        // archive when the server itself is on master - checked before
+        // anything is moved.
+        $repoRoot = realpath(__DIR__ . '/..');
+        $currentBranch = trim((string) shell_exec('cd ' . escapeshellarg($repoRoot) . ' && git rev-parse --abbrev-ref HEAD 2>/dev/null'));
+        if ($currentBranch !== 'master') {
+            $this->sendError("The server is on branch '$currentBranch'. Archiving commits to master, so it only runs when the server is deployed from master.");
+            return;
+        }
+
         // Ensure old_migrations directory exists
         if (!is_dir($oldMigrationsDir)) {
             mkdir($oldMigrationsDir, 0755, true);
@@ -3523,8 +3574,7 @@ class HeatAQAPI {
         $schemaOutput = shell_exec('php ' . escapeshellarg($dbDir . '/dump_schema.php') . ' 2>&1');
         $log[] = "✓ Schema exported";
 
-        // Commit directly to master and push
-        $repoRoot = realpath(__DIR__ . '/..');
+        // Commit on master (checked above) and push
         $oldDir = getcwd();
         chdir($repoRoot);
 
@@ -3534,55 +3584,30 @@ class HeatAQAPI {
 
         $log[] = "Committing to master...";
 
-        // Get current branch to restore later
-        $currentBranch = trim(shell_exec('git rev-parse --abbrev-ref HEAD 2>/dev/null'));
-        $log[] = "Current branch: $currentBranch";
-
-        // Stash any uncommitted changes, switch to master, commit, push, restore
-        $commands = [];
-
-        // Only stash/switch if not already on master
-        if ($currentBranch !== 'master') {
-            $commands[] = "git stash --include-untracked";
-            $commands[] = "git checkout master";
-            $commands[] = "git pull origin master --no-edit";
-        }
-
-        // Stage the migration archive changes
-        $commands[] = "git add db/old_migrations/";
-        $commands[] = "git add db/schema.json db/schema.md 2>/dev/null || true";
-        $commands[] = "git add -u db/migrations/";
-        $commands[] = "git commit -m " . escapeshellarg($commitMsg);
-        $commands[] = "git push origin master";
-
-        // Restore original branch if we switched
-        if ($currentBranch !== 'master') {
-            $commands[] = "git checkout " . escapeshellarg($currentBranch);
-            $commands[] = "git stash pop 2>/dev/null || true";
-        }
-
-        $fullCommand = implode(' && ', $commands) . ' 2>&1';
-        $output = shell_exec($fullCommand);
-
-        $pushed = strpos($output, 'fatal') === false &&
-                  strpos($output, 'CONFLICT') === false &&
-                  strpos($output, 'rejected') === false;
-
-        if ($pushed) {
-            $log[] = "✓ Committed to master";
-            $log[] = "✓ Pushed to origin/master";
-        } else {
-            $log[] = "⚠ Git operation may have failed:";
-            $log[] = trim($output);
-        }
+        // One command at a time, checking each exit code (a failed step used to
+        // be reported as success when its output lacked 'fatal'/'CONFLICT').
+        $git = function ($cmd) use (&$log) {
+            exec($cmd . ' 2>&1', $out, $code);
+            $log[] = '$ ' . $cmd . ($out ? "\n" . implode("\n", $out) : '');
+            return $code === 0;
+        };
+        $committed = $git('git add db/old_migrations/')
+            && $git('git add -u db/migrations/')
+            && $git('git add db/schema.json db/schema.md')
+            && $git('git commit -m ' . escapeshellarg($commitMsg));
+        $pushed = $committed && $git('git push origin master');
+        $log[] = $pushed ? "✓ Committed and pushed to origin/master"
+            : ($committed ? "⚠ Committed locally, but the push failed" : "⚠ Commit failed - see the git output above");
 
         chdir($oldDir);
 
+        // success = archived (files moved); pushed says whether git worked
         $this->sendResponse([
             'success' => true,
             'filename' => $filename,
-            'pushed' => $merged,
-            'merged' => $merged,
+            'committed' => $committed,
+            'pushed' => $pushed,
+            'merged' => $pushed,
             'log' => $log
         ]);
     }
