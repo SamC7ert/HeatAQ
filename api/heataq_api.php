@@ -191,6 +191,21 @@ class HeatAQAPI {
         return $this->isSuperAdminCached();
     }
 
+    /**
+     * ?project_id from the request, or the session's project. A value that is
+     * not a positive integer (e.g. a client-side 'local_...' id) is refused:
+     * cast to 0 it used to drop the project filter and list every project.
+     */
+    private function requestedProjectId() {
+        if (!isset($_GET['project_id']) || $_GET['project_id'] === '') {
+            return $this->projectId;
+        }
+        if (!ctype_digit((string)$_GET['project_id']) || (int)$_GET['project_id'] <= 0) {
+            $this->sendError('Invalid project_id', 400);
+        }
+        return (int)$_GET['project_id'];
+    }
+
     private function requireProjectAccess($projectId) {
         if (!$this->canAccessProject($projectId)) {
             $this->sendError('Access denied to this project', 403);
@@ -2285,15 +2300,34 @@ class HeatAQAPI {
      * auth, so this is what actually makes a project switch take effect on the
      * backend. No-op in dev mode (project comes from a cookie there).
      */
+    /** The session id this request was authenticated with (same order as auth.php). */
+    private function currentSessionId() {
+        $name = method_exists('Config', 'getSessionConfig') ? (Config::getSessionConfig()['name'] ?? 'heataq_session') : 'heataq_session';
+        if (!empty($_SESSION[$name . '_session_id'])) {
+            return $_SESSION[$name . '_session_id'];
+        }
+        if (!empty($_SERVER['HTTP_AUTHORIZATION'])) {
+            return str_replace('Bearer ', '', $_SERVER['HTTP_AUTHORIZATION']);
+        }
+        return $_SERVER['HTTP_X_SESSION_ID'] ?? null;
+    }
+
     private function setSessionProject($projectId) {
         if (!Config::requiresAuth() || !$this->userId) {
             return;
         }
+        // Only THIS session: updating every live session of the user re-targeted
+        // their other tabs/devices, whose next save then landed in this project.
+        $sessionId = $this->currentSessionId();
+        if (!$sessionId) {
+            error_log('[setSessionProject] no session id for this request');
+            return;
+        }
         try {
             $stmt = $this->db->prepare(
-                "UPDATE user_sessions SET project_id = ? WHERE user_id = ? AND expires_at > NOW()"
+                "UPDATE user_sessions SET project_id = ? WHERE session_id = ? AND user_id = ?"
             );
-            $stmt->execute([(int)$projectId, $this->userId]);
+            $stmt->execute([(int)$projectId, $sessionId, $this->userId]);
         } catch (Exception $e) {
             error_log('[setSessionProject] failed: ' . $e->getMessage());
         }
@@ -2426,9 +2460,7 @@ class HeatAQAPI {
     private function getProjectConfigs() {
         try {
             // Prefer GET parameter over auth context (allows switching projects without page reload)
-            $projectId = isset($_GET['project_id']) && !empty($_GET['project_id'])
-                ? (int)$_GET['project_id']
-                : $this->projectId;
+            $projectId = $this->requestedProjectId();
             $this->requireProjectAccess($projectId);
 
             // Include legacy columns to merge with json_config
@@ -2954,11 +2986,19 @@ class HeatAQAPI {
             'selected_pool',
             'sim_overrides',      // JSON: override values for simulation
             'sim_sub_tab',        // Current sub-tab in Simulate
-            'last_scenario_name'  // Last used scenario name
+            'last_scenario_name', // Last used scenario name
+            'last_project_id'     // Per user, not per project (stored under project_id 0)
         ];
         if (!in_array($key, $allowedKeys)) {
             $this->sendError('Invalid preference key: ' . $key);
             return;
+        }
+        if ($key === 'last_project_id') {
+            // Read at login before any project is chosen, so not project-scoped
+            if (!ctype_digit((string)$value)) {
+                $this->sendError('last_project_id must be a project id');
+            }
+            $projectId = 0;
         }
 
         // For JSON keys, ensure value is valid JSON if provided
@@ -3809,9 +3849,7 @@ class HeatAQAPI {
     private function getSites() {
         // Filter by project_id - prefer GET parameter over cookie/auth
         // GET parameter is needed because cookies don't update until next request
-        $projectId = isset($_GET['project_id']) && !empty($_GET['project_id'])
-            ? (int)$_GET['project_id']
-            : $this->projectId;
+        $projectId = $this->requestedProjectId();
         // Without a project this listed every project's sites
         $this->requireProjectAccess($projectId);
 

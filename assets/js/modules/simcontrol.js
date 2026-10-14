@@ -15,7 +15,13 @@ const SimControlModule = {
             await this.loadUserPreferences();
             this.initDateInputs();
             this.initMonthlyReport();
+        } else if (this.projectChanged) {
+            // The monthly report belongs to the project's last run: reload it
+            // (it used to keep showing the previous project's run and CSV data)
+            this.monthlyReportData = null;
+            this.initMonthlyReport();
         }
+        this.projectChanged = false;
 
         // Always reload project-dependent data when entering SimControl.
         // The project may have changed, or a config / weather station may have
@@ -68,6 +74,11 @@ const SimControlModule = {
 
     // Load sites from API - NO FALLBACKS, must match project's site
     loadSites: async function() {
+        // Forget the previous site/pool until this load finds valid ones: a
+        // project without a site or pool used to keep (and run with) the
+        // previous project's pool.
+        this.currentSiteId = null;
+        this.currentPoolId = null;
         console.log('[SimControl] loadSites starting...');
         const select = document.getElementById('sim-site-select');
         if (!select) {
@@ -126,6 +137,7 @@ const SimControlModule = {
 
     // Load pools for selected site
     loadPools: async function(siteId) {
+        this.currentPoolId = null;
         const select = document.getElementById('sim-pool-select');
         if (!select) return;
 
@@ -371,7 +383,9 @@ const SimControlModule = {
             console.log('[SimControl] Populating dropdown with', data.configs.length, 'configs:',
                 data.configs.map(c => ({ id: c.template_id, name: c.name })));
 
-            const optionsHtml = '<option value="">-- Use Project Config --</option>' +
+            // (The old first option "-- Use Project Config --" sent no config,
+            // which the run always refuses.)
+            const optionsHtml = (data.configs.length ? '' : '<option value="">-- No configurations in this project --</option>') +
                 data.configs.map(c =>
                     `<option value="${escapeHtml(c.template_id)}">${escapeHtml(c.name)}</option>`
                 ).join('');
@@ -386,7 +400,12 @@ const SimControlModule = {
             }
 
             // Restore saved selection (from server or localStorage)
-            const savedConfig = this.getPreference('selected_config');
+            // Only a config of THIS project: a remembered id from another
+            // project used to blank the dropdown yet load that config's values.
+            let savedConfig = this.getPreference('selected_config');
+            if (!data.configs.some(c => String(c.template_id) === String(savedConfig))) {
+                savedConfig = data.configs.length ? String(data.configs[0].template_id) : '';
+            }
             if (simSelect) simSelect.value = savedConfig;
 
             // Load config values on change (attach listener only once to avoid
@@ -400,10 +419,8 @@ const SimControlModule = {
                     });
                 }
 
-                // Load initial config if one is selected
-                if (savedConfig) {
-                    this.loadSelectedConfig(savedConfig);
-                }
+                // Load the selected config (clears the values when there is none)
+                this.loadSelectedConfig(savedConfig);
             }
         } catch (err) {
             console.error('Failed to load config options:', err);

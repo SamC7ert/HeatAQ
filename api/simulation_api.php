@@ -518,11 +518,11 @@ try {
             $stmt = $pdo->prepare("
                 SELECT run_id, status, summary_json
                 FROM simulation_runs
-                WHERE status = 'running'
+                WHERE status = 'running' AND pool_site_id = ?
                 ORDER BY run_id DESC
                 LIMIT 1
             ");
-            $stmt->execute();
+            $stmt->execute([$currentPoolSiteId]);
             $running = $stmt->fetch(PDO::FETCH_ASSOC);
             if (!$running) {
                 sendResponse(['running' => false]);

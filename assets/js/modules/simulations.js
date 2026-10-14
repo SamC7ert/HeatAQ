@@ -1726,7 +1726,7 @@ const SimulationsModule = {
         // Boiler output - use stored value (matches chart)
         const boilerOutput = stored.boiler_heat_kw ?? hs.boiler_output_kw ?? 0;
         setEl('debug-boiler-output', `${boilerOutput?.toFixed(1)} kW`);
-        setEl('debug-boiler-detail', `${((boiler.efficiency || 0.92) * 100).toFixed(0)}% eff | ${boiler.fuel_kw?.toFixed(1) || '0'} kW fuel`);
+        setEl('debug-boiler-detail', `${((boiler.efficiency || 0.92) * 100).toFixed(0)}% eff | ${boiler.fuel_kw?.toFixed(1) || '0'} kW electricity`);
 
         // Input summary bar
         const inp = data.input || {};
@@ -1809,7 +1809,7 @@ const SimulationsModule = {
                 <tr><td>Capacity</td><td><code>${escapeHtml(boiler.capacity_kw)} kW</code></td></tr>
                 <tr><td>Efficiency</td><td><code>${((boiler.efficiency || 0.92) * 100).toFixed(0)}%</code></td></tr>
                 <tr><td>Output</td><td><code><strong>${escapeHtml(boiler.output_kw)} kW</strong></code></td></tr>
-                <tr><td>Fuel input</td><td><code>${escapeHtml(boiler.fuel_kw)} kW</code></td></tr>
+                <tr><td>Electricity input</td><td><code>${escapeHtml(boiler.fuel_kw)} kW</code></td></tr>
             </table>
         `);
 

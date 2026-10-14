@@ -45,6 +45,16 @@ const app = {
             if (data.user) {
                 this.currentUser = data.user;
 
+                // The server's session project wins over a stale browser value
+                // (e.g. a switch made in another tab or on another device).
+                const serverProject = data.user.project_id ? String(data.user.project_id) : null;
+                if (serverProject && serverProject !== localStorage.getItem('heataq_project')) {
+                    localStorage.setItem('heataq_project', serverProject);
+                    localStorage.removeItem('heataq_project_name');
+                    localStorage.removeItem('heataq_project_desc');
+                    document.cookie = `heataq_project=${serverProject}; path=/; max-age=31536000`;
+                }
+
                 // Show admin section only for admin/owner roles
                 if (data.user.is_admin) {
                     const adminNav = document.getElementById('admin-section-nav');
