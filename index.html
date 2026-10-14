@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HeatAQ Schedule Management</title>
     <link rel="icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="./assets/css/main.css?v=238">
-    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=238">
-    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=238">
-    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=238">
-    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=238">
-    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=238">
+    <link rel="stylesheet" href="./assets/css/main.css?v=239">
+    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=239">
+    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=239">
+    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=239">
+    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=239">
+    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=239">
     <style>
         /* Logout button styles */
         .user-info {
@@ -1409,6 +1409,17 @@
                     </div>
 
                     <div class="card">
+                        <h3>Storage</h3>
+                        <p class="text-muted">Hourly simulation results take most of the database. They are kept for the newest 5 runs per project; older runs keep their inputs, summary and daily results (reports, charts, baselines).</p>
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <button class="btn btn-secondary" onclick="app.admin.loadStorage()">Show Storage</button>
+                            <button class="btn btn-primary" id="storage-cleanup-btn" onclick="app.admin.runStorageCleanup()" style="display: none;">Remove Old Hourly Data</button>
+                            <span id="storage-status"></span>
+                        </div>
+                        <div id="storage-info" style="margin-top: 10px;"></div>
+                    </div>
+
+                    <div class="card">
                         <h3>Database Schema</h3>
                         <p>Export current database structure for version control.</p>
                         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
@@ -1729,18 +1740,18 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=238"></script>
+    <script src="./assets/js/config.js?v=239"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=238"></script>
-    <script src="./assets/js/modules/navigation.js?v=238"></script>
-    <script src="./assets/js/modules/schedules.js?v=238"></script>
-    <script src="./assets/js/modules/calendar.js?v=238"></script>
-    <script src="./assets/js/modules/simulations.js?v=238"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=238"></script>
-    <script src="./assets/js/modules/configuration.js?v=238"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=238"></script>
-    <script src="./assets/js/modules/admin.js?v=238"></script>
-    <script src="./assets/js/modules/project.js?v=238"></script>
-    <script src="./assets/js/app.js?v=238"></script>
+    <script src="./assets/js/modules/api.js?v=239"></script>
+    <script src="./assets/js/modules/navigation.js?v=239"></script>
+    <script src="./assets/js/modules/schedules.js?v=239"></script>
+    <script src="./assets/js/modules/calendar.js?v=239"></script>
+    <script src="./assets/js/modules/simulations.js?v=239"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=239"></script>
+    <script src="./assets/js/modules/configuration.js?v=239"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=239"></script>
+    <script src="./assets/js/modules/admin.js?v=239"></script>
+    <script src="./assets/js/modules/project.js?v=239"></script>
+    <script src="./assets/js/app.js?v=239"></script>
 </body>
 </html>

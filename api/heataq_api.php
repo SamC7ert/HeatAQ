@@ -673,6 +673,20 @@ class HeatAQAPI {
                     }
                     $this->archiveMigration();
                     break;
+                // STORAGE (simulation result retention)
+                case 'get_storage':
+                    if (!$this->canManageSystem()) {
+                        $this->sendError('Permission denied - needs the admin or owner role, or super admin', 403);
+                    }
+                    $this->getStorage();
+                    break;
+                case 'storage_cleanup':
+                    if (!$this->canManageSystem()) {
+                        $this->sendError('Permission denied - needs the admin or owner role, or super admin', 403);
+                    }
+                    $this->storageCleanup();
+                    break;
+
                 case 'export_schema':
                     if (!$this->canManageSystem()) {
                         $this->sendError('Permission denied - needs the admin or owner role, or super admin', 403);
@@ -3784,6 +3798,47 @@ class HeatAQAPI {
      * Admin -> System "Export schema" / "Export & Push": run db/dump_schema.php
      * on the command line (it refuses web requests) and return its JSON.
      */
+    /**
+     * Table sizes and what the hourly-data clean-up would remove (all sites).
+     */
+    private function getStorage() {
+        require_once __DIR__ . '/../lib/RunRetention.php';
+        try {
+            $tables = RunRetention::tableSizes($this->db);
+            $total = array_sum(array_map(fn($t) => (float) $t['size_mb'], $tables));
+            $candidates = RunRetention::candidates($this->db, null);
+            $this->sendResponse([
+                'tables' => $tables,
+                'total_mb' => round($total, 1),
+                'keep_hourly_per_site' => RunRetention::KEEP_HOURLY,
+                'runs_to_clean' => count($candidates),
+            ]);
+        } catch (Throwable $e) {
+            $this->sendError('Could not read storage: ' . RequestGuard::publicMessage($e->getMessage()), 500);
+        }
+    }
+
+    /**
+     * Remove hourly results beyond the newest runs per site, for up to ~20 s
+     * per call (the page calls again until 'remaining' is 0), then compact
+     * the tables so the space is returned to the disk.
+     */
+    private function storageCleanup() {
+        require_once __DIR__ . '/../lib/RunRetention.php';
+        try {
+            $result = RunRetention::purgeHourly($this->db, null, 20);
+            $result['log'] = [];
+            if ($result['remaining'] === 0) {
+                $result['log'] = RunRetention::compact($this->db);
+                $result['total_mb'] = round(array_sum(array_map(
+                    fn($t) => (float) $t['size_mb'], RunRetention::tableSizes($this->db))), 1);
+            }
+            $this->sendResponse(['success' => true] + $result);
+        } catch (Throwable $e) {
+            $this->sendError('Clean-up failed: ' . RequestGuard::publicMessage($e->getMessage()), 500);
+        }
+    }
+
     /**
      * Dump the schema to db/schema.json + schema.md (optionally commit and
      * push). Runs in-process: the host's command-line PHP has no PDO, so the

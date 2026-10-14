@@ -89,6 +89,7 @@ if (session_status() === PHP_SESSION_ACTIVE) {
 require_once __DIR__ . '/../lib/RequestGuard.php';
 require_once __DIR__ . '/../lib/PoolScheduler.php';
 require_once __DIR__ . '/../lib/EnergySimulator.php';
+require_once __DIR__ . '/../lib/RunRetention.php';
 
 // CORS & Headers
 header('Content-Type: application/json');
@@ -480,37 +481,14 @@ try {
                     'config_template_name' => $configTemplateName,
                     'schedule_template_id' => $scheduleTemplate['template_id'] ?? null,
                     'schedule_template_name' => $scheduleTemplate['name'] ?? null,
+                    // Copy of the schedule as used, so the run can be re-run
+                    // exactly (recreate_hourly) after the schedule is edited
+                    'schedule_state' => $scheduler->exportState(),
                 ]),
             ]);
 
-            // Update status to running
-            updateRunStatus($pdo, $runId, 'running');
-            $GLOBALS['activeRunId'] = $runId;
-
-            // Live progress: once per simulated month, store the current
-            // period + percent on the run row so the frontend can poll it
-            // (get_run_progress) while this request is still executing.
-            $progressStmt = $pdo->prepare(
-                "UPDATE simulation_runs SET summary_json = ? WHERE run_id = ?"
-            );
-            $simulator->setProgressCallback(function ($period, $done, $total) use ($progressStmt, $runId) {
-                $pct = $total > 0 ? (int) round(100 * $done / $total) : 0;
-                $progressStmt->execute([
-                    json_encode(['progress' => ['period' => $period, 'pct' => $pct]]),
-                    $runId
-                ]);
-            });
-
             try {
-                // Run simulation
-                $results = $simulator->runSimulation($startDate, $endDate);
-
-                // Store results (pass storeHourly flag)
-                storeSimulationResults($pdo, $runId, $results, $storeHourly);
-
-                // Update status to completed
-                updateRunStatus($pdo, $runId, 'completed', $results['summary']);
-                $GLOBALS['activeRunId'] = null;
+                $results = executeRun($pdo, $simulator, $runId, $startDate, $endDate, $storeHourly);
 
                 // Add schedule info to meta (so frontend can display it)
                 $results['meta']['schedule_template_id'] = $scheduleTemplate['template_id'] ?? null;
@@ -530,11 +508,104 @@ try {
                 ]);
 
             } catch (Throwable $e) {
-                // Update status to failed (Errors too, e.g. a division by zero)
-                $GLOBALS['activeRunId'] = null;
-                updateRunStatus($pdo, $runId, 'failed', ['error' => $e->getMessage()]);
+                // executeRun marked the run failed
                 throw $e;
             }
+            break;
+
+        case 'set_baseline':
+            // Mark / unmark a run as a baseline to compare against. Baselines
+            // keep their inputs and results permanently (see RunRetention).
+            RequestGuard::requireWriteRequest();
+            RequestGuard::requireRole($auth, 'operator');
+            $runId = (int) getParam('run_id');
+            $flag = getParam('baseline', 1) ? 1 : 0;
+            $stmt = $pdo->prepare("UPDATE simulation_runs SET is_baseline = ? WHERE run_id = ? AND pool_site_id = ? AND status = 'completed'");
+            $stmt->execute([$flag, $runId, $currentPoolSiteId]);
+            if ($stmt->rowCount() === 0) {
+                $chk = $pdo->prepare("SELECT 1 FROM simulation_runs WHERE run_id = ? AND pool_site_id = ? AND status = 'completed'");
+                $chk->execute([$runId, $currentPoolSiteId]);
+                if (!$chk->fetchColumn()) {
+                    sendError('Completed run not found', 404);
+                }
+            }
+            sendResponse(['success' => true, 'run_id' => $runId, 'is_baseline' => $flag]);
+            break;
+
+        case 'recreate_hourly':
+            // Re-run a run from its saved inputs (config snapshot + schedule
+            // copy) with hourly results stored, as a new run - e.g. to look at
+            // the hours of a baseline whose hourly data was removed.
+            RequestGuard::requireWriteRequest();
+            RequestGuard::requireRole($auth, 'operator');
+            $sourceId = (int) getParam('run_id');
+            $stmt = $pdo->prepare("SELECT * FROM simulation_runs WHERE run_id = ? AND pool_site_id = ?");
+            $stmt->execute([$sourceId, $currentPoolSiteId]);
+            $source = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$source || $source['status'] !== 'completed') {
+                sendError('Completed run not found', 404);
+            }
+            $snap = json_decode($source['config_snapshot'] ?? '', true) ?: [];
+            if (empty($snap['equipment']) || empty($snap['pool_config'])) {
+                sendError('This run has no saved inputs to re-run from', 400);
+            }
+
+            $warnings = [];
+            if (!empty($snap['schedule_state'])) {
+                $scheduler = PoolScheduler::fromState($snap['schedule_state']);
+            } elseif (!empty($snap['schedule_template_id'])) {
+                // Runs from before the schedule copy was saved
+                $scheduler = new PoolScheduler($pdo, $currentPoolSiteId, $snap['schedule_template_id']);
+                $warnings[] = 'This run has no saved copy of its schedule: the schedule as it is now was used.';
+            } else {
+                sendError('This run has no saved schedule to re-run from', 400);
+            }
+            $sourceVersion = $snap['simulator_version'] ?? 'unknown';
+            if ($sourceVersion !== EnergySimulator::getVersion()) {
+                $warnings[] = "The run was made with simulator $sourceVersion; this re-run uses " . EnergySimulator::getVersion() . ', so results can differ.';
+            }
+
+            $simulator = new EnergySimulator($pdo, $currentPoolSiteId, $scheduler);
+            $simulator->setPoolConfig($snap['pool_config']);
+            $simulator->setEquipment($snap['equipment']);
+
+            $newSnap = $snap;
+            $newSnap['simulator_version'] = EnergySimulator::getVersion();
+            $newSnap['recreated_from_run_id'] = $sourceId;
+            $newRunId = createSimulationRun($pdo, [
+                'pool_site_id' => $currentPoolSiteId,
+                'pool_id' => $source['pool_id'],
+                'user_id' => $currentUserId,
+                'scenario_name' => function_exists('mb_substr')
+                    ? mb_substr($source['scenario_name'] . ' (hours recreated)', 0, 250)
+                    : $source['scenario_name'] . ' (hours recreated)',
+                'description' => "Re-run of run $sourceId with hourly data",
+                'start_date' => $source['start_date'],
+                'end_date' => $source['end_date'],
+                'config_snapshot' => json_encode($newSnap),
+            ]);
+            $results = executeRun($pdo, $simulator, $newRunId, $source['start_date'], $source['end_date'], true);
+
+            // Same results as the source run? (summary totals)
+            $old = json_decode($source['summary_json'] ?? '', true) ?: [];
+            $same = true;
+            foreach (['total_cost', 'total_heat_loss_kwh', 'hp_thermal_kwh', 'boiler_thermal_kwh'] as $k) {
+                if (isset($old[$k]) && abs(($results['summary'][$k] ?? 0) - $old[$k]) > max(0.01, abs($old[$k]) * 1e-6)) {
+                    $same = false;
+                }
+            }
+            if (!$same) {
+                $warnings[] = 'Results differ from the original run (weather/solar data or simulator changed since).';
+            }
+
+            sendResponse([
+                'status' => 'success',
+                'run_id' => $newRunId,
+                'source_run_id' => $sourceId,
+                'matches_source' => $same,
+                'warnings' => $warnings,
+                'simulator_version' => EnergySimulator::getVersion(),
+            ]);
             break;
 
         case 'get_run_progress':
@@ -573,6 +644,7 @@ try {
                 sendError('Invalid status filter');
             }
             $runIdFilter = getParam('run_id', null);
+            $baselineFilter = getParam('baseline', null);
             $where = 'pool_site_id = ?';
             $whereParams = [$currentPoolSiteId];
             if ($statusFilter !== null) {
@@ -582,6 +654,9 @@ try {
             if ($runIdFilter !== null && $runIdFilter !== '') {
                 $where .= ' AND run_id = ?';
                 $whereParams[] = (int) $runIdFilter;
+            }
+            if ($baselineFilter !== null && $baselineFilter !== '') {
+                $where .= ' AND is_baseline = 1';  // (column from migration 041)
             }
 
             // If no pool_site_id, return empty list (no runs possible without site)
@@ -600,16 +675,9 @@ try {
                 // Note: LIMIT/OFFSET as prepared params can cause issues, so we embed them directly (already cast to int)
                 $stmt = $pdo->prepare("
                     SELECT
-                        run_id,
-                        scenario_name,
-                        description,
-                        start_date,
-                        end_date,
-                        status,
-                        created_at,
-                        completed_at,
-                        summary_json,
-                        config_snapshot
+                        -- * : is_baseline / hourly_purged_at exist only after
+                        -- migration 041, and the list must not break before it
+                        *
                     FROM simulation_runs
                     WHERE {$where}
                     ORDER BY created_at DESC, run_id DESC
@@ -627,6 +695,10 @@ try {
                 $run['summary'] = $run['summary_json'] ? json_decode($run['summary_json'], true) : null;
                 $run['config'] = $run['config_snapshot'] ? json_decode($run['config_snapshot'], true) : null;
                 unset($run['summary_json'], $run['config_snapshot']);
+                // The schedule copy is for re-runs only; keep the list small
+                if (is_array($run['config'])) {
+                    unset($run['config']['schedule_state']);
+                }
             }
 
             // Get total count
@@ -667,6 +739,13 @@ try {
             }
 
             $run['config'] = $run['config_snapshot'] ? json_decode($run['config_snapshot'], true) : null;
+            if (is_array($run['config'])) {
+                $run['config']['has_schedule_copy'] = !empty($run['config']['schedule_state']);
+                unset($run['config']['schedule_state']);
+            }
+            $hh = $pdo->prepare("SELECT 1 FROM simulation_hourly_results WHERE run_id = ? LIMIT 1");
+            $hh->execute([$runId]);
+            $run['has_hourly'] = (bool) $hh->fetchColumn();
             $run['summary'] = $run['summary_json'] ? json_decode($run['summary_json'], true) : null;
             unset($run['config_snapshot'], $run['summary_json']);
 
@@ -956,7 +1035,10 @@ try {
             // Initialize scheduler with the stored schedule template
             $scheduleTemplateId = $configSnapshot['schedule_template_id'] ?? null;
             $poolSiteIdForDebug = $currentPoolSiteId;
-            $scheduler = new PoolScheduler($pdo, $poolSiteIdForDebug, $scheduleTemplateId);
+            // The run's own copy of its schedule when saved (runs since 3.16)
+            $scheduler = !empty($configSnapshot['schedule_state'])
+                ? PoolScheduler::fromState($configSnapshot['schedule_state'])
+                : new PoolScheduler($pdo, $poolSiteIdForDebug, $scheduleTemplateId);
             $simulator = new EnergySimulator($pdo, $poolSiteIdForDebug, $scheduler);
 
             // Apply the stored config from the run (equipment settings, pool config, etc.)
@@ -1148,7 +1230,9 @@ try {
 
             // Initialize simulator with scheduler
             $scheduleTemplateId = $configSnapshot['schedule_template_id'] ?? null;
-            $scheduler = new PoolScheduler($pdo, $currentPoolSiteId, $scheduleTemplateId);
+            $scheduler = !empty($configSnapshot['schedule_state'])
+                ? PoolScheduler::fromState($configSnapshot['schedule_state'])
+                : new PoolScheduler($pdo, $currentPoolSiteId, $scheduleTemplateId);
             $simulator = new EnergySimulator($pdo, $currentPoolSiteId, $scheduler);
 
             if (!empty($configSnapshot['equipment'])) {
@@ -1209,7 +1293,7 @@ try {
             break;
 
         default:
-            sendError('Invalid action. Valid actions: run_simulation, get_runs, get_run, get_summary, get_daily_results, get_results, delete_run, get_weather_range, get_version, debug_hour, debug_week');
+            sendError('Invalid action. Valid actions: run_simulation, set_baseline, recreate_hourly, get_runs, get_run, get_summary, get_daily_results, get_results, delete_run, get_weather_range, get_version, debug_hour, debug_week');
     }
 
 } catch (PDOException $e) {
@@ -1269,6 +1353,54 @@ function updateRunStatus($pdo, $runId, $status, $summary = null) {
         ");
         $stmt->execute([$status, $runId]);
     }
+}
+
+/**
+ * Run a created run: progress reporting, simulate, store results, mark it
+ * completed (or failed, rethrowing), then apply hourly retention for the
+ * site. Returns the simulator results.
+ */
+function executeRun($pdo, $simulator, $runId, $startDate, $endDate, $storeHourly) {
+    updateRunStatus($pdo, $runId, 'running');
+    $GLOBALS['activeRunId'] = $runId;
+
+    // Live progress: once per simulated month, store the current period +
+    // percent on the run row so the frontend can poll it (get_run_progress)
+    // while this request is still executing.
+    $progressStmt = $pdo->prepare("UPDATE simulation_runs SET summary_json = ? WHERE run_id = ?");
+    $simulator->setProgressCallback(function ($period, $done, $total) use ($progressStmt, $runId) {
+        $pct = $total > 0 ? (int) round(100 * $done / $total) : 0;
+        $progressStmt->execute([
+            json_encode(['progress' => ['period' => $period, 'pct' => $pct]]),
+            $runId
+        ]);
+    });
+
+    try {
+        $results = $simulator->runSimulation($startDate, $endDate);
+        storeSimulationResults($pdo, $runId, $results, $storeHourly);
+        updateRunStatus($pdo, $runId, 'completed', $results['summary']);
+        $GLOBALS['activeRunId'] = null;
+    } catch (Throwable $e) {
+        // Errors too, e.g. a division by zero
+        $GLOBALS['activeRunId'] = null;
+        updateRunStatus($pdo, $runId, 'failed', ['error' => $e->getMessage()]);
+        throw $e;
+    }
+
+    // Keep hourly data only for the newest runs of this site (a few seconds
+    // at most here; the Admin -> Storage clean-up finishes larger backlogs).
+    // Never fails the run.
+    if ($storeHourly) {
+        try {
+            $site = $pdo->prepare("SELECT pool_site_id FROM simulation_runs WHERE run_id = ?");
+            $site->execute([$runId]);
+            RunRetention::purgeHourly($pdo, (int) $site->fetchColumn(), 5);
+        } catch (Throwable $e) {
+            error_log('[SimAPI] hourly retention failed: ' . $e->getMessage());
+        }
+    }
+    return $results;
 }
 
 /**
