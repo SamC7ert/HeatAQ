@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.12.5';   // Wind exposure override above 1 is a percentage (40 -> 0.40), was used as a 40x factor
+    const VERSION = '3.13.0';   // Predictive without a heat pump runs reactive (strategy_used); whole-hour schedules
     const TARGET_OFFSET_LIMIT = 5.0;  // °C, max |offset| accepted from SimControl
 
     private $db;
@@ -656,6 +656,14 @@ class EnergySimulator {
         $this->validateConfigForSimulation();
         $this->refreshUnitsEnabled();
 
+        // Predictive control builds its buffer with the heat pump only; with no
+        // heat pump it never heats a closed pool and lets it cool to the 5 °C
+        // floor. Such a plant runs reactive instead, recorded on the summary.
+        $strategyRequested = $this->equipment['control_strategy'] ?? 'reactive';
+        if ($strategyRequested === 'predictive' && empty($this->equipment['heat_pump']['enabled'])) {
+            $this->equipment['control_strategy'] = 'reactive';
+        }
+
         $start = new DateTime($startDate);
         $end = new DateTime($endDate);
 
@@ -752,6 +760,8 @@ class EnergySimulator {
                 'target_hours_default' => 0,
                 'target_default' => $this->configDefaultTarget(),
                 'target_offset' => $this->targetOffset(),
+                'strategy_requested' => $strategyRequested,
+                'strategy_used' => $this->equipment['control_strategy'] ?? 'reactive',
                 // Data-quality counters: hours where a missing weather field was
                 // silently substituted (wind 2.0 m/s, humidity 70%, air->0), days
                 // with no solar rows (treated as 0 gain), and requested-span

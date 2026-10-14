@@ -1047,6 +1047,27 @@ class HeatAQAPI {
             $this->requireDaySchedule($scheduleId);
         }
 
+        // Schedules work in whole hours (the simulator steps hour by hour and
+        // used to drop the minutes: 06:30 behaved as 06:00). Check before the
+        // transaction so the message reaches the user.
+        if (!$isClosed) {
+            foreach ($periods as $i => $period) {
+                $n = $i + 1;
+                $start = substr((string)($period['start_time'] ?? ''), 0, 5);
+                $end = substr((string)($period['end_time'] ?? ''), 0, 5);
+                if (!preg_match('/^([01]\d|2[0-3]):00$/', $start) || !preg_match('/^([01]\d|2[0-3]):00$|^24:00$/', $end)) {
+                    $this->sendError("Period $n: use whole hours (HH:00), e.g. 06:00-22:00");
+                }
+                if ($end !== '24:00' && $end <= $start) {
+                    $this->sendError("Period $n: the end must be after the start");
+                }
+                $target = $period['target_temp'] ?? null;
+                if ($target !== null && $target !== '' && !is_numeric($target)) {
+                    $this->sendError("Period $n: target temperature must be a number or blank");
+                }
+            }
+        }
+
         $this->db->beginTransaction();
 
         try {
