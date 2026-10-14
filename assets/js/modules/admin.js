@@ -1150,6 +1150,9 @@ const AdminModule = {
             if (detailsEl) detailsEl.textContent = `${year}: ${data.inserted || 0} inserted, ${data.updated || 0} updated, ${data.skipped || 0} unchanged`;
             // Completeness signal from the API: flag short years so partial
             // Frost coverage is visible instead of silently accepted.
+            if (data.wind_other_height_hours > 0) {
+                warnings.push(`${year}: ${data.wind_other_height_hours} hours had wind only at another height than the station's wind height - left empty (check the station's wind height)`);
+            }
             if (data.completeness_pct !== undefined && data.completeness_pct !== null && data.completeness_pct < 90) {
                 warnings.push(`${year}: only ${data.completeness_pct}% of expected hours returned by Frost`);
             }

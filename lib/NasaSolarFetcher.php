@@ -180,33 +180,36 @@ class NasaSolarFetcher {
                 clear_sky_wh_m2 = VALUES(clear_sky_wh_m2)
         ");
 
-        // Clear existing data for this site in the date range
-        $this->db->prepare("
-            DELETE FROM site_solar_daily
-            WHERE pool_site_id = ? AND date BETWEEN ? AND ?
-        ")->execute([
-            $this->poolSiteId,
-            $startYear . '-01-01',
-            $endYear . '-12-31'
-        ]);
-
-        $this->db->prepare("
-            DELETE FROM site_solar_hourly
-            WHERE pool_site_id = ? AND DATE(timestamp) BETWEEN ? AND ?
-        ")->execute([
-            $this->poolSiteId,
-            $startYear . '-01-01',
-            $endYear . '-12-31'
-        ]);
-
-        $dailyCount = 0;
-        $hourlyCount = 0;
-        $actualStartDate = null;
-        $actualEndDate = null;
-        $skippedDays = [];  // NASA fill value -999 = missing day; must be visible, not silent
+        // Delete and re-insert in ONE transaction: the deletes used to run
+        // before it began, so any insert failure left the site with no solar
+        // data at all for the range.
         $this->db->beginTransaction();
-
         try {
+            // Clear existing data for this site in the date range
+            $this->db->prepare("
+                DELETE FROM site_solar_daily
+                WHERE pool_site_id = ? AND date BETWEEN ? AND ?
+            ")->execute([
+                $this->poolSiteId,
+                $startYear . '-01-01',
+                $endYear . '-12-31'
+            ]);
+
+            $this->db->prepare("
+                DELETE FROM site_solar_hourly
+                WHERE pool_site_id = ? AND DATE(timestamp) BETWEEN ? AND ?
+            ")->execute([
+                $this->poolSiteId,
+                $startYear . '-01-01',
+                $endYear . '-12-31'
+            ]);
+
+            $dailyCount = 0;
+            $hourlyCount = 0;
+            $actualStartDate = null;
+            $actualEndDate = null;
+            $skippedDays = [];  // NASA fill value -999 = missing day; must be visible, not silent
+
             foreach ($nasaData['all_sky'] as $dateStr => $dailyKwhM2) {
                 // NASA uses -999 as its missing-data fill value. These days get
                 // NO rows (the simulator's strict solar check will then stop a
@@ -230,22 +233,31 @@ class NasaSolarFetcher {
                     $actualEndDate = $dateFormatted;
                 }
 
-                $clearSkyKwh = $nasaData['clear_sky'][$dateStr] ?? 0;
-                $cloudFactor = $clearSkyKwh > 0 ? $dailyKwhM2 / $clearSkyKwh : 1;
+                // Clear-sky can be missing (-999) on a day with valid all-sky;
+                // store NULL then (it used to write -999 into the decimal column,
+                // which a strict SQL mode rejects - aborting the whole fetch).
+                $clearSkyKwh = $nasaData['clear_sky'][$dateStr] ?? null;
+                if ($clearSkyKwh !== null && $clearSkyKwh < 0) {
+                    $clearSkyKwh = null;
+                }
+                $cloudFactor = ($clearSkyKwh !== null && $clearSkyKwh > 0) ? $dailyKwhM2 / $clearSkyKwh : null;
+                if ($cloudFactor !== null && $cloudFactor > 9.999) {
+                    $cloudFactor = null;  // tiny clear-sky value: ratio meaningless, column max 9.999
+                }
 
                 // Store daily data (raw from NASA)
                 $dailyStmt->execute([
                     $this->poolSiteId,
                     $dateFormatted,
                     round($dailyKwhM2, 4),
-                    round($clearSkyKwh, 4),
-                    round($cloudFactor, 4)
+                    $clearSkyKwh === null ? null : round($clearSkyKwh, 4),
+                    $cloudFactor === null ? null : round($cloudFactor, 3)
                 ]);
                 $dailyCount++;
 
                 // Distribute to hourly using solar position
                 $hourlyActual = $this->distributeDailyToHourly($dailyKwhM2, $latitude, $date);
-                $hourlyClearSky = $this->distributeDailyToHourly($clearSkyKwh, $latitude, $date);
+                $hourlyClearSky = $clearSkyKwh === null ? null : $this->distributeDailyToHourly($clearSkyKwh, $latitude, $date);
 
                 // Store hourly data
                 for ($hour = 0; $hour < 24; $hour++) {
@@ -255,7 +267,7 @@ class NasaSolarFetcher {
                         $this->poolSiteId,
                         $timestamp,
                         round($hourlyActual[$hour], 2),
-                        round($hourlyClearSky[$hour], 2)
+                        $hourlyClearSky === null ? null : round($hourlyClearSky[$hour], 2)
                     ]);
                     $hourlyCount++;
                 }
@@ -294,8 +306,10 @@ class NasaSolarFetcher {
                 ]
             ];
 
-        } catch (Exception $e) {
-            $this->db->rollBack();
+        } catch (Throwable $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
             throw $e;
         }
     }
