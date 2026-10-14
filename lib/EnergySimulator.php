@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.12.2';   // Solar coverage checked whenever the site has solar data; COP, boiler efficiency and prices validated
+    const VERSION = '3.12.3';   // HP/boiler enabled follows capacity (overrides); partial bathers override keeps template values
     const TARGET_OFFSET_LIMIT = 5.0;  // °C, max |offset| accepted from SimControl
 
     private $db;
@@ -265,13 +265,7 @@ class EnergySimulator {
             $this->equipment['boiler']['capacity_kw'] = $uiConfig['equipment']['boiler_capacity_kw'] ?? $this->equipment['boiler']['capacity_kw'];
             $this->equipment['boiler']['efficiency'] = $uiConfig['equipment']['boiler_efficiency'] ?? $this->equipment['boiler']['efficiency'];
 
-            // V3.10.45: Enable HP/boiler if capacity is set (fix for null 'enabled' bug)
-            if ($this->equipment['heat_pump']['capacity_kw'] > 0) {
-                $this->equipment['heat_pump']['enabled'] = true;
-            }
-            if ($this->equipment['boiler']['capacity_kw'] > 0) {
-                $this->equipment['boiler']['enabled'] = true;
-            }
+            $this->refreshUnitsEnabled();
         }
 
         // Control settings
@@ -329,11 +323,14 @@ class EnergySimulator {
         }
 
         // Bathers settings - calculate kwh_per_visit from water volumes and temps
+        // A partial override (e.g. SimControl sends only per_day) keeps the
+        // other values already set by the config template.
         if (isset($uiConfig['bathers'])) {
-            $perDay = $uiConfig['bathers']['per_day'] ?? null;
-            $refillLiters = $uiConfig['bathers']['refill_liters'] ?? null;
-            $showerLiters = $uiConfig['bathers']['shower_liters'] ?? null;
-            $activityFactor = $uiConfig['bathers']['activity_factor'] ?? null;
+            $prev = $this->equipment['bathers'] ?? [];
+            $perDay = $uiConfig['bathers']['per_day'] ?? $prev['per_day'] ?? null;
+            $refillLiters = $uiConfig['bathers']['refill_liters'] ?? $prev['refill_liters'] ?? null;
+            $showerLiters = $uiConfig['bathers']['shower_liters'] ?? $prev['shower_liters'] ?? null;
+            $activityFactor = $uiConfig['bathers']['activity_factor'] ?? $prev['activity_factor'] ?? null;
             $showersUseHp = $this->equipment['showers_use_hp'] ?? false;
 
             // Calculate kWh per visit from water heating requirements
@@ -377,7 +374,7 @@ class EnergySimulator {
                 'shower_kwh_per_visit' => $showerEnergy,
                 'kwh_per_visit' => $kwhPerVisit, // Only includes shower if showers_use_hp=true
                 'showers_use_hp' => $showersUseHp,
-                'open_hours' => $uiConfig['bathers']['open_hours'] ?? 10,
+                'open_hours' => $uiConfig['bathers']['open_hours'] ?? $prev['open_hours'] ?? 10,
             ];
         }
 
@@ -435,8 +432,17 @@ class EnergySimulator {
      * Set equipment configuration
      */
     public function setEquipment($equipment) {
-        $this->equipment = array_merge($this->equipment, $equipment);
+        // Deep merge: overriding heat_pump.capacity_kw must keep its COP etc.
+        $this->equipment = array_replace_recursive($this->equipment, $equipment);
+        $this->refreshUnitsEnabled();
         $this->syncSchedulerTargets();
+    }
+
+    /** A heat pump / boiler runs exactly when it has capacity (overrides included). */
+    private function refreshUnitsEnabled() {
+        foreach (['heat_pump', 'boiler'] as $unit) {
+            $this->equipment[$unit]['enabled'] = (float) ($this->equipment[$unit]['capacity_kw'] ?? 0) > 0;
+        }
     }
 
     /**
@@ -642,6 +648,7 @@ class EnergySimulator {
     public function runSimulation($startDate, $endDate, $options = []) {
         // Validate configuration before running - no silent defaults allowed
         $this->validateConfigForSimulation();
+        $this->refreshUnitsEnabled();
 
         $start = new DateTime($startDate);
         $end = new DateTime($endDate);
