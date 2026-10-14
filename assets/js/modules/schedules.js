@@ -100,9 +100,13 @@ const schedules = {
 
             <div id="day-schedule-editor" style="display: none;">
                 <h4 id="day-schedule-title">Schedule Periods</h4>
+                <label style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px; cursor: pointer; font-size: 0.85rem;">
+                    <input type="checkbox" id="day-closed-toggle" onchange="app.schedules.setDayClosed(this.checked)" style="width: 16px; height: 16px;">
+                    Closed day (no open hours)
+                </label>
                 <div id="periods-container" style="overflow-x: auto;"></div>
                 <div style="margin-top: 10px; display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end;">
-                    <button class="btn btn-sm" onclick="app.schedules.addPeriod()" style="margin-right: auto; background: #90EE90; color: #000;">+ Add Period</button>
+                    <button id="add-period-btn" class="btn btn-sm" onclick="app.schedules.addPeriod()" style="margin-right: auto; background: #90EE90; color: #000;">+ Add Period</button>
                     <button class="btn btn-primary btn-sm" onclick="app.schedules.saveDaySchedule()">Save</button>
                     <button class="btn btn-danger btn-sm" onclick="app.schedules.deleteDaySchedule()">Delete</button>
                 </div>
@@ -114,6 +118,7 @@ const schedules = {
                 <div style="display: flex; gap: 5px;">
                     <input type="text" id="new-day-schedule-name" class="form-control form-control-sm" placeholder="Name" style="flex: 1;" />
                     <button class="btn btn-sm" style="background: #90EE90; color: #000;" onclick="app.schedules.createDaySchedule()">+ New</button>
+                    <button class="btn btn-sm btn-secondary" onclick="app.schedules.createDaySchedule(true)" title="Create a day schedule with no open hours">+ Closed</button>
                 </div>
             </div>
         `;
@@ -151,7 +156,8 @@ const schedules = {
             }
         }
 
-        if (periods.length === 0) return 'No periods';
+        // No periods = closed in the simulator (PoolScheduler: is_open = !empty(periods))
+        if (periods.length === 0) return 'Closed';
 
         // Sum up hours
         let totalMinutes = 0;
@@ -214,10 +220,11 @@ const schedules = {
         }
 
         this.currentPeriods = periods;
+        this.initDayClosedState(schedule);
         this.renderPeriods();
     },
 
-    async createDaySchedule() {
+    async createDaySchedule(closed = false) {
         const nameInput = document.getElementById('new-day-schedule-name');
         const name = nameInput?.value?.trim();
 
@@ -226,7 +233,8 @@ const schedules = {
             return;
         }
 
-        const periods = [{
+        // Closed day: no open hours. Open day: default 10:00-20:00 period.
+        const periods = closed ? [] : [{
             start_time: '10:00',
             end_time: '20:00',
             target_temp: 28.0,
@@ -238,7 +246,7 @@ const schedules = {
         try {
             const result = await api.daySchedules.save({
                 name: name,
-                is_closed: 0,
+                is_closed: closed ? 1 : 0,
                 periods: periods
             });
 
@@ -298,8 +306,29 @@ const schedules = {
 
         // Store current periods for editing
         this.currentPeriods = periods;
+        this.initDayClosedState(schedule);
 
         // Render periods
+        this.renderPeriods();
+    },
+
+    // Closed state being edited (saved on Save). A schedule with no periods is
+    // closed in the simulator too, so treat it as closed in the editor.
+    initDayClosedState(schedule) {
+        this.editClosed = schedule.is_closed == 1 || (this.currentPeriods || []).length === 0;
+        const toggle = document.getElementById('day-closed-toggle');
+        if (toggle) toggle.checked = this.editClosed;
+    },
+
+    // Toggle closed. Periods stay in memory, so unticking restores them; they
+    // are only dropped when a closed schedule is saved.
+    setDayClosed(closed) {
+        this.editClosed = !!closed;
+        if (!this.editClosed && (!this.currentPeriods || this.currentPeriods.length === 0)) {
+            this.currentPeriods = [];
+            this.addPeriod();  // re-opening starts with the default 10:00-20:00 period
+            return;            // addPeriod renders
+        }
         this.renderPeriods();
     },
 
@@ -307,12 +336,14 @@ const schedules = {
         const container = document.getElementById('periods-container');
         if (!container) return;
 
-        const schedule = this.selectedDaySchedule;
         const periods = this.currentPeriods || [];
         let html = '';
 
-        if (schedule && schedule.is_closed == 1) {
-            html = '<div class="alert alert-info">This is a closed day - pool is not operating</div>';
+        const addBtn = document.getElementById('add-period-btn');
+        if (addBtn) addBtn.style.visibility = this.editClosed ? 'hidden' : 'visible';
+
+        if (this.editClosed) {
+            html = '<div class="alert alert-info">Closed day — pool not operating (no open hours)</div>';
         } else if (periods.length > 0) {
             html = `
                 <table class="table table-sm" id="periods-table" style="font-size: 0.85rem;">
@@ -355,7 +386,7 @@ const schedules = {
                 </table>
             `;
         } else {
-            html = '<div class="alert alert-warning">No periods defined - click "+ Add Period" to add one</div>';
+            html = '<div class="alert alert-warning">No periods — click "+ Add Period", or tick "Closed day"</div>';
         }
 
         container.innerHTML = html;
@@ -678,8 +709,15 @@ const schedules = {
             return;
         }
 
-        // Collect periods from the table inputs
-        const periods = this.collectPeriodsFromTable();
+        // Closed day: no periods (the backend also skips them when is_closed).
+        // An open day with no periods is closed in the simulator anyway, so
+        // offer to save it as closed rather than storing an inconsistent pair.
+        let closed = !!this.editClosed;
+        const periods = closed ? [] : this.collectPeriodsFromTable();
+        if (!closed && periods.length === 0) {
+            if (!confirm('This schedule has no open periods. Save it as a closed day?')) return;
+            closed = true;
+        }
 
         // Validate periods
         for (const period of periods) {
@@ -701,7 +739,7 @@ const schedules = {
             const result = await api.daySchedules.save({
                 day_schedule_id: this.selectedDaySchedule.day_schedule_id,
                 name: this.selectedDaySchedule.name,
-                is_closed: this.selectedDaySchedule.is_closed || 0,
+                is_closed: closed ? 1 : 0,
                 periods: periods
             });
 
