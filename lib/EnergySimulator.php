@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.16.0';   // Boiler type (electric/fuel) sets its price and whether its input is electricity (from coordinates) for schedules, daily totals and reported hours; weather/solar stay UTC
+    const VERSION = '3.16.1';   // Wall-clock dates independent of the server time zone; run inputs export for the TypeScript engine (sim-ts)
     const TARGET_OFFSET_LIMIT = 5.0;  // °C, max |offset| accepted from SimControl
 
     private $db;
@@ -436,6 +436,19 @@ class EnergySimulator {
         return $this->configDefaultTarget() + $this->targetOffset();
     }
 
+
+    /**
+     * Local clock times ('Y-m-d H:i:s' in the site's time zone) are handled
+     * as wall-clock values in a fixed zone (UTC), so date arithmetic does not
+     * depend on the server's default time zone (it used to: on a non-UTC
+     * server the hours to the next opening on a DST night differed by one).
+     * The TypeScript engine (assets/js/sim) uses the same rule.
+     */
+    private static function wallClock() {
+        static $utc = null;
+        return $utc ??= new DateTimeZone('UTC');
+    }
+
     private $siteTz = null;
 
     /** The site's time zone, from its coordinates (lib/SiteTimezone.php). */
@@ -698,7 +711,62 @@ class EnergySimulator {
      * @param array $options Simulation options
      * @return array Simulation results
      */
-    public function runSimulation($startDate, $endDate, $options = []) {
+    /**
+     * Everything runSimulation() reads, as plain data for the TypeScript
+     * engine (assets/js/sim): the simulator state after configuration, the
+     * schedule copy, and the run's weather (UTC + local time) and solar data.
+     * Same validation and data loading as runSimulation().
+     */
+    public function exportRunInputs($startDate, $endDate) {
+        $data = $this->loadRunData($startDate, $endDate);
+        $weather = [];
+        foreach ($data['weather'] as $r) {
+            $weather[] = [
+                $r['timestamp'],
+                $this->toLocalTime($r['timestamp']),
+                isset($r['air_temperature']) ? (float) $r['air_temperature'] : null,
+                isset($r['wind_speed']) ? (float) $r['wind_speed'] : null,
+                isset($r['humidity']) ? (float) $r['humidity'] : null,
+                isset($r['tunnel_temperature']) ? (float) $r['tunnel_temperature'] : null,
+            ];
+        }
+        // Solar: hourly values keyed by UTC timestamp, or daily rows by date
+        $solarKind = 'none';
+        $solar = [];
+        foreach ($data['solar'] as $key => $row) {
+            if (isset($row['hourly_kwh_m2'])) {
+                $solarKind = 'hourly';
+                $solar[$key] = (float) $row['hourly_kwh_m2'];
+            } else {
+                $solarKind = 'daily';
+                $solar[$key] = (float) ($row['daily_total_kwh_m2'] ?? 0);
+            }
+        }
+        return [
+            'format' => 1,
+            'simulator_version' => self::VERSION,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'strategy_requested' => $data['strategy_requested'],
+            'pool_config' => $this->poolConfig,
+            'equipment' => $this->equipment,
+            'thermal_mass_rate' => $this->thermalMassRate,
+            'ground_factor' => $this->getGroundThermalFactor($this->poolConfig['years_operating'] ?? 3),
+            'schedule' => $this->scheduler ? $this->scheduler->exportState() : null,
+            'weather' => $weather,
+            'solar_kind' => $solarKind,
+            'solar' => (object) $solar,
+        ];
+    }
+
+    /**
+     * Validate the configuration and load what a run needs from the database:
+     * the weather rows (UTC, covering the requested LOCAL days), the solar
+     * data, and the strategy actually used. Shared by runSimulation() and
+     * exportRunInputs() (the TypeScript engine's inputs), so both engines
+     * start from identical data.
+     */
+    private function loadRunData($startDate, $endDate) {
         // Validate configuration before running - no silent defaults allowed
         $this->validateConfigForSimulation();
         $this->refreshUnitsEnabled();
@@ -711,8 +779,8 @@ class EnergySimulator {
             $this->equipment['control_strategy'] = 'reactive';
         }
 
-        $start = new DateTime($startDate);
-        $end = new DateTime($endDate);
+        $start = new DateTime($startDate, self::wallClock());
+        $end = new DateTime($endDate, self::wallClock());
 
         // Get weather data for period. Validation is on the requested UTC days;
         // the run itself covers the requested LOCAL days, so the last hours of
@@ -743,8 +811,8 @@ class EnergySimulator {
         // other years only must not make this run silently solar-free.
         if (!empty($solarData) || $this->siteHasSolarData()) {
             $missingDays = [];
-            $cursor = new DateTime($startDate);
-            $last = new DateTime($endDate);
+            $cursor = new DateTime($startDate, self::wallClock());
+            $last = new DateTime($endDate, self::wallClock());
             while ($cursor <= $last) {
                 $day = $cursor->format('Y-m-d');
                 // Daily data is keyed by date, hourly by full timestamp
@@ -765,6 +833,19 @@ class EnergySimulator {
                 );
             }
         }
+
+        return [
+            'weather' => $weatherData,
+            'solar' => $solarData,
+            'strategy_requested' => $strategyRequested,
+        ];
+    }
+
+    public function runSimulation($startDate, $endDate, $options = []) {
+        $data = $this->loadRunData($startDate, $endDate);
+        $weatherData = $data['weather'];
+        $solarData = $data['solar'];
+        $strategyRequested = $data['strategy_requested'];
 
         // Initialize results
         $results = [
@@ -900,7 +981,7 @@ class EnergySimulator {
             $targetTemp = null;
             $targetSource = null;
             if ($this->scheduler) {
-                $period = $this->scheduler->getCurrentPeriod(new DateTime($timestamp));
+                $period = $this->scheduler->getCurrentPeriod(new DateTime($timestamp, self::wallClock()));
                 if ($period) {
                     $targetTemp = $period['target_temp'];
                     $targetSource = $period['target_source'] ?? 'schedule';
@@ -951,7 +1032,7 @@ class EnergySimulator {
             $isPreheat = false;
 
             if ($controlStrategy === 'predictive') {
-                $currentTimestamp = new DateTime($timestamp);
+                $currentTimestamp = new DateTime($timestamp, self::wallClock());
 
                 // Seed a plan when the simulation STARTS inside a closed
                 // period: plans are otherwise only created on a close
@@ -1022,9 +1103,9 @@ class EnergySimulator {
                     // Get period duration from scheduler
                     $periodDuration = 10; // Default 10 hours
                     if ($this->scheduler !== null) {
-                        $date = (new DateTime($timestamp))->format('Y-m-d');
+                        $date = (new DateTime($timestamp, self::wallClock()))->format('Y-m-d');
                         $transitions = $this->scheduler->getDailyTransitions($date);
-                        $currentHour = (int)(new DateTime($timestamp))->format('G');
+                        $currentHour = (int)(new DateTime($timestamp, self::wallClock()))->format('G');
                         foreach ($transitions as $trans) {
                             if ($trans['type'] === 'open' && $trans['time'] === $currentHour) {
                                 // Find matching close transition
@@ -1894,7 +1975,19 @@ class EnergySimulator {
      * Get ground thermal factor based on years of operation
      * Ground around pool warms up over time, reducing heat loss
      */
+    private $groundFactorCache = [];
+
     private function getGroundThermalFactor($yearsOperating) {
+        // Fixed for a run, but asked for on every heat-loss calculation
+        // (2 DB queries each): look it up once per value.
+        $key = (string) $yearsOperating;
+        if (!array_key_exists($key, $this->groundFactorCache)) {
+            $this->groundFactorCache[$key] = $this->lookupGroundThermalFactor($yearsOperating);
+        }
+        return $this->groundFactorCache[$key];
+    }
+
+    private function lookupGroundThermalFactor($yearsOperating) {
         // Try to get from lookup table first
         try {
             $stmt = $this->db->prepare("
@@ -2483,7 +2576,7 @@ class EnergySimulator {
                     if (isset($rows[$nextOpenIdx]['target_temp']) && $rows[$nextOpenIdx]['target_temp'] !== null) {
                         $cycleTarget = (float)$rows[$nextOpenIdx]['target_temp'];
                     } elseif ($this->scheduler) {
-                        $period = $this->scheduler->getCurrentPeriod(new DateTime($rows[$nextOpenIdx]['timestamp']));
+                        $period = $this->scheduler->getCurrentPeriod(new DateTime($rows[$nextOpenIdx]['timestamp'], self::wallClock()));
                         if ($period && $period['target_temp'] !== null) {
                             $cycleTarget = (float)$period['target_temp'];
                         }
@@ -3097,13 +3190,13 @@ class EnergySimulator {
             // target - NOT poolConfig (no target_temp -> would default to 28).
             $targetTemp = $this->fallbackTarget();
             if ($this->scheduler) {
-                $period = $this->scheduler->getCurrentPeriod(new DateTime($timestamp));
+                $period = $this->scheduler->getCurrentPeriod(new DateTime($timestamp, self::wallClock()));
                 if ($period && isset($period['target_temp'])) {
                     $targetTemp = (float)$period['target_temp'];
                 }
             }
         } elseif ($this->scheduler) {
-            $period = $this->scheduler->getCurrentPeriod(new DateTime($timestamp));
+            $period = $this->scheduler->getCurrentPeriod(new DateTime($timestamp, self::wallClock()));
             if ($period) {
                 $isOpen = true;
                 $targetTemp = $period['target_temp'] ?? 28;

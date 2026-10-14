@@ -1,0 +1,14 @@
+{
+  "name": "heataq-sim",
+  "private": true,
+  "description": "HeatAQ pool energy simulator - TypeScript port of lib/EnergySimulator.php + lib/PoolScheduler.php",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node build.mjs && node test/compare.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.24.2",
+    "typescript": "5.6.3"
+  }
+}
