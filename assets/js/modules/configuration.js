@@ -163,6 +163,7 @@ const ConfigurationModule = {
         ['cfg-hp-capacity', 'Heat pump capacity', true],
         ['cfg-hp-cop', 'Heat pump COP', true],
         ['cfg-boiler-capacity', 'Boiler capacity', true],
+        ['cfg-boiler-type', 'Boiler type', false],
         ['cfg-boiler-eff', 'Boiler efficiency', true],
         ['cfg-showers-hp', 'Showers use HP', false],
         ['cfg-target-temp', 'Target temperature', true],
@@ -199,11 +200,32 @@ const ConfigurationModule = {
         return Number.isFinite(v) ? v : null;
     },
 
-    // Labels of required fields that are blank or not a number
+    // Labels of required fields that are blank or not a number. The boiler
+    // type must be chosen when there is a boiler; the fuel price is needed
+    // only for a fossil-fuel boiler.
     invalidFields: function() {
-        return this.FIELDS
+        const boilerType = this.getVal('cfg-boiler-type');
+        const hasBoiler = (this.numVal('cfg-boiler-capacity') || 0) > 0;
+        const invalid = this.FIELDS
             .filter(([id, , required]) => required && document.getElementById(id) && this.numVal(id) === null)
+            .filter(([id]) => id !== 'cfg-gas-cost' || boilerType === 'fuel')
             .map(([, label]) => label);
+        if (hasBoiler && !boilerType) invalid.unshift('Boiler type (electric or fossil fuel)');
+        return invalid;
+    },
+
+    // Show the fuel price only for a fossil-fuel boiler, and a typical
+    // efficiency for the chosen type
+    toggleBoilerType: function() {
+        const type = this.getVal('cfg-boiler-type');
+        const row = document.getElementById('cfg-gas-cost-row');
+        if (row) row.style.display = type === 'electric' ? 'none' : '';
+        const hint = document.getElementById('cfg-boiler-eff-hint');
+        if (hint) {
+            hint.textContent = type === 'electric' ? '0-1, electric ≈ 0.99 (input is electricity)'
+                : type === 'fuel' ? '0-1, gas ≈ 0.92, oil ≈ 0.85-0.90'
+                : '0-1, e.g. 0.92';
+        }
     },
 
     populateForm: function(config) {
@@ -239,6 +261,7 @@ const ConfigurationModule = {
             this.setVal('cfg-hp-cop', config.equipment.hp_cop);
             this.setVal('cfg-boiler-capacity', config.equipment.boiler_capacity_kw);
             this.setVal('cfg-boiler-eff', config.equipment.boiler_efficiency);
+            this.setVal('cfg-boiler-type', config.equipment.boiler_type ?? '');
             this.setVal('cfg-showers-hp', config.equipment.showers_use_hp ? '1' : '0');
         }
 
@@ -283,6 +306,7 @@ const ConfigurationModule = {
         }
 
         // Update visibility and calculated fields
+        this.toggleBoilerType();
         this.toggleCover();
         this.updateCalculatedFields();
     },
@@ -312,7 +336,7 @@ const ConfigurationModule = {
 
         const invalid = this.invalidFields();
         if (invalid.length) {
-            alert('Please fill in a number for: ' + invalid.join(', '));
+            alert('Please fill in: ' + invalid.join(', '));
             return;
         }
         const config = this.getConfig();
@@ -433,6 +457,7 @@ const ConfigurationModule = {
                 hp_cop: n('cfg-hp-cop'),
                 boiler_capacity_kw: n('cfg-boiler-capacity'),
                 boiler_efficiency: n('cfg-boiler-eff'),
+                boiler_type: this.getVal('cfg-boiler-type') || null,
                 showers_use_hp: this.getVal('cfg-showers-hp') === '1'
             },
             control: {
@@ -471,7 +496,7 @@ const ConfigurationModule = {
 
         const invalid = this.invalidFields();
         if (invalid.length) {
-            alert('Please fill in a number for: ' + invalid.join(', '));
+            alert('Please fill in: ' + invalid.join(', '));
             return;
         }
         const config = this.getConfig();

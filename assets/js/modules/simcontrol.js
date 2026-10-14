@@ -525,6 +525,12 @@ const SimControlModule = {
         );
         const hpCop = fmt(equip.heat_pump?.cop_nominal, '', 1);
         const boilerEff = equip.boiler?.efficiency ? fmt(equip.boiler.efficiency * 100, '%', 0) : '-';
+        // Boiler type (simulator >= 3.16): electric input counts as electricity,
+        // fuel (gas/oil) is shown on its own line. Older runs have no type.
+        const boilerType = summary.boiler_type || null;
+        const boilerTypeText = boilerType === 'electric' ? 'electric'
+            : boilerType === 'fuel' ? (summary.boiler_type_set ? 'gas/oil' : 'fuel (type not set in config)')
+            : null;
 
         // Target: describe what the run actually used. Each open hour's target is
         // its schedule period's target, or the config default where the period
@@ -611,7 +617,7 @@ const SimControlModule = {
             </div>
             <div><strong>Pool:</strong> ${escapeHtml(area)} m², ${escapeHtml(volume)} m³, ${escapeHtml(depth)}m deep</div>
             <div><strong>Heat Pump:</strong> ${hpKw}, COP ${hpCop}</div>
-            <div><strong>Boiler:</strong> ${boilerKw}, ${boilerEff} eff</div>
+            <div><strong>Boiler:</strong> ${boilerKw}, ${boilerEff} eff${boilerTypeText ? ', ' + escapeHtml(boilerTypeText) : ''}</div>
             <div><strong>Target:</strong> ${targetTemp}</div>
             <div><strong>Tolerance:</strong> +${upperTol} / -${lowerTol}</div>
             <div><strong>Strategy:</strong> ${escapeHtml(strategy)}</div>
@@ -670,9 +676,13 @@ const SimControlModule = {
 
         // Electricity
         setEl('bench-hp-elec', toMWh(summary.total_hp_energy_kwh));
+        // A fuel boiler's gas/oil is listed but not added to the electricity
+        // total; an electric boiler (and older runs without a type) is.
+        const boilerIsFuel = boilerType === 'fuel';
+        setEl('bench-boiler-fuel-label', boilerIsFuel ? 'Boiler fuel, gas/oil (not electricity)' : 'Boiler electricity');
         setEl('bench-boiler-fuel', toMWh(summary.total_boiler_energy_kwh));
         setEl('bench-shower', toMWh(summary.shower_heating_kwh) || '-');
-        setEl('bench-total-elec', toMWh((summary.total_hp_energy_kwh || 0) + (summary.total_boiler_energy_kwh || 0) + (summary.shower_heating_kwh || 0)));
+        setEl('bench-total-elec', toMWh((summary.total_hp_energy_kwh || 0) + (boilerIsFuel ? 0 : (summary.total_boiler_energy_kwh || 0)) + (summary.shower_heating_kwh || 0)));
 
         // Temperature — in-use values (open hours only), with fallback to the
         // overall figure for older stored runs that lack the *_open fields.

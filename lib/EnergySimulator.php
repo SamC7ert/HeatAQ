@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.15.1';   // Solar fetched from the previous UTC day like weather; site local time (from coordinates) for schedules, daily totals and reported hours; weather/solar stay UTC
+    const VERSION = '3.16.0';   // Boiler type (electric/fuel) sets its price and whether its input is electricity (from coordinates) for schedules, daily totals and reported hours; weather/solar stay UTC
     const TARGET_OFFSET_LIMIT = 5.0;  // °C, max |offset| accepted from SimControl
 
     private $db;
@@ -272,6 +272,16 @@ class EnergySimulator {
             $this->equipment['heat_pump']['cop_nominal'] = $uiConfig['equipment']['hp_cop'] ?? $this->equipment['heat_pump']['cop_nominal'];
             $this->equipment['boiler']['capacity_kw'] = $uiConfig['equipment']['boiler_capacity_kw'] ?? $this->equipment['boiler']['capacity_kw'];
             $this->equipment['boiler']['efficiency'] = $uiConfig['equipment']['boiler_efficiency'] ?? $this->equipment['boiler']['efficiency'];
+            // Boiler type: 'electric' (input is electricity, at the electricity
+            // price) or 'fuel' (gas/oil, at the fuel price). Not set = 'fuel',
+            // how every boiler was priced before the type existed.
+            if (array_key_exists('boiler_type', $uiConfig['equipment'])) {
+                $type = $uiConfig['equipment']['boiler_type'];
+                if ($type !== null && $type !== '' && !in_array($type, ['electric', 'fuel'], true)) {
+                    throw new InvalidArgumentException("Boiler type must be 'electric' or 'fuel'");
+                }
+                $this->equipment['boiler']['fuel_type'] = ($type === '' ? null : $type);
+            }
 
             $this->refreshUnitsEnabled();
         }
@@ -574,7 +584,11 @@ class EnergySimulator {
             if (!$positive($this->equipment['boiler']['efficiency'] ?? null)) {
                 $errors[] = 'boiler efficiency must be greater than 0';
             }
-            if (!is_numeric($this->equipment['boiler']['fuel_cost_per_kwh'] ?? null)) {
+            if ($this->boilerIsElectric()) {
+                if (!is_numeric($this->equipment['electricity_cost_per_kwh'] ?? null)) {
+                    $errors[] = 'electricity price is required (electric boiler)';
+                }
+            } elseif (!is_numeric($this->equipment['boiler']['fuel_cost_per_kwh'] ?? null)) {
                 $errors[] = 'boiler fuel price is required';
             }
         }
@@ -787,6 +801,10 @@ class EnergySimulator {
                 'total_boiler_energy_kwh' => 0,
                 'total_electricity_kwh' => 0,
                 'total_fuel_kwh' => 0,
+                // 'electric' or 'fuel'; boiler_type_set false = not chosen in
+                // the config (priced as fuel, the behaviour before the type)
+                'boiler_type' => $this->boilerIsElectric() ? 'electric' : 'fuel',
+                'boiler_type_set' => ($this->equipment['boiler']['fuel_type'] ?? null) !== null,
                 'shower_heating_kwh' => 0,
                 'total_cost' => 0,
                 // Temperature stats
@@ -1255,8 +1273,13 @@ class EnergySimulator {
             // Energy consumed
             $results['summary']['total_hp_energy_kwh'] += $heating['hp_electricity'];
             $results['summary']['total_boiler_energy_kwh'] += $heating['boiler_fuel'];
-            $results['summary']['total_electricity_kwh'] += $heating['hp_electricity'];
-            $results['summary']['total_fuel_kwh'] += $heating['boiler_fuel'];
+            // Boiler input is electricity or fuel depending on the boiler type
+            if ($this->boilerIsElectric()) {
+                $results['summary']['total_electricity_kwh'] += $heating['hp_electricity'] + $heating['boiler_fuel'];
+            } else {
+                $results['summary']['total_electricity_kwh'] += $heating['hp_electricity'];
+                $results['summary']['total_fuel_kwh'] += $heating['boiler_fuel'];
+            }
             $results['summary']['total_cost'] += $heating['cost'];
 
             // Temperature stats
@@ -2915,6 +2938,11 @@ class EnergySimulator {
     /**
      * Apply boiler heating
      */
+    /** True when the boiler runs on electricity (config boiler_type 'electric'). */
+    private function boilerIsElectric() {
+        return ($this->equipment['boiler']['fuel_type'] ?? null) === 'electric';
+    }
+
     private function applyBoiler($requiredHeat) {
         $boiler = $this->equipment['boiler'];
 
@@ -2925,11 +2953,14 @@ class EnergySimulator {
         // Available heat output
         $availableHeat = min($requiredHeat, $boiler['capacity_kw']);
 
-        // Fuel consumption
+        // Energy input (electricity for an electric boiler, else gas/oil)
         $fuel = $availableHeat / $boiler['efficiency'];
 
-        // Cost
-        $cost = $fuel * $boiler['fuel_cost_per_kwh'];
+        // Cost at the price of what it burns
+        $price = $this->boilerIsElectric()
+            ? $this->equipment['electricity_cost_per_kwh']
+            : $boiler['fuel_cost_per_kwh'];
+        $cost = $fuel * $price;
 
         return [
             'heat' => $availableHeat,
@@ -3297,6 +3328,7 @@ class EnergySimulator {
                 'capacity_kw' => $this->equipment['boiler']['capacity_kw'] ?? 200,
                 'enabled' => $this->equipment['boiler']['enabled'] ?? true,
                 'efficiency' => $this->equipment['boiler']['efficiency'] ?? 0.92,
+                'type' => $this->boilerIsElectric() ? 'electric' : 'fuel',
                 'output_kw' => round($boilerOutput, 3),
                 'fuel_kw' => round($boilerFuel, 3),
             ],
