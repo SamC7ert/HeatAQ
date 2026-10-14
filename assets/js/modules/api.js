@@ -1,6 +1,27 @@
 // API module - Handles all server communication
 
 const api = {
+    // Parse a response as JSON. When the server sends something else (a host
+    // error page, a resource-limit 503/508 page, a firewall block), the plain
+    // response.json() only says "Unexpected token '<'"; this names the HTTP
+    // status and the page title so the real cause is visible.
+    async parseJson(response) {
+        const text = await response.text();
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            // Visible page text (host error pages put the reason in the body,
+            // e.g. "Resource Limit Is Reached"); fall back to the <title>.
+            const title = ((text.match(/<title[^>]*>([^<]*)<\/title>/i) || [])[1] || '').trim();
+            const bodyText = text
+                .replace(/<head[\s\S]*?<\/head>|<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ')
+                .replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+            const snippet = (bodyText || title).slice(0, 160);
+            const status = `HTTP ${response.status}${response.statusText ? ' ' + response.statusText : ''}`;
+            throw new Error(`Server returned ${status} instead of data` + (snippet ? `: ${snippet}` : ' (empty response)'));
+        }
+    },
+
     // Generic API call function
     async call(action, params = {}) {
         try {
@@ -15,19 +36,12 @@ const api = {
             }
             
             const response = await fetch(urlString);
+            const data = await api.parseJson(response);
 
             if (!response.ok) {
-                // Try to get error details from response body
-                try {
-                    const errorData = await response.json();
-                    const errorMsg = errorData.message || errorData.error || `HTTP error! status: ${response.status}`;
-                    throw new Error(errorMsg);
-                } catch (parseError) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
+                // Server sent a JSON error body; prefer its message
+                throw new Error(data.message || data.error || `HTTP error! status: ${response.status}`);
             }
-
-            const data = await response.json();
 
             if (data.error) {
                 console.error('API Error:', data.error);
@@ -55,8 +69,8 @@ const api = {
                 })
             });
 
-            // Always try to read the response body for error details
-            const result = await response.json();
+            // Always read the response body for error details
+            const result = await api.parseJson(response);
 
             if (!response.ok || result.error) {
                 const errorMsg = result.error || `HTTP error ${response.status}`;
