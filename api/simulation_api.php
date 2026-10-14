@@ -29,11 +29,26 @@ set_error_handler(function($severity, $message, $file, $line) {
 });
 
 // Catch fatal errors
+// A fatal error (memory, time limit) mid-run must not leave the run row
+// 'running' forever: the run sets $GLOBALS['activeRunId'] while it executes.
 register_shutdown_function(function() {
     $error = error_get_last();
     if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
-        header('Content-Type: application/json');
-        echo json_encode(['error' => $error['message'], 'file' => $error['file'], 'line' => $error['line']]);
+        if (!empty($GLOBALS['activeRunId']) && isset($GLOBALS['pdo'])) {
+            try {
+                updateRunStatus($GLOBALS['pdo'], $GLOBALS['activeRunId'], 'failed', ['error' => 'Simulation aborted: ' . strtok($error['message'], "\n")]);
+            } catch (Throwable $e) {
+                // nothing more we can do
+            }
+        }
+        $debug = class_exists('Config') && Config::isDebug();
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: application/json');
+        }
+        echo json_encode($debug
+            ? ['error' => $error['message'], 'file' => $error['file'], 'line' => $error['line']]
+            : ['error' => 'Simulation aborted: ' . strtok($error['message'], "\n")]);
     }
 });
 
@@ -280,13 +295,18 @@ try {
                 $config = null;
                 $configRow = null;
 
+                // Only a config of this site's project (or an unassigned
+                // legacy one) may be used - never another project's.
+                $configScope = "AND (project_id IS NULL OR project_id = (SELECT project_id FROM pool_sites WHERE id = ?))";
+                $configParams = [$configId, $currentPoolSiteId];
+
                 // Try with all columns first (json_config + legacy columns + template_name)
                 try {
                     $configStmt = $pdo->prepare("
                         SELECT template_name, json_config, hp_capacity_kw, boiler_capacity_kw, target_temp, control_strategy
-                        FROM config_templates WHERE template_id = ?
+                        FROM config_templates WHERE template_id = ? $configScope
                     ");
-                    $configStmt->execute([$configId]);
+                    $configStmt->execute($configParams);
                     $configRow = $configStmt->fetch();
                 } catch (PDOException $e) {
                     // Columns may not exist, try fallback
@@ -298,14 +318,18 @@ try {
                     try {
                         $configStmt = $pdo->prepare("
                             SELECT template_name, config_json as json_config
-                            FROM config_templates WHERE template_id = ?
+                            FROM config_templates WHERE template_id = ? $configScope
                         ");
-                        $configStmt->execute([$configId]);
+                        $configStmt->execute($configParams);
                         $configRow = $configStmt->fetch();
                     } catch (PDOException $e) {
                         // Neither column exists
                         $configRow = null;
                     }
+                }
+
+                if (!$configRow) {
+                    sendError('Run not started - the selected Config was not found in this project. Pick a Config and try again.', 400);
                 }
 
                 if ($configRow) {
@@ -419,6 +443,7 @@ try {
 
             // Update status to running
             updateRunStatus($pdo, $runId, 'running');
+            $GLOBALS['activeRunId'] = $runId;
 
             // Live progress: once per simulated month, store the current
             // period + percent on the run row so the frontend can poll it
@@ -443,6 +468,7 @@ try {
 
                 // Update status to completed
                 updateRunStatus($pdo, $runId, 'completed', $results['summary']);
+                $GLOBALS['activeRunId'] = null;
 
                 // Add schedule info to meta (so frontend can display it)
                 $results['meta']['schedule_template_id'] = $scheduleTemplate['template_id'] ?? null;
@@ -461,8 +487,9 @@ try {
                     'hourly_stored' => $storeHourly
                 ]);
 
-            } catch (Exception $e) {
-                // Update status to failed
+            } catch (Throwable $e) {
+                // Update status to failed (Errors too, e.g. a division by zero)
+                $GLOBALS['activeRunId'] = null;
                 updateRunStatus($pdo, $runId, 'failed', ['error' => $e->getMessage()]);
                 throw $e;
             }
@@ -1147,9 +1174,16 @@ try {
 } catch (PDOException $e) {
     $message = Config::isDebug() ? $e->getMessage() : 'Database error occurred';
     sendError($message, 500);
-} catch (Exception $e) {
-    $message = Config::isDebug() ? $e->getMessage() : 'An error occurred';
-    sendError($message, 500);
+} catch (Throwable $e) {
+    // The simulator's own validation errors (missing data, invalid config)
+    // tell the user what to fix, so they are always shown; anything else
+    // (PHP errors) only in debug mode.
+    $userFacing = $e instanceof RuntimeException || $e instanceof InvalidArgumentException;
+    if (!$userFacing) {
+        error_log('[SimAPI] ' . get_class($e) . ': ' . $e->getMessage() . ' at ' . $e->getFile() . ':' . $e->getLine());
+    }
+    $message = ($userFacing || Config::isDebug()) ? $e->getMessage() : 'An error occurred';
+    sendError($message, $userFacing ? 400 : 500);
 }
 
 // Helper functions
