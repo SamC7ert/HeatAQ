@@ -18,6 +18,7 @@
  */
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/lib/LoginThrottle.php';
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
@@ -62,10 +63,20 @@ try {
     $stmt->execute([$email]);
     $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
+    // Brute-force protection (lib/LoginThrottle.php, migration 036)
+    $clientIp = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    if (LoginThrottle::isBlocked($pdo, $email, $clientIp)) {
+        http_response_code(429);
+        echo json_encode(['success' => false, 'message' => 'Too many failed logins. Please wait 15 minutes and try again.']);
+        exit;
+    }
+
     if (!$user || !password_verify($password, $user['password_hash'])) {
+        LoginThrottle::recordFailure($pdo, $email, $clientIp);
         echo json_encode(['success' => false, 'message' => 'Invalid email or password']);
         exit;
     }
+    LoginThrottle::clear($pdo, $email);
 
     if (!$user['is_active']) {
         echo json_encode(['success' => false, 'message' => 'Account is deactivated']);
@@ -118,8 +129,7 @@ try {
             UPDATE users
             SET password_hash = ?,
                 force_password_change = 0,
-                password_history = ?,
-                updated_at = NOW()
+                password_history = ?
             WHERE user_id = ?
         ");
         $stmt->execute([$newHash, json_encode($passwordHistory), $user['user_id']]);
@@ -132,6 +142,7 @@ try {
         $stmt = $pdo->prepare("SELECT * FROM users WHERE user_id = ?");
         $stmt->execute([$user['user_id']]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        $forcePasswordChange = (bool)($user['force_password_change'] ?? false);
     }
 
     // Step 1: Return projects list (no project selected yet)
@@ -186,7 +197,12 @@ try {
         exit;
     }
 
-    // Step 2: Create session for selected project
+    // Step 2: Create session for selected project - never while a forced
+    // password change is still outstanding.
+    if ($forcePasswordChange) {
+        echo json_encode(['success' => false, 'message' => 'You must change your password before logging in.', 'force_password_change' => true]);
+        exit;
+    }
     $projectId = (int)$projectId;
 
     // Verify user has access to this project (pool_site_id from pool_sites)
@@ -234,8 +250,11 @@ try {
         $_SERVER['HTTP_USER_AGENT'] ?? null
     ]);
 
-    // Start PHP session and store info
-    session_start();
+    // Start PHP session and store info. A fresh session id on login stops a
+    // session id planted before login (session fixation) from being reused.
+    require_once __DIR__ . '/lib/RequestGuard.php';
+    RequestGuard::startSession();
+    session_regenerate_id(true);
     $sessionName = $sessionConfig['name'] ?? 'heataq_session';
     $_SESSION[$sessionName . '_session_id'] = $sessionId;
     $_SESSION[$sessionName . '_user_id'] = $user['user_id'];

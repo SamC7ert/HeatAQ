@@ -8,7 +8,8 @@
  * Setup:
  *   1. Add to config_heataq/database.env:   DIAG_TOKEN=<secret>
  *   2. Deploy this file.
- *   3. GET https://<host>/api/diag.php?token=<secret>&action=<action>
+ *   3. GET https://<host>/api/diag.php?action=<action>
+ *      with header  X-Diag-Token: <secret>
  *
  * Actions:
  *   ping                         DB time/version + weather_data row count
@@ -21,9 +22,10 @@
  *   query&sql=SELECT ...         run a read-only SELECT/SHOW/EXPLAIN (LIMIT capped)
  *
  * Security: read-only (query rejects anything but SELECT/SHOW/EXPLAIN/DESCRIBE,
- * blocks multiple statements and INTO OUTFILE, caps rows); inert unless
- * DIAG_TOKEN is set; 403 without a matching token. Token via ?token= or the
- * X-Diag-Token header.
+ * blocks multiple statements, comments, INTO and LOAD_FILE, and the login /
+ * session tables; caps rows); inert unless DIAG_TOKEN is set; 403 without a
+ * matching token. Token only via the X-Diag-Token header (a ?token= in the
+ * URL would end up in access logs and browser history).
  */
 
 header('Content-Type: application/json');
@@ -80,8 +82,17 @@ function diag_run_query(PDO $db, string $sql): array {
     if (!preg_match('/^(SELECT|SHOW|EXPLAIN|DESCRIBE|DESC)\b/i', $sql)) {
         throw new RuntimeException('only SELECT / SHOW / EXPLAIN / DESCRIBE are allowed (read-only)');
     }
-    if (preg_match('/\binto\s+(out|dump)file\b/i', $sql)) {
-        throw new RuntimeException('file output is not allowed');
+    // Comments could hide a keyword from the checks below; INTO covers
+    // OUTFILE/DUMPFILE and variables.
+    if (preg_match('#/\*|--|\##', $sql)) {
+        throw new RuntimeException('comments are not allowed');
+    }
+    if (preg_match('/\binto\b|\bload_file\s*\(/i', $sql)) {
+        throw new RuntimeException('INTO and LOAD_FILE are not allowed');
+    }
+    // Password hashes, live session tokens and reset tokens stay out of reach.
+    if (preg_match('/\b(users|user_sessions|user_projects|user_preferences|password_reset_\w+|audit_log)\b/i', $sql)) {
+        throw new RuntimeException('login, session and audit tables are not available via diagnostics');
     }
     if (preg_match('/^SELECT\b/i', $sql) && !preg_match('/\blimit\s+\d/i', $sql)) {
         $sql .= ' LIMIT 500';
@@ -98,7 +109,7 @@ $configured = diag_read_token();
 if (empty($configured)) {
     diag_out(['error' => 'diagnostics disabled: DIAG_TOKEN is not set in config_heataq/database.env'], 403);
 }
-$provided = $_GET['token'] ?? ($_SERVER['HTTP_X_DIAG_TOKEN'] ?? '');
+$provided = $_SERVER['HTTP_X_DIAG_TOKEN'] ?? '';
 if (!is_string($provided) || !hash_equals((string)$configured, $provided)) {
     diag_out(['error' => 'invalid or missing token'], 403);
 }

@@ -2,11 +2,17 @@
 /**
  * Clear PHP OPcache
  *
- * Access via: /api/clear_cache.php
+ * Access via: /api/clear_cache.php (logged in as admin or owner)
  * Returns JSON with status and current simulator version
  */
 
 header('Content-Type: application/json');
+
+// Admins only (anyone could otherwise reset the server's opcache at will)
+require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../lib/RequestGuard.php';
+$auth = RequestGuard::authenticate();
+RequestGuard::requireRole($auth, 'admin');
 
 $result = [
     'opcache_cleared' => false,

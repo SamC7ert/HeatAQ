@@ -7,6 +7,12 @@
  * Usage: php scripts/validate_columns.php [--verbose]
  */
 
+// Command line only: this script must never run from a web request.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit;
+}
+
 $verbose = in_array('--verbose', $argv) || in_array('-v', $argv);
 
 // Load schema

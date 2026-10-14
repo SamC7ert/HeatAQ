@@ -37,7 +37,8 @@ class HeatAQAuth {
      * @return array|false User and project data if authenticated
      */
     public static function check($requireAuth = true) {
-        session_start();
+        require_once __DIR__ . '/lib/RequestGuard.php';
+        RequestGuard::startSession();
 
         $sessionConfig = Config::getSessionConfig();
         $sessionName = $sessionConfig['name'];
@@ -57,10 +58,8 @@ class HeatAQAuth {
         elseif (isset($_SERVER['HTTP_X_SESSION_ID'])) {
             $sessionId = $_SERVER['HTTP_X_SESSION_ID'];
         }
-        // 4. Check POST/GET parameter
-        elseif (isset($_REQUEST['session_id'])) {
-            $sessionId = $_REQUEST['session_id'];
-        }
+        // (A session id in the URL/query is no longer accepted: it leaks into
+        // logs and browser history and allows session fixation.)
 
         if (!$sessionId) {
             if ($requireAuth) {

@@ -10,6 +10,7 @@ set_time_limit(300);  // 5 minutes
 ini_set('memory_limit', '512M');
 
 header('Content-Type: application/json');
+require_once __DIR__ . '/../lib/RequestGuard.php';
 
 // A fatal error (max execution time, memory exhaustion) otherwise ends the
 // request with an HTML/empty body the browser can't parse as JSON, surfacing
@@ -21,7 +22,7 @@ register_shutdown_function(function () {
             http_response_code(500);
             header('Content-Type: application/json');
         }
-        echo json_encode(['error' => 'Server fatal error: ' . $err['message']]);
+        echo json_encode(['error' => 'Server fatal error: ' . strtok($err['message'], "\n")]);
     }
 });
 
@@ -639,6 +640,14 @@ try {
 
     $action = $_GET['action'] ?? '';
 
+    // Logged-in users only; storing data needs an admin and a POST from the app.
+    require_once __DIR__ . '/../lib/RequestGuard.php';
+    $auth = RequestGuard::authenticate();
+    if ($action === 'fetch_and_store_year') {
+        RequestGuard::requireWriteRequest();
+        RequestGuard::requireRole($auth, 'admin');
+    }
+
     switch ($action) {
         case 'check_station':
             checkStation($frostClientId);
@@ -657,17 +666,11 @@ try {
             echo json_encode(['error' => 'Invalid action']);
     }
 
-} catch (Exception $e) {
-    // Global error handler
-    echo json_encode([
-        'error' => 'Server error: ' . $e->getMessage(),
-        'file' => basename($e->getFile()),
-        'line' => $e->getLine()
-    ]);
-} catch (Error $e) {
-    echo json_encode([
-        'error' => 'Fatal error: ' . $e->getMessage(),
-        'file' => basename($e->getFile()),
-        'line' => $e->getLine()
-    ]);
+} catch (Throwable $e) {
+    // Global error handler: details go to the log, not the response
+    error_log('[frost_api] ' . get_class($e) . ': ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+    if (!headers_sent()) {
+        http_response_code(500);
+    }
+    echo json_encode(['error' => 'Server error: ' . RequestGuard::publicMessage($e->getMessage())]);
 }

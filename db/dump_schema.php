@@ -3,9 +3,15 @@
  * Database Schema Dump Script
  * Generates a complete schema description and saves to db/schema.json
  *
- * Usage: php db/dump_schema.php
- * Or via web: /db/dump_schema.php (if accessible)
+ * Usage: php db/dump_schema.php [--push] [--json]
+ * From the app: Admin -> System runs it through heataq_api (action dump_schema).
  */
+
+// Command line only: this script must never run from a web request.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit;
+}
 
 require_once __DIR__ . '/../config.php';
 
@@ -104,7 +110,8 @@ try {
     file_put_contents($mdPath, $md);
 
     // Check if git push requested
-    $pushToGit = isset($_GET['push']) || (isset($argv[1]) && $argv[1] === '--push');
+    $args = $argv ?? [];
+    $pushToGit = in_array('--push', $args, true);
     $gitResult = null;
 
     if ($pushToGit) {
@@ -140,8 +147,8 @@ try {
         ];
     }
 
-    // Output result
-    if (php_sapi_name() === 'cli') {
+    // Output result (--json: for the API action that runs this script)
+    if (!in_array('--json', $args, true)) {
         echo "Schema dumped to:\n";
         echo "  - $jsonPath\n";
         echo "  - $mdPath\n";
@@ -151,7 +158,6 @@ try {
             echo $gitResult['output'] . "\n";
         }
     } else {
-        header('Content-Type: application/json');
         $response = [
             'status' => 'success',
             'tables' => count($schema['tables']),
@@ -165,12 +171,10 @@ try {
     }
 
 } catch (Exception $e) {
-    if (php_sapi_name() === 'cli') {
+    if (!in_array('--json', $argv ?? [], true)) {
         echo "Error: " . $e->getMessage() . "\n";
-        exit(1);
     } else {
-        header('Content-Type: application/json');
-        http_response_code(500);
         echo json_encode(['error' => $e->getMessage()]);
     }
+    exit(1);
 }
