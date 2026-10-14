@@ -1,23 +1,30 @@
 // API module - Handles all server communication
 
-// The host's rate limiter answers HTTP 429 when requests come too fast. It
-// rejects the request before PHP runs, so nothing was saved and resending is
-// safe. Wrap fetch once (this file loads before every other module) so all
-// API calls wait and retry instead of failing: Retry-After if the host sends
-// it (capped), else 1s, 2s, 4s. auth_api is excluded: its own 429 is a real
-// password-reset limit that a quick retry would only hit again.
+// Wraps fetch once for our own API (this file loads before every other module):
+//
+// 1. Retry on HTTP 429. The host's rate limiter rejects a request before PHP
+//    runs, so nothing was saved and resending is safe. Waits Retry-After if
+//    sent (capped), else 1s, 2s, 4s.
+//
+// 2. Share identical reads. Modules load the same lists independently (app
+//    start sent 27 requests, only 16 distinct). A GET whose action starts with
+//    get_ is shared: callers asking for the same URL while it is in flight, or
+//    up to SHARE_MS after it answered, get a copy of that one response.
+//    Any other request (POST, save_/delete_/switch_project, and GETs that write
+//    such as fetch_and_store_year) clears all shared answers before and after
+//    it runs, so a read following a change always goes to the server.
+//
+// auth_api is left alone: its 429 is a real password-reset limit.
 (function () {
     if (typeof window === 'undefined' || typeof window.fetch !== 'function') return;
     const nativeFetch = window.fetch.bind(window);
     const RETRIES = 3;
+    const SHARE_MS = 3000;
+    const NEVER_SHARE = ['get_run_progress'];  // live polling must stay fresh
     const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const shared = new Map();  // url -> { promise, expires (null while in flight) }
 
-    window.fetch = async function (input, init) {
-        const url = typeof input === 'string' ? input : (input && input.url) || '';
-        const isOwnApi = url.includes('/api/') && !url.includes('auth_api.php')
-            && (!/^https?:\/\//i.test(url) || url.startsWith(window.location.origin));
-        if (!isOwnApi) return nativeFetch(input, init);
-
+    async function fetchWithRetry(input, init, url) {
         for (let attempt = 0; ; attempt++) {
             const response = await nativeFetch(input, init);
             if (response.status !== 429 || attempt >= RETRIES) return response;
@@ -26,6 +33,45 @@
             console.warn(`[api] HTTP 429 from host for ${url} — retrying in ${delay / 1000}s (attempt ${attempt + 1}/${RETRIES})`);
             await sleep(delay);
         }
+    }
+
+    window.fetch = function (input, init) {
+        const url = typeof input === 'string' ? input : (input && input.url) || '';
+        const isOwnApi = url.includes('/api/') && !url.includes('auth_api.php')
+            && (!/^https?:\/\//i.test(url) || url.startsWith(window.location.origin));
+        if (!isOwnApi) return nativeFetch(input, init);
+
+        const method = ((init && init.method) || (typeof input !== 'string' && input && input.method) || 'GET').toUpperCase();
+        const action = decodeURIComponent((url.match(/[?&]action=([^&#]*)/) || [])[1] || '');
+        const isRead = method === 'GET' && action.startsWith('get_');
+
+        if (!isRead) {
+            // May change data: drop shared answers now and once it completes
+            shared.clear();
+            const p = fetchWithRetry(input, init, url);
+            p.then(() => shared.clear(), () => shared.clear());
+            return p;
+        }
+
+        const bypass = NEVER_SHARE.includes(action)
+            || (init && (init.cache === 'no-store' || init.cache === 'reload'));
+        if (bypass) return fetchWithRetry(input, init, url);
+
+        const now = Date.now();
+        for (const [k, e] of shared) {
+            if (e.expires !== null && e.expires <= now) shared.delete(k);
+        }
+        const hit = shared.get(url);
+        if (hit) return hit.promise.then(r => r.clone());
+
+        const entry = { promise: fetchWithRetry(input, init, url), expires: null };
+        shared.set(url, entry);
+        entry.promise.then(r => {
+            if (shared.get(url) !== entry) return;  // cleared by a change meanwhile
+            if (r.ok) entry.expires = Date.now() + SHARE_MS;
+            else shared.delete(url);                // never share errors
+        }, () => { if (shared.get(url) === entry) shared.delete(url); });
+        return entry.promise.then(r => r.clone());
     };
 })();
 

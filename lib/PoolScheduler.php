@@ -24,6 +24,10 @@ class PoolScheduler {
     private $dateRanges = [];
     private $exceptionDays = [];
     private $holidayDates = [];
+    // getScheduleForDate() result per Y-m-d. The inputs (exception days, date
+    // ranges, week schedules) are loaded once and fixed for this instance, and
+    // the simulator asks for the same date many times per simulated day.
+    private $scheduleForDateCache = [];
 
     /**
      * Initialize scheduler from database
@@ -449,7 +453,20 @@ class PoolScheduler {
         }
 
         $dateStr = $date->format('Y-m-d');
+        if (array_key_exists($dateStr, $this->scheduleForDateCache)) {
+            return $this->scheduleForDateCache[$dateStr];
+        }
+        $result = $this->resolveScheduleForDate($date, $dateStr);
+        $this->scheduleForDateCache[$dateStr] = $result;
+        return $result;
+    }
 
+    /**
+     * Uncached lookup behind getScheduleForDate(). Logs only anomalies (once
+     * per date thanks to the cache); the per-call trace that previously wrote
+     * ~5 error_log lines for every simulated hour has been removed.
+     */
+    private function resolveScheduleForDate(DateTime $date, $dateStr) {
         // 1. Check exception days (holidays) - highest priority
         $exception = $this->checkExceptionDays($date);
         if ($exception) {
@@ -457,20 +474,15 @@ class PoolScheduler {
         }
 
         // 2. Check date ranges (programs)
-        error_log("[PoolScheduler] getScheduleForDate($dateStr): Checking " . count($this->dateRanges) . " date ranges");
         foreach ($this->dateRanges as $i => $dateRange) {
             $inRange = $this->dateInRange($date, $dateRange);
-            error_log("[PoolScheduler]   Range $i: id={$dateRange['id']}, is_default=" . ($dateRange['is_default'] ? 'YES' : 'no') . ", week_schedule_id={$dateRange['week_schedule_id']}, inRange=" . ($inRange ? 'YES' : 'no'));
             if ($inRange) {
                 $weekScheduleId = $dateRange['week_schedule_id'];
                 $weekSchedule = $this->weekSchedules[$weekScheduleId] ?? null;
-                error_log("[PoolScheduler]   -> Matched! Looking up weekSchedule[$weekScheduleId]: " . ($weekSchedule ? "found '{$weekSchedule['name']}'" : "NOT FOUND"));
                 if ($weekSchedule) {
                     $dow = $this->getDayOfWeekShort($date);
                     $scheduleName = $weekSchedule['days'][$dow] ?? null;
-                    error_log("[PoolScheduler]   -> Day mapping for $dow: " . ($scheduleName ?: 'NULL'));
                     if ($scheduleName) {
-                        error_log("[PoolScheduler]   -> RETURNING: $scheduleName");
                         return $scheduleName;
                     } else {
                         // Day not mapped in week schedule
