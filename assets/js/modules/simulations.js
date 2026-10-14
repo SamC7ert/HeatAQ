@@ -79,10 +79,16 @@ const SimulationsModule = {
      */
     loadRuns: async function() {
         try {
-            const response = await fetch('/api/simulation_api.php?action=get_runs&limit=20');
-            const data = await response.json();
-            if (data.runs) {
-                this.runs = data.runs;
+            // Newest 20 runs, plus every baseline (they stay listed however
+            // many runs follow)
+            const [recent, baselines] = await Promise.all([
+                fetch('/api/simulation_api.php?action=get_runs&limit=20').then(r => r.json()),
+                fetch('/api/simulation_api.php?action=get_runs&baseline=1&limit=100').then(r => r.json()).catch(() => ({}))
+            ]);
+            if (recent.runs) {
+                const base = baselines.runs || [];
+                const ids = new Set(base.map(r => r.run_id));
+                this.runs = [...base, ...recent.runs.filter(r => !ids.has(r.run_id))];
                 this.renderRunsList();
             }
         } catch (error) {
@@ -110,6 +116,7 @@ const SimulationsModule = {
             <table class="data-table history-table">
                 <thead>
                     <tr>
+                        <th title="Baseline: kept permanently to compare against">★</th>
                         <th>Scenario</th>
                         <th>Dates</th>
                         <th>Schedule</th>
@@ -129,7 +136,10 @@ const SimulationsModule = {
                         const hpCap = equip.heat_pump?.capacity_kw || equip.hp_capacity_kw || '-';
                         const boilerCap = equip.boiler?.capacity_kw || equip.boiler_capacity_kw || '-';
                         const scheduleName = config.schedule_template_name || '-';
-                        const elecMwh = s.total_hp_energy_kwh ? (s.total_hp_energy_kwh / 1000).toFixed(1) : '-';
+                        // All electricity (HP, plus an electric boiler since 3.16)
+                        const elecKwh = s.total_electricity_kwh ?? s.total_hp_energy_kwh;
+                        const elecMwh = elecKwh ? (elecKwh / 1000).toFixed(1) : '-';
+                        const isBaseline = Number(run.is_baseline) === 1;
                         const days1 = s.days_below_27 ?? '-';
                         const days2 = s.days_below_26 ?? '-';
                         const isSelected = this.selectedRunId === run.run_id;
@@ -139,6 +149,10 @@ const SimulationsModule = {
                                 data-run-id="${escapeHtml(run.run_id)}"
                                 onclick="SimulationsModule.selectRun(${run.run_id})"
                                 style="cursor: pointer;">
+                                <td>${run.status === 'completed'
+                                    ? `<span class="baseline-star${isBaseline ? ' on' : ''}" title="${isBaseline ? 'Baseline - click to unmark' : 'Mark as baseline'}"
+                                         onclick="event.stopPropagation(); SimulationsModule.toggleBaseline(${Number(run.run_id)}, ${isBaseline ? 0 : 1})">${isBaseline ? '★' : '☆'}</span>`
+                                    : ''}</td>
                                 <td class="run-name">${this.escapeHtml(run.scenario_name)}</td>
                                 <td class="run-dates">${escapeHtml(run.start_date.substring(5))} - ${escapeHtml(run.end_date.substring(5))}</td>
                                 <td class="run-schedule" title="${this.escapeHtml(scheduleName)}">${this.escapeHtml(scheduleName.substring(0, 15))}</td>
@@ -147,7 +161,8 @@ const SimulationsModule = {
                                 <td>${elecMwh}</td>
                                 <td class="${days1 > 10 ? 'bad' : days1 > 0 ? 'warning' : ''}">${escapeHtml(days1)}</td>
                                 <td class="${days2 > 5 ? 'bad' : days2 > 0 ? 'warning' : ''}">${escapeHtml(days2)}</td>
-                                <td><span class="status-badge status-${escapeHtml(run.status)}">${escapeHtml(run.status)}</span></td>
+                                <td><span class="status-badge status-${escapeHtml(run.status)}">${escapeHtml(run.status)}</span>${run.hourly_purged_at
+                                    ? ' <span class="text-muted" title="Hourly data removed (only the newest 5 runs keep it); summary and daily results are kept" style="font-size:11px;">no hours</span>' : ''}</td>
                             </tr>
                         `;
                     }).join('')}
@@ -412,6 +427,51 @@ const SimulationsModule = {
         return '';
     },
 
+    /** Mark (1) or unmark (0) a run as a baseline. */
+    toggleBaseline: async function(runId, flag) {
+        try {
+            const response = await fetch('/api/simulation_api.php?action=set_baseline', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ run_id: runId, baseline: flag })
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
+            await this.loadRuns();
+            if (this.currentRun && Number(this.currentRun.run_id) === Number(runId)) {
+                this.currentRun.is_baseline = flag;
+                this.renderRunDetail();
+            }
+        } catch (err) {
+            alert('Could not change baseline: ' + err.message);
+        }
+    },
+
+    /** Re-run a run from its saved inputs with hourly data (as a new run). */
+    recreateHourly: async function(runId) {
+        const btn = document.getElementById('recreate-hourly-btn');
+        const notice = document.getElementById('run-detail-notice');
+        if (btn) { btn.disabled = true; btn.textContent = 'Re-running...'; }
+        try {
+            const response = await fetch('/api/simulation_api.php?action=recreate_hourly', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ run_id: runId })
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
+            const msgs = [`Hours recreated as run ${data.run_id}` + (data.matches_source ? ' - same results as the original.' : '.')]
+                .concat(data.warnings || []);
+            await this.loadRuns();
+            await this.selectRun(data.run_id);
+            const newNotice = document.getElementById('run-detail-notice');
+            if (newNotice) newNotice.innerHTML = msgs.map(m => `<p class="${data.matches_source ? 'text-muted' : 'error'}" style="margin:4px 0;">${escapeHtml(m)}</p>`).join('');
+        } catch (err) {
+            if (notice) notice.innerHTML = `<p class="error">Could not recreate hours: ${escapeHtml(err.message)}</p>`;
+            if (btn) { btn.disabled = false; btn.textContent = 'Recreate hours'; }
+        }
+    },
+
     /**
      * Render run detail view
      */
@@ -431,9 +491,14 @@ const SimulationsModule = {
 
         container.innerHTML = `
             <div class="run-detail-header">
-                <h3>${this.escapeHtml(run.scenario_name)}</h3>
-                <button class="btn btn-secondary btn-sm" onclick="SimulationsModule.closeDetail()">Close</button>
+                <h3>${Number(run.is_baseline) === 1 ? '★ ' : ''}${this.escapeHtml(run.scenario_name)}</h3>
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                    ${run.status === 'completed' ? `<button class="btn btn-secondary btn-sm" onclick="SimulationsModule.toggleBaseline(${Number(run.run_id)}, ${Number(run.is_baseline) === 1 ? 0 : 1})">${Number(run.is_baseline) === 1 ? 'Unmark baseline' : 'Mark as baseline'}</button>` : ''}
+                    ${run.status === 'completed' && !run.has_hourly ? `<button class="btn btn-secondary btn-sm" id="recreate-hourly-btn" title="Re-run from this run's saved inputs with hourly data, as a new run" onclick="SimulationsModule.recreateHourly(${Number(run.run_id)})">Recreate hours</button>` : ''}
+                    <button class="btn btn-secondary btn-sm" onclick="SimulationsModule.closeDetail()">Close</button>
+                </div>
             </div>
+            <div id="run-detail-notice"></div>
 
             <div class="run-detail-info">
                 <div class="info-row">

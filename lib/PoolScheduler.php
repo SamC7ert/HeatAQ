@@ -840,6 +840,62 @@ class PoolScheduler {
     }
 
     /**
+     * Everything this scheduler loaded, as plain data (JSON-safe). Stored in a
+     * run's config_snapshot so the run can later be re-run with exactly the
+     * schedule it used, even after the schedule is edited (see fromState).
+     */
+    public function exportState() {
+        $holidays = [];
+        foreach ($this->holidayDates as $key => $value) {
+            if ($value instanceof DateTime) {
+                continue;  // year-indexed Easter shortcut, rebuilt in fromState
+            }
+            foreach ($value as $year => $date) {
+                $holidays[$key][$year] = $date->format('Y-m-d');
+            }
+        }
+        return [
+            'format' => 1,
+            'pool_site_id' => $this->poolSiteId,
+            'template' => $this->template,
+            'schedules' => $this->schedules,
+            'week_schedules' => $this->weekSchedules,
+            'date_ranges' => $this->dateRanges,
+            'exception_days' => $this->exceptionDays,
+            'holiday_dates' => $holidays,
+        ];
+    }
+
+    /** A scheduler rebuilt from exportState() data, without reading the database. */
+    public static function fromState(array $state) {
+        if (($state['format'] ?? null) !== 1) {
+            throw new InvalidArgumentException('Unsupported schedule snapshot format');
+        }
+        $s = (new ReflectionClass(self::class))->newInstanceWithoutConstructor();
+        $s->db = null;
+        $s->siteId = null;
+        $s->poolSiteId = (int) ($state['pool_site_id'] ?? 0);
+        $s->template = $state['template'];
+        $s->templateId = $state['template']['template_id'] ?? null;
+        $s->projectId = isset($state['template']['project_id']) ? (int) $state['template']['project_id'] : null;
+        $s->schedules = $state['schedules'];
+        $s->weekSchedules = $state['week_schedules'];
+        $s->dateRanges = $state['date_ranges'];
+        $s->exceptionDays = $state['exception_days'];
+        $s->holidayDates = [];
+        foreach ($state['holiday_dates'] ?? [] as $refId => $years) {
+            foreach ($years as $year => $date) {
+                $s->holidayDates[(int) $refId][(int) $year] = new DateTime($date);
+            }
+        }
+        // Same Easter shortcut as loadHolidayDates()
+        foreach ($s->holidayDates[1] ?? [] as $year => $date) {
+            $s->holidayDates[$year] = $date;
+        }
+        return $s;
+    }
+
+    /**
      * Get all loaded schedules
      *
      * @return array

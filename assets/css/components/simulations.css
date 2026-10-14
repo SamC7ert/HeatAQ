@@ -1223,3 +1223,13 @@ p.loading {
     min-width: 80px;
     white-space: nowrap;
 }
+
+/* Baseline marker in History (★ = kept permanently to compare against) */
+.baseline-star {
+    cursor: pointer;
+    font-size: 1.1rem;
+    color: #adb5bd;
+    padding: 0 2px;
+}
+.baseline-star:hover { color: #f0ad4e; }
+.baseline-star.on { color: #e0a800; }

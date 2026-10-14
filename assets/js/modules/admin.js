@@ -1892,6 +1892,76 @@ const AdminModule = {
         }
     },
 
+    // ========================================
+    // STORAGE (hourly result retention)
+    // ========================================
+
+    loadStorage: async function() {
+        const info = document.getElementById('storage-info');
+        const status = document.getElementById('storage-status');
+        const btn = document.getElementById('storage-cleanup-btn');
+        if (status) status.textContent = 'Reading table sizes...';
+        try {
+            const response = await fetch('./api/heataq_api.php?action=get_storage');
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
+
+            const rows = data.tables.slice(0, 8).map(t => `<tr>
+                <td>${escapeHtml(t.name)}</td>
+                <td style="text-align:right;">${Number(t.approx_rows || 0).toLocaleString()}</td>
+                <td style="text-align:right;">${escapeHtml(t.size_mb)} MB</td>
+            </tr>`).join('');
+            if (info) info.innerHTML = `
+                <table class="data-table compact">
+                    <thead><tr><th>Table</th><th style="text-align:right;">Rows (approx.)</th><th style="text-align:right;">Size</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+                <p style="margin-top:6px;"><strong>Total: ${escapeHtml(data.total_mb)} MB</strong>.
+                   ${data.runs_to_clean > 0
+                        ? `${escapeHtml(data.runs_to_clean)} older run(s) still have hourly data that can be removed.`
+                        : 'No old hourly data to remove.'}</p>`;
+            if (btn) btn.style.display = data.runs_to_clean > 0 ? '' : 'none';
+            if (status) status.textContent = '';
+            this.storageRunsToClean = data.runs_to_clean;
+        } catch (err) {
+            if (status) status.innerHTML = `<span class="error">Could not read storage: ${escapeHtml(err.message)}</span>`;
+        }
+    },
+
+    runStorageCleanup: async function() {
+        const n = this.storageRunsToClean || 0;
+        if (!confirm(`Remove the hourly data of ${n} older run(s)?\n\nTheir inputs, summary and daily results are kept (History, reports, charts, baselines). `
+            + `Only the hour-by-hour Details go; they can be recreated by re-running. This cannot be undone.`)) {
+            return;
+        }
+        const status = document.getElementById('storage-status');
+        const btn = document.getElementById('storage-cleanup-btn');
+        if (btn) btn.disabled = true;
+        let runs = 0, rowsDeleted = 0;
+        try {
+            // Each call works ~20 s; repeat until nothing remains
+            for (let round = 0; round < 200; round++) {
+                const response = await fetch('./api/heataq_api.php?action=storage_cleanup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
+                runs += data.runs_done;
+                rowsDeleted += data.rows_deleted;
+                if (status) status.textContent = `Removed hourly data of ${runs} run(s), ${rowsDeleted.toLocaleString()} rows` +
+                    (data.remaining > 0 ? `... (${data.remaining} to go)` : '. Compacting done.');
+                if (data.remaining === 0) break;
+            }
+        } catch (err) {
+            if (status) status.innerHTML = `<span class="error">Clean-up stopped: ${escapeHtml(err.message)}</span>`;
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+        await this.loadStorage();
+    },
+
     dumpSchema: async function(pushToGit = false) {
         const status = document.getElementById('schema-status');
         const result = document.getElementById('schema-result');
