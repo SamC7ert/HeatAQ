@@ -28,6 +28,11 @@ class PoolScheduler {
     // ranges, week schedules) are loaded once and fixed for this instance, and
     // the simulator asks for the same date many times per simulated day.
     private $scheduleForDateCache = [];
+    // Target resolution: a period's target is its own value, or this default
+    // when left blank, plus the simulation offset. Set by the simulator from
+    // its configuration (setTargetSettings); 28 / 0 for standalone use.
+    private $defaultTarget = 28.0;
+    private $targetOffset = 0.0;
 
     /**
      * Initialize scheduler from database
@@ -156,10 +161,18 @@ class PoolScheduler {
                 $startHour = $this->timeToHour($period['start_time']);
                 $endHour = $this->timeToHour($period['end_time']);
 
+                // target_temp_raw: the period's own target, NULL when left blank
+                // (= use the configuration's default). target_temp: the effective
+                // target every consumer reads, (raw ?? default) + offset - see
+                // setTargetSettings(). Never (float)-cast NULL: that made 0 °C.
+                $raw = ($period['target_temp'] === null || $period['target_temp'] === '')
+                    ? null : (float) $period['target_temp'];
                 $schedules[$scheduleName]['periods'][] = [
                     'from' => $startHour,
                     'to' => $endHour,
-                    'target_temp' => (float) $period['target_temp'],
+                    'target_temp_raw' => $raw,
+                    'target_source' => $raw === null ? 'default' : 'schedule',
+                    'target_temp' => round(($raw ?? $this->defaultTarget) + $this->targetOffset, 2),
                     'min_temp' => $period['min_temp'] ? (float) $period['min_temp'] : null,
                     'max_temp' => $period['max_temp'] ? (float) $period['max_temp'] : null
                 ];
@@ -797,6 +810,31 @@ class PoolScheduler {
      *
      * @return array
      */
+    /**
+     * Set how period targets resolve: (period target ?? $defaultTarget) + $offset.
+     * Re-resolves every loaded period, so getCurrentPeriod, getDailyTransitions,
+     * findNextOpening and getCurrentTemperature all return the effective target.
+     *
+     * @param float $defaultTarget Configuration default, used where a period has no target
+     * @param float $offset        Simulation adjustment applied to every target
+     */
+    public function setTargetSettings($defaultTarget, $offset = 0.0) {
+        $this->defaultTarget = (float) $defaultTarget;
+        $this->targetOffset = (float) $offset;
+        foreach ($this->schedules as &$schedule) {
+            foreach ($schedule['periods'] as &$p) {
+                $p['target_temp'] = round(($p['target_temp_raw'] ?? $this->defaultTarget) + $this->targetOffset, 2);
+            }
+            unset($p);
+        }
+        unset($schedule);
+    }
+
+    /** @return array ['default' => float, 'offset' => float] */
+    public function getTargetSettings() {
+        return ['default' => $this->defaultTarget, 'offset' => $this->targetOffset];
+    }
+
     public function getTemplate() {
         return $this->template;
     }

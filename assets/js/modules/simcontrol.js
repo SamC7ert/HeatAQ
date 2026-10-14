@@ -509,12 +509,34 @@ const SimControlModule = {
         const hpCop = fmt(equip.heat_pump?.cop_nominal, '', 1);
         const boilerEff = equip.boiler?.efficiency ? fmt(equip.boiler.efficiency * 100, '%', 0) : '-';
 
-        // Control values - check equipment directly first, then control sub-object
-        const targetTemp = withOverride(
-            equip.target_temp || control.target_temp || config.target_temp,
-            overrides.control?.target_temp,
-            '°C', 1
-        );
+        // Target: describe what the run actually used. Each open hour's target is
+        // its schedule period's target, or the config default where the period
+        // has none, plus the SimControl offset. Runs from simulator >= 3.12 carry
+        // target_open_min/max + source counts in the summary; older runs fall
+        // back to the configured value as before.
+        let targetTemp;
+        if (summary.target_open_min !== undefined && summary.target_open_min !== null) {
+            const n = v => Number(v).toFixed(1).replace(/\.0$/, '');
+            const off = Number(summary.target_offset || 0);
+            const fromSchedule = (summary.target_hours_schedule || 0) > 0;
+            const fromDefault = (summary.target_hours_default || 0) > 0;
+            const source = fromSchedule && fromDefault ? `Schedule + default ${n(summary.target_default)}°C`
+                : fromDefault ? `Default ${n(summary.target_default)}°C`
+                : 'Schedule';
+            const range = summary.target_open_min === summary.target_open_max
+                ? `${n(summary.target_open_min)}°C`
+                : `${n(summary.target_open_min)}–${n(summary.target_open_max)}°C`;
+            const offTxt = off !== 0
+                ? ` <span style="color:#0d6efd;font-weight:600" title="Offset applied">${off > 0 ? '+' : '−'}${n(Math.abs(off))}°C ✓</span>`
+                : '';
+            targetTemp = `${source}${offTxt} → ${range}`;
+        } else {
+            targetTemp = withOverride(
+                equip.target_temp || control.target_temp || config.target_temp,
+                overrides.control?.target_temp,
+                '°C', 1
+            );
+        }
         // Tolerance: check equipment (from PHP) then control section (from config_json)
         const upperTol = withOverride(
             equip.upper_tolerance || control.upper_tolerance || equip.temp_tolerance || control.temp_tolerance,
@@ -635,10 +657,20 @@ const SimControlModule = {
         // Thresholds are target-relative (target-1 / target-2); render the
         // actual temperatures in the labels so they stay correct for any target.
         // Counts are accumulated over the whole period, so show them per year.
-        const t1 = summary.days_below_threshold1_temp;
-        const t2 = summary.days_below_threshold2_temp;
-        if (t1 !== undefined && t1 !== null) setEl('bench-days-27-label', `Days/yr < ${t1}°C`);
-        if (t2 !== undefined && t2 !== null) setEl('bench-days-26-label', `Days/yr < ${t2}°C`);
+        if (summary.days_below_mode === 'relative_to_target') {
+            // Simulator >= 3.12: a day counts if an open hour was more than
+            // 1 / 2 °C below THAT hour's target (schedule or default, + offset)
+            const d1 = summary.days_below_threshold1_delta ?? 1;
+            const d2 = summary.days_below_threshold2_delta ?? 2;
+            setEl('bench-days-27-label', `Days/yr >${d1}°C below target`);
+            setEl('bench-days-26-label', `Days/yr >${d2}°C below target`);
+        } else {
+            // Older runs: fixed thresholds from the configured target
+            const t1 = summary.days_below_threshold1_temp;
+            const t2 = summary.days_below_threshold2_temp;
+            if (t1 !== undefined && t1 !== null) setEl('bench-days-27-label', `Days/yr < ${t1}°C`);
+            if (t2 !== undefined && t2 !== null) setEl('bench-days-26-label', `Days/yr < ${t2}°C`);
+        }
         const daysPerYr = (v) => v ? (v / years).toFixed(1) : '0';
         setEl('bench-days-27', daysPerYr(summary.days_below_27));
         setEl('bench-days-26', daysPerYr(summary.days_below_26));

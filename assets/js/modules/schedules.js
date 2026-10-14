@@ -237,9 +237,9 @@ const schedules = {
         const periods = closed ? [] : [{
             start_time: '10:00',
             end_time: '20:00',
-            target_temp: 28.0,
-            min_temp: 26.0,
-            max_temp: 30.0,
+            target_temp: null,   // blank = use the configuration's default target
+            min_temp: null,
+            max_temp: null,
             period_order: 1
         }];
 
@@ -360,11 +360,9 @@ const schedules = {
             `;
 
             periods.forEach((period, index) => {
-                // Don't default - show actual value from database (warn if missing)
-                const target = period.target_temp_c || period.target_temp || '';
-                if (!target) {
-                    console.warn(`Period ${index + 1} missing target_temp`);
-                }
+                // Show the period's own target; blank = uses the configuration default
+                const own = period.target_temp_c ?? period.target_temp;
+                const target = (own === null || own === undefined || own === '') ? '' : own;
                 // Format time as HH:MM (remove seconds if present)
                 const startTime = (period.start_time || '10:00').substring(0, 5);
                 const endTime = (period.end_time || '20:00').substring(0, 5);
@@ -373,7 +371,7 @@ const schedules = {
                         <td>${index + 1}</td>
                         <td><input type="text" class="form-control form-control-sm period-start" value="${startTime}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" style="width: 70px;" /></td>
                         <td><input type="text" class="form-control form-control-sm period-end" value="${endTime}" pattern="[0-2][0-9]:[0-5][0-9]" placeholder="HH:MM" style="width: 70px;" /></td>
-                        <td><input type="number" class="form-control form-control-sm period-target" value="${target}" step="0.5" min="20" max="35" style="width: 70px;" /></td>
+                        <td><input type="number" class="form-control form-control-sm period-target" value="${target}" step="0.5" min="20" max="35" placeholder="default" title="Blank = use the configuration's default target" style="width: 70px;" /></td>
                         <td>
                             <button class="btn btn-danger btn-xs" onclick="app.schedules.removePeriod(${index})" title="Remove period" style="padding: 1px 6px;">×</button>
                         </td>
@@ -384,6 +382,7 @@ const schedules = {
             html += `
                     </tbody>
                 </table>
+                <div class="text-muted" style="font-size: 0.75rem; margin-top: 2px;">Blank target = configuration default</div>
             `;
         } else {
             html = '<div class="alert alert-warning">No periods — click "+ Add Period", or tick "Closed day"</div>';
@@ -645,9 +644,9 @@ const schedules = {
         const newPeriod = {
             start_time: lastPeriod ? lastPeriod.end_time : '10:00',
             end_time: '20:00',
-            target_temp: 28.0,
-            min_temp: 26.0,
-            max_temp: 30.0,
+            target_temp: null,   // blank = use the configuration's default target
+            min_temp: null,
+            max_temp: null,
             period_order: this.currentPeriods.length + 1
         };
 
@@ -683,18 +682,19 @@ const schedules = {
             const targetInput = row.querySelector('.period-target');
 
             if (startInput && endInput && targetInput) {
-                const target = parseFloat(targetInput.value);
-                // Validate - don't silently default to 28
-                if (isNaN(target) || target < 20 || target > 35) {
+                // Blank target = use the configuration's default target
+                const raw = targetInput.value.trim();
+                const target = raw === '' ? null : parseFloat(raw);
+                if (target !== null && (isNaN(target) || target < 20 || target > 35)) {
                     console.error(`Period ${index + 1}: Invalid target_temp value "${targetInput.value}"`);
-                    throw new Error(`Period ${index + 1} requires a valid target temperature (20-35°C)`);
+                    throw new Error(`Period ${index + 1}: target must be 20-35°C, or blank to use the configuration default`);
                 }
                 periods.push({
                     start_time: startInput.value,
                     end_time: endInput.value,
                     target_temp: target,
-                    min_temp: target - 2.0,  // Auto-calculate from target
-                    max_temp: target + 2.0,
+                    min_temp: target === null ? null : target - 2.0,  // Auto-calculate from target
+                    max_temp: target === null ? null : target + 2.0,
                     period_order: index + 1
                 });
             }
@@ -729,7 +729,7 @@ const schedules = {
                 api.utils.showError('Start time must be before end time');
                 return;
             }
-            if (period.min_temp > period.target_temp || period.target_temp > period.max_temp) {
+            if (period.target_temp !== null && (period.min_temp > period.target_temp || period.target_temp > period.max_temp)) {
                 api.utils.showError('Temperature order must be: Min ≤ Target ≤ Max');
                 return;
             }

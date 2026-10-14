@@ -450,8 +450,8 @@
                             <h3>Control Settings</h3>
                             <table class="data-table form-table">
                                 <tr>
-                                    <td><label for="cfg-target-temp">Target Temp (°C)</label></td>
-                                    <td><input type="number" id="cfg-target-temp" step="0.5" value="28"></td>
+                                    <td><label for="cfg-target-temp" title="Used for open periods whose schedule has no target of its own">Default Target (°C)</label></td>
+                                    <td><input type="number" id="cfg-target-temp" step="0.5" value="28" title="Used for open periods whose schedule has no target of its own"></td>
                                 </tr>
                                 <tr>
                                     <td><label for="cfg-upper-tolerance">Upper Tolerance (°C above)</label></td>
@@ -674,10 +674,16 @@
                                         <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-boiler-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
-                                        <td>Target Temp (°C)</td>
+                                        <td title="Used for open periods whose schedule has no target of its own">Default Target (°C)</td>
                                         <td id="cfg-val-target-temp" class="config-value" style="font-weight: bold; font-size: 14px; text-align: center;">-</td>
-                                        <td><input type="text" id="sim-target-override" placeholder="-" style="text-align: center;"></td>
-                                        <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-target-override')" title="Clear">&times;</button></td>
+                                        <td style="text-align: center; color: #999; font-size: 12px;">schedule / config</td>
+                                        <td></td>
+                                    </tr>
+                                    <tr>
+                                        <td title="Added to every open hour's target (schedule period, or the default). -5 to +5 °C.">Target Offset (°C)</td>
+                                        <td class="config-value" style="font-weight: bold; font-size: 14px; text-align: center;">0</td>
+                                        <td><input type="text" id="sim-target-offset" placeholder="±0" title="e.g. +1 or -0.5 (range -5 to +5)" style="text-align: center;"></td>
+                                        <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-target-offset')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
                                         <td>Upper Tolerance (°C)</td>
@@ -1680,18 +1686,18 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=222"></script>
+    <script src="./assets/js/config.js?v=223"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=222"></script>
-    <script src="./assets/js/modules/navigation.js?v=222"></script>
-    <script src="./assets/js/modules/schedules.js?v=222"></script>
-    <script src="./assets/js/modules/calendar.js?v=222"></script>
-    <script src="./assets/js/modules/simulations.js?v=222"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=222"></script>
-    <script src="./assets/js/modules/configuration.js?v=222"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=222"></script>
-    <script src="./assets/js/modules/admin.js?v=222"></script>
-    <script src="./assets/js/modules/project.js?v=222"></script>
-    <script src="./assets/js/app.js?v=222"></script>
+    <script src="./assets/js/modules/api.js?v=223"></script>
+    <script src="./assets/js/modules/navigation.js?v=223"></script>
+    <script src="./assets/js/modules/schedules.js?v=223"></script>
+    <script src="./assets/js/modules/calendar.js?v=223"></script>
+    <script src="./assets/js/modules/simulations.js?v=223"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=223"></script>
+    <script src="./assets/js/modules/configuration.js?v=223"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=223"></script>
+    <script src="./assets/js/modules/admin.js?v=223"></script>
+    <script src="./assets/js/modules/project.js?v=223"></script>
+    <script src="./assets/js/app.js?v=223"></script>
 </body>
 </html>
