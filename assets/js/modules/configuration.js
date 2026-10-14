@@ -27,7 +27,8 @@ const ConfigurationModule = {
             hp_capacity_kw: 125,
             hp_cop: 4.6,
             boiler_capacity_kw: 200,
-            boiler_efficiency: 0.92,
+            boiler_efficiency: 0.99,
+            boiler_type: 'electric',
             showers_use_hp: true
         },
         control: {
