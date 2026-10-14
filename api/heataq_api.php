@@ -15,10 +15,24 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 
-// Global error handler to return JSON on fatal errors
+// Log non-fatal PHP errors (warnings/notices) and let PHP continue
 set_error_handler(function($errno, $errstr, $errfile, $errline) {
     error_log("PHP Error: [$errno] $errstr in $errfile:$errline");
     return false; // Let PHP handle it normally
+});
+
+// set_error_handler never sees fatal errors (timeout, memory, uncaught Error).
+// Without this the request ends with an empty 500 that the host turns into an
+// HTML error page, which the browser reports as "Unexpected token '<'".
+register_shutdown_function(function () {
+    $err = error_get_last();
+    if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        if (!headers_sent()) {
+            http_response_code(500);
+            header('Content-Type: application/json');
+        }
+        echo json_encode(['error' => 'Server fatal error: ' . $err['message']]);
+    }
 });
 
 // Include configuration loader
@@ -559,8 +573,12 @@ class HeatAQAPI {
                 default:
                     $this->sendError('Invalid action');
             }
-        } catch (Exception $e) {
-            $this->sendError(Config::isDebug() ? $e->getMessage() : 'An error occurred');
+        } catch (Throwable $e) {
+            // Throwable, not Exception: a PHP Error (TypeError etc.) previously
+            // escaped as a bare 500 / host HTML page instead of a JSON error.
+            error_log('[heataq_api] ' . get_class($e) . ': ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+            // Error type is safe to show without debug (no SQL/paths); details in the log
+            $this->sendError(Config::isDebug() ? $e->getMessage() : 'An error occurred (' . get_class($e) . ')', 500);
         }
     }
     
