@@ -58,8 +58,24 @@ const schedules = {
             const data = await api.daySchedules.getAll();
             this.daySchedules = data.schedules || [];
             this.renderDayScheduleSelector();
+            this.syncCalendarSchedules('day');
         } catch (error) {
             console.error('Failed to load day schedules:', error);
+        }
+    },
+
+    // The calendar editor keeps its own copies of the schedule lists for its
+    // dropdowns. Every reload here (create, save, delete) pushes the fresh list
+    // across, so a new or renamed schedule appears in the calendar without a
+    // page refresh. Only re-renders once the calendar has loaded its data.
+    syncCalendarSchedules(kind) {
+        if (!app.calendar) return;
+        if (kind === 'week') {
+            app.calendar.weekSchedules = this.weekSchedules;
+            if (app.calendar.loaded) app.calendar.renderDateRanges();
+        } else {
+            app.calendar.daySchedules = this.daySchedules;
+            if (app.calendar.loaded) app.calendar.renderExceptionDays();
         }
     },
     
@@ -229,13 +245,9 @@ const schedules = {
             if (result.success) {
                 api.utils.showSuccess('Created: ' + name);
                 nameInput.value = '';
-                await this.loadDaySchedules();
-                // Also refresh week schedules (dropdown options) and calendar
+                await this.loadDaySchedules();  // also syncs the calendar
+                // Also refresh week schedules (dropdown options)
                 this.renderWeekScheduleSelector();
-                if (app.calendar) {
-                    app.calendar.daySchedules = this.daySchedules;
-                    app.calendar.renderExceptionDays();
-                }
                 // Select the new schedule
                 this.selectDaySchedule(result.day_schedule_id);
             }
@@ -354,6 +366,7 @@ const schedules = {
             const data = await api.weekSchedules.getAll();
             this.weekSchedules = data.schedules || [];
             this.renderWeekScheduleSelector();
+            this.syncCalendarSchedules('week');
         } catch (error) {
             console.error('Failed to load week schedules:', error);
         }
@@ -720,13 +733,9 @@ const schedules = {
             await api.daySchedules.delete(this.selectedDaySchedule.day_schedule_id);
             api.utils.showSuccess('Day schedule deleted');
             this.selectedDaySchedule = null;
-            await this.loadDaySchedules();
-            // Also refresh week schedules and calendar
+            await this.loadDaySchedules();  // also syncs the calendar
+            // Also refresh week schedules (dropdown options)
             this.renderWeekScheduleSelector();
-            if (app.calendar) {
-                app.calendar.daySchedules = this.daySchedules;
-                app.calendar.renderExceptionDays();
-            }
         } catch (err) {
             api.utils.showError('Failed to delete: ' + err.message);
         }
@@ -747,12 +756,7 @@ const schedules = {
             await api.weekSchedules.delete(this.selectedWeekSchedule.week_schedule_id);
             api.utils.showSuccess('Week schedule deleted');
             this.selectedWeekSchedule = null;
-            await this.loadWeekSchedules();
-            // Also refresh calendar
-            if (app.calendar) {
-                app.calendar.weekSchedules = this.weekSchedules;
-                app.calendar.renderDateRanges();
-            }
+            await this.loadWeekSchedules();  // also syncs the calendar
         } catch (err) {
             api.utils.showError('Failed to delete: ' + err.message);
         }

@@ -9,6 +9,7 @@ const calendar = {
     weekSchedules: [],
     daySchedules: [],
     currentTemplateId: 1,
+    loaded: false,  // set once calendar data is loaded; schedules.js re-renders only then
 
     async loadCalendarData(templateId) {
         this.currentTemplateId = templateId;
@@ -25,6 +26,7 @@ const calendar = {
             this.loadCalendarRules(templateId),
             this.loadReferenceDays()
         ]);
+        this.loaded = true;
     },
 
     async loadCalendarRules(templateId) {
