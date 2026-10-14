@@ -1,4 +1,9 @@
 <?php
+// Command line only: never run from a web request.
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit;
+}
 // php sim-ts/test/php-harness.php <libdir> '<scenario json>' <out.json> [--no-inputs]
 // Runs the real PHP simulator on ts_sim and writes {inputs, php: {summary, daily, hourly}}.
 error_reporting(E_ALL & ~E_DEPRECATED);
