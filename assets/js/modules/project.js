@@ -55,6 +55,28 @@ const ProjectModule = {
         }
     },
 
+    // Number from a DB value or form field; blank/missing/invalid -> null.
+    // (0 is a real value: "x || default" used to replace it.)
+    toNum(v) {
+        if (v === null || v === undefined) return null;
+        const t = String(v).trim().replace(',', '.');
+        if (t === '') return null;
+        const n = Number(t);
+        return Number.isFinite(n) ? n : null;
+    },
+
+    // Number from a form field, or the fallback when it is blank
+    fieldNum(id, fallback = null) {
+        const n = this.toNum(document.getElementById(id)?.value);
+        return n === null ? fallback : n;
+    },
+
+    // Set while the site/pool modal is creating a new record: the current
+    // site/pool stay as they are until the new one is saved (cancelling used
+    // to leave them blanked, and the next Edit + Save inserted a duplicate).
+    editingNewSite: false,
+    editingNewPool: false,
+
     // Load site data from API (always fetch to ensure correct project)
     async loadSiteData() {
         try {
@@ -71,12 +93,17 @@ const ProjectModule = {
             if (result.sites && result.sites.length > 0) {
                 // Use first site for current project
                 const dbSite = result.sites[0];
+                // Keep the whole row (description, investment costs...): the
+                // Edit Site form is filled from it and saves every field back.
                 this.currentSite = {
+                    ...dbSite,
                     id: dbSite.id,  // INT pool_site_id
-                    name: dbSite.name,
-                    latitude: parseFloat(dbSite.latitude) || null,
-                    longitude: parseFloat(dbSite.longitude) || null,
-                    weather_station_id: dbSite.weather_station_id,
+                    latitude: this.toNum(dbSite.latitude),
+                    longitude: this.toNum(dbSite.longitude),
+                    hp_base_cost_nok: this.toNum(dbSite.hp_base_cost_nok),
+                    hp_marginal_cost_per_kw: this.toNum(dbSite.hp_marginal_cost_per_kw),
+                    boiler_base_cost_nok: this.toNum(dbSite.boiler_base_cost_nok),
+                    boiler_marginal_cost_per_kw: this.toNum(dbSite.boiler_marginal_cost_per_kw)
                 };
                 console.log('[Project] Loaded site from DB, id:', this.currentSite.id);
                 // Save to localStorage
@@ -359,6 +386,7 @@ const ProjectModule = {
         }
 
         const site = this.currentSite || {};
+        this.editingNewSite = false;
         console.log('[Project] Editing site:', site);
 
         // Populate form
@@ -367,8 +395,8 @@ const ProjectModule = {
         const lngEl = document.getElementById('edit-site-lng');
 
         if (nameEl) nameEl.value = site.name || '';
-        if (latEl) latEl.value = site.latitude || '';
-        if (lngEl) lngEl.value = site.longitude || '';
+        if (latEl) latEl.value = site.latitude ?? '';
+        if (lngEl) lngEl.value = site.longitude ?? '';
 
         // Populate weather station dropdown
         const wsSelect = document.getElementById('edit-site-weather');
@@ -407,10 +435,10 @@ const ProjectModule = {
         const hpMarginalEl = document.getElementById('edit-site-hp-marginal');
         const boilerBaseEl = document.getElementById('edit-site-boiler-base');
         const boilerMarginalEl = document.getElementById('edit-site-boiler-marginal');
-        if (hpBaseEl) hpBaseEl.value = site.hp_base_cost_nok || '';
-        if (hpMarginalEl) hpMarginalEl.value = site.hp_marginal_cost_per_kw || '';
-        if (boilerBaseEl) boilerBaseEl.value = site.boiler_base_cost_nok || '';
-        if (boilerMarginalEl) boilerMarginalEl.value = site.boiler_marginal_cost_per_kw || '';
+        if (hpBaseEl) hpBaseEl.value = site.hp_base_cost_nok ?? '';
+        if (hpMarginalEl) hpMarginalEl.value = site.hp_marginal_cost_per_kw ?? '';
+        if (boilerBaseEl) boilerBaseEl.value = site.boiler_base_cost_nok ?? '';
+        if (boilerMarginalEl) boilerMarginalEl.value = site.boiler_marginal_cost_per_kw ?? '';
 
         // Update modal title for edit mode
         const titleEl = modal.querySelector('h3');
@@ -491,36 +519,27 @@ const ProjectModule = {
     hideSiteModal() {
         const modal = document.getElementById('edit-site-modal');
         if (modal) modal.style.display = 'none';
+        this.editingNewSite = false;
     },
 
-    // Save site
+    // Save site. The site shown is updated only after the server saved it;
+    // on failure the error is shown and the modal stays open.
     async saveSite() {
-        const nameEl = document.getElementById('edit-site-name');
-        const latEl = document.getElementById('edit-site-lat');
-        const lngEl = document.getElementById('edit-site-lng');
-        const wsEl = document.getElementById('edit-site-weather');
-        const hpBaseEl = document.getElementById('edit-site-hp-base');
-        const hpMarginalEl = document.getElementById('edit-site-hp-marginal');
-        const boilerBaseEl = document.getElementById('edit-site-boiler-base');
-        const boilerMarginalEl = document.getElementById('edit-site-boiler-marginal');
-
-        const name = nameEl?.value?.trim() || '';
-        const latRaw = latEl?.value;
-        const lngRaw = lngEl?.value;
-        const lat = latRaw ? parseFloat(latRaw) : null;
-        const lng = lngRaw ? parseFloat(lngRaw) : null;
-        const wsId = wsEl?.value || null;
-        const hpBase = hpBaseEl?.value ? parseFloat(hpBaseEl.value) : null;
-        const hpMarginal = hpMarginalEl?.value ? parseFloat(hpMarginalEl.value) : null;
-        const boilerBase = boilerBaseEl?.value ? parseFloat(boilerBaseEl.value) : null;
-        const boilerMarginal = boilerMarginalEl?.value ? parseFloat(boilerMarginalEl.value) : null;
+        const name = document.getElementById('edit-site-name')?.value?.trim() || '';
+        const lat = this.fieldNum('edit-site-lat');
+        const lng = this.fieldNum('edit-site-lng');
+        const wsId = document.getElementById('edit-site-weather')?.value || null;
+        const hpBase = this.fieldNum('edit-site-hp-base');
+        const hpMarginal = this.fieldNum('edit-site-hp-marginal');
+        const boilerBase = this.fieldNum('edit-site-boiler-base');
+        const boilerMarginal = this.fieldNum('edit-site-boiler-marginal');
+        const isNew = this.editingNewSite;
+        const base = isNew ? {} : (this.currentSite || {});
 
         // Check if coordinates changed
-        const oldLat = this.currentSite?.latitude;
-        const oldLng = this.currentSite?.longitude;
-        const coordsChanged = lat && lng && (lat !== oldLat || lng !== oldLng);
-
-        console.log('[Project] Save - Coords changed:', coordsChanged, { old: [oldLat, oldLng], new: [lat, lng] });
+        const oldLat = base.latitude ?? null;
+        const oldLng = base.longitude ?? null;
+        const coordsChanged = lat !== null && lng !== null && (lat !== oldLat || lng !== oldLng);
 
         // Find weather station name
         let wsName = null;
@@ -528,20 +547,6 @@ const ProjectModule = {
             const ws = this.weatherStations.find(w => w.station_id === wsId);
             if (ws) wsName = ws.name || ws.station_name;
         }
-
-        // Update site object - use INT id
-        this.currentSite = {
-            ...this.currentSite,
-            name: name || 'Main Site',
-            latitude: lat,
-            longitude: lng,
-            weather_station_id: wsId,
-            weather_station_name: wsName,
-            hp_base_cost_nok: hpBase,
-            hp_marginal_cost_per_kw: hpMarginal,
-            boiler_base_cost_nok: boilerBase,
-            boiler_marginal_cost_per_kw: boilerMarginal
-        };
 
         // Validate project_id before saving
         const projectId = this.currentProject?.id;
@@ -551,56 +556,54 @@ const ProjectModule = {
             return;
         }
 
-        console.log('[Project] Saving site with project_id:', projectId, 'currentProject:', this.currentProject);
+        const payload = {
+            id: isNew ? null : (base.id || null),  // INT pool_site_id, null for new
+            project_id: projectId,
+            name: name,
+            latitude: lat,
+            longitude: lng,
+            weather_station_id: wsId,
+            hp_base_cost_nok: hpBase,
+            hp_marginal_cost_per_kw: hpMarginal,
+            boiler_base_cost_nok: boilerBase,
+            boiler_marginal_cost_per_kw: boilerMarginal
+        };
 
-        // Save to database via API - uses INT id
+        let result;
         try {
-            const payload = {
-                id: this.currentSite.id || null,  // INT pool_site_id, null for new
-                project_id: projectId,  // Required for new sites - validated above
-                name: name,
-                latitude: lat,
-                longitude: lng,
-                weather_station_id: wsId,
-                hp_base_cost_nok: hpBase,
-                hp_marginal_cost_per_kw: hpMarginal,
-                boiler_base_cost_nok: boilerBase,
-                boiler_marginal_cost_per_kw: boilerMarginal
-            };
-            console.log('[Project] Save site payload:', JSON.stringify(payload));
-
             const response = await fetch(`${config.API_BASE_URL}?action=save_site`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            const result = await response.json();
-
-            if (result.error) {
-                console.error('[Project] Failed to save site to DB:', result.error);
-                alert('Failed to save site: ' + result.error);
-                return;
-            } else {
-                console.log('[Project] Site saved to database:', result);
-                // Update id if server assigned one (for new sites)
-                if (result.id) {
-                    this.currentSite.id = result.id;
-                    // Set cookie for API to use
-                    document.cookie = `heataq_pool_site_id=${result.id}; path=/; max-age=31536000`;
-                }
-            }
+            result = await response.json().catch(() => ({ error: `Server returned HTTP ${response.status}` }));
+            if (!response.ok && !result.error) result.error = `Server returned HTTP ${response.status}`;
         } catch (err) {
-            console.error('[Project] API error saving site:', err);
+            result = { error: err.message || 'Network error' };
+        }
+        if (result.error) {
+            console.error('[Project] Failed to save site:', result.error);
+            alert('Failed to save site: ' + result.error);
+            return;
         }
 
-        // Save to localStorage
+        // Saved: now update the site shown
+        this.currentSite = {
+            ...base,
+            ...payload,
+            id: result.id || payload.id,
+            name: name || 'Main Site',
+            weather_station_name: wsName
+        };
+        this.editingNewSite = false;
+        if (this.currentSite.id) {
+            document.cookie = `heataq_pool_site_id=${this.currentSite.id}; path=/; max-age=31536000`;
+        }
         localStorage.setItem('heataq_site', JSON.stringify(this.currentSite));
 
         // Update display
         this.updateSiteDisplay();
         this.hideSiteModal();
-
-        console.log('[Project] Site saved:', this.currentSite);
 
         // Reload pool data for the new/updated site
         // This ensures pools are filtered by the current site's pool_site_id
@@ -711,14 +714,8 @@ const ProjectModule = {
         const titleEl = modal.querySelector('h3');
         if (titleEl) titleEl.textContent = 'Add New Site';
 
-        // Mark as new site (clear id)
-        this.currentSite = {
-            id: null,
-            name: '',
-            latitude: null,
-            longitude: null,
-            weather_station_id: null
-        };
+        // New site: the current site stays until the new one is saved
+        this.editingNewSite = true;
 
         // Load weather stations for dropdown
         await this.populateWeatherStationDropdown();
@@ -749,6 +746,7 @@ const ProjectModule = {
         document.getElementById('edit-pool-cover-solar').value = '10';
         document.getElementById('edit-pool-has-tunnel').value = '1';
         document.getElementById('edit-pool-floor-insulated').value = '1';
+        document.getElementById('edit-pool-years').value = '3';
 
         // Reset dimensions display
         this.calcPoolDimensions();
@@ -757,15 +755,8 @@ const ProjectModule = {
         const titleEl = modal.querySelector('h3');
         if (titleEl) titleEl.textContent = 'Add New Pool';
 
-        // Mark as new pool (clear id)
-        this.currentPool = {
-            pool_id: null,
-            name: '',
-            length: null,
-            width: null,
-            depth: null
-        };
-        this.currentPoolId = null;
+        // New pool: the current pool stays until the new one is saved
+        this.editingNewPool = true;
 
         modal.style.display = 'flex';
     },
@@ -818,12 +809,16 @@ const ProjectModule = {
                     // NB: 0 is a legitimate value ("0 = sheltered") — use an
                     // isFinite check, not ||, so 0 isn't replaced by the default.
                     wind_exposure: Number.isFinite(parseFloat(dbPool.wind_exposure)) ? parseFloat(dbPool.wind_exposure) : 0.5,
-                    solar_absorption: parseFloat(dbPool.solar_absorption) || 60,
+                    solar_absorption: this.toNum(dbPool.solar_absorption) ?? 60,
                     has_cover: dbPool.has_cover == 1,
-                    cover_u_value: parseFloat(dbPool.cover_r_value) || 5.0,
-                    cover_solar_trans: parseFloat(dbPool.cover_solar_transmittance) || 10,
+                    cover_u_value: this.toNum(dbPool.cover_r_value) ?? 5.0,
+                    cover_solar_trans: this.toNum(dbPool.cover_solar_transmittance) ?? 10,
                     has_tunnel: dbPool.has_tunnel == 1,
-                    floor_insulated: dbPool.floor_insulated == 1
+                    floor_insulated: dbPool.floor_insulated == 1,
+                    // Kept so a save writes them back unchanged
+                    years_operating: this.toNum(dbPool.years_operating) ?? 3,
+                    pool_type: dbPool.pool_type ?? null,
+                    description: dbPool.description ?? null
                 };
                 console.log('[Project] Pool loaded from database:', this.currentPool);
                 return;
@@ -883,6 +878,7 @@ const ProjectModule = {
         }
 
         const pool = this.currentPool;
+        this.editingNewPool = false;
 
         // Populate form
         document.getElementById('edit-pool-name').value = pool.name || 'Main Pool';
@@ -913,6 +909,7 @@ const ProjectModule = {
     hidePoolModal() {
         const modal = document.getElementById('edit-pool-modal');
         if (modal) modal.style.display = 'none';
+        this.editingNewPool = false;
     },
 
     // Calculate pool dimensions from length/width/depth
@@ -937,28 +934,47 @@ const ProjectModule = {
         }
     },
 
-    // Save pool to database (with localStorage backup)
+    // Save pool. The pool shown (and SimControl's "From Pool Settings") is
+    // updated only after the server saved it; on failure the error is shown
+    // and the modal stays open.
     async savePool() {
-        const length = parseFloat(document.getElementById('edit-pool-length')?.value) || 0;
-        const width = parseFloat(document.getElementById('edit-pool-width')?.value) || 0;
-        const depth = parseFloat(document.getElementById('edit-pool-depth')?.value) || 0;
+        const length = this.fieldNum('edit-pool-length', 0);
+        const width = this.fieldNum('edit-pool-width', 0);
+        const depth = this.fieldNum('edit-pool-depth', 0);
+        const isNew = this.editingNewPool;
+        const base = isNew ? {} : (this.currentPool || {});
+
+        // Percent fields: 0 is a real value (no solar gain / opaque cover).
+        // Values in (0, 1] are refused because the simulator reads them as
+        // fractions (1 would mean 100 %).
+        const solar = this.fieldNum('edit-pool-solar', 60);
+        const coverSolar = this.fieldNum('edit-pool-cover-solar', 10);
+        for (const [label, v, max] of [['Solar absorption', solar, 100], ['Cover solar transmittance', coverSolar, 99.99]]) {
+            if (v < 0 || v > max || (v > 0 && v <= 1)) {
+                alert(`${label} is a percentage: enter 0, or a value above 1 up to ${max} (e.g. 60).`);
+                return;
+            }
+        }
 
         const poolData = {
-            pool_id: this.currentPoolId || null,
+            pool_id: isNew ? null : (this.currentPoolId || null),
             pool_site_id: this.currentSite?.id,  // Required for new pools
             name: document.getElementById('edit-pool-name')?.value?.trim() || 'Main Pool',
             length_m: length,
             width_m: width,
             depth_m: depth,
-            // NB: 0 is legitimate ("0 = sheltered") — don't let || replace it.
-            wind_exposure: Number.isFinite(parseFloat(document.getElementById('edit-pool-wind')?.value)) ? parseFloat(document.getElementById('edit-pool-wind').value) : 0.5,
-            solar_absorption: parseFloat(document.getElementById('edit-pool-solar')?.value) || 60,
+            // NB: 0 is legitimate ("0 = sheltered")
+            wind_exposure: this.fieldNum('edit-pool-wind', 0.5),
+            solar_absorption: solar,
             has_cover: document.getElementById('edit-pool-has-cover')?.value === '1',
-            cover_r_value: parseFloat(document.getElementById('edit-pool-cover-u')?.value) || 5.0,
-            cover_solar_transmittance: parseFloat(document.getElementById('edit-pool-cover-solar')?.value) || 10,
+            cover_r_value: this.fieldNum('edit-pool-cover-u', 5.0),
+            cover_solar_transmittance: coverSolar,
             has_tunnel: document.getElementById('edit-pool-has-tunnel')?.value === '1',
             floor_insulated: document.getElementById('edit-pool-floor-insulated')?.value === '1',
-            years_operating: parseInt(document.getElementById('edit-pool-years')?.value) || 3
+            years_operating: this.fieldNum('edit-pool-years', 3),
+            // Not in the form: send back what was loaded (server keeps it when null)
+            pool_type: base.pool_type ?? null,
+            description: base.description ?? null
         };
 
         // Validate we have a site
@@ -968,11 +984,28 @@ const ProjectModule = {
             return;
         }
 
-        console.log('[Project] Saving pool with pool_site_id:', poolData.pool_site_id, 'currentSite:', this.currentSite);
+        let result;
+        try {
+            const response = await fetch('./api/heataq_api.php?action=save_pool', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(poolData)
+            });
+            result = await response.json().catch(() => ({ error: `Server returned HTTP ${response.status}` }));
+        } catch (err) {
+            result = { error: err.message || 'Network error' };
+        }
+        if (!result.success) {
+            console.error('[Project] Failed to save pool:', result.error);
+            alert('Failed to save pool: ' + (result.error || 'Unknown error'));
+            return;
+        }
 
-        // Update local state
+        // Saved: now update the pool shown
+        this.currentPoolId = result.pool_id;
         this.currentPool = {
             ...poolData,
+            pool_id: result.pool_id,
             length: length,
             width: width,
             depth: depth,
@@ -981,30 +1014,8 @@ const ProjectModule = {
             cover_u_value: poolData.cover_r_value,
             cover_solar_trans: poolData.cover_solar_transmittance
         };
-
-        // Always save to localStorage as backup
+        this.editingNewPool = false;
         localStorage.setItem('heataq_pool', JSON.stringify(this.currentPool));
-
-        // Try to save to database
-        try {
-            const response = await fetch('./api/heataq_api.php?action=save_pool', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(poolData)
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                this.currentPoolId = result.pool_id;
-                this.currentPool.pool_id = result.pool_id;
-                console.log('[Project] Pool saved to database:', result.pool_id);
-            } else {
-                console.warn('[Project] Failed to save pool to database:', result.error);
-            }
-        } catch (err) {
-            console.warn('[Project] Database save failed, using localStorage only:', err);
-        }
 
         // Update displays
         this.updatePoolCard();
@@ -1015,8 +1026,6 @@ const ProjectModule = {
         if (typeof SimulationsModule !== 'undefined' && SimulationsModule.refreshPoolValues) {
             SimulationsModule.refreshPoolValues();
         }
-
-        console.log('[Project] Pool saved:', this.currentPool);
     },
 
     // Update pool card display

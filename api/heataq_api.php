@@ -1964,7 +1964,10 @@ class HeatAQAPI {
                 SELECT u.user_id, u.email,
                        COALESCE(u.name, u.email) as name,
                        COALESCE(u.is_active, 1) as is_active,
-                       MAX(up.role) as role,
+                       -- highest role by rank (MAX on an ENUM compares the text,
+                       -- so 'viewer' used to win over 'owner')
+                       ELT(MAX(FIELD(up.role, 'viewer', 'operator', 'admin', 'owner')),
+                           'viewer', 'operator', 'admin', 'owner') as role,
                        GROUP_CONCAT(DISTINCT p.project_name SEPARATOR ', ') as project_names,
                        GROUP_CONCAT(DISTINCT up.project_id) as project_ids_str
                 FROM users u
@@ -2347,18 +2350,20 @@ class HeatAQAPI {
             $this->sendError('Email is required');
         }
 
-        // Validate role - only admin or operator allowed
-        if (!in_array($role, ['admin', 'operator'])) {
-            $role = 'operator';
+        // Every real role (user_projects.role); an unknown one is refused
+        // instead of being turned into operator.
+        if (!in_array($role, ['viewer', 'operator', 'admin', 'owner'], true)) {
+            $this->sendError('Invalid role');
         }
+        $isActive = ((int) $isActive) ? 1 : 0;
 
         // An admin is admin of every project, and saving rewrites all of a
         // user's project roles. So only owners / super admins may create or
         // edit admins, owners and super admins (an admin editing an owner used
         // to silently demote them).
         if (Config::requiresAuth() && !$this->canEditShared()) {
-            if ($role === 'admin') {
-                $this->sendError('Only an owner can grant the admin role', 403);
+            if ($role === 'admin' || $role === 'owner') {
+                $this->sendError('Only an owner can grant the admin or owner role', 403);
             }
             if ($userId) {
                 $stmt = $this->db->prepare("
@@ -2386,6 +2391,20 @@ class HeatAQAPI {
             ");
             $stmt->execute([$name, $isActive, $userId]);
 
+            // Existing per-project roles. When the role in the form is the
+            // user's current (highest) role, projects that stay assigned keep
+            // their own role, so an edit (name, status, projects) does not
+            // flatten e.g. owner of one project + operator of another.
+            $stmt = $this->db->prepare("SELECT project_id, role FROM user_projects WHERE user_id = ?");
+            $stmt->execute([$userId]);
+            $existingRoles = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
+            $rank = ['viewer' => 1, 'operator' => 2, 'admin' => 3, 'owner' => 4];
+            $currentRole = null;
+            foreach ($existingRoles as $r) {
+                if ($currentRole === null || ($rank[$r] ?? 0) > ($rank[$currentRole] ?? 0)) $currentRole = $r;
+            }
+            $keepExisting = ($currentRole === $role);
+
             // Clear existing project assignments
             $stmt = $this->db->prepare("DELETE FROM user_projects WHERE user_id = ?");
             $stmt->execute([$userId]);
@@ -2402,13 +2421,14 @@ class HeatAQAPI {
                     $stmt->execute([$userId, $projectId, $role]);
                 }
             } else {
-                // Operators get access to selected projects
+                // Viewers, operators and owners get the selected projects
                 foreach ($projectIds as $projectId) {
+                    $projectRole = ($keepExisting && isset($existingRoles[$projectId])) ? $existingRoles[$projectId] : $role;
                     $stmt = $this->db->prepare("
                         INSERT INTO user_projects (user_id, project_id, role)
                         VALUES (?, ?, ?)
                     ");
-                    $stmt->execute([$userId, $projectId, $role]);
+                    $stmt->execute([$userId, $projectId, $projectRole]);
                 }
             }
         } else {
@@ -4134,9 +4154,17 @@ class HeatAQAPI {
         // Structure
         $hasTunnel = isset($input['has_tunnel']) ? (($input['has_tunnel']) ? 1 : 0) : null;
         $floorInsulated = isset($input['floor_insulated']) ? (($input['floor_insulated']) ? 1 : 0) : null;
-        $poolType = $input['pool_type'] ?? 'outdoor';
+        // Not edited in the pool form: null keeps the stored value on update
+        $poolType = $input['pool_type'] ?? null;
+        $description = $input['description'] ?? null;
 
-        $description = $input['description'] ?? '';
+        // Percent fields. Values in (0, 1] are refused: the simulator reads a
+        // value <= 1 as a fraction, so "1" would be used as 100 %.
+        foreach ([['Solar absorption', $solarAbsorption, 100], ['Cover solar transmittance', $coverSolarTrans, 99.99]] as [$label, $v, $max]) {
+            if ($v !== null && ($v < 0 || $v > $max || ($v > 0 && $v <= 1))) {
+                $this->sendError("$label is a percentage: enter 0, or a value above 1 up to $max (e.g. 60)");
+            }
+        }
 
         if (!$poolSiteId) {
             $this->sendError('pool_site_id is required');
@@ -4150,7 +4178,7 @@ class HeatAQAPI {
                     UPDATE pools SET
                         pool_site_id = COALESCE(pool_site_id, ?),
                         name = ?,
-                        description = ?,
+                        description = COALESCE(?, description),
                         length_m = ?,
                         width_m = ?,
                         depth_m = ?,
@@ -4164,7 +4192,7 @@ class HeatAQAPI {
                         cover_solar_transmittance = ?,
                         has_tunnel = ?,
                         floor_insulated = ?,
-                        pool_type = ?
+                        pool_type = COALESCE(?, pool_type)
                     WHERE pool_id = ?
                 ");
                 $stmt->execute([
@@ -4188,11 +4216,11 @@ class HeatAQAPI {
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ");
                 $stmt->execute([
-                    $poolSiteId, $name, $description,
+                    $poolSiteId, $name, $description ?? '',
                     $length, $width, $depth, $area, $volume,
                     $windExposure, $solarAbsorption, $yearsOperating,
                     $hasCover, $coverRValue, $coverSolarTrans,
-                    $hasTunnel, $floorInsulated, $poolType
+                    $hasTunnel, $floorInsulated, $poolType ?? 'outdoor'
                 ]);
                 $poolId = $this->db->lastInsertId();
             }
