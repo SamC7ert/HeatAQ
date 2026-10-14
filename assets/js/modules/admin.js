@@ -3,7 +3,9 @@
 const AdminModule = {
     // Current data
     holidayDefinitions: [],
-    referenceDays: [],
+    referenceDays: [],   // reference day definitions [{id, name, description}]
+    easterDates: [],     // computed Easter dates [{year, easter_date}] (separate list:
+                         // both used to share referenceDays, last loader won)
     weatherStations: [],
     users: [],
 
@@ -166,8 +168,9 @@ const AdminModule = {
             }
             if (def.offset_days === null) def.offset_days = 0;
         }
-        await this.saveHolidayInline(def);
-        this.renderHolidayDefinitions(); // Re-render to show correct fields
+        if (await this.saveHolidayInline(def)) {
+            this.renderHolidayDefinitions(); // Re-render to show correct fields
+        }
     },
 
     updateHolidayDate: async function(id, dateValue) {
@@ -195,12 +198,18 @@ const AdminModule = {
                     offset_days: def.offset_days
                 })
             });
-            const result = await response.json();
+            const result = await response.json().catch(() => ({ error: `Server returned HTTP ${response.status}` }));
             if (!result.success) {
-                console.error('Failed to save:', result.error);
+                throw new Error(result.error || 'Unknown error');
             }
+            return true;
         } catch (err) {
+            // The row was already changed locally: say so and reload the
+            // saved definitions so it reverts to what the server has.
             console.error('Failed to save:', err);
+            alert(`Could not save "${def.name}": ${err.message}`);
+            await this.loadHolidayDefinitions();
+            return false;
         }
     },
 
@@ -374,7 +383,7 @@ const AdminModule = {
             const data = await response.json();
 
             if (data.reference_days) {
-                this.referenceDays = data.reference_days;
+                this.easterDates = data.reference_days;
                 this.renderReferenceDays();
             }
         } catch (err) {
@@ -386,7 +395,7 @@ const AdminModule = {
         const container = document.getElementById('reference-days-list');
         if (!container) return;
 
-        if (this.referenceDays.length === 0) {
+        if (this.easterDates.length === 0) {
             container.innerHTML = '<p class="text-muted">No reference days</p>';
             return;
         }
@@ -395,7 +404,7 @@ const AdminModule = {
             '<th>Year</th><th>1. påskedag</th>' +
             '</tr></thead><tbody>';
 
-        this.referenceDays.forEach(ref => {
+        this.easterDates.forEach(ref => {
             html += `<tr>
                 <td>${escapeHtml(ref.year)}</td>
                 <td>${escapeHtml(ref.easter_date)}</td>
@@ -430,15 +439,22 @@ const AdminModule = {
                 this.renderWeatherStations();
                 this.populateStationDropdown();
 
-                // Default to the station linked to the open project's site so
-                // the view opens on relevant data instead of an empty selector.
+                // The dropdown was rebuilt: keep the selected station if it
+                // still exists, else default to the station linked to the open
+                // project's site. If neither exists (e.g. the selected station
+                // was just deleted), clear the selection and its details, so
+                // nothing keeps pointing at a station that is gone.
                 const select = document.getElementById('weather-station-select');
+                const exists = id => id && this.weatherStations.some(s => s.station_id === id);
                 const projStation = (typeof ProjectModule !== 'undefined')
                     ? ProjectModule.currentSite?.weather_station_id : null;
-                if (select && !select.value && projStation
-                    && this.weatherStations.some(s => s.station_id === projStation)) {
-                    select.value = projStation;
-                    await this.onStationChange();
+                if (select) {
+                    const previous = this.selectedStationId;
+                    const next = exists(previous) ? previous : (exists(projStation) ? projStation : '');
+                    select.value = next;
+                    if (next !== previous || next === '') {
+                        await this.onStationChange();
+                    }
                 }
             }
         } catch (err) {
@@ -1611,8 +1627,8 @@ const AdminModule = {
         const inactiveContainer = document.getElementById('inactive-users-list');
 
         // Split users by active status
-        const activeUsers = this.users.filter(u => u.is_active);
-        const inactiveUsers = this.users.filter(u => !u.is_active);
+        const activeUsers = this.users.filter(u => Number(u.is_active) !== 0);
+        const inactiveUsers = this.users.filter(u => Number(u.is_active) === 0);
 
         // Render active users
         if (activeContainer) {
@@ -1639,7 +1655,7 @@ const AdminModule = {
             '</tr></thead><tbody>';
 
         users.forEach(user => {
-            const roleLabel = user.role === 'admin' ? 'Admin' : 'Operator';
+            const roleLabel = { viewer: 'Viewer', operator: 'Operator', admin: 'Admin', owner: 'Owner' }[user.role] || '-';
             const projectNames = user.project_names || '-';
             html += `<tr>
                 <td>${escapeHtml(user.email)}</td>
@@ -1669,6 +1685,9 @@ const AdminModule = {
 
     showUserForm: function(existingUser) {
         const isEdit = !!existingUser;
+        // is_active arrives as 0/1 (or "0"/"1"); "0 !== false" used to show
+        // every inactive user as Active, and saving re-activated them
+        const userInactive = isEdit && Number(existingUser.is_active) === 0;
         const title = isEdit ? 'Edit User' : 'Add User';
         const userProjectIds = existingUser?.project_ids || [];
 
@@ -1716,16 +1735,15 @@ const AdminModule = {
                         <div class="form-group">
                             <label>Role</label>
                             <select id="user-role" class="form-control" onchange="app.admin.toggleProjectsField()">
-                                <option value="operator" ${existingUser?.role !== 'admin' ? 'selected' : ''}>Operator</option>
-                                <option value="admin" ${existingUser?.role === 'admin' ? 'selected' : ''}>Admin</option>
+                                ${['viewer', 'operator', 'admin', 'owner'].map(r => `<option value="${r}" ${(existingUser?.role || 'operator') === r ? 'selected' : ''}>${r[0].toUpperCase() + r.slice(1)}</option>`).join('')}
                             </select>
                         </div>
 
                         <div class="form-group">
                             <label>Status</label>
                             <select id="user-active" class="form-control">
-                                <option value="1" ${existingUser?.is_active !== false ? 'selected' : ''}>Active</option>
-                                <option value="0" ${existingUser?.is_active === false ? 'selected' : ''}>Inactive</option>
+                                <option value="1" ${!userInactive ? 'selected' : ''}>Active</option>
+                                <option value="0" ${userInactive ? 'selected' : ''}>Inactive</option>
                             </select>
                         </div>
 
@@ -1734,7 +1752,7 @@ const AdminModule = {
                             <div style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px; background: #fafafa;">
                                 ${projectCheckboxes || '<p class="text-muted">No projects available</p>'}
                             </div>
-                            <small class="text-muted">Operators can only access assigned projects</small>
+                            <small class="text-muted">Viewers, operators and owners can only access assigned projects; admins get all</small>
                         </div>
 
                         <div class="form-actions">
@@ -1808,9 +1826,9 @@ const AdminModule = {
         const id = document.getElementById('user-id').value;
         const role = document.getElementById('user-role').value;
 
-        // Get selected projects for operators
+        // Get selected projects (admins get every project server-side)
         const projectIds = [];
-        if (role === 'operator') {
+        if (role !== 'admin') {
             document.querySelectorAll('input[name="user-projects"]:checked').forEach(cb => {
                 projectIds.push(parseInt(cb.value));
             });
