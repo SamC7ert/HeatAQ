@@ -176,11 +176,25 @@ hour from `water_temp − target`.
 These are acknowledged gaps to resolve later; documented so they are not
 mistaken for the intended design.
 
-1. **Target source: schedule vs. config.** The correct source of target
-   temperature is the **schedule** (each period can carry its own target). Today
-   the predictive planner reads the **config** target. Intended future state:
-   drive from the schedule, with config as an option. **For now, config is
-   used** — this document assumes config target/min/max.
+1. **Target source: schedule vs. config — RESOLVED (simulator 3.12.0).**
+   Every open hour's target is resolved in one place (`PoolScheduler::
+   setTargetSettings`, fed by `EnergySimulator::syncSchedulerTargets`):
+
+   `target = (schedule period target ?? config default target) + sim offset`
+
+   - A period may leave its target blank → it uses the config **default target**
+     (`control.target_temp`, labelled "Default Target" in the config editor).
+   - SimControl applies an **offset** (`control.target_offset`, −5…+5 °C in
+     0.5 steps) to every hour's target; it replaced the old absolute target
+     override, which flattened or (in practice) ignored the schedule.
+   - Hourly control, closed-period planning, open-period planning, the Details
+     view and the comfort statistics all use this resolved target. Before 3.12
+     open-period planning read a config key that was never set and always
+     planned against 28 °C, and a blank period target was cast to 0 °C.
+   - Comfort statistics count days with an open hour more than 1 / 2 °C below
+     *that hour's* target (`days_below_mode = relative_to_target`).
+   Tolerances (`upper_tolerance` / `lower_tolerance`) still come from config and
+   apply around each hour's resolved target.
 2. **Min/max representation.** In the config UI the allowed range is derived as
    `target − lower_tolerance … target + upper_tolerance`
    (`configuration.js:353`), while the simulator reads standalone
@@ -233,7 +247,9 @@ demands it (Regime A holds at target).
 | Parameter | Role in predictive control |
 |-----------|----------------------------|
 | `control_strategy` | Must be `predictive`. |
-| `target_temp` | Setpoint the pool holds when open; floor of the buffer. |
+| `target_temp` | **Default** setpoint, used for open periods whose schedule has no target of its own (see §7.1). |
+| schedule period target | Setpoint the pool holds in that open period; floor of the buffer. |
+| `target_offset` | SimControl adjustment added to every resolved target (−5…+5 °C). |
 | `max_temp` | Hard cap on preheat temperature. |
 | `min_temp` | Floor the water may coast to while closed. |
 | `hp_capacity_kw` | Determines whether a given open period needs preheat. |

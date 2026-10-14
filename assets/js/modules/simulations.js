@@ -113,8 +113,8 @@ const SimulationsModule = {
                         <th>HP (kW)</th>
                         <th>Boiler (kW)</th>
                         <th>Elec (MWh)</th>
-                        <th>&lt;1°C</th>
-                        <th>&lt;2°C</th>
+                        <th title="Days with an open hour more than 1 °C below its target">&lt;1°C</th>
+                        <th title="Days with an open hour more than 2 °C below its target">&lt;2°C</th>
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -895,7 +895,7 @@ const SimulationsModule = {
      */
     loadSavedOverrides: async function() {
         const fields = [
-            'sim-hp-override', 'sim-boiler-override', 'sim-target-override',
+            'sim-hp-override', 'sim-boiler-override', 'sim-target-offset',
             'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
             'sim-activity-override', 'sim-wind-override', 'sim-solar-override'
         ];
@@ -944,7 +944,7 @@ const SimulationsModule = {
      */
     saveOverrides: function() {
         const fields = [
-            'sim-hp-override', 'sim-boiler-override', 'sim-target-override',
+            'sim-hp-override', 'sim-boiler-override', 'sim-target-offset',
             'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
             'sim-activity-override', 'sim-wind-override', 'sim-solar-override'
         ];
@@ -992,12 +992,12 @@ const SimulationsModule = {
         }
 
         // Control overrides
-        const targetOverride = getOverride('sim-target-override');
+        const targetOffset = SimulationsModule.readTargetOffset();
         const upperTolOverride = getOverride('sim-upper-tol-override');
         const lowerTolOverride = getOverride('sim-lower-tol-override');
-        if (targetOverride !== null || upperTolOverride !== null || lowerTolOverride !== null) {
+        if (targetOffset !== null || upperTolOverride !== null || lowerTolOverride !== null) {
             override.control = {};
-            if (targetOverride !== null) override.control.target_temp = targetOverride;
+            if (targetOffset !== null) override.control.target_offset = targetOffset;
             if (upperTolOverride !== null) override.control.upper_tolerance = upperTolOverride;
             if (lowerTolOverride !== null) override.control.lower_tolerance = lowerTolOverride;
         }
@@ -1035,7 +1035,7 @@ const SimulationsModule = {
      */
     clearAllOverrides: function() {
         const ids = [
-            'sim-hp-override', 'sim-boiler-override', 'sim-target-override',
+            'sim-hp-override', 'sim-boiler-override', 'sim-target-offset',
             'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
             'sim-activity-override', 'sim-wind-override', 'sim-solar-override'
         ];
@@ -1058,6 +1058,23 @@ const SimulationsModule = {
     /**
      * Clear a single override field
      */
+    /**
+     * Read the SimControl target offset (°C added to every open hour's target).
+     * Accepts "+1", "-0.5", "1,5". Returns null when blank. Throws on values
+     * outside ±5 °C or not a multiple of 0.5, so a typo (e.g. "29" from the old
+     * absolute field) can't turn into a 57 °C run. Server validates too.
+     */
+    readTargetOffset: function() {
+        const el = document.getElementById('sim-target-offset');
+        const raw = el ? el.value.trim().replace(',', '.') : '';
+        if (raw === '') return null;
+        const v = Number(raw);
+        if (!Number.isFinite(v) || Math.abs(v) > 5 || Math.abs(v * 2 - Math.round(v * 2)) > 1e-9) {
+            throw new Error(`Target offset "${el.value}" is not valid: use -5 to +5 °C in steps of 0.5 (e.g. +1, -0.5)`);
+        }
+        return v === 0 ? null : v;
+    },
+
     clearOverride: function(fieldId) {
         const el = document.getElementById(fieldId);
         if (el) {
@@ -1088,12 +1105,12 @@ const SimulationsModule = {
         }
 
         // Control overrides
-        const targetOverride = getOverride('sim-target-override');
+        const targetOffset = SimulationsModule.readTargetOffset();
         const upperTolOverride = getOverride('sim-upper-tol-override');
         const lowerTolOverride = getOverride('sim-lower-tol-override');
-        if (targetOverride !== null || upperTolOverride !== null || lowerTolOverride !== null) {
+        if (targetOffset !== null || upperTolOverride !== null || lowerTolOverride !== null) {
             override.control = {};
-            if (targetOverride !== null) override.control.target_temp = targetOverride;
+            if (targetOffset !== null) override.control.target_offset = targetOffset;
             if (upperTolOverride !== null) override.control.upper_tolerance = upperTolOverride;
             if (lowerTolOverride !== null) override.control.lower_tolerance = lowerTolOverride;
         }
@@ -1140,7 +1157,7 @@ const SimulationsModule = {
 
         const hpOverride = getOverride('sim-hp-override');
         const boilerOverride = getOverride('sim-boiler-override');
-        const targetOverride = getOverride('sim-target-override');
+        const targetOffset = SimulationsModule.readTargetOffset();
         const upperTolOverride = getOverride('sim-upper-tol-override');
         const lowerTolOverride = getOverride('sim-lower-tol-override');
         const bathersOverride = getOverride('sim-bathers-override');
@@ -1150,7 +1167,7 @@ const SimulationsModule = {
 
         if (hpOverride !== null) config.equipment.hp_capacity_kw = hpOverride;
         if (boilerOverride !== null) config.equipment.boiler_capacity_kw = boilerOverride;
-        if (targetOverride !== null) config.control.target_temp = targetOverride;
+        if (targetOffset !== null) config.control.target_offset = targetOffset;
         if (upperTolOverride !== null) config.control.upper_tolerance = upperTolOverride;
         if (lowerTolOverride !== null) config.control.lower_tolerance = lowerTolOverride;
         if (bathersOverride !== null) config.bathers.per_day = Math.round(bathersOverride);
@@ -2625,9 +2642,15 @@ const SimulationsModule = {
             // Show benchmark report (same as after running simulation)
             // Note: API returns decoded config in lastRun.config (not config_snapshot)
             if (typeof SimControlModule !== 'undefined' && lastRun.summary) {
+                // Dates live on the run record, not in its saved config - without
+                // them the reopened report showed "Period: to (365 days ...)".
                 SimControlModule.showBenchmarkReport({
                     summary: lastRun.summary,
-                    meta: lastRun.config || {}
+                    meta: {
+                        ...(lastRun.config || {}),
+                        start_date: lastRun.config?.start_date || lastRun.start_date,
+                        end_date: lastRun.config?.end_date || lastRun.end_date
+                    }
                 });
             }
 

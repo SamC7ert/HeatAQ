@@ -943,11 +943,18 @@ class HeatAQAPI {
                 ");
 
                 foreach ($periods as $i => $period) {
+                    // Blank target = NULL = "use the configuration's default target"
+                    $target = $period['target_temp'] ?? null;
+                    if ($target === '' || $target === null) {
+                        $target = null;
+                    } elseif (!is_numeric($target)) {
+                        throw new Exception('Target temperature must be a number or blank');
+                    }
                     $stmt->execute([
                         $scheduleId,
                         $period['start_time'],
                         $period['end_time'],
-                        $period['target_temp'] ?? 28.0,
+                        $target,
                         $period['min_temp'] ?? 26.0,
                         $period['max_temp'] ?? 30.0,
                         $period['period_order'] ?? ($i + 1)

@@ -27,7 +27,8 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.11.3';   // Predictive demand now net of solar (losses - solar), matching run()
+    const VERSION = '3.12.0';   // Target = (schedule period ?? config default) + sim offset everywhere; open-period plan uses the real target (was fixed 28)
+    const TARGET_OFFSET_LIMIT = 5.0;  // °C, max |offset| accepted from SimControl
 
     private $db;
     private $siteId;
@@ -95,6 +96,7 @@ class EnergySimulator {
 
         // Load equipment configuration
         $this->equipment = $this->loadEquipmentConfig();
+        $this->syncSchedulerTargets();
     }
 
     /**
@@ -288,6 +290,21 @@ class EnergySimulator {
                 $this->equipment['upper_tolerance'] = $uiConfig['control']['temp_tolerance'];
                 $this->equipment['lower_tolerance'] = $uiConfig['control']['temp_tolerance'];
             }
+            // Simulation target offset (SimControl): added to every hour's
+            // target (schedule period target, or the config default where the
+            // period has none). Stored with the equipment so a run's snapshot
+            // carries it into the Details/debug views.
+            if (array_key_exists('target_offset', $uiConfig['control'])) {
+                $offset = $uiConfig['control']['target_offset'];
+                if ($offset === null || $offset === '') {
+                    $offset = 0.0;
+                }
+                if (!is_numeric($offset) || abs((float) $offset) > self::TARGET_OFFSET_LIMIT) {
+                    throw new InvalidArgumentException('Target offset must be between -' . self::TARGET_OFFSET_LIMIT
+                        . ' and +' . self::TARGET_OFFSET_LIMIT . ' °C');
+                }
+                $this->equipment['target_offset'] = (float) $offset;
+            }
         }
 
         // Energy costs
@@ -370,6 +387,39 @@ class EnergySimulator {
             $poolMass = $this->poolConfig['volume_m3'] * self::WATER_DENSITY; // kg
             $this->thermalMassRate = $poolMass * self::WATER_SPECIFIC_HEAT / 3600000; // kWh/°C
         }
+
+        $this->syncSchedulerTargets();
+    }
+
+    // ------------------------------------------------------------------
+    // Target temperature resolution
+    //
+    // Effective target for an open hour = (schedule period target, or the
+    // config default where the period has none) + simulation offset. The
+    // scheduler resolves period targets; these helpers give the same value
+    // wherever no period applies (fallbacks) and keep the scheduler in sync.
+    // ------------------------------------------------------------------
+
+    /** Config default target (°C): used where a schedule period has no target. */
+    private function configDefaultTarget() {
+        return (float) ($this->equipment['target_temp'] ?? 28.0);
+    }
+
+    /** Simulation offset (°C) added to every target. */
+    private function targetOffset() {
+        return (float) ($this->equipment['target_offset'] ?? 0.0);
+    }
+
+    /** Target when no schedule period applies: config default + offset. */
+    private function fallbackTarget() {
+        return $this->configDefaultTarget() + $this->targetOffset();
+    }
+
+    /** Push default + offset into the scheduler so period targets resolve the same way. */
+    private function syncSchedulerTargets() {
+        if ($this->scheduler && method_exists($this->scheduler, 'setTargetSettings')) {
+            $this->scheduler->setTargetSettings($this->configDefaultTarget(), $this->targetOffset());
+        }
     }
 
     /**
@@ -377,6 +427,7 @@ class EnergySimulator {
      */
     public function setEquipment($equipment) {
         $this->equipment = array_merge($this->equipment, $equipment);
+        $this->syncSchedulerTargets();
     }
 
     /**
@@ -648,6 +699,15 @@ class EnergySimulator {
                 'min_water_temp_open' => 999,  // min during OPEN hours (in-use)
                 'max_water_temp_open' => -999, // max during OPEN hours (in-use)
                 'avg_water_temp_open' => 0,    // avg during OPEN hours (in-use)
+                // What the open-hour targets actually were (for the report):
+                // range of effective targets, how many open hours took their
+                // target from a schedule period vs the config default, offset.
+                'target_open_min' => null,
+                'target_open_max' => null,
+                'target_hours_schedule' => 0,
+                'target_hours_default' => 0,
+                'target_default' => $this->configDefaultTarget(),
+                'target_offset' => $this->targetOffset(),
                 // Data-quality counters: hours where a missing weather field was
                 // silently substituted (wind 2.0 m/s, humidity 70%, air->0), days
                 // with no solar rows (treated as 0 gain), and requested-span
@@ -710,12 +770,15 @@ class EnergySimulator {
                 }
             }
 
-            // Get target temperature from scheduler
+            // Get target temperature from scheduler (already resolved:
+            // period target or config default, plus the simulation offset)
             $targetTemp = null;
+            $targetSource = null;
             if ($this->scheduler) {
                 $period = $this->scheduler->getCurrentPeriod(new DateTime($timestamp));
                 if ($period) {
                     $targetTemp = $period['target_temp'];
+                    $targetSource = $period['target_source'] ?? 'schedule';
                 }
             }
 
@@ -825,7 +888,8 @@ class EnergySimulator {
                         $currentWaterTemp,
                         $weatherArray,
                         $hourIndex,
-                        $periodDuration
+                        $periodDuration,
+                        $targetTemp
                     );
                     $this->openPlanTimestamp = $currentTimestamp;
                 }
@@ -972,6 +1036,7 @@ class EnergySimulator {
                     'avg_water_temp' => 0,
                     'min_water_temp' => 999,
                     'min_water_temp_open' => 999,  // min during OPEN hours only (comfort metric)
+                    'max_shortfall_open' => null,  // largest (target - water) in an OPEN hour, °C
                     'total_loss_kwh' => 0,
                     'total_solar_kwh' => 0,
                     'total_hp_kwh' => 0,           // Electricity consumed
@@ -989,8 +1054,13 @@ class EnergySimulator {
             $dailyStats['avg_water_temp'] += $currentWaterTemp;
             $dailyStats['min_water_temp'] = min($dailyStats['min_water_temp'], $currentWaterTemp);
             if ($targetTemp !== null) {
-                // Pool is open this hour: track the min temp seen while in use.
+                // Pool is open this hour: track the min temp seen while in use,
+                // and how far below THIS hour's target the water was (comfort
+                // is judged against each hour's own target, not one number).
                 $dailyStats['min_water_temp_open'] = min($dailyStats['min_water_temp_open'], $currentWaterTemp);
+                $shortfall = $targetTemp - $currentWaterTemp;
+                $dailyStats['max_shortfall_open'] = $dailyStats['max_shortfall_open'] === null
+                    ? $shortfall : max($dailyStats['max_shortfall_open'], $shortfall);
             }
             $dailyStats['total_loss_kwh'] += $losses['total'];
             $dailyStats['total_solar_kwh'] += $solarGain;
@@ -1038,6 +1108,16 @@ class EnergySimulator {
             $results['summary']['max_water_temp'] = max($results['summary']['max_water_temp'], $currentWaterTemp);
             $results['summary']['avg_water_temp'] += $currentWaterTemp;
             if ($targetTemp !== null) {
+                // Effective target range and source (schedule vs config default)
+                $s = &$results['summary'];
+                $s['target_open_min'] = $s['target_open_min'] === null ? $targetTemp : min($s['target_open_min'], $targetTemp);
+                $s['target_open_max'] = $s['target_open_max'] === null ? $targetTemp : max($s['target_open_max'], $targetTemp);
+                if ($targetSource === 'default') {
+                    $s['target_hours_default']++;
+                } else {
+                    $s['target_hours_schedule']++;
+                }
+                unset($s);
                 // In-use temperature stats (open hours only)
                 $results['summary']['min_water_temp_open'] = min($results['summary']['min_water_temp_open'], $currentWaterTemp);
                 $results['summary']['max_water_temp_open'] = max($results['summary']['max_water_temp_open'], $currentWaterTemp);
@@ -1066,29 +1146,26 @@ class EnergySimulator {
             $results['daily'][] = $dailyStats;
         }
 
-        // Count days the pool dropped below the comfort thresholds.
-        // Thresholds are relative to the target temperature: target-1 and
-        // target-2 (previously hard-coded 27/26, which only matched a target
-        // of 28). Summary keys keep their historical names for frontend
-        // compatibility; the actual threshold temps are exposed alongside so
-        // the labels can be rendered dynamically.
-        $targetTemp = $this->equipment['target_temp'] ?? ($this->poolConfig['target_temp'] ?? 27);
-        $threshold1 = $targetTemp - 1;
-        $threshold2 = $targetTemp - 2;
-        $results['summary']['days_below_threshold1_temp'] = $threshold1;
-        $results['summary']['days_below_threshold2_temp'] = $threshold2;
+        // Comfort: count days on which an OPEN hour was more than 1 °C / 2 °C
+        // below that hour's own target. Judged per hour against the effective
+        // target (schedule period or config default, plus offset) - a single
+        // fixed threshold is meaningless for schedules with mixed targets
+        // (a 27 °C evening period made every day count as "below 28").
+        // Closed hours are excluded: the water may coast below target by design.
+        // Keys keep their historical names (days_below_27/26) for frontend
+        // compatibility; days_below_mode tells the report how to label them.
+        $results['summary']['days_below_mode'] = 'relative_to_target';
+        $results['summary']['days_below_threshold1_delta'] = 1.0;
+        $results['summary']['days_below_threshold2_delta'] = 2.0;
         foreach ($results['daily'] as $day) {
-            // Only assess days the pool was actually OPEN. While closed the
-            // water is allowed to coast below target by design, so those dips
-            // are not comfort failures and must not be counted.
-            if (($day['open_hours'] ?? 0) <= 0) {
+            if (($day['open_hours'] ?? 0) <= 0 || $day['max_shortfall_open'] === null) {
                 continue;
             }
-            $minOpen = $day['min_water_temp_open'];
-            if ($minOpen < $threshold1) {
+            // Small epsilon: a 1.0000001 °C float residue isn't a shortfall of "more than 1"
+            if ($day['max_shortfall_open'] > 1.0 + 1e-6) {
                 $results['summary']['days_below_27']++;
             }
-            if ($minOpen < $threshold2) {
+            if ($day['max_shortfall_open'] > 2.0 + 1e-6) {
                 $results['summary']['days_below_26']++;
             }
         }
@@ -1772,15 +1849,10 @@ class EnergySimulator {
         }
 
         $tmr = $this->thermalMassRate;
-        // Target for the coming open period: prefer the schedule's target for the
-        // next opening (what the pool is actually held at when open), then the
-        // config target. NOTE: poolConfig has no target_temp - setConfigFromUI
-        // stores it in equipment - so reading poolConfig here would wrongly
-        // fall back to 28. See doc §7 (schedule/config target).
-        $target = $nextOpening['target_temp']
-            ?? $this->equipment['target_temp']
-            ?? $this->poolConfig['target_temp']
-            ?? 28.0;
+        // Target for the coming open period: the scheduler's resolved target for
+        // the next opening (period target or config default, plus offset), else
+        // the same fallback. See doc §7 (schedule/config target).
+        $target = $nextOpening['target_temp'] ?? $this->fallbackTarget();
         $upperTol = $this->equipment['upper_tolerance'] ?? 1.0;
         $lowerTol = $this->equipment['lower_tolerance'] ?? 2.0;
         $maxTemp = $this->poolConfig['max_temp'] ?? ($target + $upperTol);
@@ -2021,10 +2093,13 @@ class EnergySimulator {
      * Core calculation for open period HP/boiler rates
      * Called by both planOpenPeriod() and debugSingleHour()
      */
-    private function calculateOpenPlanRates($waterTemp, $periodDemandTotal, $periodDuration) {
+    private function calculateOpenPlanRates($waterTemp, $periodDemandTotal, $periodDuration, $targetTemp = null) {
         $hpCapacity = $this->equipment['heat_pump']['capacity_kw'] ?? 200;
         $boilerCapacity = $this->equipment['boiler']['capacity_kw'] ?? 200;
-        $targetTemp = $this->poolConfig['target_temp'] ?? 28.0;
+        // The open period's own target. Previously read poolConfig['target_temp'],
+        // which is never set, so every open period was planned against 28 °C
+        // regardless of schedule (e.g. a 27 °C evening) or config.
+        $targetTemp = $targetTemp ?? $this->fallbackTarget();
         $thermalMassRate = $this->thermalMassRate ?? 0;
 
         // Calculate temperature difference from target
@@ -2084,9 +2159,9 @@ class EnergySimulator {
         $openPlansByDate = [];
 
         $tmr = ($this->thermalMassRate && $this->thermalMassRate > 0) ? $this->thermalMassRate : 1.0;
-        // Base target from config (equipment, not poolConfig - see planClosedPeriod).
-        // Per closed period the schedule target of the next opening is preferred.
-        $baseTarget = $this->equipment['target_temp'] ?? $this->poolConfig['target_temp'] ?? 28.0;
+        // Fallback target (config default + offset). Per closed period the
+        // resolved target of the next opening is preferred.
+        $baseTarget = $this->fallbackTarget();
         $upperTol = $this->equipment['upper_tolerance'] ?? 1.0;
         $lowerTol = $this->equipment['lower_tolerance'] ?? 2.0;
         $hpCapacity = $this->equipment['heat_pump']['capacity_kw'] ?? 0;
@@ -2242,7 +2317,7 @@ class EnergySimulator {
      * At OPEN transition, calculates optimal HP/boiler rates for the period.
      * Uses excess temperature as energy buffer and forecasts demand.
      */
-    private function planOpenPeriod($timestamp, $waterTemp, $weatherData, $currentIdx, $periodDuration) {
+    private function planOpenPeriod($timestamp, $waterTemp, $weatherData, $currentIdx, $periodDuration, $targetTemp = null) {
         // Calculate total demand for the open period
         $periodDemandTotal = 0;
         for ($i = 0; $i < $periodDuration; $i++) {
@@ -2262,7 +2337,7 @@ class EnergySimulator {
         }
 
         // Use shared calculation
-        $plan = $this->calculateOpenPlanRates($waterTemp, $periodDemandTotal, $periodDuration);
+        $plan = $this->calculateOpenPlanRates($waterTemp, $periodDemandTotal, $periodDuration, $targetTemp);
 
         // Debug: capture first open plan per day (keyed by date)
         $dateKey = $timestamp->format('Y-m-d');
@@ -2274,7 +2349,7 @@ class EnergySimulator {
                     'periodDemandTotal' => round($periodDemandTotal, 2),
                     'periodDuration' => $periodDuration,
                     'thermalMassRate' => $this->thermalMassRate,
-                    'targetTemp' => $this->poolConfig['target_temp'] ?? 28,
+                    'targetTemp' => $plan['target_temp'] ?? null,
                 ],
                 'outputs' => [
                     'hp_rate' => $plan['hp_rate'] ?? null,
@@ -2448,8 +2523,9 @@ class EnergySimulator {
             // Predictive mode: null means "not time to heat yet" - no heating
             return $result;
         } elseif ($targetTemp === null) {
-            // Reactive mode: always maintain configured target (ignores schedule)
-            $targetTemp = $this->poolConfig['target_temp'] ?? 28.0;
+            // Reactive mode while closed: hold the config default (+ offset).
+            // Previously read poolConfig['target_temp'], never set -> always 28.
+            $targetTemp = $this->fallbackTarget();
         }
         // When targetTemp is provided, use it directly (includes preheat targets)
 
@@ -2726,7 +2802,7 @@ class EnergySimulator {
             $isOpen = $isOpenOverride;
             // Prefer the schedule's target for this hour, then config equipment
             // target - NOT poolConfig (no target_temp -> would default to 28).
-            $targetTemp = $this->equipment['target_temp'] ?? $this->poolConfig['target_temp'] ?? 28;
+            $targetTemp = $this->fallbackTarget();
             if ($this->scheduler) {
                 $period = $this->scheduler->getCurrentPeriod(new DateTime($timestamp));
                 if ($period && isset($period['target_temp'])) {
@@ -2833,7 +2909,7 @@ class EnergySimulator {
             // Closed: heat pump only, hold target (steady-state approximation).
             // Target from schedule (if any) then config equipment - NOT poolConfig
             // which has no target_temp (would wrongly fall back to 28).
-            $holdTarget = $targetTemp ?? $this->equipment['target_temp'] ?? $this->poolConfig['target_temp'] ?? 28.0;
+            $holdTarget = $targetTemp ?? $this->fallbackTarget();
             $heating = $this->heatPumpToHold($holdTarget, $netRequirementKW, $airTemp, $poolTemp, $tmr);
             $heatingDebugMode = 'closed_hold';
         } else {
@@ -3025,7 +3101,7 @@ class EnergySimulator {
         $periodDemandTotal = $currentLossKW * $periodDuration; // Estimate
 
         // Use shared calculation
-        $plan = $this->calculateOpenPlanRates($waterTemp, $periodDemandTotal, $periodDuration);
+        $plan = $this->calculateOpenPlanRates($waterTemp, $periodDemandTotal, $periodDuration, $targetTemp);
 
         // Check what mode WOULD be used during simulation
         $controlStrategy = $this->equipment['control_strategy'] ?? 'reactive';
