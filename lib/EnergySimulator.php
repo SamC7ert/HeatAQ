@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.14.0';   // Standby temperature for long closures; plan starts when the HP needs to; no losses below the 5 C floor
+    const VERSION = '3.15.0';   // Site local time (from coordinates) for schedules, daily totals and reported hours; weather/solar stay UTC
     const TARGET_OFFSET_LIMIT = 5.0;  // °C, max |offset| accepted from SimControl
 
     private $db;
@@ -426,6 +426,31 @@ class EnergySimulator {
         return $this->configDefaultTarget() + $this->targetOffset();
     }
 
+    private $siteTz = null;
+
+    /** The site's time zone, from its coordinates (lib/SiteTimezone.php). */
+    private function siteTimezone() {
+        if ($this->siteTz === null) {
+            require_once __DIR__ . '/SiteTimezone.php';
+            $this->siteTz = $this->poolSiteId ? SiteTimezone::forSite($this->db, $this->poolSiteId) : new DateTimeZone('UTC');
+        }
+        return $this->siteTz;
+    }
+
+    /** 'Y-m-d H:i:s' in UTC -> the site's local clock time. */
+    private function toLocalTime($utc) {
+        $d = new DateTime($utc, new DateTimeZone('UTC'));
+        $d->setTimezone($this->siteTimezone());
+        return $d->format('Y-m-d H:i:s');
+    }
+
+    /** The site's local clock time -> 'Y-m-d H:i:s' in UTC. */
+    private function toUtcTime($local) {
+        $d = new DateTime($local, $this->siteTimezone());
+        $d->setTimezone(new DateTimeZone('UTC'));
+        return $d->format('Y-m-d H:i:s');
+    }
+
     /** Turn a day's accumulated sums into averages (every day, not just the last). */
     private function finalizeDay(array $day) {
         if ($day['hours'] > 0) {
@@ -675,11 +700,21 @@ class EnergySimulator {
         $start = new DateTime($startDate);
         $end = new DateTime($endDate);
 
-        // Get weather data for period
-        $weatherData = $this->getWeatherData($startDate, $endDate);
+        // Get weather data for period. Validation is on the requested UTC days;
+        // the run itself covers the requested LOCAL days, so the last hours of
+        // the previous UTC day are included when present (local midnight is
+        // 23:00/22:00 UTC in Norway) and hours past local midnight dropped.
+        $prevDay = date('Y-m-d', strtotime($startDate . ' -1 day'));
+        $weatherAll = $this->getWeatherData($prevDay, $endDate);
+        $weatherData = array_values(array_filter($weatherAll, fn($r) => substr($r['timestamp'], 0, 10) >= $startDate));
 
         // Validate weather data structure
         $this->validateWeatherData($weatherData, $startDate, $endDate);
+
+        $weatherData = array_values(array_filter($weatherAll, function ($r) use ($startDate, $endDate) {
+            $localDate = substr($this->toLocalTime($r['timestamp']), 0, 10);
+            return $localDate >= $startDate && $localDate <= $endDate;
+        }));
 
         // Get solar data for period
         $solarData = $this->getSolarData($startDate, $endDate);
@@ -805,9 +840,15 @@ class EnergySimulator {
         $totalHours = count($weatherData);
         $lastProgressMonth = null;
         foreach ($weatherData as $hour) {
-            $timestamp = $hour['timestamp'];
+            // Weather (and solar) hours are UTC; schedules, daily totals and
+            // the reported hours use the site's local clock time. (Schedules
+            // used to be read against UTC hours: opening hours were 1-2 h off
+            // in Norway.)
+            $utcTimestamp = $hour['timestamp'];
+            $timestamp = $this->toLocalTime($utcTimestamp);
             $date = substr($timestamp, 0, 10);
-            $hourOfDay = (int) substr($timestamp, 11, 2);
+            $solarDate = substr($utcTimestamp, 0, 10);
+            $solarHour = (int) substr($utcTimestamp, 11, 2);
 
             // Report progress once per simulated month
             if ($this->progressCallback !== null) {
@@ -823,11 +864,11 @@ class EnergySimulator {
             if (!isset($hour['wind_speed'])) $results['summary']['weather_hours_missing_wind']++;
             if (!isset($hour['humidity'])) $results['summary']['weather_hours_missing_humidity']++;
             if (!isset($hour['air_temperature'])) $results['summary']['weather_hours_missing_air_temp']++;
-            if (!empty($solarData) && $date !== $lastSolarCheckDate) {
-                $lastSolarCheckDate = $date;
+            if (!empty($solarData) && $solarDate !== $lastSolarCheckDate) {
+                $lastSolarCheckDate = $solarDate;
                 // Daily data is keyed by date, hourly data by full timestamp -
                 // probe both shapes (noon is present in any complete hourly day).
-                if (!isset($solarData[$date]) && !isset($solarData[$date . ' 12:00:00'])) {
+                if (!isset($solarData[$solarDate]) && !isset($solarData[$solarDate . ' 12:00:00'])) {
                     $results['summary']['solar_days_missing']++;
                 }
             }
@@ -856,7 +897,9 @@ class EnergySimulator {
             }
 
             // Get solar for this hour (uses pre-calculated hourly if available)
-            $hourlySolar = $this->getSolarForHour($solarData, $date, $hourOfDay);
+            // Solar stays on the UTC hour: the stored profiles peak at 12:00,
+            // which is closer to solar noon in UTC than in local clock time.
+            $hourlySolar = $this->getSolarForHour($solarData, $solarDate, $solarHour);
 
             // Calculate heat losses
             $waterTempStart = $currentWaterTemp;  // Store before any changes
@@ -2941,8 +2984,12 @@ class EnergySimulator {
      * @return array Detailed breakdown of all calculations
      */
     public function debugSingleHour($date, $hour, $waterTemp = null, $isOpenOverride = null) {
-        // Get weather for this specific hour
+        // $date/$hour are the site's local time (as shown in the results);
+        // weather and solar are stored in UTC.
         $timestamp = sprintf('%s %02d:00:00', $date, $hour);
+        $utcTimestamp = $this->toUtcTime($timestamp);
+        $utcDate = substr($utcTimestamp, 0, 10);
+        $utcHour = (int) substr($utcTimestamp, 11, 2);
 
         $stmt = $this->db->prepare("
             SELECT
@@ -2958,7 +3005,7 @@ class EnergySimulator {
               AND wd.timestamp = ?
             LIMIT 1
         ");
-        $stmt->execute([$this->poolSiteId, $timestamp]);
+        $stmt->execute([$this->poolSiteId, $utcTimestamp]);
         $weather = $stmt->fetch();
 
         if (!$weather) {
@@ -2978,7 +3025,7 @@ class EnergySimulator {
                 WHERE pool_site_id = ? AND timestamp = ?
                 LIMIT 1
             ");
-            $stmt->execute([$this->poolSiteId, $timestamp]);
+            $stmt->execute([$this->poolSiteId, $utcTimestamp]);
             $hourlyRow = $stmt->fetch();
             if ($hourlyRow) {
                 $hourlySolar = ($hourlyRow['solar_wh_m2'] ?? 0) / 1000; // Wh to kWh
@@ -2997,11 +3044,11 @@ class EnergySimulator {
                 WHERE ps.id = ? AND sd.date = ?
                 LIMIT 1
             ");
-            $stmt->execute([$this->poolSiteId, $date]);
+            $stmt->execute([$this->poolSiteId, $utcDate]);
             $solar = $stmt->fetch();
             if ($solar) {
                 $dailySolar = (float) $solar['daily_total_kwh_m2'];
-                $hourlySolar = $this->distributeSolarToHour(['daily_total_kwh_m2' => $dailySolar], $hour);
+                $hourlySolar = $this->distributeSolarToHour(['daily_total_kwh_m2' => $dailySolar], $utcHour);
                 $solarSource = 'daily';
             }
         }
