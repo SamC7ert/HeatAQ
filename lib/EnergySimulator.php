@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.12.0';   // Target = (schedule period ?? config default) + sim offset everywhere; open-period plan uses the real target (was fixed 28)
+    const VERSION = '3.12.1';   // Daily avg_air/avg_water are averages on every day (were sums except the last); start temp from resolved target
     const TARGET_OFFSET_LIMIT = 5.0;  // °C, max |offset| accepted from SimControl
 
     private $db;
@@ -415,6 +415,15 @@ class EnergySimulator {
         return $this->configDefaultTarget() + $this->targetOffset();
     }
 
+    /** Turn a day's accumulated sums into averages (every day, not just the last). */
+    private function finalizeDay(array $day) {
+        if ($day['hours'] > 0) {
+            $day['avg_air_temp'] /= $day['hours'];
+            $day['avg_water_temp'] /= $day['hours'];
+        }
+        return $day;
+    }
+
     /** Push default + offset into the scheduler so period targets resolve the same way. */
     private function syncSchedulerTargets() {
         if ($this->scheduler && method_exists($this->scheduler, 'setTargetSettings')) {
@@ -783,8 +792,14 @@ class EnergySimulator {
             }
 
             // Initialize water temp on first iteration (start at target, not arbitrary 20°C)
+            // If the window starts closed, use the coming opening's resolved
+            // target (or the config default + offset), never a fixed 28 °C.
             if ($currentWaterTemp === null) {
-                $currentWaterTemp = $targetTemp ?? 28.0;  // Use target or default 28°C
+                $currentWaterTemp = $targetTemp;
+                if ($currentWaterTemp === null && $this->scheduler) {
+                    $currentWaterTemp = $this->scheduler->findNextOpening($timestamp)['target_temp'] ?? null;
+                }
+                $currentWaterTemp = (float) ($currentWaterTemp ?? $this->fallbackTarget());
             }
 
             // Get solar for this hour (uses pre-calculated hourly if available)
@@ -1025,7 +1040,7 @@ class EnergySimulator {
             // Aggregate daily stats
             if ($date !== $currentDay) {
                 if ($currentDay !== null) {
-                    $results['daily'][] = $dailyStats;
+                    $results['daily'][] = $this->finalizeDay($dailyStats);
                 }
                 $currentDay = $date;
                 $dailyStats = [
@@ -1141,9 +1156,7 @@ class EnergySimulator {
 
         // Finalize last day
         if ($currentDay !== null && $dailyStats['hours'] > 0) {
-            $dailyStats['avg_air_temp'] /= $dailyStats['hours'];
-            $dailyStats['avg_water_temp'] /= $dailyStats['hours'];
-            $results['daily'][] = $dailyStats;
+            $results['daily'][] = $this->finalizeDay($dailyStats);
         }
 
         // Comfort: count days on which an OPEN hour was more than 1 °C / 2 °C
