@@ -706,6 +706,12 @@ const SimulationsModule = {
     },
 
     // Utility functions
+    // A percentage field (e.g. wind exposure "40" or "40%") as a fraction (0.40).
+    // Values up to 1 are taken as already being a fraction.
+    percentToFraction: function(value) {
+        return value > 1 ? value / 100 : value;
+    },
+
     escapeHtml: function(text) {
         return escapeHtml(text);  // shared helper (config.js); also escapes quotes
     },
@@ -1012,7 +1018,8 @@ const SimulationsModule = {
         // Pool overrides
         const windOverride = getOverride('sim-wind-override');
         if (windOverride !== null) {
-            override.pool = { wind_exposure: windOverride };
+            // Typed as a percentage like the base value (50.0%); send a fraction
+            override.pool = { wind_exposure: SimulationsModule.percentToFraction(windOverride) };
         }
 
         // Solar overrides
@@ -1125,7 +1132,8 @@ const SimulationsModule = {
         // Pool overrides
         const windOverride = getOverride('sim-wind-override');
         if (windOverride !== null) {
-            override.pool = { wind_exposure: windOverride };
+            // Typed as a percentage like the base value (50.0%); send a fraction
+            override.pool = { wind_exposure: SimulationsModule.percentToFraction(windOverride) };
         }
 
         // Solar overrides
@@ -1170,7 +1178,7 @@ const SimulationsModule = {
         if (lowerTolOverride !== null) config.control.lower_tolerance = lowerTolOverride;
         if (bathersOverride !== null) config.bathers.per_day = Math.round(bathersOverride);
         if (activityOverride !== null) config.bathers.activity_factor = activityOverride;
-        if (windOverride !== null) config.pool.wind_exposure = windOverride;
+        if (windOverride !== null) config.pool.wind_exposure = SimulationsModule.percentToFraction(windOverride);
         if (solarOverride !== null) config.solar.absorption = solarOverride;
 
         // Save overrides for next time
