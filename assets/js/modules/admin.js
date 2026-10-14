@@ -2244,7 +2244,10 @@ const AdminModule = {
             });
 
             if (!response.ok) {
-                if (resultEl) resultEl.innerHTML = `<p class="error">API error: ${response.status}</p>`;
+                // Show the server's reason (permission, missing session header,
+                // cross-site check...), not just the status code
+                const errBody = await response.json().catch(() => ({}));
+                if (resultEl) resultEl.innerHTML = `<p class="error">API error ${response.status}: ${escapeHtml(errBody.error || errBody.message || response.statusText || 'request refused')}</p>`;
                 if (btn) {
                     btn.textContent = '✗ Error';
                     btn.style.backgroundColor = '#dc3545';

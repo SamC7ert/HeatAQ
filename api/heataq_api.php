@@ -161,6 +161,17 @@ class HeatAQAPI {
         return (bool)$stmt->fetchColumn();
     }
 
+    /**
+     * Database migrations change the whole database. An admin is admin of
+     * every project (save_user grants admins all projects), so admins may run
+     * them, as may owners and super admins - the same roles that can list
+     * them (check_migrations).
+     */
+    private function canRunMigrations() {
+        if (!Config::requiresAuth()) return true;
+        return in_array($this->userRole, ['admin', 'owner'], true) || $this->isSuperAdmin();
+    }
+
     /** Shared tables (holiday definitions) affect every project: owners and super admins only. */
     private function canEditShared() {
         if (!Config::requiresAuth()) return true;
@@ -650,14 +661,14 @@ class HeatAQAPI {
                     $this->checkMigrations();
                     break;
                 case 'run_migration':
-                    if (!$this->canEditShared()) {
-                        $this->sendError('Permission denied - owner only', 403);
+                    if (!$this->canRunMigrations()) {
+                        $this->sendError('Permission denied - running migrations needs the admin or owner role, or super admin', 403);
                     }
                     $this->runMigration();
                     break;
                 case 'archive_migration':
-                    if (!$this->canEditShared()) {
-                        $this->sendError('Permission denied - owner only', 403);
+                    if (!$this->canRunMigrations()) {
+                        $this->sendError('Permission denied - archiving migrations needs the admin or owner role, or super admin', 403);
                     }
                     $this->archiveMigration();
                     break;
