@@ -3732,9 +3732,15 @@ class HeatAQAPI {
         }
 
         // Export schema (without git push - we'll do our own commit)
+        // (in-process: the host's command-line PHP has no PDO)
         $log[] = "Exporting schema...";
-        $schemaOutput = shell_exec('php ' . escapeshellarg($dbDir . '/dump_schema.php') . ' 2>&1');
-        $log[] = "✓ Schema exported";
+        require_once __DIR__ . '/../lib/SchemaDumper.php';
+        try {
+            $dump = SchemaDumper::dump($this->db, false);
+            $log[] = "✓ Schema exported ({$dump['tables']} tables)";
+        } catch (Throwable $e) {
+            $log[] = "✗ Schema export failed: " . RequestGuard::publicMessage($e->getMessage()) . " (archiving continues)";
+        }
 
         // Commit on master (checked above) and push
         $oldDir = getcwd();
