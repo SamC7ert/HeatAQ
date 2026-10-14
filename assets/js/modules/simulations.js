@@ -7,6 +7,9 @@ const SimulationsModule = {
     // State
     runs: [],
     currentRun: null,
+    // Run the Details tab inspects: the run selected in History or the run
+    // just executed ({run_id, start_date, end_date}). Null = server default.
+    inspectRun: null,
     weatherRange: null,
     debugTimestamp: null,  // Current debug date+hour for chart highlighting
     dailyChart: null,      // Chart instance for History tab
@@ -183,6 +186,7 @@ const SimulationsModule = {
 
             // Store current run and render detail
             this.currentRun = data.run;
+            this.setInspectRun(data.run);
             this.renderRunDetail();
 
             // Show the detail container
@@ -219,9 +223,22 @@ const SimulationsModule = {
             return;
         }
 
+        // Read the overrides first: invalid input stops here with a message
+        // instead of being sent as 0, a truncated number or null.
+        const statusEl = document.getElementById('simulation-status');
+        let configOverride;
+        try {
+            configOverride = this.buildConfigOverride();
+        } catch (error) {
+            if (statusEl) {
+                statusEl.textContent = `Run not started: ${error.message}`;
+                statusEl.style.color = '#dc3545';
+            }
+            return;
+        }
+
         // Disable button and show progress
         const btn = document.getElementById('run-simulation-btn');
-        const statusEl = document.getElementById('simulation-status');
         btn.disabled = true;
         btn.textContent = 'Running...';
 
@@ -257,9 +274,6 @@ const SimulationsModule = {
         };
 
         try {
-            // Build config override from override fields
-            const configOverride = this.buildConfigOverride();
-
             // Get pool_id from SimControl selection
             const poolId = typeof SimControlModule !== 'undefined' ? SimControlModule.currentPoolId : null;
 
@@ -311,8 +325,11 @@ const SimulationsModule = {
                 statusEl.style.color = '#28a745';
             }
 
-            // Show benchmark report
-            if (typeof SimControlModule !== 'undefined' && data.summary) {
+            // Show the new run in the Simulate tab: report, summary cards and
+            // yearly chart (the same view as on tab entry).
+            if (data.run_id) {
+                await this.autoLoadLastRun(data.run_id, { keepStatus: true });
+            } else if (typeof SimControlModule !== 'undefined' && data.summary) {
                 SimControlModule.showBenchmarkReport({
                     summary: data.summary,
                     meta: data.meta || {}
@@ -334,7 +351,8 @@ const SimulationsModule = {
 
             // View the new run
             if (data.run_id) {
-                setTimeout(() => this.viewRun(data.run_id), 1000);
+                // (a summary-only run cannot be inspected in Details)
+                setTimeout(() => this.viewRun(data.run_id, { inspect: storeHourly }), 1000);
             }
 
         } catch (error) {
@@ -352,7 +370,7 @@ const SimulationsModule = {
     /**
      * View a simulation run
      */
-    viewRun: async function(runId) {
+    viewRun: async function(runId, options = {}) {
         try {
             const response = await fetch(`/api/simulation_api.php?action=get_run&run_id=${runId}`);
             const data = await response.json();
@@ -362,6 +380,7 @@ const SimulationsModule = {
             }
 
             this.currentRun = data.run;
+            if (options.inspect !== false) this.setInspectRun(data.run);
             this.renderRunDetail();
 
             // Also load daily results for charts
@@ -371,6 +390,26 @@ const SimulationsModule = {
             console.error('Failed to load run:', error);
             alert('Failed to load simulation run');
         }
+    },
+
+    setInspectRun: function(run) {
+        if (run && run.run_id && run.status === 'completed') {
+            this.inspectRun = { run_id: run.run_id, start_date: run.start_date, end_date: run.end_date };
+        }
+    },
+
+    /**
+     * "&run_id=N" for debug_hour/debug_week when the date lies in the
+     * inspected run, so the hour panel and week chart show that run (and the
+     * same one). Otherwise '' and the server picks the newest completed run
+     * with hourly data covering the date - the same rule for both calls.
+     */
+    debugRunParam: function(date) {
+        const r = this.inspectRun;
+        if (r && date >= r.start_date && date <= r.end_date) {
+            return `&run_id=${encodeURIComponent(r.run_id)}`;
+        }
+        return '';
     },
 
     /**
@@ -384,8 +423,11 @@ const SimulationsModule = {
         const summary = run.summary || {};
         const config = run.config || {};
         const scheduleName = config.schedule_template_name || 'Unknown';
-        // Per-year divisor: summary.*_kwh / total_cost are cumulative over the run.
-        const years = (summary.total_hours || 0) / 8760 || 1;
+        // summary.*_kwh / total_cost are cumulative over the run: per year
+        // for runs of a year or more, period totals for shorter runs.
+        const basis = annualBasis(summary.total_hours);
+        const years = basis.divisor;
+        const sfx = basis.suffix;
 
         container.innerHTML = `
             <div class="run-detail-header">
@@ -415,23 +457,23 @@ const SimulationsModule = {
             <div class="run-summary-cards">
                 <div class="summary-card">
                     <div class="card-value">${this.formatCurrency((summary.total_cost || 0) / years)}</div>
-                    <div class="card-label">Total Cost/yr</div>
+                    <div class="card-label">Total Cost${sfx}</div>
                 </div>
                 <div class="summary-card">
                     <div class="card-value">${this.formatEnergy((summary.total_heat_loss_kwh || 0) / years)}</div>
-                    <div class="card-label">Heat Loss/yr</div>
+                    <div class="card-label">Heat Loss${sfx}</div>
                 </div>
                 <div class="summary-card">
                     <div class="card-value">${this.formatEnergy((summary.total_solar_gain_kwh || 0) / years)}</div>
-                    <div class="card-label">Solar Gain/yr</div>
+                    <div class="card-label">Solar Gain${sfx}</div>
                 </div>
                 <div class="summary-card">
                     <div class="card-value">${this.formatEnergy((summary.total_hp_energy_kwh || 0) / years)}</div>
-                    <div class="card-label">Heat Pump/yr</div>
+                    <div class="card-label">Heat Pump${sfx}</div>
                 </div>
                 <div class="summary-card">
                     <div class="card-value">${this.formatEnergy((summary.total_boiler_energy_kwh || 0) / years)}</div>
-                    <div class="card-label">Boiler/yr</div>
+                    <div class="card-label">Boiler${sfx}</div>
                 </div>
                 <div class="summary-card">
                     <div class="card-value">${summary.avg_cop?.toFixed(2) || '-'}</div>
@@ -505,8 +547,9 @@ const SimulationsModule = {
 
         // Prepare data - use thermal output (heat delivered)
         const labels = dailyResults.map(d => d.date);
-        const hpData = dailyResults.map(d => parseFloat(d.hp_thermal_kwh) || 0);
-        const boilerData = dailyResults.map(d => parseFloat(d.boiler_thermal_kwh) || 0);
+        const heatLabels = this.dailyHeatLabels(dailyResults);
+        const hpData = dailyResults.map(d => this.dailyHeat(d).hp);
+        const boilerData = dailyResults.map(d => this.dailyHeat(d).boiler);
 
         this.dailyChart = new Chart(canvas, {
             type: 'line',
@@ -514,7 +557,7 @@ const SimulationsModule = {
                 labels: labels,
                 datasets: [
                     {
-                        label: 'Heat Pump (kWh)',
+                        label: heatLabels.hp,
                         data: hpData,
                         borderColor: 'rgba(40, 167, 69, 1)',
                         backgroundColor: 'rgba(40, 167, 69, 0.7)',
@@ -525,7 +568,7 @@ const SimulationsModule = {
                         order: 1
                     },
                     {
-                        label: 'Boiler (kWh)',
+                        label: heatLabels.boiler,
                         data: boilerData,
                         borderColor: 'rgba(220, 53, 69, 1)',
                         backgroundColor: 'rgba(220, 53, 69, 0.7)',
@@ -594,8 +637,8 @@ const SimulationsModule = {
                                 <td>${escapeHtml(d.open_hours)}</td>
                                 <td>${parseFloat(d.avg_water_temp).toFixed(1)}°C</td>
                                 <td>${parseFloat(d.total_loss_kwh).toFixed(1)}</td>
-                                <td>${parseFloat(d.hp_thermal_kwh || d.total_hp_kwh).toFixed(1)}</td>
-                                <td>${parseFloat(d.boiler_thermal_kwh || d.total_boiler_kwh).toFixed(1)}</td>
+                                <td>${this.dailyHeat(d).stored ? this.dailyHeat(d).hp.toFixed(1) : '-'}</td>
+                                <td>${this.dailyHeat(d).stored ? this.dailyHeat(d).boiler.toFixed(1) : '-'}</td>
                                 <td>${this.formatCurrency(d.total_cost)}</td>
                             </tr>
                         `).join('')}
@@ -610,8 +653,8 @@ const SimulationsModule = {
                                 <td>${escapeHtml(d.open_hours)}</td>
                                 <td>${parseFloat(d.avg_water_temp).toFixed(1)}°C</td>
                                 <td>${parseFloat(d.total_loss_kwh).toFixed(1)}</td>
-                                <td>${parseFloat(d.hp_thermal_kwh || d.total_hp_kwh).toFixed(1)}</td>
-                                <td>${parseFloat(d.boiler_thermal_kwh || d.total_boiler_kwh).toFixed(1)}</td>
+                                <td>${this.dailyHeat(d).stored ? this.dailyHeat(d).hp.toFixed(1) : '-'}</td>
+                                <td>${this.dailyHeat(d).stored ? this.dailyHeat(d).boiler.toFixed(1) : '-'}</td>
                                 <td>${this.formatCurrency(d.total_cost)}</td>
                             </tr>
                         `).join('')}
@@ -733,6 +776,36 @@ const SimulationsModule = {
         };
     },
 
+    /**
+     * Daily heat output for charts/tables. Runs stored before migration 038
+     * have no daily thermal values (null): return the electricity instead and
+     * say so (stored: false) - never an estimate from a fixed COP.
+     */
+    dailyHeat: function(d) {
+        const hp = d.hp_thermal_kwh, boiler = d.boiler_thermal_kwh;
+        const stored = hp !== null && hp !== undefined && boiler !== null && boiler !== undefined;
+        return stored
+            ? { hp: parseFloat(hp) || 0, boiler: parseFloat(boiler) || 0, stored: true }
+            : { hp: parseFloat(d.total_hp_kwh) || 0, boiler: parseFloat(d.total_boiler_kwh) || 0, stored: false };
+    },
+
+    // Dataset labels for dailyHeat values
+    dailyHeatLabels: function(dailyResults) {
+        const stored = dailyResults.every(d => this.dailyHeat(d).stored);
+        return stored
+            ? { hp: 'Heat Pump (kWh)', boiler: 'Boiler (kWh)', stored }
+            : { hp: 'Heat Pump electricity (kWh) - heat output not stored for this run', boiler: 'Boiler electricity (kWh)', stored };
+    },
+
+    // 'YYYY-MM-DD' plus n days, computed in UTC so a DST change in the
+    // browser's time zone cannot skip or repeat a day.
+    addDays: function(ymd, n) {
+        const [y, m, d] = ymd.split('-').map(Number);
+        const dt = new Date(Date.UTC(y, m - 1, d));
+        dt.setUTCDate(dt.getUTCDate() + n);
+        return dt.toISOString().slice(0, 10);
+    },
+
     // A percentage field (e.g. wind exposure "40" or "40%") as a fraction (0.40).
     // Values up to 1 are taken as already being a fraction.
     percentToFraction: function(value) {
@@ -813,7 +886,7 @@ const SimulationsModule = {
 
         if (select1 && select2) {
             try {
-                const response = await fetch('/api/simulation_api.php?action=get_runs&limit=50');
+                const response = await fetch('/api/simulation_api.php?action=get_runs&status=completed&limit=50');
                 const data = await response.json();
 
                 if (data.runs) {
@@ -894,10 +967,11 @@ const SimulationsModule = {
             'cfg-val-solar': solarDisplay
         };
 
+        // A value the config lacks shows '-' (not the previous config's value)
         for (const [id, value] of Object.entries(mappings)) {
             const el = document.getElementById(id);
-            if (el && value !== undefined) {
-                el.textContent = value;
+            if (el) {
+                el.textContent = (value !== undefined && value !== null && value !== '') ? value : '-';
             }
         }
 
@@ -928,7 +1002,7 @@ const SimulationsModule = {
         const fields = [
             'sim-hp-override', 'sim-boiler-override', 'sim-target-offset',
             'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
-            'sim-activity-override', 'sim-wind-override', 'sim-solar-override'
+            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy'
         ];
 
         // Try loading from server first
@@ -977,7 +1051,7 @@ const SimulationsModule = {
         const fields = [
             'sim-hp-override', 'sim-boiler-override', 'sim-target-offset',
             'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
-            'sim-activity-override', 'sim-wind-override', 'sim-solar-override'
+            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy'
         ];
         const overrides = {};
         fields.forEach(id => {
@@ -1002,74 +1076,13 @@ const SimulationsModule = {
     },
 
     /**
-     * Build config override object from override fields
-     * Returns an object with only the overridden values for API
-     */
-    buildConfigOverride: function() {
-        const getOverride = (id) => {
-            const el = document.getElementById(id);
-            return el && el.value !== '' ? parseFloat(el.value) : null;
-        };
-
-        const override = {};
-
-        // Equipment overrides
-        const hpOverride = getOverride('sim-hp-override');
-        const boilerOverride = getOverride('sim-boiler-override');
-        if (hpOverride !== null || boilerOverride !== null) {
-            override.equipment = {};
-            if (hpOverride !== null) override.equipment.hp_capacity_kw = hpOverride;
-            if (boilerOverride !== null) override.equipment.boiler_capacity_kw = boilerOverride;
-        }
-
-        // Control overrides
-        const targetOffset = SimulationsModule.readTargetOffset();
-        const upperTolOverride = getOverride('sim-upper-tol-override');
-        const lowerTolOverride = getOverride('sim-lower-tol-override');
-        if (targetOffset !== null || upperTolOverride !== null || lowerTolOverride !== null) {
-            override.control = {};
-            if (targetOffset !== null) override.control.target_offset = targetOffset;
-            if (upperTolOverride !== null) override.control.upper_tolerance = upperTolOverride;
-            if (lowerTolOverride !== null) override.control.lower_tolerance = lowerTolOverride;
-        }
-
-        // Bathers overrides
-        const bathersOverride = getOverride('sim-bathers-override');
-        const activityOverride = getOverride('sim-activity-override');
-        if (bathersOverride !== null || activityOverride !== null) {
-            override.bathers = {};
-            if (bathersOverride !== null) override.bathers.per_day = Math.round(bathersOverride);
-            if (activityOverride !== null) override.bathers.activity_factor = activityOverride;
-        }
-
-        // Pool overrides
-        const windOverride = getOverride('sim-wind-override');
-        if (windOverride !== null) {
-            // Typed as a percentage like the base value (50.0%); send a fraction
-            override.pool = { wind_exposure: SimulationsModule.percentToFraction(windOverride) };
-        }
-
-        // Solar overrides
-        const solarOverride = getOverride('sim-solar-override');
-        if (solarOverride !== null) {
-            override.solar = { absorption: solarOverride };
-        }
-
-        // Save overrides for next time
-        this.saveOverrides();
-
-        // Return null if no overrides set
-        return Object.keys(override).length > 0 ? override : null;
-    },
-
-    /**
      * Clear all override fields
      */
     clearAllOverrides: function() {
         const ids = [
             'sim-hp-override', 'sim-boiler-override', 'sim-target-offset',
             'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
-            'sim-activity-override', 'sim-wind-override', 'sim-solar-override'
+            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy'
         ];
         ids.forEach(id => {
             const el = document.getElementById(id);
@@ -1115,15 +1128,49 @@ const SimulationsModule = {
         }
     },
 
+    // Override fields: [id, label, min, max, integer]. Wind and solar are
+    // typed as percentages, like the Config column shows them.
+    OVERRIDE_FIELDS: [
+        ['sim-hp-override', 'HP capacity (kW)', 0, 100000],
+        ['sim-boiler-override', 'Boiler capacity (kW)', 0, 100000],
+        ['sim-upper-tol-override', 'Upper tolerance (°C)', 0, 5],
+        ['sim-lower-tol-override', 'Lower tolerance (°C)', 0, 10],
+        ['sim-bathers-override', 'Bathers per day', 0, 100000, true],
+        ['sim-activity-override', 'Activity factor', 0, 5],
+        ['sim-wind-override', 'Wind exposure (%)', 0, 100],
+        ['sim-solar-override', 'Solar absorption (%)', 0, 100]
+    ],
+
+    /**
+     * Read one override field. Blank = null (use the config). Accepts a
+     * decimal comma and a trailing "%". Throws a readable error for text or
+     * out-of-range values instead of sending 0, a truncated number or null.
+     */
+    readOverride: function(id) {
+        const field = this.OVERRIDE_FIELDS.find(f => f[0] === id);
+        const el = document.getElementById(id);
+        const raw = el ? el.value.trim().replace(',', '.').replace(/%$/, '').trim() : '';
+        if (raw === '') return null;
+        const v = Number(raw);
+        const [, label, min, max, integer] = field;
+        if (!Number.isFinite(v) || v < min || v > max || (integer && !Number.isInteger(v))) {
+            throw new Error(`${label} "${el.value}" is not valid: use ${integer ? 'a whole number' : 'a number'} from ${min} to ${max}, or leave it blank`);
+        }
+        return v;
+    },
+
+    /** Strategy override from the Simulate tab ('' = use the config's). */
+    readStrategy: function() {
+        return document.getElementById('sim-strategy')?.value || null;
+    },
+
     /**
      * Build config override object from override fields
      * Returns an object with only the overridden values for API
+     * (throws on invalid input - see readOverride)
      */
     buildConfigOverride: function() {
-        const getOverride = (id) => {
-            const el = document.getElementById(id);
-            return el && el.value !== '' ? parseFloat(el.value) : null;
-        };
+        const getOverride = (id) => this.readOverride(id);
 
         const override = {};
 
@@ -1140,11 +1187,13 @@ const SimulationsModule = {
         const targetOffset = SimulationsModule.readTargetOffset();
         const upperTolOverride = getOverride('sim-upper-tol-override');
         const lowerTolOverride = getOverride('sim-lower-tol-override');
-        if (targetOffset !== null || upperTolOverride !== null || lowerTolOverride !== null) {
+        const strategy = this.readStrategy();
+        if (targetOffset !== null || upperTolOverride !== null || lowerTolOverride !== null || strategy) {
             override.control = {};
             if (targetOffset !== null) override.control.target_offset = targetOffset;
             if (upperTolOverride !== null) override.control.upper_tolerance = upperTolOverride;
             if (lowerTolOverride !== null) override.control.lower_tolerance = lowerTolOverride;
+            if (strategy) override.control.strategy = strategy;
         }
 
         // Bathers overrides
@@ -1152,7 +1201,7 @@ const SimulationsModule = {
         const activityOverride = getOverride('sim-activity-override');
         if (bathersOverride !== null || activityOverride !== null) {
             override.bathers = {};
-            if (bathersOverride !== null) override.bathers.per_day = Math.round(bathersOverride);
+            if (bathersOverride !== null) override.bathers.per_day = bathersOverride;
             if (activityOverride !== null) override.bathers.activity_factor = activityOverride;
         }
 
@@ -1183,10 +1232,7 @@ const SimulationsModule = {
         const config = JSON.parse(JSON.stringify(baseConfig)); // Deep clone
 
         // Apply overrides if set
-        const getOverride = (id) => {
-            const el = document.getElementById(id);
-            return el && el.value ? parseFloat(el.value) : null;
-        };
+        const getOverride = (id) => this.readOverride(id);
 
         const hpOverride = getOverride('sim-hp-override');
         const boilerOverride = getOverride('sim-boiler-override');
@@ -1203,7 +1249,7 @@ const SimulationsModule = {
         if (targetOffset !== null) config.control.target_offset = targetOffset;
         if (upperTolOverride !== null) config.control.upper_tolerance = upperTolOverride;
         if (lowerTolOverride !== null) config.control.lower_tolerance = lowerTolOverride;
-        if (bathersOverride !== null) config.bathers.per_day = Math.round(bathersOverride);
+        if (bathersOverride !== null) config.bathers.per_day = bathersOverride;
         if (activityOverride !== null) config.bathers.activity_factor = activityOverride;
         if (windOverride !== null) config.pool.wind_exposure = SimulationsModule.percentToFraction(windOverride);
         if (solarOverride !== null) config.solar.absorption = solarOverride;
@@ -1535,7 +1581,7 @@ const SimulationsModule = {
 
         try {
             // Use stored water temp from simulation (no override)
-            const url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}`;
+            const url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}${this.debugRunParam(date)}`;
 
             const response = await fetch(url);
             const data = await response.json();
@@ -1572,15 +1618,13 @@ const SimulationsModule = {
         if (!hourEl || !dateEl) return;
 
         let hour = parseInt(hourEl.value);
-        let date = new Date(dateEl.value);
 
         if (hour > 0) {
             hour--;
         } else {
             // Go to previous day, hour 23
             hour = 23;
-            date.setDate(date.getDate() - 1);
-            dateEl.value = date.toISOString().split('T')[0];
+            dateEl.value = SimulationsModule.addDays(dateEl.value, -1);
         }
         hourEl.value = hour;
         this.debugHour();
@@ -1595,15 +1639,13 @@ const SimulationsModule = {
         if (!hourEl || !dateEl) return;
 
         let hour = parseInt(hourEl.value);
-        let date = new Date(dateEl.value);
 
         if (hour < 23) {
             hour++;
         } else {
             // Go to next day, hour 0
             hour = 0;
-            date.setDate(date.getDate() + 1);
-            dateEl.value = date.toISOString().split('T')[0];
+            dateEl.value = SimulationsModule.addDays(dateEl.value, 1);
         }
         hourEl.value = hour;
         this.debugHour();
@@ -2011,7 +2053,7 @@ const SimulationsModule = {
         if (placeholder) placeholder.innerHTML = '<span style="color: #666;">Loading weekly data...</span>';
 
         try {
-            const url = `/api/simulation_api.php?action=debug_week&date=${date}`;
+            const url = `/api/simulation_api.php?action=debug_week&date=${date}${this.debugRunParam(date)}`;
             const response = await fetch(url);
             const result = await response.json();
 
@@ -2051,11 +2093,7 @@ const SimulationsModule = {
         const dateInput = document.getElementById('debug-date');
         if (!dateInput || !dateInput.value) return;
 
-        const currentDate = new Date(dateInput.value);
-        currentDate.setDate(currentDate.getDate() + (direction * 7));
-
-        // Format as YYYY-MM-DD
-        const newDate = currentDate.toISOString().split('T')[0];
+        const newDate = SimulationsModule.addDays(dateInput.value, direction * 7);
         dateInput.value = newDate;
 
         // Save to server preferences and reload
@@ -2644,10 +2682,14 @@ const SimulationsModule = {
     /**
      * Auto-load last simulation run results for Simulate tab
      */
-    autoLoadLastRun: async function() {
+    autoLoadLastRun: async function(runId = null, options = {}) {
         try {
-            // Get the most recent completed run
-            const response = await fetch('/api/simulation_api.php?action=get_runs&limit=1');
+            // The given run, or the most recent COMPLETED run (a running or
+            // failed run has no results and would show as all zeros)
+            const query = runId
+                ? `run_id=${encodeURIComponent(runId)}`
+                : 'status=completed&limit=1';
+            const response = await fetch(`/api/simulation_api.php?action=get_runs&${query}`);
             const data = await response.json();
 
             if (!data.runs || data.runs.length === 0) {
@@ -2695,7 +2737,7 @@ const SimulationsModule = {
 
             // Show last run completion time in status with version
             const statusEl = document.getElementById('simulation-status');
-            if (statusEl && lastRun.completed_at) {
+            if (statusEl && lastRun.completed_at && !options.keepStatus) {
                 const completed = new Date(lastRun.completed_at);
                 const dateStr = completed.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
                 const timeStr = completed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
@@ -2716,25 +2758,23 @@ const SimulationsModule = {
         const container = document.getElementById('sim-summary-cards');
         if (!container) return;
 
-        // Calculate thermal output (heat delivered), not electricity/fuel consumed
-        // For old runs without thermal columns, estimate using typical COP/efficiency
-        const hpThermal = summary.hp_thermal_kwh > 0
-            ? summary.hp_thermal_kwh
-            : (summary.total_hp_energy_kwh || 0) * 3.5;
-        const boilerThermal = summary.boiler_thermal_kwh > 0
-            ? summary.boiler_thermal_kwh
-            : (summary.total_boiler_energy_kwh || 0) * 0.92;
+        // Thermal output (heat delivered), not electricity consumed. Very old
+        // runs without it show '-' rather than an estimate from a fixed COP.
+        const hpThermal = summary.hp_thermal_kwh ?? null;
+        const boilerThermal = summary.boiler_thermal_kwh ?? null;
 
         // Show per-year figures (summary.*_kwh / total_cost are cumulative over
         // the whole simulated period) so these cards match the annualized
         // Simulation Report instead of showing 10x-larger period totals.
-        const years = (summary.total_hours || 0) / 8760 || 1;
+        const basis = annualBasis(summary.total_hours);
+        const years = basis.divisor;
+        const sfx = basis.suffix;
         const cards = [
-            { label: 'Total Cost/yr', value: this.formatCurrency((summary.total_cost || 0) / years) },
-            { label: 'Heat Loss/yr', value: this.formatEnergy((summary.total_heat_loss_kwh || 0) / years) },
-            { label: 'Solar Gain/yr', value: this.formatEnergy((summary.total_solar_gain_kwh || 0) / years) },
-            { label: 'HP Thermal/yr', value: this.formatEnergy((hpThermal || 0) / years) },
-            { label: 'Boiler Thermal/yr', value: this.formatEnergy((boilerThermal || 0) / years) },
+            { label: 'Total Cost' + sfx, value: this.formatCurrency((summary.total_cost || 0) / years) },
+            { label: 'Heat Loss' + sfx, value: this.formatEnergy((summary.total_heat_loss_kwh || 0) / years) },
+            { label: 'Solar Gain' + sfx, value: this.formatEnergy((summary.total_solar_gain_kwh || 0) / years) },
+            { label: 'HP Thermal' + sfx, value: hpThermal === null ? '-' : this.formatEnergy(hpThermal / years) },
+            { label: 'Boiler Thermal' + sfx, value: boilerThermal === null ? '-' : this.formatEnergy(boilerThermal / years) },
             { label: 'Avg COP', value: summary.avg_cop?.toFixed(2) || '-' }
         ];
 
@@ -2782,18 +2822,9 @@ const SimulationsModule = {
 
         // Prepare data - use thermal output (heat delivered), NOT electricity consumed
         const labels = dailyResults.map(d => d.date);
-        const hpData = dailyResults.map(d => {
-            const thermal = parseFloat(d.hp_thermal_kwh);
-            if (thermal > 0) return thermal;
-            const elec = parseFloat(d.total_hp_kwh) || 0;
-            return elec * 3.5;  // Estimated thermal output
-        });
-        const boilerData = dailyResults.map(d => {
-            const thermal = parseFloat(d.boiler_thermal_kwh);
-            if (thermal > 0) return thermal;
-            const fuel = parseFloat(d.total_boiler_kwh) || 0;
-            return fuel * 0.92;  // Estimated thermal output
-        });
+        const heatLabels = this.dailyHeatLabels(dailyResults);
+        const hpData = dailyResults.map(d => this.dailyHeat(d).hp);
+        const boilerData = dailyResults.map(d => this.dailyHeat(d).boiler);
 
         this.yearlyChart = new Chart(canvas, {
             type: 'line',
@@ -2801,7 +2832,7 @@ const SimulationsModule = {
                 labels: labels,
                 datasets: [
                     {
-                        label: 'Heat Pump (kWh)',
+                        label: heatLabels.hp,
                         data: hpData,
                         borderColor: 'rgba(40, 167, 69, 1)',
                         backgroundColor: 'rgba(40, 167, 69, 0.7)',
@@ -2812,7 +2843,7 @@ const SimulationsModule = {
                         order: 1
                     },
                     {
-                        label: 'Boiler (kWh)',
+                        label: heatLabels.boiler,
                         data: boilerData,
                         borderColor: 'rgba(220, 53, 69, 1)',
                         backgroundColor: 'rgba(220, 53, 69, 0.7)',
@@ -2877,7 +2908,7 @@ const SimulationsModule = {
 
         try {
             // Load debug hour data
-            const url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}`;
+            const url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}${this.debugRunParam(date)}`;
             const response = await fetch(url);
             const data = await response.json();
 

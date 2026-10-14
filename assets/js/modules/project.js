@@ -297,19 +297,8 @@ const ProjectModule = {
         const listEl = document.getElementById('site-pools-list');
         if (!listEl) return;
 
-        // Get pools from configuration if available
-        let pools = this.currentSite?.pools || [];
-
-        if (typeof app.configuration !== 'undefined') {
-            const config = app.configuration.getConfig();
-            if (config?.pool) {
-                pools = [{
-                    name: 'Main Pool',
-                    volume: config.pool.volume,
-                    surface_area: config.pool.surface_area
-                }];
-            }
-        }
+        // Pools of the site (the Configuration editor has no pool data)
+        const pools = this.currentSite?.pools || [];
 
         if (pools.length > 0) {
             listEl.innerHTML = pools.map(pool =>
@@ -1038,7 +1027,7 @@ const ProjectModule = {
         }
 
         const pool = this.currentPool;
-        const cfg = typeof app.configuration !== 'undefined' ? app.configuration.getConfig() : null;
+        const cfg = await this.loadDisplayConfig();
 
         // Pool name
         const nameEl = document.getElementById('pool-name');
@@ -1062,10 +1051,33 @@ const ProjectModule = {
         const hpEl = document.getElementById('pool-hp-capacity');
         const boilerEl = document.getElementById('pool-boiler-capacity');
 
-        if (cfg) {
-            if (targetEl) targetEl.textContent = cfg.control?.target_temp ? `${cfg.control.target_temp}°C` : '28°C';
-            if (hpEl) hpEl.textContent = cfg.equipment?.hp_capacity_kw ? `${cfg.equipment.hp_capacity_kw} kW` : '- kW';
-            if (boilerEl) boilerEl.textContent = cfg.equipment?.boiler_capacity_kw ? `${cfg.equipment.boiler_capacity_kw} kW` : '- kW';
+        const num = v => v !== null && v !== undefined && v !== '';
+        if (targetEl) targetEl.textContent = num(cfg?.control?.target_temp) ? `${cfg.control.target_temp}°C` : '-';
+        if (hpEl) hpEl.textContent = num(cfg?.equipment?.hp_capacity_kw) ? `${cfg.equipment.hp_capacity_kw} kW` : '- kW';
+        if (boilerEl) boilerEl.textContent = num(cfg?.equipment?.boiler_capacity_kw) ? `${cfg.equipment.boiler_capacity_kw} kW` : '- kW';
+    },
+
+    /**
+     * The saved configuration shown on the project page and dashboard: the
+     * one selected in SimControl, else the project's first. Read from the
+     * API - not from the Configuration editor's form, which holds HTML
+     * defaults or unsaved edits. Returns the config object or null.
+     */
+    async loadDisplayConfig() {
+        try {
+            const projectId = this.currentProject?.id || '';
+            const response = await fetch(`./api/heataq_api.php?action=get_project_configs&project_id=${encodeURIComponent(projectId)}`);
+            const data = await response.json();
+            const configs = data.configs || [];
+            if (!configs.length) return null;
+            const selected = typeof SimControlModule !== 'undefined'
+                ? SimControlModule.getPreference('selected_config')
+                : localStorage.getItem('heataq_selected_config');
+            const chosen = configs.find(c => String(c.template_id) === String(selected)) || configs[0];
+            return chosen.config || null;
+        } catch (error) {
+            console.error('[Project] Could not load configuration:', error);
+            return null;
         }
     },
 
@@ -1099,21 +1111,17 @@ const ProjectModule = {
     // Load project summary data
     async loadSummary() {
         try {
-            // Get configuration data
-            if (typeof app.configuration !== 'undefined') {
-                const config = app.configuration.getConfig();
-                if (config) {
-                    const siteEl = document.getElementById('dash-site-name');
-                    const areaEl = document.getElementById('dash-pool-area');
-                    const hpEl = document.getElementById('dash-hp-capacity');
-                    const boilerEl = document.getElementById('dash-boiler-capacity');
+            // Saved configuration (see loadDisplayConfig) and pool data
+            const config = await this.loadDisplayConfig();
+            const siteEl = document.getElementById('dash-site-name');
+            const areaEl = document.getElementById('dash-pool-area');
+            const hpEl = document.getElementById('dash-hp-capacity');
+            const boilerEl = document.getElementById('dash-boiler-capacity');
 
-                    if (siteEl) siteEl.textContent = this.currentProject?.name || '-';
-                    if (areaEl) areaEl.textContent = config.pool?.surface_area ? `${config.pool.surface_area} m²` : '-';
-                    if (hpEl) hpEl.textContent = config.equipment?.hp_capacity_kw ? `${config.equipment.hp_capacity_kw} kW` : '-';
-                    if (boilerEl) boilerEl.textContent = config.equipment?.boiler_capacity_kw ? `${config.equipment.boiler_capacity_kw} kW` : '-';
-                }
-            }
+            if (siteEl) siteEl.textContent = this.currentProject?.name || '-';
+            if (areaEl) areaEl.textContent = this.currentPool?.area ? `${this.currentPool.area} m²` : '-';
+            if (hpEl) hpEl.textContent = config?.equipment?.hp_capacity_kw != null ? `${config.equipment.hp_capacity_kw} kW` : '-';
+            if (boilerEl) boilerEl.textContent = config?.equipment?.boiler_capacity_kw != null ? `${config.equipment.boiler_capacity_kw} kW` : '-';
 
             // Get weather data range (from simulation API)
             const weatherResponse = await fetch('./api/simulation_api.php?action=get_weather_range');

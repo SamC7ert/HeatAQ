@@ -156,7 +156,59 @@ const ConfigurationModule = {
     },
 
     // Populate form from config object
+    // Editor fields: [id, label, required]. Cleared before a config is shown,
+    // so a field the config lacks shows blank instead of the previous
+    // config's value, and checked before saving.
+    FIELDS: [
+        ['cfg-hp-capacity', 'Heat pump capacity', true],
+        ['cfg-hp-cop', 'Heat pump COP', true],
+        ['cfg-boiler-capacity', 'Boiler capacity', true],
+        ['cfg-boiler-eff', 'Boiler efficiency', true],
+        ['cfg-showers-hp', 'Showers use HP', false],
+        ['cfg-target-temp', 'Target temperature', true],
+        ['cfg-upper-tolerance', 'Upper tolerance', true],
+        ['cfg-lower-tolerance', 'Lower tolerance', true],
+        ['cfg-strategy', 'Strategy', false],
+        ['cfg-standby-temp', 'Standby temperature', false],
+        ['cfg-bathers', 'Bathers per day', true],
+        ['cfg-refill-liters', 'Refill litres', true],
+        ['cfg-shower-liters', 'Shower litres', true],
+        ['cfg-activity-factor', 'Activity factor', true],
+        ['cfg-cold-water-temp', 'Cold water temperature', true],
+        ['cfg-shower-target-temp', 'Shower temperature', true],
+        ['cfg-hot-water-temp', 'Hot water tank temperature', true],
+        ['cfg-hp-max-dhw-temp', 'HP max DHW temperature', true],
+        ['cfg-elec-cost', 'Electricity price', true],
+        ['cfg-gas-cost', 'Gas/oil price', true]
+    ],
+
+    clearForm: function() {
+        this.FIELDS.forEach(([id]) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (el.tagName === 'SELECT') el.selectedIndex = 0;
+            else el.value = '';
+        });
+    },
+
+    // Number from a field: decimal comma accepted, blank/text -> null
+    numVal: function(id) {
+        const raw = (this.getVal(id) ?? '').trim().replace(',', '.');
+        if (raw === '') return null;
+        const v = Number(raw);
+        return Number.isFinite(v) ? v : null;
+    },
+
+    // Labels of required fields that are blank or not a number
+    invalidFields: function() {
+        return this.FIELDS
+            .filter(([id, , required]) => required && document.getElementById(id) && this.numVal(id) === null)
+            .map(([, label]) => label);
+    },
+
     populateForm: function(config) {
+        this.clearForm();
+
         // Pool Physical
         if (config.pool) {
             this.setVal('cfg-pool-volume', config.pool.volume_m3);
@@ -258,6 +310,11 @@ const ConfigurationModule = {
             return;
         }
 
+        const invalid = this.invalidFields();
+        if (invalid.length) {
+            alert('Please fill in a number for: ' + invalid.join(', '));
+            return;
+        }
         const config = this.getConfig();
 
         try {
@@ -366,54 +423,41 @@ const ConfigurationModule = {
     },
 
     // Get current configuration as object
+    // Only the sections the editor has fields for (pool, cover and solar
+    // live on the pool/site since migration 024).
     getConfig: function() {
+        const n = (id) => this.numVal(id);
         return {
-            pool: {
-                volume_m3: parseFloat(this.getVal('cfg-pool-volume')),
-                area_m2: parseFloat(this.getVal('cfg-pool-area')),
-                depth_m: parseFloat(this.getVal('cfg-pool-depth')),
-                wind_exposure: parseFloat(this.getVal('cfg-wind-factor')),
-                years_operating: parseInt(this.getVal('cfg-years-operating')) || 3
-            },
-            cover: {
-                has_cover: this.getVal('cfg-has-cover') === '1',
-                u_value: parseFloat(this.getVal('cfg-cover-u')),
-                solar_transmittance: parseFloat(this.getVal('cfg-cover-solar'))
-            },
-            solar: {
-                absorption: parseFloat(this.getVal('cfg-solar-absorb'))
-            },
-            weather_station_id: this.getVal('cfg-weather-station') || null,
             equipment: {
-                hp_capacity_kw: parseFloat(this.getVal('cfg-hp-capacity')),
-                hp_cop: parseFloat(this.getVal('cfg-hp-cop')),
-                boiler_capacity_kw: parseFloat(this.getVal('cfg-boiler-capacity')),
-                boiler_efficiency: parseFloat(this.getVal('cfg-boiler-eff')),
+                hp_capacity_kw: n('cfg-hp-capacity'),
+                hp_cop: n('cfg-hp-cop'),
+                boiler_capacity_kw: n('cfg-boiler-capacity'),
+                boiler_efficiency: n('cfg-boiler-eff'),
                 showers_use_hp: this.getVal('cfg-showers-hp') === '1'
             },
             control: {
-                target_temp: parseFloat(this.getVal('cfg-target-temp')),
-                upper_tolerance: parseFloat(this.getVal('cfg-upper-tolerance')),
-                lower_tolerance: parseFloat(this.getVal('cfg-lower-tolerance')),
+                target_temp: n('cfg-target-temp'),
+                upper_tolerance: n('cfg-upper-tolerance'),
+                lower_tolerance: n('cfg-lower-tolerance'),
                 strategy: this.getVal('cfg-strategy'),
                 // Blank = no standby minimum (null)
-                standby_temp: this.getVal('cfg-standby-temp') === '' ? null : parseFloat(this.getVal('cfg-standby-temp'))
+                standby_temp: n('cfg-standby-temp')
             },
             bathers: {
-                per_day: parseInt(this.getVal('cfg-bathers')),
-                refill_liters: parseInt(this.getVal('cfg-refill-liters')),
-                shower_liters: parseInt(this.getVal('cfg-shower-liters')),
-                activity_factor: parseFloat(this.getVal('cfg-activity-factor'))
+                per_day: n('cfg-bathers'),
+                refill_liters: n('cfg-refill-liters'),
+                shower_liters: n('cfg-shower-liters'),
+                activity_factor: n('cfg-activity-factor')
             },
             water_temps: {
-                cold_water: parseInt(this.getVal('cfg-cold-water-temp')),
-                shower_target: parseInt(this.getVal('cfg-shower-target-temp')),
-                hot_water_tank: parseInt(this.getVal('cfg-hot-water-temp')),
-                hp_max_dhw: parseInt(this.getVal('cfg-hp-max-dhw-temp'))
+                cold_water: n('cfg-cold-water-temp'),
+                shower_target: n('cfg-shower-target-temp'),
+                hot_water_tank: n('cfg-hot-water-temp'),
+                hp_max_dhw: n('cfg-hp-max-dhw-temp')
             },
             costs: {
-                electricity_nok_kwh: parseFloat(this.getVal('cfg-elec-cost')),
-                gas_nok_kwh: parseFloat(this.getVal('cfg-gas-cost'))
+                electricity_nok_kwh: n('cfg-elec-cost'),
+                gas_nok_kwh: n('cfg-gas-cost')
             }
         };
     },
@@ -425,6 +469,11 @@ const ConfigurationModule = {
             return;
         }
 
+        const invalid = this.invalidFields();
+        if (invalid.length) {
+            alert('Please fill in a number for: ' + invalid.join(', '));
+            return;
+        }
         const config = this.getConfig();
         const currentConfig = this.configs.find(c => c.template_id == this.currentConfigId);
 
