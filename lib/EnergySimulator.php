@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.12.1';   // Daily avg_air/avg_water are averages on every day (were sums except the last); start temp from resolved target
+    const VERSION = '3.12.2';   // Solar coverage checked whenever the site has solar data; COP, boiler efficiency and prices validated
     const TARGET_OFFSET_LIMIT = 5.0;  // °C, max |offset| accepted from SimControl
 
     private $db;
@@ -514,6 +514,26 @@ class EnergySimulator {
             $errors[] = 'equipment.boiler.capacity_kw is required';
         }
 
+        // A unit that can run needs its efficiency and price: a cleared field
+        // saves as null, which divided by zero (boiler) or priced energy at 0.
+        $positive = fn($v) => is_numeric($v) && (float) $v > 0;
+        if ((float) ($this->equipment['heat_pump']['capacity_kw'] ?? 0) > 0) {
+            if (!$positive($this->equipment['heat_pump']['cop_nominal'] ?? null)) {
+                $errors[] = 'heat pump COP must be greater than 0';
+            }
+            if (!is_numeric($this->equipment['electricity_cost_per_kwh'] ?? null)) {
+                $errors[] = 'electricity price is required';
+            }
+        }
+        if ((float) ($this->equipment['boiler']['capacity_kw'] ?? 0) > 0) {
+            if (!$positive($this->equipment['boiler']['efficiency'] ?? null)) {
+                $errors[] = 'boiler efficiency must be greater than 0';
+            }
+            if (!is_numeric($this->equipment['boiler']['fuel_cost_per_kwh'] ?? null)) {
+                $errors[] = 'boiler fuel price is required';
+            }
+        }
+
         // Thermal mass rate (calculated from volume)
         if ($this->thermalMassRate === null || $this->thermalMassRate <= 0) {
             $errors[] = 'thermal_mass_rate not calculated (check volume_m3)';
@@ -639,7 +659,9 @@ class EnergySimulator {
         // run - a partially covered period would silently contribute 0 solar
         // gain on the missing days and overstate heating demand. A site with
         // NO solar data at all runs explicitly (and visibly) without solar.
-        if (!empty($solarData)) {
+        // "Has solar data" is decided for the site, not the period: data for
+        // other years only must not make this run silently solar-free.
+        if (!empty($solarData) || $this->siteHasSolarData()) {
             $missingDays = [];
             $cursor = new DateTime($startDate);
             $last = new DateTime($endDate);
@@ -1277,6 +1299,23 @@ class EnergySimulator {
         } catch (PDOException $e) {
             return false;
         }
+    }
+
+    /**
+     * Does the site have ANY solar data (hourly, or daily via its station)?
+     */
+    private function siteHasSolarData() {
+        if ($this->hasHourlySolarData()) return true;
+        if (!$this->poolSiteId) return false;
+        $stmt = $this->db->prepare("
+            SELECT 1
+            FROM solar_daily_data sd
+            JOIN pool_sites ps ON sd.station_id = COALESCE(ps.weather_station_id, ps.default_weather_station)
+            WHERE ps.id = ?
+            LIMIT 1
+        ");
+        $stmt->execute([$this->poolSiteId]);
+        return (bool) $stmt->fetchColumn();
     }
 
     /**
