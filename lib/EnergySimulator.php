@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.15.0';   // Site local time (from coordinates) for schedules, daily totals and reported hours; weather/solar stay UTC
+    const VERSION = '3.15.1';   // Solar fetched from the previous UTC day like weather; site local time (from coordinates) for schedules, daily totals and reported hours; weather/solar stay UTC
     const TARGET_OFFSET_LIMIT = 5.0;  // °C, max |offset| accepted from SimControl
 
     private $db;
@@ -716,8 +716,10 @@ class EnergySimulator {
             return $localDate >= $startDate && $localDate <= $endDate;
         }));
 
-        // Get solar data for period
-        $solarData = $this->getSolarData($startDate, $endDate);
+        // Get solar data for period. Like the weather, it is fetched from the
+        // previous UTC day: the first local day starts on that day's last
+        // UTC hours. Coverage is still checked on the requested days only.
+        $solarData = $this->getSolarData($prevDay, $endDate);
 
         // STRICT: when the site has solar data, it must cover every day of the
         // run - a partially covered period would silently contribute 0 solar
@@ -864,7 +866,9 @@ class EnergySimulator {
             if (!isset($hour['wind_speed'])) $results['summary']['weather_hours_missing_wind']++;
             if (!isset($hour['humidity'])) $results['summary']['weather_hours_missing_humidity']++;
             if (!isset($hour['air_temperature'])) $results['summary']['weather_hours_missing_air_temp']++;
-            if (!empty($solarData) && $solarDate !== $lastSolarCheckDate) {
+            // (The previous UTC day's night hours that open the first local
+            // day are not counted: that day is outside the requested period.)
+            if (!empty($solarData) && $solarDate !== $lastSolarCheckDate && $solarDate >= $startDate) {
                 $lastSolarCheckDate = $solarDate;
                 // Daily data is keyed by date, hourly data by full timestamp -
                 // probe both shapes (noon is present in any complete hourly day).
