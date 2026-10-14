@@ -739,8 +739,10 @@ const EnergyAnalysis = {
             this.results.map(r => r.success ? (r.summary?.total_hp_energy_kwh || 0) / 1000 / yearsOf(r) : '-'),
             true, false));
 
-        // Boiler Electric (API uses total_boiler_energy_kwh)
-        rows.push(this.buildRow('Boiler Electric', 'MWh' + sfx,
+        // Boiler input (API uses total_boiler_energy_kwh): electricity for an
+        // electric boiler, gas/oil for a fuel boiler (not in the electric total)
+        const boilerFuel = firstOkCase?.summary?.boiler_type === 'fuel';
+        rows.push(this.buildRow(boilerFuel ? 'Boiler Fuel (gas/oil)' : 'Boiler Electric', 'MWh' + sfx,
             this.results.map(r => r.success ? (r.summary?.total_boiler_energy_kwh || 0) / 1000 / yearsOf(r) : '-'),
             true, false));
 
@@ -748,7 +750,7 @@ const EnergyAnalysis = {
         const totalElec = this.results.map(r => {
             if (!r.success) return null;
             const hp = r.summary?.total_hp_energy_kwh || 0;
-            const boiler = r.summary?.total_boiler_energy_kwh || 0;
+            const boiler = r.summary?.boiler_type === 'fuel' ? 0 : (r.summary?.total_boiler_energy_kwh || 0);
             return (hp + boiler) / 1000 / yearsOf(r);
         });
         rows.push(this.buildTotalElectricRow('Total Electric', 'MWh' + sfx, totalElec));
