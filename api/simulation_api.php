@@ -204,6 +204,19 @@ try {
                 $storeHourly = true;
             }
 
+            // The schedule template must belong to this site's project
+            if ($templateId) {
+                $tplStmt = $pdo->prepare("
+                    SELECT 1 FROM schedule_templates t
+                    JOIN pool_sites s ON s.project_id = t.project_id
+                    WHERE t.template_id = ? AND s.id = ?
+                ");
+                $tplStmt->execute([$templateId, $currentPoolSiteId]);
+                if (!$tplStmt->fetchColumn()) {
+                    sendError('Run not started - the selected Schedule was not found in this project', 400);
+                }
+            }
+
             // Initialize scheduler (with optional template selection)
             $poolSiteId = $currentPoolSiteId;
             $scheduler = new PoolScheduler($pdo, $poolSiteId, $templateId);
@@ -258,9 +271,9 @@ try {
 
             // Load pool data from pools table
             $poolStmt = $pdo->prepare("
-                SELECT * FROM pools WHERE pool_id = ? AND is_active = 1
+                SELECT * FROM pools WHERE pool_id = ? AND pool_site_id = ? AND is_active = 1
             ");
-            $poolStmt->execute([$poolId]);
+            $poolStmt->execute([$poolId, $currentPoolSiteId]);
             $poolRow = $poolStmt->fetch();
 
             if (!$poolRow) {
@@ -846,6 +859,14 @@ try {
             $timestamp = sprintf('%s %02d:00:00', $date, $hour);
 
             // Get run_id (specified or most recent completed run covering this date)
+            if ($runId) {
+                // An explicit run must belong to this site
+                $ownStmt = $pdo->prepare("SELECT 1 FROM simulation_runs WHERE run_id = ? AND pool_site_id = ?");
+                $ownStmt->execute([(int)$runId, $currentPoolSiteId]);
+                if (!$ownStmt->fetchColumn()) {
+                    sendError('Simulation run not found', 404);
+                }
+            }
             if (!$runId) {
                 $poolSiteId = $currentPoolSiteId;
                 $stmt = $pdo->prepare("
@@ -1006,6 +1027,14 @@ try {
             $endDate = $endDt->format('Y-m-d');
 
             // Get run_id (specified or most recent completed run that covers this date range)
+            if ($runId) {
+                // An explicit run must belong to this site
+                $ownStmt = $pdo->prepare("SELECT 1 FROM simulation_runs WHERE run_id = ? AND pool_site_id = ?");
+                $ownStmt->execute([(int)$runId, $currentPoolSiteId]);
+                if (!$ownStmt->fetchColumn()) {
+                    sendError('Simulation run not found', 404);
+                }
+            }
             if (!$runId) {
                 $poolSiteId = $currentPoolSiteId;
                 $stmt = $pdo->prepare("
