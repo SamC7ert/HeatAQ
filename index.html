@@ -5,18 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HeatAQ Schedule Management</title>
     <link rel="icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="./assets/css/main.css">
-    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css">
-    <link rel="stylesheet" href="./assets/css/components/sidebar.css">
-    <link rel="stylesheet" href="./assets/css/components/schedules.css">
-    <link rel="stylesheet" href="./assets/css/components/calendar.css">
-    <link rel="stylesheet" href="./assets/css/components/simulations.css">
+    <link rel="stylesheet" href="./assets/css/main.css?v=227">
+    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=227">
+    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=227">
+    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=227">
+    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=227">
+    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=227">
     <style>
         /* Logout button styles */
         .user-info {
             position: absolute;
             top: 20px;
-            right: 20px;
+            right: 30px;  /* = content padding, so it lines up with the cards */
             display: flex;
             align-items: center;
             gap: 15px;
@@ -89,7 +89,8 @@
         </div>
         
         <!-- Sidebar Navigation -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
+            <button type="button" class="sidebar-pin" id="sidebar-pin" onclick="toggleSidebarPin()" title="Keep the menu open">📌</button>
             <div class="sidebar-header">
                 <h2>🏊 HeatAQ</h2>
                 <p>Pool Energy Design</p>
@@ -1432,6 +1433,20 @@
         document.getElementById('current-project').textContent = projectName;
         document.getElementById('current-user').textContent = userName;
         
+        // Sidebar pin: keep the menu expanded instead of opening on hover
+        function applySidebarPin(pinned) {
+            document.getElementById('sidebar').classList.toggle('pinned', pinned);
+            const btn = document.getElementById('sidebar-pin');
+            btn.title = pinned ? 'Let the menu collapse' : 'Keep the menu open';
+            btn.setAttribute('aria-pressed', pinned ? 'true' : 'false');
+        }
+        function toggleSidebarPin() {
+            const pinned = !document.getElementById('sidebar').classList.contains('pinned');
+            applySidebarPin(pinned);
+            try { localStorage.setItem('heataq_sidebar_pinned', pinned ? '1' : '0'); } catch (e) {}
+        }
+        try { applySidebarPin(localStorage.getItem('heataq_sidebar_pinned') === '1'); } catch (e) {}
+
         // Logout function: end the session on the server first (otherwise it
         // stays valid until it expires), then clear the browser's copy.
         async function logout() {
@@ -1693,18 +1708,18 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=226"></script>
+    <script src="./assets/js/config.js?v=227"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=226"></script>
-    <script src="./assets/js/modules/navigation.js?v=226"></script>
-    <script src="./assets/js/modules/schedules.js?v=226"></script>
-    <script src="./assets/js/modules/calendar.js?v=226"></script>
-    <script src="./assets/js/modules/simulations.js?v=226"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=226"></script>
-    <script src="./assets/js/modules/configuration.js?v=226"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=226"></script>
-    <script src="./assets/js/modules/admin.js?v=226"></script>
-    <script src="./assets/js/modules/project.js?v=226"></script>
-    <script src="./assets/js/app.js?v=226"></script>
+    <script src="./assets/js/modules/api.js?v=227"></script>
+    <script src="./assets/js/modules/navigation.js?v=227"></script>
+    <script src="./assets/js/modules/schedules.js?v=227"></script>
+    <script src="./assets/js/modules/calendar.js?v=227"></script>
+    <script src="./assets/js/modules/simulations.js?v=227"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=227"></script>
+    <script src="./assets/js/modules/configuration.js?v=227"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=227"></script>
+    <script src="./assets/js/modules/admin.js?v=227"></script>
+    <script src="./assets/js/modules/project.js?v=227"></script>
+    <script src="./assets/js/app.js?v=227"></script>
 </body>
 </html>
