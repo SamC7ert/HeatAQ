@@ -5,18 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HeatAQ Schedule Management</title>
     <link rel="icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="./assets/css/main.css?v=241">
-    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=241">
-    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=241">
-    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=241">
-    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=241">
-    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=241">
+    <link rel="stylesheet" href="./assets/css/main.css?v=242">
+    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=242">
+    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=242">
+    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=242">
+    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=242">
+    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=242">
     <style>
-        /* Logout button styles */
-        .user-info {
+        /* Top bar, right: background saving panel, user card */
+        .top-bar-right {
             position: absolute;
             top: -10px;   /* inside .top-bar: aligned with the right edge of the cards */
             right: 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .hourly-saver {
+            background: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            font-size: 13px;
+            color: #333;
+            max-width: 360px;
+        }
+        .hourly-saver[hidden] { display: none; }
+        .hourly-saver .hs-line { cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+        .hourly-saver .hs-line + .hs-line { margin-top: 6px; }
+        .hourly-saver .hs-sub { color: #888; font-size: 12px; }
+        .hourly-saver .hs-spin { display: inline-block; animation: hs-spin 1.2s linear infinite; }
+        @keyframes hs-spin { to { transform: rotate(360deg); } }
+        .hourly-saver .hs-bar { flex-basis: 100%; height: 3px; background: #e9ecef; border-radius: 2px; overflow: hidden; }
+        .hourly-saver .hs-bar > div { height: 100%; background: #0d6efd; transition: width 0.3s; }
+        .hourly-saver .hs-failed { color: #dc3545; cursor: default; }
+        .hourly-saver .hs-failed span { cursor: pointer; }
+        .hourly-saver .hs-failed .btn { padding: 1px 8px; font-size: 12px; }
+        .hourly-saver .hs-ok { color: #28a745; cursor: default; }
+        .hourly-saver .hs-info { color: #666; cursor: default; }
+
+        /* Logout button styles */
+        .user-info {
             display: flex;
             align-items: center;
             gap: 15px;
@@ -143,11 +173,14 @@
         <main class="main-content">
             <div class="content-wrapper">
                 <div class="top-bar">
+                <div class="top-bar-right">
+                <div class="hourly-saver" id="hourly-saver" hidden></div>
                 <div class="user-info">
                     <span class="project-name" id="current-project"></span>
                     <span class="user-name" id="current-user"></span>
                     <span class="version-badge" id="header-version">V140</span>
                     <button onclick="logout()" class="btn-logout">Logout</button>
+                </div>
                 </div>
                 </div>
                 <!-- Schedules Section (Default) -->
@@ -1491,6 +1524,7 @@
         // Logout function: end the session on the server first (otherwise it
         // stays valid until it expires), then clear the browser's copy.
         async function logout() {
+            if (typeof HourlySaver !== 'undefined' && !HourlySaver.confirmLeave('Logging out', true)) return;
             try {
                 await fetch('./api/heataq_api.php?action=logout', { method: 'POST' });
             } catch (e) {
@@ -1749,19 +1783,19 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=241"></script>
+    <script src="./assets/js/config.js?v=242"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=241"></script>
-    <script src="./assets/js/modules/navigation.js?v=241"></script>
-    <script src="./assets/js/modules/schedules.js?v=241"></script>
-    <script src="./assets/js/modules/calendar.js?v=241"></script>
-    <script src="./assets/js/modules/simengine.js?v=241"></script>
-    <script src="./assets/js/modules/simulations.js?v=241"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=241"></script>
-    <script src="./assets/js/modules/configuration.js?v=241"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=241"></script>
-    <script src="./assets/js/modules/admin.js?v=241"></script>
-    <script src="./assets/js/modules/project.js?v=241"></script>
-    <script src="./assets/js/app.js?v=241"></script>
+    <script src="./assets/js/modules/api.js?v=242"></script>
+    <script src="./assets/js/modules/navigation.js?v=242"></script>
+    <script src="./assets/js/modules/schedules.js?v=242"></script>
+    <script src="./assets/js/modules/calendar.js?v=242"></script>
+    <script src="./assets/js/modules/simengine.js?v=242"></script>
+    <script src="./assets/js/modules/simulations.js?v=242"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=242"></script>
+    <script src="./assets/js/modules/configuration.js?v=242"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=242"></script>
+    <script src="./assets/js/modules/admin.js?v=242"></script>
+    <script src="./assets/js/modules/project.js?v=242"></script>
+    <script src="./assets/js/app.js?v=242"></script>
 </body>
 </html>

@@ -9,7 +9,29 @@ chooses:
 |---|---|
 | PHP (server) | as before |
 | Compare PHP + TypeScript | PHP runs and stores the results; the browser then runs TypeScript on the same inputs (`get_sim_inputs`) and shows a comparison (summary values and every day) |
-| TypeScript (browser) | `run_simulation` with `engine=typescript` sets up the run exactly as for PHP and returns its inputs instead of simulating; the browser simulates and posts the results (`submit_ts_hourly`, `submit_ts_results`) |
+| TypeScript (browser) | `run_simulation` with `engine=typescript` sets up the run exactly as for PHP and returns its inputs instead of simulating; the browser simulates and posts the results (see below) |
+
+## Saving a TypeScript run
+
+Requests stay under ~90 KB each (shared hosts' firewalls refuse larger
+bodies with a bare 403), so results go in pieces:
+
+1. `submit_ts_daily` (a few pieces, 3 at a time), then `submit_ts_results`
+   with the summary: the run is complete and every results view works.
+   With hourly data it is flagged `summary.hourly_saving`.
+2. The hourly rows are saved in the background (`HourlySaver` in
+   `assets/js/modules/simengine.js`, progress panel in the top bar):
+   `submit_ts_hourly` pieces, 3 at a time (1 while a server-side
+   simulation runs), then `finish_ts_hourly` clears the flag. Runs queue
+   oldest first; a failed piece is retried twice, then the panel offers
+   Retry / Dismiss.
+3. Meanwhile the Details tab uses this browser's copy of the hours (the
+   week chart is built locally; `debug_hour` gets the hour's row in a `row`
+   parameter, used only while the run is still saving).
+4. If retention removes the run's hours during saving (newer runs took the
+   newest-5 places), the server answers 410 and the run is dropped from
+   the queue. A run left `hourly_saving` (page closed, saving dismissed)
+   shows as "hours incomplete"; Recreate hours rebuilds them.
 
 ## How the engines get identical inputs
 
