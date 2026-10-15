@@ -38,6 +38,7 @@ const EnergyAnalysis = {
             startDate: document.getElementById('ea-start-date')?.value,
             endDate: document.getElementById('ea-end-date')?.value,
             storeHourly: document.getElementById('ea-store-hourly')?.checked,
+            engine: document.getElementById('ea-engine')?.value,
             // Selections (saved after dropdowns load)
             site: document.getElementById('ea-site-select')?.value,
             pool: document.getElementById('ea-pool-select')?.value,
@@ -90,6 +91,7 @@ const EnergyAnalysis = {
         if (state.startDate) document.getElementById('ea-start-date').value = state.startDate;
         if (state.endDate) document.getElementById('ea-end-date').value = state.endDate;
         if (state.storeHourly !== undefined) document.getElementById('ea-store-hourly').checked = state.storeHourly;
+        if (state.engine) document.getElementById('ea-engine').value = state.engine;
     },
 
     /**
@@ -106,7 +108,7 @@ const EnergyAnalysis = {
         const inputs = [
             'ea-fixed-hp', 'ea-total-start', 'ea-total-step', 'ea-total-cases',
             'ea-fixed-total', 'ea-hp-start', 'ea-hp-step', 'ea-hp-cases',
-            'ea-strategy', 'ea-start-date', 'ea-end-date'
+            'ea-strategy', 'ea-start-date', 'ea-end-date', 'ea-engine'
         ];
         inputs.forEach(id => {
             const el = document.getElementById(id);
@@ -487,6 +489,7 @@ const EnergyAnalysis = {
         const startDate = document.getElementById('ea-start-date')?.value || '2024-01-01';
         const endDate = document.getElementById('ea-end-date')?.value || '2024-12-31';
         const storeHourly = document.getElementById('ea-store-hourly')?.checked || false;
+        const engine = document.getElementById('ea-engine')?.value === 'typescript' ? 'typescript' : 'php';
 
         // Load investment costs from current site
         await this.loadInvestmentCosts();
@@ -505,7 +508,8 @@ const EnergyAnalysis = {
         // Run scenarios sequentially (parallel would overload server)
         for (let i = 0; i < scenarios.length; i++) {
             const scenario = scenarios[i];
-            this.updateProgress(i, scenarios.length, `Running case ${i + 1}/${scenarios.length}: ${scenario.label}`);
+            const caseText = `Running case ${i + 1}/${scenarios.length}: ${scenario.label}`;
+            this.updateProgress(i, scenarios.length, caseText);
 
             try {
                 const result = await this.runSingleScenario({
@@ -518,8 +522,9 @@ const EnergyAnalysis = {
                     end_date: endDate,
                     pool_id: poolId,
                     store_hourly: storeHourly,
+                    engine: engine,
                     scenario_name: `Energy Analysis: ${scenario.label}`
-                });
+                }, (t) => this.updateProgress(i, scenarios.length, `${caseText} - ${t}`));
 
                 this.results.push({
                     ...scenario,
@@ -560,7 +565,9 @@ const EnergyAnalysis = {
     /**
      * Run a single simulation scenario
      */
-    runSingleScenario: async function(params) {
+    runSingleScenario: async function(params, onStatus) {
+        // A server-side run: background hourly saving slows down meanwhile
+        if (params.engine !== 'typescript') HourlySaver.foregroundStart();
         const response = await fetch('./api/simulation_api.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -573,6 +580,7 @@ const EnergyAnalysis = {
                 config_id: params.config_id,
                 template_id: params.schedule_id,
                 store_hourly: params.store_hourly,
+                engine: params.engine,
                 config_override: {
                     equipment: {
                         hp_capacity_kw: params.hp_capacity,
@@ -583,7 +591,7 @@ const EnergyAnalysis = {
                     }
                 }
             })
-        });
+        }).finally(() => { if (params.engine !== 'typescript') HourlySaver.foregroundEnd(); });
 
         // A shared-host timeout or PHP fatal returns an HTML page, not JSON
         const text = await response.text();
@@ -595,6 +603,14 @@ const EnergyAnalysis = {
         }
         if (data.error) {
             throw new Error(data.error);
+        }
+        // TypeScript engine: the server prepared the run; simulate here and
+        // save it (hourly rows, if stored, follow in the background)
+        if (data.status === 'prepared') {
+            const { result } = await SimEngine.runPrepared(data, params.scenario_name, (period, pct) => {
+                if (onStatus) onStatus(`simulating ${period} (${pct}%)`);
+            }, (t) => { if (onStatus) onStatus(t.toLowerCase()); });
+            return { ...data, summary: result.summary };
         }
         if (!response.ok || !data.summary) {
             throw new Error(`Server returned HTTP ${response.status} without a result`);
