@@ -1827,7 +1827,7 @@ const SimulationsModule = {
         const configDisplay = document.getElementById('debug-config-display');
         const ohcDisplay = document.getElementById('debug-ohc-display');
         const runDisplay = document.getElementById('debug-run-display');
-        if (runDisplay) { runDisplay.textContent = `#${runId}`; runDisplay.title = ''; }
+        if (runDisplay) { runDisplay.textContent = `Run #${runId}`; runDisplay.title = ''; }
 
         try {
             const response = await fetch(`/api/simulation_api.php?action=get_run&run_id=${runId}`);
@@ -1849,10 +1849,16 @@ const SimulationsModule = {
                 if (runDisplay) {
                     const r = data.run;
                     const made = r.created_at ? new Date(r.created_at.replace(' ', 'T')) : null;
-                    const when = made && !isNaN(made)
-                        ? made.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-                        : '';
-                    runDisplay.textContent = `#${runId}${when ? ', ' + when : ''}`;
+                    let when = '';
+                    if (made && !isNaN(made)) {
+                        // "Today 10:02", "Y'day 10:02", else "Tue 14 Oct 10:02"
+                        const time = made.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                        const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(made).setHours(0, 0, 0, 0)) / 86400000);
+                        const day = days === 0 ? 'Today' : days === 1 ? "Y'day"
+                            : made.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '');
+                        when = `${day} ${time}`;
+                    }
+                    runDisplay.innerHTML = `Run #${escapeHtml(runId)}${when ? '<br>' + escapeHtml(when) : ''}`;
                     const tip = [r.scenario_name, r.description,
                         r.start_date && r.end_date ? `Period: ${r.start_date} to ${r.end_date}` : ''].filter(Boolean).join('\n');
                     runDisplay.title = tip;
