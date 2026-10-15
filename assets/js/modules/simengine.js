@@ -49,30 +49,72 @@ const SimEngine = {
     },
 
     async api(action, body) {
-        const response = await fetch(`/api/simulation_api.php?action=${action}`, body ? {
+        const payload = body ? JSON.stringify(body) : null;
+        const response = await fetch(`/api/simulation_api.php?action=${action}`, payload ? {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
+            body: payload
         } : undefined);
-        const data = await response.json().catch(() => ({ error: `Server returned HTTP ${response.status}` }));
-        if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
+        const text = await response.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            // Not from HeatAQ (its errors are JSON): the web server or its
+            // firewall refused the request - say which step and what it said.
+            const snippet = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
+            throw new Error(`${action}: web server returned HTTP ${response.status}` +
+                (payload ? ` for a ${Math.round(payload.length / 1024)} KB request` : '') + (snippet ? ` (${snippet})` : ''));
+        }
+        if (!response.ok || data.error) throw new Error(`${action}: ${data.error || 'HTTP ' + response.status}`);
         return data;
     },
 
+    // Shared hosts' firewalls (e.g. ModSecurity) refuse request bodies over
+    // ~128 KB, often with a bare 403: upload results in pieces well below.
+    MAX_BODY: 90 * 1024,
+
+    /** Split rows into pieces whose JSON stays under MAX_BODY. */
+    pieces: function(rows) {
+        const out = [];
+        let cur = [], size = 0;
+        for (const r of rows) {
+            const n = JSON.stringify(r).length + 1;
+            if (cur.length && size + n > this.MAX_BODY) { out.push(cur); cur = []; size = 0; }
+            cur.push(r);
+            size += n;
+        }
+        if (cur.length) out.push(cur);
+        return out;
+    },
+
     /**
-     * Store a TypeScript run's results: hourly rows in chunks (if the run
-     * stores hourly data), then summary + daily, which completes the run.
+     * Store a TypeScript run's results in small requests: hourly rows (if
+     * the run stores them), daily rows, then the summary, which completes
+     * the run. On failure the run is marked failed, not left "running".
      */
     submit: async function(runId, result, storeHourly, onStatus) {
-        if (storeHourly) {
-            const chunk = 8760;
-            for (let i = 0; i < result.hourly.length; i += chunk) {
-                if (onStatus) onStatus(`Saving hourly data... ${Math.round(100 * i / result.hourly.length)}%`);
-                await this.api('submit_ts_hourly', { run_id: runId, rows: result.hourly.slice(i, i + chunk) });
+        const say = t => { if (onStatus) onStatus(t); };
+        try {
+            if (storeHourly) {
+                // Only the 17 stored values per hour
+                const hourly = this.pieces(result.hourly.map(r => r.slice(0, 17)));
+                for (let i = 0; i < hourly.length; i++) {
+                    say(`Saving hourly data... ${Math.round(100 * i / hourly.length)}%`);
+                    await this.api('submit_ts_hourly', { run_id: runId, rows: hourly[i] });
+                }
             }
+            const daily = this.pieces(result.daily);
+            for (let i = 0; i < daily.length; i++) {
+                say(`Saving daily results... ${Math.round(100 * i / daily.length)}%`);
+                await this.api('submit_ts_daily', { run_id: runId, daily: daily[i] });
+            }
+            say('Saving results...');
+            await this.api('submit_ts_results', { run_id: runId, summary: result.summary });
+        } catch (err) {
+            try { await this.api('fail_ts_run', { run_id: runId, message: err.message }); } catch (e) { /* best effort */ }
+            throw err;
         }
-        if (onStatus) onStatus('Saving results...');
-        await this.api('submit_ts_results', { run_id: runId, summary: result.summary, daily: result.daily });
     },
 
     // Summary values shown in the comparison (all numeric keys are checked)

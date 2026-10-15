@@ -663,7 +663,9 @@ try {
             break;
 
         case 'submit_ts_hourly':
+        case 'submit_ts_daily':
         case 'submit_ts_results':
+        case 'fail_ts_run':
             // Results of a TypeScript-engine run (prepared by run_simulation
             // with engine=typescript). Only for that run while it is running.
             RequestGuard::requireWriteRequest();
@@ -677,6 +679,23 @@ try {
                 sendError('No TypeScript run in progress with this id', 409);
             }
 
+            if ($action === 'fail_ts_run') {
+                // The browser could not finish (e.g. a refused upload)
+                $msg = substr((string) getParam('message', 'TypeScript run did not complete'), 0, 500);
+                updateRunStatus($pdo, $runId, 'failed', ['error' => $msg, 'engine' => 'typescript']);
+                sendResponse(['success' => true]);
+            }
+
+            if ($action === 'submit_ts_daily') {
+                // Daily rows in pieces (hosts refuse large request bodies)
+                $daily = getParam('daily', []);
+                if (!is_array($daily) || count($daily) > 5000) {
+                    sendError('daily must be a list of at most 5000 days');
+                }
+                storeSimulationResults($pdo, $runId, ['daily' => sanitizeDaily($daily), 'hourly' => []], false);
+                sendResponse(['success' => true, 'stored' => count($daily)]);
+            }
+
             if ($action === 'submit_ts_hourly') {
                 $rows = getParam('rows', []);
                 if (!is_array($rows) || count($rows) > 20000) {
@@ -687,12 +706,14 @@ try {
             }
 
             $summary = getParam('summary', null);
-            $daily = getParam('daily', null);
-            if (!is_array($summary) || !is_array($daily)) {
-                sendError('summary and daily are required');
+            $daily = getParam('daily', null);  // optional: may come in pieces (submit_ts_daily)
+            if (!is_array($summary)) {
+                sendError('summary is required');
             }
             $summary['engine'] = 'typescript';
-            storeSimulationResults($pdo, $runId, ['daily' => sanitizeDaily($daily), 'hourly' => []], false);
+            if (is_array($daily) && $daily) {
+                storeSimulationResults($pdo, $runId, ['daily' => sanitizeDaily($daily), 'hourly' => []], false);
+            }
             updateRunStatus($pdo, $runId, 'completed', $summary);
             if (!empty($snap['store_hourly'])) {
                 try {
@@ -1389,7 +1410,7 @@ try {
             break;
 
         default:
-            sendError('Invalid action. Valid actions: run_simulation, get_sim_inputs, submit_ts_hourly, submit_ts_results, set_baseline, recreate_hourly, get_runs, get_run, get_summary, get_daily_results, get_results, delete_run, get_weather_range, get_version, debug_hour, debug_week');
+            sendError('Invalid action. Valid actions: run_simulation, get_sim_inputs, submit_ts_hourly, submit_ts_daily, submit_ts_results, fail_ts_run, set_baseline, recreate_hourly, get_runs, get_run, get_summary, get_daily_results, get_results, delete_run, get_weather_range, get_version, debug_hour, debug_week');
     }
 
 } catch (PDOException $e) {
