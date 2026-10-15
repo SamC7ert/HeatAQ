@@ -416,7 +416,8 @@ const SimulationsModule = {
             // View the new run
             if (data.run_id) {
                 // (a summary-only run cannot be inspected in Details)
-                setTimeout(() => this.viewRun(data.run_id, { inspect: storeHourly }), 1000);
+                // (or one whose hours this browser holds: TypeScript runs)
+                setTimeout(() => this.viewRun(data.run_id, { inspect: storeHourly || SimEngine.local.has(Number(data.run_id)) }), 1000);
             }
 
         } catch (error) {
@@ -498,7 +499,7 @@ const SimulationsModule = {
         return null;
     },
 
-    /** debug_hour URL, with this browser's row of the hour (the server uses it while the run's hours are not saved yet). */
+    /** debug_hour URL, with this browser's row of the hour (the server uses it when the hour is not saved). */
     debugHourUrl: function(date, hour) {
         let url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}${this.debugRunParam(date)}`;
         const runId = this.localDebugRun(date);
@@ -598,6 +599,8 @@ const SimulationsModule = {
                 ? '<p class="text-muted" style="margin:4px 0;">Hourly data is being saved in the background (see the top bar); the Details tab already shows it.</p>'
                 : hoursIncomplete
                 ? '<p style="margin:4px 0; color:#b8860b;">The saving of this run\'s hourly data was interrupted, so its hours are incomplete. Recreate hours rebuilds them.</p>'
+                : !run.has_hourly && SimEngine.local.has(Number(run.run_id))
+                ? '<p class="text-muted" style="margin:4px 0;">Hourly data not saved in the database; the Details tab shows it from this browser until the page is reloaded.</p>'
                 : ''}</div>
 
             <div class="run-detail-info">
