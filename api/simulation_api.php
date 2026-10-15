@@ -856,7 +856,9 @@ try {
                     SELECT
                         -- * : is_baseline / hourly_purged_at exist only after
                         -- migration 041, and the list must not break before it
-                        *
+                        *,
+                        -- exact moments (unix seconds), see get_run
+                        UNIX_TIMESTAMP(created_at) AS created_ts, UNIX_TIMESTAMP(completed_at) AS completed_ts
                     FROM simulation_runs
                     WHERE {$where}
                     ORDER BY created_at DESC, run_id DESC
@@ -907,7 +909,11 @@ try {
 
             $poolSiteId = $currentPoolSiteId;
             $stmt = $pdo->prepare("
-                SELECT * FROM simulation_runs
+                SELECT *,
+                       -- exact moments (unix seconds): created_at/completed_at
+                       -- are the database server's clock time, not the user's
+                       UNIX_TIMESTAMP(created_at) AS created_ts, UNIX_TIMESTAMP(completed_at) AS completed_ts
+                FROM simulation_runs
                 WHERE run_id = ? AND pool_site_id = ?
             ");
             $stmt->execute([$runId, $poolSiteId]);
