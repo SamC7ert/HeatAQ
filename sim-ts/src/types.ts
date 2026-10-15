@@ -117,6 +117,19 @@ export interface DailyResult {
 }
 
 /**
+ * Compact daily row: exactly the values simulation_daily_results stores,
+ * rounded as PHP rounds them (storeSimulationResults()).
+ * [date, hours, open_hours, avg_air_temp, avg_water_temp, total_loss_kwh,
+ *  total_solar_kwh, total_hp_kwh, total_boiler_kwh, hp_thermal_kwh,
+ *  boiler_thermal_kwh, total_cost]
+ */
+export type StoredDayRow = [
+  string, number, number, number, number, number,
+  number, number, number, number,
+  number, number,
+];
+
+/**
  * Compact hourly row: exactly the values simulation_hourly_results stores,
  * rounded as PHP rounds them.
  * [timestamp, air, wind, humidity, solar_kwh_m2, target_temp, water_temp,

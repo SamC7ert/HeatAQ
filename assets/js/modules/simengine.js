@@ -37,7 +37,7 @@ const SimEngine = {
                     if (onProgress) onProgress(m.period, m.pct);
                 } else if (m.type === 'result') {
                     worker.terminate();
-                    resolve({ result: m.result, ms: m.ms });
+                    resolve({ result: m.result, ms: m.ms, dailyRows: m.dailyRows });
                 } else if (m.type === 'error') {
                     worker.terminate();
                     reject(new Error(m.message));
@@ -134,18 +134,27 @@ const SimEngine = {
         const runId = prepared.run_id;
         const say = t => { if (onStatus) onStatus(t); };
         try {
-            const { result, ms } = await this.run(prepared.inputs, onProgress);
+            const { result, ms, dailyRows } = await this.run(prepared.inputs, onProgress);
             const hourlyPending = !!prepared.store_hourly && result.hourly.length > 0;
-            const daily = this.pieces(result.daily);
-            let sent = 0;
-            say('Saving daily results...');
-            await this.parallel(daily.map(piece => async () => {
-                await this.api('submit_ts_daily', { run_id: runId, daily: piece });
-                sent++;
-                say(`Saving daily results... ${Math.round(100 * sent / daily.length)}%`);
-            }), 3);
-            say('Saving results...');
-            await this.api('submit_ts_results', { run_id: runId, summary: result.summary, hourly_pending: hourlyPending });
+            const finish = { run_id: runId, summary: result.summary, hourly_pending: hourlyPending };
+            // The days as stored (compact): with the summary in one request
+            // when they fit (a year does), else in pieces first
+            const days = dailyRows || result.daily;
+            if (JSON.stringify(days).length + JSON.stringify(finish).length < this.MAX_BODY) {
+                say('Saving results...');
+                await this.api('submit_ts_results', { ...finish, daily: days });
+            } else {
+                const daily = this.pieces(days);
+                let sent = 0;
+                say('Saving daily results...');
+                await this.parallel(daily.map(piece => async () => {
+                    await this.api('submit_ts_daily', { run_id: runId, daily: piece });
+                    sent++;
+                    say(`Saving daily results... ${Math.round(100 * sent / daily.length)}%`);
+                }), 3);
+                say('Saving results...');
+                await this.api('submit_ts_results', finish);
+            }
             if (hourlyPending) {
                 this.keepLocal(runId, result.hourly);
                 HourlySaver.add(runId, label, result.hourly);
