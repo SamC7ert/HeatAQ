@@ -1188,10 +1188,11 @@ try {
             $stored = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if (!$stored && getParam('row')) {
-                // A TypeScript run whose hours the browser is still saving:
-                // it sends this hour's row (the stored values) itself
+                // A TypeScript run whose hours are not (yet) in the database:
+                // the browser sends this hour's row (the stored values) itself.
+                // Only shown back to this user; nothing is written.
                 $r = json_decode((string) getParam('row'), true);
-                if (isHourlySaving($pdo, $runId) && is_array($r) && count($r) >= 17 && $r[0] === $timestamp) {
+                if (is_array($r) && count($r) >= 17 && $r[0] === $timestamp) {
                     $stored = [
                         'water_temp' => (float) $r[6], 'water_temp_start' => (float) $r[7], 'is_open' => $r[8] ? 1 : 0,
                         'total_loss_kw' => (float) $r[9], 'solar_gain_kw' => (float) $r[10], 'hp_heat_kw' => (float) $r[11],

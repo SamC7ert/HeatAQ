@@ -126,8 +126,8 @@ const SimEngine = {
     /**
      * Run a prepared TypeScript run (run_simulation with engine=typescript):
      * simulate in the worker, then save the daily rows and the summary,
-     * which completes the run. Its hourly rows (if the run stores them) stay
-     * in this browser for the Details tab and are saved in the background
+     * which completes the run. Its hourly rows stay in this browser for the
+     * Details tab and, if the run stores them, are saved in the background
      * (HourlySaver). On failure the run is marked failed, not left "running".
      */
     runPrepared: async function(prepared, label, onProgress, onStatus) {
@@ -155,10 +155,10 @@ const SimEngine = {
                 say('Saving results...');
                 await this.api('submit_ts_results', finish);
             }
-            if (hourlyPending) {
-                this.keepLocal(runId, result.hourly);
-                HourlySaver.add(runId, label, result.hourly);
-            }
+            // The Details tab shows the latest runs' hours from this browser,
+            // saved in the database or not
+            if (result.hourly.length) this.keepLocal(runId, result.hourly);
+            if (hourlyPending) HourlySaver.add(runId, label, result.hourly);
             return { result, ms };
         } catch (err) {
             try { await this.api('fail_ts_run', { run_id: runId, message: err.message }); } catch (e) { /* best effort */ }
@@ -167,7 +167,8 @@ const SimEngine = {
     },
 
     // Hourly rows of recent TypeScript runs in this browser: the Details tab
-    // reads them instead of the server (also while they are being saved).
+    // reads them instead of the server (also while they are being saved, or
+    // when the run does not save them).
     // The newest LOCAL_RUNS are kept, and any still being saved.
     local: new Map(),   // run_id -> { rows, index }
     LOCAL_RUNS: 2,

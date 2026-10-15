@@ -29,9 +29,11 @@ bodies with a bare 403), so results go in pieces:
    simulation runs), then `finish_ts_hourly` clears the flag. Runs queue
    oldest first; a failed piece is retried twice, then the panel offers
    Retry / Dismiss.
-3. Meanwhile the Details tab uses this browser's copy of the hours (the
-   week chart is built locally; `debug_hour` gets the hour's row in a `row`
-   parameter, used only while the run is still saving).
+3. The Details tab uses this browser's copy of the hours of the latest
+   TypeScript runs (`SimEngine.local`, the newest 2 plus any still saving),
+   whether they are saved in the database or not: the week chart is built
+   locally; `debug_hour` gets the hour's row in a `row` parameter, used when
+   that hour is not in the database.
 4. If retention removes the run's hours during saving (newer runs took the
    newest-5 places), the server answers 410 and the run is dropped from
    the queue. A run left `hourly_saving` (page closed, saving dismissed)
