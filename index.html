@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HeatAQ Schedule Management</title>
     <link rel="icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="./assets/css/main.css?v=251">
-    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=251">
-    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=251">
-    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=251">
-    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=251">
-    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=251">
+    <link rel="stylesheet" href="./assets/css/main.css?v=252">
+    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=252">
+    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=252">
+    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=252">
+    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=252">
+    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=252">
     <style>
         /* Top bar, right: background saving panel, user card */
         .top-bar-right {
@@ -500,11 +500,11 @@
                             <h3>Control Settings</h3>
                             <table class="data-table form-table">
                                 <tr>
-                                    <td><label for="cfg-target-temp" title="Used for open periods whose schedule has no target of its own">Default Target (°C)</label></td>
+                                    <td><label for="cfg-target-temp" title="Target temperature of open periods whose schedule has none of its own">Default temp (°C)</label></td>
                                     <td><input type="number" id="cfg-target-temp" step="0.5" value="28" title="Used for open periods whose schedule has no target of its own"></td>
                                 </tr>
                                 <tr>
-                                    <td><label for="cfg-upper-tolerance">Upper Tolerance (°C above)</label></td>
+                                    <td><label for="cfg-upper-tolerance" title="Predictive: how far above target the water may be heated, before opening or during open hours, to cover hours the heat pump cannot cover alone">Max overheat<br><span style="font-size: 11px; color: #888;">°C above target</span></label></td>
                                     <td><input type="number" id="cfg-upper-tolerance" step="0.5" value="1" min="0" max="5"></td>
                                 </tr>
                                 <tr>
@@ -738,7 +738,7 @@
                                         <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-boiler-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
-                                        <td title="Used for open periods whose schedule has no target of its own">Default Target (°C)</td>
+                                        <td title="Target temperature of open periods whose schedule has none of its own">Default temp (°C)</td>
                                         <td id="cfg-val-target-temp" class="config-value" style="font-weight: bold; font-size: 14px; text-align: center;">-</td>
                                         <td style="text-align: center; color: #999; font-size: 12px;">schedule / config</td>
                                         <td></td>
@@ -750,7 +750,7 @@
                                         <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-target-offset')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
-                                        <td>Upper Tolerance (°C)</td>
+                                        <td title="Predictive: how far above target the water may be heated, before opening or during open hours, to cover hours the heat pump cannot cover alone">Max overheat<br><span style="font-size: 11px; color: #888;">°C above target</span></td>
                                         <td id="cfg-val-upper-tol" class="config-value" style="font-weight: bold; font-size: 14px; text-align: center;">-</td>
                                         <td><input type="text" id="sim-upper-tol-override" placeholder="-" style="text-align: center;"></td>
                                         <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-upper-tol-override')" title="Clear">&times;</button></td>
@@ -1807,19 +1807,19 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=251"></script>
+    <script src="./assets/js/config.js?v=252"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=251"></script>
-    <script src="./assets/js/modules/navigation.js?v=251"></script>
-    <script src="./assets/js/modules/schedules.js?v=251"></script>
-    <script src="./assets/js/modules/calendar.js?v=251"></script>
-    <script src="./assets/js/modules/simengine.js?v=251"></script>
-    <script src="./assets/js/modules/simulations.js?v=251"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=251"></script>
-    <script src="./assets/js/modules/configuration.js?v=251"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=251"></script>
-    <script src="./assets/js/modules/admin.js?v=251"></script>
-    <script src="./assets/js/modules/project.js?v=251"></script>
-    <script src="./assets/js/app.js?v=251"></script>
+    <script src="./assets/js/modules/api.js?v=252"></script>
+    <script src="./assets/js/modules/navigation.js?v=252"></script>
+    <script src="./assets/js/modules/schedules.js?v=252"></script>
+    <script src="./assets/js/modules/calendar.js?v=252"></script>
+    <script src="./assets/js/modules/simengine.js?v=252"></script>
+    <script src="./assets/js/modules/simulations.js?v=252"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=252"></script>
+    <script src="./assets/js/modules/configuration.js?v=252"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=252"></script>
+    <script src="./assets/js/modules/admin.js?v=252"></script>
+    <script src="./assets/js/modules/project.js?v=252"></script>
+    <script src="./assets/js/app.js?v=252"></script>
 </body>
 </html>

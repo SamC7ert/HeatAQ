@@ -1420,7 +1420,7 @@ const SimulationsModule = {
     OVERRIDE_FIELDS: [
         ['sim-hp-override', 'HP capacity (kW)', 0, 100000],
         ['sim-boiler-override', 'Boiler capacity (kW)', 0, 100000],
-        ['sim-upper-tol-override', 'Upper tolerance (°C)', 0, 5],
+        ['sim-upper-tol-override', 'Max overheat (°C)', 0, 5],
         ['sim-lower-tol-override', 'Lower tolerance (°C)', 0, 10],
         ['sim-bathers-override', 'Bathers per day', 0, 100000, true],
         ['sim-activity-override', 'Activity factor', 0, 5],
