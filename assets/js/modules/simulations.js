@@ -369,7 +369,7 @@ const SimulationsModule = {
             const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
             const version = data.simulator_version || 'unknown';
             if (statusEl) {
-                statusEl.textContent = `Simulation v${version} completed ${dateStr} - ${timeStr}`;
+                statusEl.textContent = `${data.run_id ? `Run #${data.run_id} · ` : ''}Simulation v${version} completed ${dateStr} - ${timeStr}`;
                 statusEl.style.color = '#28a745';
             }
 
@@ -725,7 +725,7 @@ const SimulationsModule = {
                 </div>
                 <div class="info-row">
                     <span class="label">Created:</span>
-                    <span class="value">${escapeHtml(this.formatDate(run.created_at))}</span>
+                    <span class="value">${escapeHtml(this.runTime(run) ? this.formatDate(this.runTime(run)) : '')}</span>
                 </div>
             </div>
 
@@ -1095,6 +1095,18 @@ const SimulationsModule = {
         if (!dateStr) return '';
         const date = new Date(dateStr);
         return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    },
+
+    /**
+     * When a run was created / completed, as a Date in the user's time zone.
+     * created_at / completed_at are the database server's clock time (its
+     * own zone); the API adds the exact moment as created_ts / completed_ts.
+     */
+    runTime: function(run, which = 'created') {
+        const ts = run?.[which + '_ts'];
+        if (ts !== undefined && ts !== null && ts !== '') return new Date(Number(ts) * 1000);
+        const s = run?.[which + '_at'];
+        return s ? new Date(String(s).replace(' ', 'T')) : null;
     },
 
     formatCurrency: function(value) {
@@ -1956,7 +1968,7 @@ const SimulationsModule = {
                 // description on mouse-over
                 if (runDisplay) {
                     const r = data.run;
-                    const made = r.created_at ? new Date(r.created_at.replace(' ', 'T')) : null;
+                    const made = this.runTime(r);
                     let when = '';
                     if (made && !isNaN(made)) {
                         // "Today 10:02", "Y'day 10:02", else "Tue 14 Oct 10:02"
@@ -3046,11 +3058,11 @@ const SimulationsModule = {
             // Show last run completion time in status with version
             const statusEl = document.getElementById('simulation-status');
             if (statusEl && lastRun.completed_at && !options.keepStatus) {
-                const completed = new Date(lastRun.completed_at);
+                const completed = this.runTime(lastRun, 'completed');
                 const dateStr = completed.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
                 const timeStr = completed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
                 const version = lastRun.config?.simulator_version || 'unknown';
-                statusEl.textContent = `Last run v${version}: ${dateStr} - ${timeStr}`;
+                statusEl.textContent = `Last run #${lastRun.run_id}, v${version}: ${dateStr} - ${timeStr}`;
                 statusEl.style.color = '#28a745';
             }
 

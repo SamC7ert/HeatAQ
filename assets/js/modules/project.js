@@ -1167,7 +1167,7 @@ const ProjectModule = {
                     // Show last 3 runs
                     const recentRuns = runs.slice(0, 3);
                     container.innerHTML = recentRuns.map(run => {
-                        const date = new Date(run.created_at).toLocaleDateString();
+                        const date = (run.created_ts ? new Date(run.created_ts * 1000) : new Date(run.created_at)).toLocaleDateString();
                         return `<div style="padding: 5px 0; border-bottom: 1px solid #eee;">
                             <strong>${escapeHtml(run.scenario_name || 'Run #' + run.id)}</strong>
                             <span style="color: #666; font-size: 12px; margin-left: 10px;">${escapeHtml(date)}</span>
