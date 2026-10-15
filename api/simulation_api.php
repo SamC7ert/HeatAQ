@@ -157,6 +157,14 @@ function defaultDebugRunId($pdo, $poolSiteId, $date) {
     return $runId ? (int) $runId : null;
 }
 
+/** A TypeScript run whose hourly rows the browser is (or was) still saving. */
+function isHourlySaving($pdo, $runId) {
+    $stmt = $pdo->prepare("SELECT summary_json FROM simulation_runs WHERE run_id = ?");
+    $stmt->execute([(int) $runId]);
+    $summary = json_decode($stmt->fetchColumn() ?: '', true) ?: [];
+    return !empty($summary['hourly_saving']);
+}
+
 function validateDate($date) {
     $d = DateTime::createFromFormat('Y-m-d', $date);
     return $d && $d->format('Y-m-d') === $date;
@@ -665,17 +673,65 @@ try {
         case 'submit_ts_hourly':
         case 'submit_ts_daily':
         case 'submit_ts_results':
+        case 'finish_ts_hourly':
         case 'fail_ts_run':
             // Results of a TypeScript-engine run (prepared by run_simulation
-            // with engine=typescript). Only for that run while it is running.
+            // with engine=typescript). Only for that run while it is running,
+            // except its hourly rows: the browser saves those in the
+            // background after completing the run (summary.hourly_saving).
             RequestGuard::requireWriteRequest();
             RequestGuard::requireRole($auth, 'operator');
             $runId = (int) getParam('run_id');
-            $stmt = $pdo->prepare("SELECT status, config_snapshot FROM simulation_runs WHERE run_id = ? AND pool_site_id = ?");
+            $stmt = $pdo->prepare("SELECT * FROM simulation_runs WHERE run_id = ? AND pool_site_id = ?");
             $stmt->execute([$runId, $currentPoolSiteId]);
             $runRow = $stmt->fetch(PDO::FETCH_ASSOC);
             $snap = $runRow ? (json_decode($runRow['config_snapshot'] ?? '', true) ?: []) : [];
-            if (!$runRow || $runRow['status'] !== 'running' || ($snap['engine'] ?? 'php') !== 'typescript') {
+            $runSummary = $runRow ? (json_decode($runRow['summary_json'] ?? '', true) ?: []) : [];
+            $isTs = $runRow && ($snap['engine'] ?? 'php') === 'typescript';
+            $savingHourly = $isTs && $runRow['status'] === 'completed' && !empty($runSummary['hourly_saving']);
+
+            if (in_array($action, ['submit_ts_hourly', 'finish_ts_hourly'], true) && $savingHourly) {
+                $endSaving = function () use ($pdo, $runId, $runSummary) {
+                    unset($runSummary['hourly_saving']);
+                    $pdo->prepare("UPDATE simulation_runs SET summary_json = ? WHERE run_id = ?")
+                        ->execute([json_encode($runSummary), $runId]);
+                };
+                $purged = function () use ($pdo, $runId, $endSaving) {
+                    // Retention removed this run's hours meanwhile (newer
+                    // runs took the KEEP_HOURLY places): no point in more,
+                    // and rows that arrived during the purge go as well
+                    $pdo->prepare("DELETE FROM simulation_hourly_results WHERE run_id = ?")->execute([$runId]);
+                    $endSaving();
+                    sendError('The hourly data of this run was removed by retention (only the newest ' . RunRetention::KEEP_HOURLY . ' runs keep it)', 410);
+                };
+                if (!empty($runRow['hourly_purged_at'])) {
+                    $purged();
+                }
+                if ($action === 'finish_ts_hourly') {
+                    $endSaving();
+                    try {
+                        RunRetention::purgeHourly($pdo, $currentPoolSiteId, 5);
+                    } catch (Throwable $e) {
+                        error_log('[SimAPI] hourly retention failed: ' . $e->getMessage());
+                    }
+                    sendResponse(['success' => true]);
+                }
+                $rows = getParam('rows', []);
+                if (!is_array($rows) || count($rows) > 20000) {
+                    sendError('rows must be a list of at most 20000 hours');
+                }
+                storeHourlyRows($pdo, $runId, $rows);
+                // Purged while these rows were being written? Then remove
+                // them too, or they would stay outside retention's reach.
+                $chk = $pdo->prepare("SELECT hourly_purged_at FROM simulation_runs WHERE run_id = ?");
+                $chk->execute([$runId]);
+                if ($chk->fetchColumn()) {
+                    $purged();
+                }
+                sendResponse(['success' => true, 'stored' => count($rows)]);
+            }
+
+            if (!$isTs || $runRow['status'] !== 'running') {
                 sendError('No TypeScript run in progress with this id', 409);
             }
 
@@ -711,6 +767,12 @@ try {
                 sendError('summary is required');
             }
             $summary['engine'] = 'typescript';
+            unset($summary['hourly_saving']);
+            if (getParam('hourly_pending', false) && !empty($snap['store_hourly'])) {
+                // The browser saves the hourly rows after this (submit_ts_hourly,
+                // then finish_ts_hourly); until then they are incomplete
+                $summary['hourly_saving'] = true;
+            }
             if (is_array($daily) && $daily) {
                 storeSimulationResults($pdo, $runId, ['daily' => sanitizeDaily($daily), 'hourly' => []], false);
             }
@@ -1125,9 +1187,25 @@ try {
             $stmt->execute([$runId, $timestamp]);
             $stored = $stmt->fetch(PDO::FETCH_ASSOC);
 
+            if (!$stored && getParam('row')) {
+                // A TypeScript run whose hours the browser is still saving:
+                // it sends this hour's row (the stored values) itself
+                $r = json_decode((string) getParam('row'), true);
+                if (isHourlySaving($pdo, $runId) && is_array($r) && count($r) >= 17 && $r[0] === $timestamp) {
+                    $stored = [
+                        'water_temp' => (float) $r[6], 'water_temp_start' => (float) $r[7], 'is_open' => $r[8] ? 1 : 0,
+                        'total_loss_kw' => (float) $r[9], 'solar_gain_kw' => (float) $r[10], 'hp_heat_kw' => (float) $r[11],
+                        'boiler_heat_kw' => (float) $r[12], 'hp_cop' => (float) $r[15],
+                    ];
+                }
+            }
+
             if (!$stored) {
                 $anyStmt = $pdo->prepare("SELECT 1 FROM simulation_hourly_results WHERE run_id = ? LIMIT 1");
                 $anyStmt->execute([$runId]);
+                if (isHourlySaving($pdo, $runId)) {
+                    sendError("The hourly data of run $runId is still being saved (or its saving was interrupted: use Recreate hours).", 404);
+                }
                 if (!$anyStmt->fetchColumn()) {
                     sendError("Run $runId was saved without hourly data, so its hours cannot be inspected. Re-run it with 'Store hourly' on.", 404);
                 }
@@ -1309,6 +1387,9 @@ try {
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             if (empty($rows)) {
+                if (isHourlySaving($pdo, $runId)) {
+                    sendError("The hourly data of run $runId is still being saved (or its saving was interrupted: use Recreate hours).", 404);
+                }
                 sendError("No hourly data found for run $runId in date range $startDate to $endDate", 404);
             }
 
@@ -1410,7 +1491,7 @@ try {
             break;
 
         default:
-            sendError('Invalid action. Valid actions: run_simulation, get_sim_inputs, submit_ts_hourly, submit_ts_daily, submit_ts_results, fail_ts_run, set_baseline, recreate_hourly, get_runs, get_run, get_summary, get_daily_results, get_results, delete_run, get_weather_range, get_version, debug_hour, debug_week');
+            sendError('Invalid action. Valid actions: run_simulation, get_sim_inputs, submit_ts_hourly, submit_ts_daily, submit_ts_results, finish_ts_hourly, fail_ts_run, set_baseline, recreate_hourly, get_runs, get_run, get_summary, get_daily_results, get_results, delete_run, get_weather_range, get_version, debug_hour, debug_week');
     }
 
 } catch (PDOException $e) {

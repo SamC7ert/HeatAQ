@@ -162,7 +162,14 @@ const SimulationsModule = {
                                 <td class="${days1 > 10 ? 'bad' : days1 > 0 ? 'warning' : ''}">${escapeHtml(days1)}</td>
                                 <td class="${days2 > 5 ? 'bad' : days2 > 0 ? 'warning' : ''}">${escapeHtml(days2)}</td>
                                 <td><span class="status-badge status-${escapeHtml(run.status)}">${escapeHtml(run.status)}</span>${run.hourly_purged_at
-                                    ? ' <span class="text-muted" title="Hourly data removed (only the newest 5 runs keep it); summary and daily results are kept" style="font-size:11px;">no hours</span>' : ''}</td>
+                                    ? ' <span class="text-muted" title="Hourly data removed (only the newest 5 runs keep it); summary and daily results are kept" style="font-size:11px;">no hours</span>'
+                                    : run.summary?.hourly_saving
+                                    ? (HourlySaver.failed(run.run_id)
+                                        ? ' <span title="Saving of the hourly data failed: Retry in the top bar" style="font-size:11px; color:#dc3545;">saving failed</span>'
+                                        : HourlySaver.has(run.run_id)
+                                        ? ' <span class="text-muted" title="Hourly data is being saved in the background" style="font-size:11px;">saving hours</span>'
+                                        : ' <span title="Saving of the hourly data was interrupted; Recreate hours rebuilds them" style="font-size:11px; color:#b8860b;">hours incomplete</span>')
+                                    : ''}</td>
                             </tr>
                         `;
                     }).join('')}
@@ -301,26 +308,32 @@ const SimulationsModule = {
             // Get store_hourly option
             const storeHourly = document.getElementById('sim-store-hourly')?.checked ?? true;
 
-            const response = await fetch('/api/simulation_api.php?action=run_simulation', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    scenario_name: scenarioName,
-                    start_date: startDate,
-                    end_date: endDate,
-                    description: description,
-                    config_id: configId,
-                    template_id: ohcId,
-                    pool_id: poolId,
-                    config_override: configOverride,
-                    store_hourly: storeHourly,
-                    engine: engine === 'typescript' ? 'typescript' : 'php'
-                })
-            });
-
-            const data = await response.json();
+            // A server-side run: background hourly saving slows down meanwhile
+            let data;
+            HourlySaver.foregroundStart();
+            try {
+                const response = await fetch('/api/simulation_api.php?action=run_simulation', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        scenario_name: scenarioName,
+                        start_date: startDate,
+                        end_date: endDate,
+                        description: description,
+                        config_id: configId,
+                        template_id: ohcId,
+                        pool_id: poolId,
+                        config_override: configOverride,
+                        store_hourly: storeHourly,
+                        engine: engine === 'typescript' ? 'typescript' : 'php'
+                    })
+                });
+                data = await response.json();
+            } finally {
+                HourlySaver.foregroundEnd();
+            }
             stopProgressPoll();
 
             if (data.error) {
@@ -332,11 +345,10 @@ const SimulationsModule = {
             if (data.status === 'prepared') {
                 const setStatus = (t) => { if (statusEl) { statusEl.textContent = t; statusEl.style.color = '#666'; } };
                 setStatus('TypeScript engine running in this browser...');
-                const { result, ms } = await SimEngine.run(data.inputs, (period, pct) => {
+                const { result, ms } = await SimEngine.runPrepared(data, scenarioName, (period, pct) => {
                     const [y, m] = period.split('-');
                     setStatus(`TypeScript: simulating ${monthNames[parseInt(m, 10) - 1]} ${y}... (${pct}%)`);
-                });
-                await SimEngine.submit(data.run_id, result, data.store_hourly, setStatus);
+                }, setStatus);
                 data.simulator_version = (data.inputs.simulator_version || '') + ' (TypeScript, ' + ms + ' ms)';
                 data.summary = result.summary;
             }
@@ -464,6 +476,47 @@ const SimulationsModule = {
         return '';
     },
 
+    /** HourlySaver finished (or gave up on) a run's hours: update the run views. */
+    hourlySaveEnded: function(runId, saved) {
+        const update = (r) => {
+            if (!r || Number(r.run_id) !== Number(runId)) return false;
+            if (r.summary) delete r.summary.hourly_saving;
+            if (saved) r.has_hourly = true;
+            else r.hourly_purged_at = r.hourly_purged_at || 'now';
+            return true;
+        };
+        if (update(this.currentRun)) this.renderRunDetail();
+        if ((this.runs || []).some(update)) this.renderRunsList();
+    },
+
+    /** The inspected run, if this browser holds its hours (TypeScript run) and it covers the date. */
+    localDebugRun: function(date) {
+        const r = this.inspectRun;
+        if (r && date >= r.start_date && date <= r.end_date && SimEngine.local.has(Number(r.run_id))) {
+            return Number(r.run_id);
+        }
+        return null;
+    },
+
+    /** debug_hour URL, with this browser's row of the hour (the server uses it while the run's hours are not saved yet). */
+    debugHourUrl: function(date, hour) {
+        let url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}${this.debugRunParam(date)}`;
+        const runId = this.localDebugRun(date);
+        const row = runId ? SimEngine.localRow(runId, `${date} ${String(hour).padStart(2, '0')}:00:00`) : null;
+        if (row) url += `&row=${encodeURIComponent(JSON.stringify(row.slice(0, 17)))}`;
+        return url;
+    },
+
+    /** The simulated heating mode of the hour from this browser's copy (the server only knows it after a week replay). */
+    applyLocalHour: function(data, date, hour) {
+        const runId = this.localDebugRun(date);
+        const row = runId ? SimEngine.localRow(runId, `${date} ${String(hour).padStart(2, '0')}:00:00`) : null;
+        if (row && data.stored && data.stored.cache_source !== 'session') {
+            data.stored.heating_mode = row[17];
+            data.stored.cache_source = 'browser';
+        }
+    },
+
     /** Mark (1) or unmark (0) a run as a baseline. */
     toggleBaseline: async function(runId, flag) {
         try {
@@ -489,12 +542,13 @@ const SimulationsModule = {
         const btn = document.getElementById('recreate-hourly-btn');
         const notice = document.getElementById('run-detail-notice');
         if (btn) { btn.disabled = true; btn.textContent = 'Re-running...'; }
+        HourlySaver.foregroundStart();
         try {
             const response = await fetch('/api/simulation_api.php?action=recreate_hourly', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ run_id: runId })
-            });
+            }).finally(() => HourlySaver.foregroundEnd());
             const data = await response.json().catch(() => ({}));
             if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
             const msgs = [`Hours recreated as run ${data.run_id}` + (data.matches_source ? ' - same results as the original.' : '.')]
@@ -520,6 +574,9 @@ const SimulationsModule = {
         const summary = run.summary || {};
         const config = run.config || {};
         const scheduleName = config.schedule_template_name || 'Unknown';
+        // A TypeScript run's hours: saved in the background, or interrupted
+        const savingHours = !!summary.hourly_saving && !run.hourly_purged_at && HourlySaver.has(run.run_id);
+        const hoursIncomplete = !!summary.hourly_saving && !run.hourly_purged_at && !savingHours;
         // summary.*_kwh / total_cost are cumulative over the run: per year
         // for runs of a year or more, period totals for shorter runs.
         const basis = annualBasis(summary.total_hours);
@@ -531,11 +588,17 @@ const SimulationsModule = {
                 <h3>${Number(run.is_baseline) === 1 ? '★ ' : ''}${this.escapeHtml(run.scenario_name)}</h3>
                 <div style="display:flex; gap:6px; flex-wrap:wrap;">
                     ${run.status === 'completed' ? `<button class="btn btn-secondary btn-sm" onclick="SimulationsModule.toggleBaseline(${Number(run.run_id)}, ${Number(run.is_baseline) === 1 ? 0 : 1})">${Number(run.is_baseline) === 1 ? 'Unmark baseline' : 'Mark as baseline'}</button>` : ''}
-                    ${run.status === 'completed' && !run.has_hourly ? `<button class="btn btn-secondary btn-sm" id="recreate-hourly-btn" title="Re-run from this run's saved inputs with hourly data, as a new run" onclick="SimulationsModule.recreateHourly(${Number(run.run_id)})">Recreate hours</button>` : ''}
+                    ${run.status === 'completed' && (!run.has_hourly || hoursIncomplete) ? `<button class="btn btn-secondary btn-sm" id="recreate-hourly-btn" title="Re-run from this run's saved inputs with hourly data, as a new run" onclick="SimulationsModule.recreateHourly(${Number(run.run_id)})">Recreate hours</button>` : ''}
                     <button class="btn btn-secondary btn-sm" onclick="SimulationsModule.closeDetail()">Close</button>
                 </div>
             </div>
-            <div id="run-detail-notice"></div>
+            <div id="run-detail-notice">${savingHours && HourlySaver.failed(run.run_id)
+                ? '<p style="margin:4px 0; color:#dc3545;">Saving the hourly data failed: use Retry in the top bar. The Details tab still shows the hours from this browser.</p>'
+                : savingHours
+                ? '<p class="text-muted" style="margin:4px 0;">Hourly data is being saved in the background (see the top bar); the Details tab already shows it.</p>'
+                : hoursIncomplete
+                ? '<p style="margin:4px 0; color:#b8860b;">The saving of this run\'s hourly data was interrupted, so its hours are incomplete. Recreate hours rebuilds them.</p>'
+                : ''}</div>
 
             <div class="run-detail-info">
                 <div class="info-row">
@@ -1683,7 +1746,7 @@ const SimulationsModule = {
 
         try {
             // Use stored water temp from simulation (no override)
-            const url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}${this.debugRunParam(date)}`;
+            const url = this.debugHourUrl(date, hour);
 
             const response = await fetch(url);
             const data = await response.json();
@@ -1691,6 +1754,7 @@ const SimulationsModule = {
             if (data.error) {
                 throw new Error(data.error);
             }
+            this.applyLocalHour(data, date, hour);
 
             this.renderDebugResults(data);
 
@@ -2117,7 +2181,7 @@ const SimulationsModule = {
                     | <strong>Debug mode:</strong> ${escapeHtml(hs.debug_mode || '?')}
                     ${storedOpenPlan ? ' | hp_rate=' + (storedOpenPlan.hp_rate||0).toFixed(0) + ' (case ' + escapeHtml(storedOpenPlan.case||'?') + ', buffer=' + (storedOpenPlan.buffer_kwh||storedOpenPlan.energy_buffer||0).toFixed(0) + 'kWh)' : ''}
                     ${storedOpenPlan?.transition_water_temp ? '<br>OPEN transition temp: <strong>' + storedOpenPlan.transition_water_temp.toFixed(2) + '°C</strong>' : ''}
-                    ${stored.cache_source === 'session' ? ' <span style="color:green;">✓cached</span>' : ' <span style="color:orange;">(reload week to cache)</span>'}
+                    ${stored.cache_source === 'session' ? ' <span style="color:green;">✓cached</span>' : stored.cache_source === 'browser' ? ' <span style="color:green;">✓from run</span>' : ' <span style="color:orange;">(reload week to cache)</span>'}
                 </div>
                 <div style="font-size:10px;margin-top:4px;padding:4px;background:#e8f4e8;border-radius:3px;">
                     <strong>Thermal Mass:</strong> Stored=${(storedOpenPlan?.thermal_mass||0).toFixed(0)} | Calc=${(openPlanData?.thermal_mass||0).toFixed(0)} kWh/°C
@@ -2155,9 +2219,15 @@ const SimulationsModule = {
         if (placeholder) placeholder.innerHTML = '<span style="color: #666;">Loading weekly data...</span>';
 
         try {
-            const url = `/api/simulation_api.php?action=debug_week&date=${date}${this.debugRunParam(date)}`;
-            const response = await fetch(url);
-            const result = await response.json();
+            // This browser's copy of a TypeScript run (no download, and
+            // usable while its hours are still being saved), else the server
+            const localRunId = this.localDebugRun(date);
+            let result = localRunId ? SimEngine.localWeek(localRunId, date) : null;
+            if (!result) {
+                const url = `/api/simulation_api.php?action=debug_week&date=${date}${this.debugRunParam(date)}`;
+                const response = await fetch(url);
+                result = await response.json();
+            }
 
             if (result.error) {
                 throw new Error(result.error);
@@ -3010,7 +3080,7 @@ const SimulationsModule = {
 
         try {
             // Load debug hour data
-            const url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}${this.debugRunParam(date)}`;
+            const url = this.debugHourUrl(date, hour);
             const response = await fetch(url);
             const data = await response.json();
 
@@ -3019,6 +3089,7 @@ const SimulationsModule = {
                 this.setDebugButtonState('changed'); // Red - needs calculation
                 return;
             }
+            this.applyLocalHour(data, date, hour);
 
             // Render results
             this.renderDebugResults(data);

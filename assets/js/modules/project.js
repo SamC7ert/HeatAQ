@@ -1504,6 +1504,11 @@ const ProjectModule = {
         if (projectId == this.currentProject?.id) {
             return; // Already on this project
         }
+        // Background saving of hourly data is for this project's site
+        if (typeof HourlySaver !== 'undefined' && !HourlySaver.confirmLeave('Switching project')) {
+            await this.loadProjectsList();  // dropdown back to the current project
+            return;
+        }
 
         try {
             // Find project in list (API returns project_id and project_name)
@@ -1534,6 +1539,8 @@ const ProjectModule = {
                     await this.loadProjectsList();  // dropdown back to the current project
                     return;
                 }
+
+                if (typeof HourlySaver !== 'undefined') HourlySaver.abandon();
 
                 // Clear old project's site/pool data from localStorage
                 localStorage.removeItem('heataq_site');
