@@ -1,13 +1,20 @@
 # HeatAQ Heating Control Algorithm
 
-**Version:** V104
-**Last Updated:** December 2024
+**Version:** V104 (predictive section and control settings updated for simulator 3.17.0)
+**Last Updated:** October 2026
+
+> **Predictive control** is specified in [`PREDICTIVE_CONTROL.md`](PREDICTIVE_CONTROL.md)
+> (the authoritative description, with a map of the code). This document
+> covers the reactive hold-to-target logic and the heat physics; the
+> physics code is `lib/EnergySimulator.php` and its TypeScript port
+> `sim-ts/src/physics.ts`, which are the reference where this text and the
+> code differ.
 
 ---
 
 ## Overview
 
-HeatAQ uses a simplified reactive heating algorithm with 100% schedule foresight. The system maintains target water temperature by calculating hourly heat requirements and prioritizing the heat pump for efficiency.
+The simulator steps hour by hour. Each hour it computes the losses and solar gain, decides the heat to deliver (control strategy), heat pump first and boiler as backup, and updates the water temperature.
 
 ---
 
@@ -23,10 +30,19 @@ Only two strategies are supported:
 
 ### 2. Predictive
 
-- Follows schedule: uses target temp when open, setback temp when closed
-- During closed hours, maintains a lower "setback" temperature (default 26°C)
-- Reduces energy costs by allowing temp to drop when not in use
-- Automatically reheats before scheduled opening
+Plans each closed period at closing, with foresight of the weather and the
+schedule (full description: [`PREDICTIVE_CONTROL.md`](PREDICTIVE_CONTROL.md)):
+
+- While closed (cover on) the water **coasts down**, not below the minimum,
+  and the heat pump starts **as late as possible** so the water reaches the
+  required opening temperature exactly at opening.
+- The opening temperature is the target, or higher (up to the maximum) when
+  some coming open hours need more heat than the heat pump can deliver.
+  The boiler never builds this buffer.
+- While open, the heat pump banks heat only up to the last such hour, then
+  the pool holds target. The boiler only backs up the target.
+
+(There is no "setback temperature": that was an older model.)
 
 ---
 
@@ -183,8 +199,10 @@ Boiler only runs when HP capacity exceeded.
 | Parameter | Description |
 |-----------|-------------|
 | control_strategy | 'reactive' or 'predictive' |
-| target_temp | Target water temperature (°C) |
-| setback_temp | Temperature during closed hours (predictive mode) |
+| target_temp | Default target water temperature (°C); schedule periods may set their own |
+| target_offset | SimControl offset added to every target |
+| upper_tolerance / lower_tolerance | Max / min temperature around the target (predictive), unless the pool sets max_temp / min_temp |
+| standby_temp | Temperature held during long closures (predictive) |
 
 ---
 
@@ -192,6 +210,7 @@ Boiler only runs when HP capacity exceeded.
 
 | Version | Changes |
 |---------|---------|
+| Simulator 3.17.0 | Predictive: late start in every closed period, buffer sized hour by hour, banking only to the last short hour (see PREDICTIVE_CONTROL.md §8) |
 | V104 | Added cover heat loss breakdown documentation |
 | V103 | Simplified: removed deadband, only reactive/predictive, always HP first |
 | V102 | Aggressive recovery: full deficit in 1 hour |

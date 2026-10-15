@@ -78,4 +78,7 @@ energy, cost) and prints the first differing hour. `PHPTZ=Europe/Oslo`
 runs PHP with a non-UTC server time zone.
 
 When the PHP simulator changes, make the same change in `src/`, then re-run
-the comparison.
+the comparison. For the predictive planner (`computeClosedPlan`,
+`planClosedPeriod`, the open/closed modes) also run
+`php tests/test_closed_plan.php`; the design is in
+`docs/PREDICTIVE_CONTROL.md` (§0 maps the code in both engines).

@@ -15,7 +15,7 @@ HeatAQ is a comprehensive web-based pool energy simulation and analysis system d
 - **Frontend**: HTML5, JavaScript (ES6+), CSS3
 - **Backend**: PHP 8.2+
 - **Database**: MySQL 5.7+
-- **Simulator**: Python 3.8+ (numpy, pandas)
+- **Simulator**: PHP (`lib/EnergySimulator.php`, runs on the server) and an identical TypeScript port (`sim-ts/`, runs in the browser); see `sim-ts/README.md`
 
 ## Project Structure
 ```
@@ -27,7 +27,9 @@ heataq/
 │   └── js/             # JavaScript modules
 │       └── modules/
 ├── docs/               # Documentation
-├── simulator/          # Python simulation engine
+├── lib/                # PHP simulator (EnergySimulator, PoolScheduler) and helpers
+├── sim-ts/             # TypeScript port of the simulator (built to assets/js/sim/)
+├── tests/              # Command-line tests (e.g. test_closed_plan.php)
 ├── index.html         # Main application
 ├── login.html         # Authentication
 └── config.php.example # Configuration template
@@ -96,7 +98,9 @@ git pull origin main
 - [System Architecture](docs/SYSTEM_ARCHITECTURE.md)
 - [Database Structure](docs/DATABASE_STRUCTURE.md)
 - [Design Guide](docs/DESIGN_GUIDE.md)
-- [Heating Algorithm](docs/HEATING_ALGORITHM.md)
+- [Heating Algorithm](docs/HEATING_ALGORITHM.md) (reactive control, heat physics)
+- [Predictive Control](docs/PREDICTIVE_CONTROL.md) (how predictive heating plans each day, with a map of the code)
+- [TypeScript engine](sim-ts/README.md) (browser engine, PHP parity tests, how results are saved)
 - [Roadmap](docs/ROADMAP.md)
 
 ---

@@ -332,7 +332,7 @@ Control mode testing progress:
 | Mode | Status | Notes |
 |------|--------|-------|
 | **Reactive** | Testing | Well along, details remain |
-| **Predictive** | Not Started | Next priority |
+| **Predictive** | Implemented (simulator 3.17.0) | See `docs/PREDICTIVE_CONTROL.md` |
 | **Optimizing** | Planned | Cost optimization based on spot electricity prices |
 
 See `docs/HEATING_ALGORITHM.md` for mode descriptions.

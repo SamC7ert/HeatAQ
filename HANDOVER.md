@@ -1,5 +1,12 @@
 # HeatAQ Development Handover Guide
 
+> **Start here (October 2026).** Parts of this guide are historical (written
+> around V133). For the current state read: `README.md` (structure),
+> `docs/PREDICTIVE_CONTROL.md` (predictive heating, code map, tests),
+> `sim-ts/README.md` (TypeScript engine, PHP parity, saving results),
+> `docs/DATABASE_STRUCTURE.md`. App version: `?v=` in `index.html`;
+> simulator version: `EnergySimulator::VERSION`.
+
 **Current Version:** V133 (December 2024)
 
 ## Pre-Commit Checklist
@@ -172,7 +179,7 @@ Database:
 
 ### Ongoing Issues
 - `save_preference` API returns 400 for debug_mode (localStorage fallback works)
-- Predictive preheating algorithm needs testing (HP rate showing 59 kW instead of 125 kW)
+- (Resolved) Predictive preheating: rewritten; see `docs/PREDICTIVE_CONTROL.md` (simulator 3.17.0)
 
 ---
 
@@ -206,7 +213,8 @@ HTML:
 
 1. Read the key documentation:
    - `docs/ROADMAP.md` - Current priorities and known issues
-   - `docs/HEATING_ALGORITHM.md` - Control modes (reactive, predictive)
+   - `docs/HEATING_ALGORITHM.md` - Reactive control and heat physics
+   - `docs/PREDICTIVE_CONTROL.md` - Predictive control (authoritative, with a map of the code)
    - `docs/DATABASE_STRUCTURE.md` - Database overview
 
 2. Run the error check script:
@@ -312,7 +320,7 @@ Both Archive and Export use **branch-then-merge** pattern for clean git history.
 | Mode | Description | Status |
 |------|-------------|--------|
 | **Reactive** | Maintains target temp 24/7, ignores schedule | Testing |
-| **Predictive** | Follows schedule, uses setback temp when closed | In Progress |
+| **Predictive** | Coasts while closed, heats as late as possible, buffers only for open hours the heat pump cannot cover (`docs/PREDICTIVE_CONTROL.md`) | Implemented (simulator 3.17.0) |
 | **Optimizing** | Minimizes cost using spot electricity prices | Planned |
 
 ### Simulation Config Flow
@@ -383,7 +391,7 @@ After changes, verify:
 - Site selector may not load correct site
 - History tab only loads partial data
 - Analysis tab does not show data
-- Predictive mode: HP rate calculation needs verification
+- (Resolved) Predictive mode: see `docs/PREDICTIVE_CONTROL.md`
 
 ## Documentation Index
 
@@ -392,12 +400,14 @@ After changes, verify:
 | `README.md` | Project overview and setup |
 | `docs/SYSTEM_ARCHITECTURE.md` | Full module documentation |
 | `docs/DATABASE_STRUCTURE.md` | Database tables and relationships |
-| `docs/HEATING_ALGORITHM.md` | Control mode logic, cover factors |
+| `docs/HEATING_ALGORITHM.md` | Reactive control, heat physics |
+| `docs/PREDICTIVE_CONTROL.md` | Predictive control: design, code map, tests |
+| `sim-ts/README.md` | TypeScript engine, PHP parity tests, saving results |
 | `docs/ROADMAP.md` | Priorities, known issues, planned features |
 | `docs/DESIGN_GUIDE.md` | UI/UX guidelines |
 
 ## Next Priority Tasks
 
-1. **Predictive Preheating** - Debug why HP shows 59 kW instead of 125 kW capacity
+1. ~~**Predictive Preheating**~~ - Done (simulator 3.17.0, `docs/PREDICTIVE_CONTROL.md`)
 2. **Batch Data Storage** - For simulations longer than current memory allows
 3. **save_preference API** - Fix 400 error for debug_mode preference
