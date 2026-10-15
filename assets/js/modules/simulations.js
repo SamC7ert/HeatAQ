@@ -1854,8 +1854,7 @@ const SimulationsModule = {
                         : '';
                     runDisplay.textContent = `#${runId}${when ? ', ' + when : ''}`;
                     const tip = [r.scenario_name, r.description,
-                        r.start_date && r.end_date ? `Period: ${r.start_date} to ${r.end_date}` : '',
-                        r.summary?.engine === 'typescript' ? 'Engine: TypeScript' : ''].filter(Boolean).join('\n');
+                        r.start_date && r.end_date ? `Period: ${r.start_date} to ${r.end_date}` : ''].filter(Boolean).join('\n');
                     runDisplay.title = tip;
                     runDisplay.style.cursor = tip ? 'help' : '';
                     runDisplay.style.borderBottom = tip ? '1px dotted #999' : '';
