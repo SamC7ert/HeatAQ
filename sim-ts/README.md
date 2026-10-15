@@ -23,21 +23,53 @@ bodies with a bare 403), so results go in pieces:
    results view works. With hourly data it is flagged
    `summary.hourly_saving`. The server writes each request in one
    transaction (one commit, not one per row).
-2. The hourly rows are saved in the background (`HourlySaver` in
+2. Only if "Save hourly data in database" is ticked (off by default; the
+   Details tab no longer needs saved hours, see below), the hourly rows
+   are saved in the background (`HourlySaver` in
    `assets/js/modules/simengine.js`, progress panel in the top bar):
    `submit_ts_hourly` pieces, 3 at a time (1 while a server-side
    simulation runs), then `finish_ts_hourly` clears the flag. Runs queue
    oldest first; a failed piece is retried twice, then the panel offers
    Retry / Dismiss.
-3. The Details tab uses this browser's copy of the hours of the latest
-   TypeScript runs (`SimEngine.local`, the newest 2 plus any still saving),
-   whether they are saved in the database or not: the week chart is built
-   locally; `debug_hour` gets the hour's row in a `row` parameter, used when
-   that hour is not in the database.
-4. If retention removes the run's hours during saving (newer runs took the
+3. If retention removes the run's hours during saving (newer runs took the
    newest-5 places), the server answers 410 and the run is dropped from
    the queue. A run left `hourly_saving` (page closed, saving dismissed)
    shows as "hours incomplete"; Recreate hours rebuilds them.
+
+## Hours on demand (Details tab)
+
+A run's hours are only needed by the Details tab (hour panel, week chart).
+They are computed in the browser when needed instead of being stored
+(`SimulationsModule.ensureHours()` in `assets/js/modules/simulations.js`):
+
+1. The Details tab shows the inspected run (the one selected in History or
+   just run). If this browser holds its hours (`SimEngine.local`, the
+   newest 2 runs), they are used.
+2. Otherwise the run's saved inputs are loaded (`get_sim_inputs`: weather,
+   solar, configuration and the copy of the schedule saved with the run)
+   and simulated in the worker. That takes about 0.1-0.3 s per simulated
+   year, once per run and session. This also works for PHP runs, since both
+   engines give the same results.
+3. The recomputed days are checked against the run's saved daily results.
+   The note next to the week chart heading says where the hours come from,
+   and warns when they do not match. That happens when the run was made with
+   another simulator version, or when weather or solar data changed since.
+4. A run made with another simulator version that has its own saved hours
+   uses those (`debug_week` / `debug_hour` on the server): they are the
+   exact record of that version. Runs without a saved schedule copy
+   (before V239) also use the server.
+
+`debug_hour` recalculates the hour on the server; the browser sends the
+hour's row (`row` parameter), used when the hour is not in the database.
+
+## Engine reference set
+
+`tests/reference/` holds 13 scenarios with frozen inputs and the results
+each simulator version gives. `node test/reference.mjs` checks this
+engine against them, `lib/ReferenceCheck.php` / `src/reference.ts` define
+the comparison, and Admin → System → Engine Verification runs it in the
+app (server PHP and browser). See `tests/reference/README.md`, including
+the checklist for releasing a new simulator version.
 
 ## How the engines get identical inputs
 

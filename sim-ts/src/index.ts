@@ -3,4 +3,6 @@
 // assets/js/sim/heataq-sim-worker.js.
 export { runSimulation, computeClosedPlan, storedDailyRows, PORT_OF_VERSION } from './engine';
 export { phpRound } from './util';
+export { referenceResult, compareReference, MODE_CODES } from './reference';
+export type { ReferenceResult, ReferenceComparison } from './reference';
 export type { RunInputs, RunResult, HourlyRow, DailyResult, StoredDayRow } from './types';

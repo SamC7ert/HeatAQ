@@ -371,7 +371,7 @@
   };
 
   // src/engine.ts
-  var PORT_OF_VERSION = "3.17.0";
+  var PORT_OF_VERSION = "3.17.1";
   var ZERO_HEATING = () => ({
     hp_heat: 0,
     hp_electricity: 0,
@@ -519,10 +519,9 @@
     openPreheatHeating(target, maxTemp, net, air, water, tmr) {
       const hpReq = Math.max(0, net + (maxTemp - water) * tmr);
       const hp = this.phys.applyHeatPump(hpReq, air);
-      const afterHp = net - hp.heat;
       let boiler = { heat: 0, fuel: 0, cost: 0 };
-      if (water <= target + 0.01 && afterHp > 0) {
-        const boilerReq = afterHp + Math.max(0, (target - water) * tmr);
+      const boilerReq = net + Math.max(0, (target - water) * tmr) - hp.heat;
+      if (water <= target + 0.01 && boilerReq > 0) {
         boiler = this.phys.applyBoiler(boilerReq);
       }
       const requested = water <= target + 0.01 ? Math.max(0, net + Math.max(0, (target - water) * tmr)) : 0;
@@ -986,16 +985,99 @@
     ]);
   }
 
+  // src/reference.ts
+  var MODE_CODES = {
+    preheat_coast: "c",
+    preheat_ramp: "r",
+    open_preheat: "p",
+    open_hold: "h",
+    standby: "s",
+    reactive: "x",
+    closed_hold: "k"
+  };
+  var TOLERANCE = 0.011;
+  function referenceResult(r) {
+    const summary = {};
+    for (const [k, v] of Object.entries(r.summary)) {
+      if (v === null || typeof v !== "object") summary[k] = v;
+    }
+    const hours = { water: [], hp: [], boiler: [], mode: "" };
+    for (const h of r.hourly) {
+      hours.water.push(phpRound(h[6], 2));
+      hours.hp.push(phpRound(h[11], 2));
+      hours.boiler.push(phpRound(h[12], 2));
+      hours.mode += MODE_CODES[h[17]] ?? "?";
+    }
+    return { summary, days: storedDailyRows(r.daily), hours };
+  }
+  var isNum = (v) => typeof v === "number" && isFinite(v) || typeof v === "string" && v.trim() !== "" && isFinite(Number(v));
+  function compareReference(expected, got) {
+    let exact = true;
+    const same = (a, b) => {
+      if (a === b) return true;
+      if (isNum(a) && isNum(b)) {
+        const x = Number(a), y = Number(b);
+        if (x === y) return true;
+        exact = false;
+        return Math.abs(x - y) <= TOLERANCE + 1e-9 * Math.max(Math.abs(x), Math.abs(y));
+      }
+      return false;
+    };
+    const summaryDiffs = [];
+    for (const [k, v] of Object.entries(expected.summary)) {
+      const w = got.summary[k] ?? null;
+      if (!same(v, w)) summaryDiffs.push({ key: k, expected: v, got: w });
+    }
+    let daysDiffering = 0;
+    let firstDay = null;
+    const nd = Math.max(expected.days.length, got.days.length);
+    for (let i = 0; i < nd; i++) {
+      const a = expected.days[i], b = got.days[i];
+      let ok = !!a && !!b && a.length === b.length;
+      for (let j = 0; ok && j < a.length; j++) ok = same(a[j], b[j]);
+      if (!ok) {
+        daysDiffering++;
+        if (firstDay === null) firstDay = String((a ?? b)?.[0] ?? `#${i}`);
+      }
+    }
+    let hoursDiffering = 0;
+    let firstHour = null;
+    const eh = expected.hours, gh = got.hours;
+    const nh = Math.max(eh.water.length, gh.water.length);
+    for (let i = 0; i < nh; i++) {
+      const ok = eh.water[i] !== void 0 && gh.water[i] !== void 0 && same(eh.water[i], gh.water[i]) && same(eh.hp[i], gh.hp[i]) && same(eh.boiler[i], gh.boiler[i]) && (eh.mode[i] ?? "") === (gh.mode[i] ?? "");
+      if (!ok) {
+        hoursDiffering++;
+        if (firstHour === null) firstHour = i;
+      }
+    }
+    const differs = summaryDiffs.length > 0 || daysDiffering > 0 || hoursDiffering > 0;
+    return {
+      status: differs ? "differs" : exact ? "identical" : "rounding",
+      summary_diffs: summaryDiffs.slice(0, 10),
+      summary_differing: summaryDiffs.length,
+      days_differing: daysDiffering,
+      first_day: firstDay,
+      hours_differing: hoursDiffering,
+      first_hour: firstHour
+    };
+  }
+
   // src/worker.ts
   var ctx = self;
   ctx.onmessage = (e) => {
-    const { id, inputs } = e.data || {};
+    const { id, inputs, expected } = e.data || {};
     const t0 = Date.now();
     try {
       const result = runSimulation(inputs, (period, done, total) => {
         ctx.postMessage({ id, type: "progress", period, pct: total > 0 ? Math.round(100 * done / total) : 0 });
       });
-      ctx.postMessage({ id, type: "result", result, dailyRows: storedDailyRows(result.daily), ms: Date.now() - t0 });
+      const ms = Date.now() - t0;
+      if (expected) {
+        ctx.postMessage({ id, type: "reference", comparison: compareReference(expected, referenceResult(result)), ms });
+      } else {
+        ctx.postMessage({ id, type: "result", result, dailyRows: storedDailyRows(result.daily), ms });
+      }
     } catch (err) {
       ctx.postMessage({ id, type: "error", message: err instanceof Error ? err.message : String(err) });
     }

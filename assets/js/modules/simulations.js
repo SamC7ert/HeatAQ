@@ -306,7 +306,7 @@ const SimulationsModule = {
             const poolId = typeof SimControlModule !== 'undefined' ? SimControlModule.currentPoolId : null;
 
             // Get store_hourly option
-            const storeHourly = document.getElementById('sim-store-hourly')?.checked ?? true;
+            const storeHourly = document.getElementById('sim-store-hourly')?.checked ?? false;
 
             // A server-side run: background hourly saving slows down meanwhile
             let data;
@@ -415,9 +415,8 @@ const SimulationsModule = {
 
             // View the new run
             if (data.run_id) {
-                // (a summary-only run cannot be inspected in Details)
-                // (or one whose hours this browser holds: TypeScript runs)
-                setTimeout(() => this.viewRun(data.run_id, { inspect: storeHourly || SimEngine.local.has(Number(data.run_id)) }), 1000);
+                // and inspect it in Details (hours computed on demand if not saved)
+                setTimeout(() => this.viewRun(data.run_id, { inspect: true }), 1000);
             }
 
         } catch (error) {
@@ -490,6 +489,97 @@ const SimulationsModule = {
         if ((this.runs || []).some(update)) this.renderRunsList();
     },
 
+    /**
+     * Hours on demand: make sure this browser holds the hours of the run the
+     * Details tab shows for this date (the inspected run). If it does not,
+     * they are computed from the run's saved inputs (get_sim_inputs; the
+     * TypeScript engine gives the same hours as PHP), unless the run was made
+     * with another simulator version and has its own saved hours - those are
+     * the exact record and are read from the database instead. A recomputed
+     * run is checked against its saved daily results (debug-hours-note).
+     */
+    hoursPending: {},
+
+    ensureHours: async function(date) {
+        const r = this.inspectRun;
+        if (!r || date < r.start_date || date > r.end_date) return null;
+        const id = Number(r.run_id);
+        if (SimEngine.local.has(id)) { this.showHoursNote(id); return id; }
+        if (!this.hoursPending[id]) {
+            this.hoursPending[id] = this.computeHours(id).finally(() => { delete this.hoursPending[id]; });
+        }
+        return this.hoursPending[id];
+    },
+
+    computeHours: async function(id) {
+        const note = document.getElementById('debug-hours-note');
+        try {
+            const runResp = await SimEngine.api(`get_run&run_id=${encodeURIComponent(id)}`);
+            const run = runResp.run || {};
+            const runVersion = run.config?.simulator_version || null;
+            if (!run.config?.has_schedule_copy) {
+                this.hoursSource[id] = { kind: 'database', reason: 'This run has no saved copy of its schedule (made before V239): hours from the database, if kept.' };
+                this.showHoursNote(id);
+                return null;
+            }
+            this.engineVersion = this.engineVersion || (await SimEngine.api('get_version')).simulator_version;
+            const engineVersion = this.engineVersion;
+            if (run.has_hourly && runVersion && engineVersion && runVersion !== engineVersion) {
+                // The run's own saved hours are the exact record of that version
+                this.hoursSource[id] = { kind: 'database', reason: `Hours from the database, as saved by simulator ${runVersion} (this engine is ${engineVersion}).` };
+                this.showHoursNote(id);
+                return null;
+            }
+            if (note) note.innerHTML = `<span class="text-muted">Computing the hours of run #${escapeHtml(id)} in this browser...</span>`;
+            const inp = await SimEngine.api(`get_sim_inputs&run_id=${encodeURIComponent(id)}`);
+            const t0 = Date.now();
+            const { result } = await SimEngine.run(inp.inputs);
+            const ms = Date.now() - t0;
+            SimEngine.keepLocal(id, result.hourly);
+            // Do the recomputed days match what the run saved?
+            let check = null;
+            try {
+                const dailyRes = await fetch(`/api/simulation_api.php?action=get_daily_results&run_id=${encodeURIComponent(id)}`).then(x => x.json());
+                check = SimEngine.compare(run.summary || {}, dailyRes.daily_results || [], result);
+            } catch (e) { /* check unavailable */ }
+            this.hoursSource[id] = { kind: 'computed', ms, runVersion, engineVersion, check };
+            this.showHoursNote(id);
+            return id;
+        } catch (err) {
+            this.hoursSource[id] = { kind: 'error', reason: `Could not compute the hours: ${err.message}` };
+            this.showHoursNote(id);
+            return null;
+        }
+    },
+
+    hoursSource: {},
+
+    /** Where the Details hours of a run come from, under the week chart heading. */
+    showHoursNote: function(id) {
+        const note = document.getElementById('debug-hours-note');
+        if (!note) return;
+        const s = this.hoursSource[id];
+        if (!s) {
+            note.innerHTML = SimEngine.local.has(Number(id))
+                ? `<span class="text-muted">Run #${escapeHtml(id)}: hours from this browser (latest run).</span>` : '';
+            return;
+        }
+        if (s.kind !== 'computed') {
+            note.innerHTML = `<span class="${s.kind === 'error' ? 'error' : 'text-muted'}">Run #${escapeHtml(id)}: ${escapeHtml(s.reason)}</span>`;
+            return;
+        }
+        const other = s.runVersion && s.engineVersion && s.runVersion !== s.engineVersion;
+        const base = `Run #${escapeHtml(id)}: hours computed in this browser from the run's saved inputs (${escapeHtml(s.ms)} ms)`;
+        if (s.check && !s.check.ok) {
+            note.innerHTML = `<span style="color:#b8860b;">${base}, with simulator ${escapeHtml(s.engineVersion)}. `
+                + `They do not match the run's saved results (${escapeHtml(s.check.daysDiffering)} of ${escapeHtml(s.check.days)} days differ`
+                + `${other ? `; the run was made with ${escapeHtml(s.runVersion)}` : '; weather or solar data may have changed since'}). `
+                + `Re-run the scenario to compare like with like.</span>`;
+        } else {
+            note.innerHTML = `<span class="text-muted">${base}${other ? `, with simulator ${escapeHtml(s.engineVersion)} (run made with ${escapeHtml(s.runVersion)}; results match)` : ''}.</span>`;
+        }
+    },
+
     /** The inspected run, if this browser holds its hours (TypeScript run) and it covers the date. */
     localDebugRun: function(date) {
         const r = this.inspectRun;
@@ -515,6 +605,22 @@ const SimulationsModule = {
         if (row && data.stored && data.stored.cache_source !== 'session') {
             data.stored.heating_mode = row[17];
             data.stored.cache_source = 'browser';
+        }
+    },
+
+    /** Download a run's saved inputs as JSON (get_sim_inputs). */
+    exportInputs: async function(runId) {
+        try {
+            const data = await SimEngine.api(`get_sim_inputs&run_id=${encodeURIComponent(runId)}`);
+            const blob = new Blob([JSON.stringify(data.inputs)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `heataq-run-${runId}-inputs.json`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        } catch (err) {
+            alert('Could not export the inputs: ' + err.message);
         }
     },
 
@@ -589,7 +695,8 @@ const SimulationsModule = {
                 <h3>${Number(run.is_baseline) === 1 ? '★ ' : ''}${this.escapeHtml(run.scenario_name)}</h3>
                 <div style="display:flex; gap:6px; flex-wrap:wrap;">
                     ${run.status === 'completed' ? `<button class="btn btn-secondary btn-sm" onclick="SimulationsModule.toggleBaseline(${Number(run.run_id)}, ${Number(run.is_baseline) === 1 ? 0 : 1})">${Number(run.is_baseline) === 1 ? 'Unmark baseline' : 'Mark as baseline'}</button>` : ''}
-                    ${run.status === 'completed' && (!run.has_hourly || hoursIncomplete) ? `<button class="btn btn-secondary btn-sm" id="recreate-hourly-btn" title="Re-run from this run's saved inputs with hourly data, as a new run" onclick="SimulationsModule.recreateHourly(${Number(run.run_id)})">Recreate hours</button>` : ''}
+                    ${run.status === 'completed' && (hoursIncomplete || (!run.has_hourly && !config.has_schedule_copy)) ? `<button class="btn btn-secondary btn-sm" id="recreate-hourly-btn" title="Re-run from this run's saved inputs with hourly data, as a new run" onclick="SimulationsModule.recreateHourly(${Number(run.run_id)})">Recreate hours</button>` : ''}
+                    ${run.status === 'completed' && config.has_schedule_copy ? `<button class="btn btn-secondary btn-sm" title="Download this run's complete inputs (weather, solar, configuration, schedule), e.g. to add it to the engine reference set (tests/reference)" onclick="SimulationsModule.exportInputs(${Number(run.run_id)})">Export inputs</button>` : ''}
                     <button class="btn btn-secondary btn-sm" onclick="SimulationsModule.closeDetail()">Close</button>
                 </div>
             </div>
@@ -599,8 +706,8 @@ const SimulationsModule = {
                 ? '<p class="text-muted" style="margin:4px 0;">Hourly data is being saved in the background (see the top bar); the Details tab already shows it.</p>'
                 : hoursIncomplete
                 ? '<p style="margin:4px 0; color:#b8860b;">The saving of this run\'s hourly data was interrupted, so its hours are incomplete. Recreate hours rebuilds them.</p>'
-                : !run.has_hourly && SimEngine.local.has(Number(run.run_id))
-                ? '<p class="text-muted" style="margin:4px 0;">Hourly data not saved in the database; the Details tab shows it from this browser until the page is reloaded.</p>'
+                : !run.has_hourly && config.has_schedule_copy
+                ? '<p class="text-muted" style="margin:4px 0;">Hourly data not saved in the database: the Details tab computes it from the run\'s saved inputs.</p>'
                 : ''}</div>
 
             <div class="run-detail-info">
@@ -1749,6 +1856,7 @@ const SimulationsModule = {
 
         try {
             // Use stored water temp from simulation (no override)
+            await this.ensureHours(date);
             const url = this.debugHourUrl(date, hour);
 
             const response = await fetch(url);
@@ -2248,6 +2356,7 @@ const SimulationsModule = {
         try {
             // This browser's copy of a TypeScript run (no download, and
             // usable while its hours are still being saved), else the server
+            await this.ensureHours(date);
             const localRunId = this.localDebugRun(date);
             let result = localRunId ? SimEngine.localWeek(localRunId, date) : null;
             if (!result) {
@@ -3107,6 +3216,7 @@ const SimulationsModule = {
 
         try {
             // Load debug hour data
+            await this.ensureHours(date);
             const url = this.debugHourUrl(date, hour);
             const response = await fetch(url);
             const data = await response.json();

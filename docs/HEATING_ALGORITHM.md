@@ -210,6 +210,7 @@ Boiler only runs when HP capacity exceeded.
 
 | Version | Changes |
 |---------|---------|
+| Simulator 3.17.1 | Predictive, banking open hours: below target the boiler restores target |
 | Simulator 3.17.0 | Predictive: late start in every closed period, buffer sized hour by hour, banking only to the last short hour (see PREDICTIVE_CONTROL.md §8) |
 | V104 | Added cover heat loss breakdown documentation |
 | V103 | Simplified: removed deadband, only reactive/predictive, always HP first |

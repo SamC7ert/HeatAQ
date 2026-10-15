@@ -3,9 +3,11 @@
 > **Start here (October 2026).** Parts of this guide are historical (written
 > around V133). For the current state read: `README.md` (structure),
 > `docs/PREDICTIVE_CONTROL.md` (predictive heating, code map, tests),
-> `sim-ts/README.md` (TypeScript engine, PHP parity, saving results),
-> `docs/DATABASE_STRUCTURE.md`. App version: `?v=` in `index.html`;
-> simulator version: `EnergySimulator::VERSION`.
+> `sim-ts/README.md` (TypeScript engine, PHP parity, saving results, hours
+> on demand), `tests/reference/README.md` (engine reference set and how to
+> release a new simulator version), `docs/DATABASE_STRUCTURE.md`. App
+> version: `?v=` in `index.html`; simulator version:
+> `EnergySimulator::VERSION` (= `PORT_OF_VERSION` in `sim-ts`).
 
 **Current Version:** V133 (December 2024)
 

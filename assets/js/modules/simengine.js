@@ -19,8 +19,12 @@ const SimEngine = {
         return './assets/js/sim/heataq-sim-worker.js' + v;
     })(),
 
-    /** Run the TypeScript engine on exportRunInputs() data in a worker. */
-    run: function(inputs, onProgress) {
+    /**
+     * Run the TypeScript engine on exportRunInputs() data in a worker. With
+     * `expected` (a reference result, tests/reference) it is a reference
+     * check and resolves to { ...comparison, ms } (Admin > Engine Verification).
+     */
+    run: function(inputs, onProgress, expected) {
         return new Promise((resolve, reject) => {
             let worker;
             try {
@@ -38,6 +42,9 @@ const SimEngine = {
                 } else if (m.type === 'result') {
                     worker.terminate();
                     resolve({ result: m.result, ms: m.ms, dailyRows: m.dailyRows });
+                } else if (m.type === 'reference') {
+                    worker.terminate();
+                    resolve({ ...m.comparison, ms: m.ms });
                 } else if (m.type === 'error') {
                     worker.terminate();
                     reject(new Error(m.message));
@@ -47,8 +54,12 @@ const SimEngine = {
                 worker.terminate();
                 reject(new Error('TypeScript engine failed: ' + (e.message || 'worker error')));
             };
-            worker.postMessage({ id, inputs });
+            worker.postMessage(expected ? { id, inputs, expected } : { id, inputs });
         });
+    },
+
+    checkReference: function(inputs, expected) {
+        return this.run(inputs, null, expected);
     },
 
     async api(action, body) {

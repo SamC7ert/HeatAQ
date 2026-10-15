@@ -1962,6 +1962,112 @@ const AdminModule = {
         await this.loadStorage();
     },
 
+    // ========================================
+    // ENGINE VERIFICATION (reference set, tests/reference)
+    // ========================================
+
+    REFERENCE_LAST_KEY: 'heataq_reference_last',
+
+    loadReference: async function() {
+        const info = document.getElementById('reference-info');
+        const status = document.getElementById('reference-status');
+        if (status) status.textContent = 'Loading...';
+        try {
+            const ref = await SimEngine.api('reference_info');
+            this.reference = ref;
+            const pct = (a, b) => {
+                if (typeof a !== 'number' || typeof b !== 'number') return a === b ? '=' : `${escapeHtml(a)} → ${escapeHtml(b)}`;
+                if (a === b) return '=';
+                if (Math.abs(a) <= 1e-9) return `${a} → ${b}`;
+                const p = 100 * (b - a) / Math.abs(a);
+                return Math.abs(p) < 0.05 ? '≈0%' : `${p > 0 ? '+' : ''}${p.toFixed(1)}%`;
+            };
+            const changes = (ref.changes || []).map(c => {
+                const v = c.values;
+                return `<tr><td>${escapeHtml(c.title)}</td>
+                    <td>${c.status === 'differs' ? 'changed' : 'unchanged'}</td>
+                    <td style="text-align:right;">${pct(v.total_cost.from, v.total_cost.to)}</td>
+                    <td style="text-align:right;">${pct(v.boiler_thermal_kwh.from, v.boiler_thermal_kwh.to)}</td>
+                    <td style="text-align:right;">${pct(v.hp_thermal_kwh.from, v.hp_thermal_kwh.to)}</td>
+                    <td style="text-align:right;">${escapeHtml(v.days_below_27.from)} → ${escapeHtml(v.days_below_27.to)}</td></tr>`;
+            }).join('');
+            const own = ref.compared_with === ref.engine_version;
+            let last = null;
+            try { last = JSON.parse(localStorage.getItem(this.REFERENCE_LAST_KEY) || 'null'); } catch (e) { /* none */ }
+            if (info) info.innerHTML = `
+                <p style="margin:4px 0;">Engine <strong>${escapeHtml(ref.engine_version)}</strong>.
+                   Reference results stored for: ${ref.versions.map(escapeHtml).join(', ') || 'none'}.
+                   ${own ? '' : `<br><span style="color:#b8860b;">No results stored for ${escapeHtml(ref.engine_version)} yet: it is checked against ${escapeHtml(ref.compared_with)}, so differences are expected.</span>`}</p>
+                ${last ? `<p class="text-muted" style="margin:4px 0;">Last verified in this browser: ${escapeHtml(new Date(last.at).toLocaleString('en-GB'))}, engine ${escapeHtml(last.version)}: ${escapeHtml(last.text)}</p>` : ''}
+                <table class="data-table compact" id="reference-table" style="margin-top:6px;">
+                    <thead><tr><th>Scenario</th><th>Period</th><th>PHP (server)</th><th>TypeScript (browser)</th></tr></thead>
+                    <tbody>${ref.scenarios.map(s => `<tr data-id="${escapeHtml(s.id)}">
+                        <td title="${escapeHtml(s.description)}">${escapeHtml(s.title)}</td>
+                        <td>${escapeHtml(s.start)} – ${escapeHtml(s.end)}</td>
+                        <td class="ref-php">-</td><td class="ref-ts">-</td></tr>`).join('')}</tbody>
+                </table>
+                ${ref.previous_version && changes ? `
+                <p style="margin:12px 0 4px;"><strong>What ${escapeHtml(ref.compared_with)} changed compared with ${escapeHtml(ref.previous_version)}</strong> (stored results)</p>
+                <table class="data-table compact">
+                    <thead><tr><th>Scenario</th><th></th><th style="text-align:right;">Cost</th><th style="text-align:right;">Boiler heat</th><th style="text-align:right;">HP heat</th><th style="text-align:right;">Days &gt;1 °C below</th></tr></thead>
+                    <tbody>${changes}</tbody>
+                </table>` : ''}`;
+            if (status) status.textContent = '';
+            return ref;
+        } catch (err) {
+            if (status) status.innerHTML = `<span class="error">Could not load the reference set: ${escapeHtml(err.message)}</span>`;
+            return null;
+        }
+    },
+
+    /** One comparison result as a table cell. */
+    referenceCell: function(c, own) {
+        if (!c) return '<span class="error">error</span>';
+        if (c.error) return `<span class="error" title="${escapeHtml(c.error)}">error</span>`;
+        const ms = c.ms !== undefined ? ` <span class="text-muted">${escapeHtml(c.ms)} ms</span>` : '';
+        if (c.status === 'identical') return `<span style="color:#28a745;">✓ identical</span>${ms}`;
+        if (c.status === 'rounding') return `<span style="color:#28a745;" title="Some values differ in the last rounded digit">✓ within rounding</span>${ms}`;
+        const detail = `${c.summary_differing} summary values, ${c.days_differing} days (first ${c.first_day ?? '-'}), ${c.hours_differing} hours`
+            + (c.summary_diffs || []).slice(0, 4).map(d => `\n${d.key}: ${d.expected} → ${d.got}`).join('');
+        return `<span style="color:${own ? '#dc3545' : '#b8860b'};" title="${escapeHtml(detail)}">${own ? '✗ differs' : 'changed'}</span>${ms}`;
+    },
+
+    verifyEngine: async function() {
+        const btn = document.getElementById('reference-verify-btn');
+        const status = document.getElementById('reference-status');
+        const ref = await this.loadReference();
+        if (!ref) return;
+        const own = ref.compared_with === ref.engine_version;
+        if (btn) btn.disabled = true;
+        let bad = 0, done = 0;
+        const n = ref.scenarios.length;
+        for (const s of ref.scenarios) {
+            const row = document.querySelector(`#reference-table tr[data-id="${CSS.escape(s.id)}"]`);
+            const php = row?.querySelector('.ref-php'), ts = row?.querySelector('.ref-ts');
+            if (status) status.textContent = `Checking ${done + 1} of ${n}: ${s.title}...`;
+            let p, t;
+            if (php) php.textContent = 'running...';
+            try { p = await SimEngine.api(`reference_check_php&id=${encodeURIComponent(s.id)}`); } catch (e) { p = { error: e.message }; }
+            if (php) php.innerHTML = this.referenceCell(p, own);
+            if (ts) ts.textContent = 'running...';
+            try {
+                const sc = await SimEngine.api(`reference_scenario&id=${encodeURIComponent(s.id)}`);
+                t = await SimEngine.checkReference(sc.inputs, sc.expected);
+            } catch (e) { t = { error: e.message }; }
+            if (ts) ts.innerHTML = this.referenceCell(t, own);
+            if (!p || p.error || p.status === 'differs' || !t || t.error || t.status === 'differs') bad++;
+            done++;
+        }
+        const text = bad === 0
+            ? `all ${n} scenarios match on both engines`
+            : own ? `${bad} of ${n} scenarios differ` : `${bad} of ${n} scenarios changed compared with ${ref.compared_with}`;
+        if (status) status.innerHTML = `<span style="color:${bad === 0 ? '#28a745' : own ? '#dc3545' : '#b8860b'};">${bad === 0 ? '✓' : own ? '✗' : '!'} ${escapeHtml(text[0].toUpperCase() + text.slice(1))}.</span>`;
+        try {
+            localStorage.setItem(this.REFERENCE_LAST_KEY, JSON.stringify({ at: Date.now(), version: ref.engine_version, text }));
+        } catch (e) { /* private mode */ }
+        if (btn) btn.disabled = false;
+    },
+
     dumpSchema: async function(pushToGit = false) {
         const status = document.getElementById('schema-status');
         const result = document.getElementById('schema-result');
