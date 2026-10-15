@@ -8,7 +8,7 @@ import { Physics, distributeSolarToHour } from './physics';
 import { Scheduler } from './scheduler';
 import { addHours, num, parseNaive, phpRound, unix } from './util';
 
-export const PORT_OF_VERSION = '3.17.1';
+export const PORT_OF_VERSION = '3.18.0';
 
 interface ClosedPlan {
   preheat: boolean;
@@ -101,6 +101,13 @@ class Run {
   // ---- targets ----
   private configDefaultTarget(): number { return num(this.eq.target_temp, 28.0) as number; }
   private targetOffset(): number { return num(this.eq.target_offset, 0.0) as number; }
+  /** EnergySimulator::maxTemp: target + "Max overheat" (upper_tolerance). */
+  private maxTemp(target: number): number { return target + (num(this.eq.upper_tolerance, 1.0) as number); }
+  /** EnergySimulator::closedFloor: "Min temp when closed" (standby_temp), else 5 °C; never above target. */
+  private closedFloor(target: number): number {
+    const floor = num(this.eq.standby_temp, null);
+    return Math.min(target, floor === null ? 5.0 : floor);
+  }
   private fallbackTarget(): number { return this.configDefaultTarget() + this.targetOffset(); }
   private strategy(): string { return this.eq.control_strategy ?? 'reactive'; }
 
@@ -224,10 +231,8 @@ class Run {
 
     const tmr = this.tmr;
     const target = next.target_temp ?? this.fallbackTarget();
-    const upperTol = num(this.eq.upper_tolerance, 1.0) as number;
-    const lowerTol = num(this.eq.lower_tolerance, 2.0) as number;
-    const maxTemp = num(this.pool.max_temp, target + upperTol) as number;
-    const minTemp = num(this.pool.min_temp, target - lowerTol) as number;
+    const maxTemp = this.maxTemp(target);
+    const minTemp = this.closedFloor(target);
     const hpCapacity = num(this.eq.heat_pump?.capacity_kw, 0) as number;
 
     const hoursToOpen = Math.max(1, phpRound((unix(next.datetime) - unix(nowMs)) / 3600));
@@ -415,8 +420,7 @@ class Run {
           const bankHours = this.closedPlan?.bank_hours ?? 0;
           this.openPreheat = bankHours > 0;
           this.openBankEnd = hourIndex + bankHours;
-          this.openMaxTemp = this.closedPlan?.max_temp
-            ?? num(this.pool.max_temp, targetTemp + (num(eq.upper_tolerance, 1.0) as number));
+          this.openMaxTemp = this.closedPlan?.max_temp ?? this.maxTemp(targetTemp);
           this.closedPlan = null;
           date = timestamp.slice(0, 10);
         }
@@ -437,7 +441,7 @@ class Run {
         heating = this.heatPumpToHold(holdTemp, netRequirement, airTemp, currentWaterTemp, tmr);
       } else if (controlStrategy === 'predictive' && targetTemp !== null && this.openPreheat && hourIndex < this.openBankEnd) {
         heatingMode = 'open_preheat';
-        const maxTemp = this.openMaxTemp ?? num(this.pool.max_temp, targetTemp + 1.0) as number;
+        const maxTemp = this.openMaxTemp ?? this.maxTemp(targetTemp);
         effectiveTarget = targetTemp;
         isPreheat = currentWaterTemp > targetTemp + 0.1;
         heating = this.openPreheatHeating(targetTemp, maxTemp, netRequirement, airTemp, currentWaterTemp, tmr);

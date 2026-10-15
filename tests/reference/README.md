@@ -99,3 +99,7 @@ next stored version on, or from the current one if you store it with
   target whenever the heat pump covered the losses alone. Only the no-cover
   scenario changed noticeably: days more than 1 °C below target 84 → 70,
   cost +6.4 %.
+- **3.18.0**: one floor for closed hours, "Min temp when closed" (standby
+  temp); the lower tolerance is gone. Changed: predictive-standby-2y −0.8 %
+  and predictive-new-pool −1.7 % cost (closures of several days),
+  predictive-no-cover marginally; comfort unchanged everywhere.

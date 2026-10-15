@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.17.1';   // Banking open hours: below target the boiler restores target (3.17.0: late start every night, hourly buffer, banking only to the last short hour)
+    const VERSION = '3.18.0';   // One floor for closed hours: "Min temp when closed" (standby_temp); lower tolerance and pool max/min removed
     const TARGET_OFFSET_LIMIT = 5.0;  // °C, max |offset| accepted from SimControl
 
     private $db;
@@ -292,14 +292,15 @@ class EnergySimulator {
             $this->equipment['control_strategy'] = $uiConfig['control']['strategy'] ?? $this->equipment['control_strategy'];
             // Preserve previously-set values on a PARTIAL override. A per-sim
             // override may carry only one field (e.g. just upper_tolerance);
-            // "?? null" would wipe target_temp/lower_tolerance and silently
-            // revert the pool to the 28°C fallback.
+            // "?? null" would wipe target_temp and silently revert the pool to
+            // the 28°C fallback.
             $this->equipment['target_temp'] = $uiConfig['control']['target_temp'] ?? $this->equipment['target_temp'] ?? null;
-            // Config stores upper/lower tolerance separately
+            // "Max overheat" (°C above target). The former lower tolerance is
+            // no longer used: the closed-period floor is standby_temp (3.18).
             $this->equipment['upper_tolerance'] = $uiConfig['control']['upper_tolerance'] ?? $this->equipment['upper_tolerance'] ?? null;
-            $this->equipment['lower_tolerance'] = $uiConfig['control']['lower_tolerance'] ?? $this->equipment['lower_tolerance'] ?? null;
-            // Standby temperature: system-wide minimum water temperature during
-            // long closures (predictive). Blank/null = no minimum.
+            // "Min temp when closed" (predictive): the lowest water
+            // temperature while closed - nights, weekends, long closures
+            // (closedFloor()). Blank/null = no minimum (5 °C frost floor).
             if (array_key_exists('standby_temp', $uiConfig['control'])) {
                 $sb = $uiConfig['control']['standby_temp'];
                 $this->equipment['standby_temp'] = ($sb === null || $sb === '' || !is_numeric($sb)) ? null : (float) $sb;
@@ -307,7 +308,6 @@ class EnergySimulator {
             // For backward compat, also check temp_tolerance
             if (isset($uiConfig['control']['temp_tolerance'])) {
                 $this->equipment['upper_tolerance'] = $uiConfig['control']['temp_tolerance'];
-                $this->equipment['lower_tolerance'] = $uiConfig['control']['temp_tolerance'];
             }
             // Simulation target offset (SimControl): added to every hour's
             // target (schedule period target, or the config default where the
@@ -433,6 +433,24 @@ class EnergySimulator {
     }
 
     /** Target when no schedule period applies: config default + offset. */
+    /**
+     * Highest water temperature (predictive): target + "Max overheat"
+     * (upper_tolerance). Caps the opening temperature and banking.
+     */
+    private function maxTemp($target) {
+        return (float) $target + (float) ($this->equipment['upper_tolerance'] ?? 1.0);
+    }
+
+    /**
+     * Lowest water temperature while closed (predictive): the "Min temp when
+     * closed" setting (standby_temp), else the 5 °C frost floor; never above
+     * the target. The water coasts down to it at most, on any closure.
+     */
+    private function closedFloor($target) {
+        $floor = $this->equipment['standby_temp'] ?? null;
+        return min((float) $target, $floor === null ? 5.0 : (float) $floor);
+    }
+
     private function fallbackTarget() {
         return $this->configDefaultTarget() + $this->targetOffset();
     }
@@ -1164,7 +1182,7 @@ class EnergySimulator {
                     $this->openPreheat = $bankHours > 0;
                     $this->openBankEnd = $hourIndex + $bankHours;
                     $this->openMaxTemp = $this->closedPlan['max_temp']
-                        ?? ($this->poolConfig['max_temp'] ?? ($targetTemp + ($this->equipment['upper_tolerance'] ?? 1.0)));
+                        ?? $this->maxTemp($targetTemp);
                     $this->closedPlan = null;
                     $this->closedPlanTimestamp = null;
 
@@ -1227,7 +1245,7 @@ class EnergySimulator {
                 // ---- OPEN period, up to its last short hour: HP at FULL (banking
                 // heat up to max_temp), boiler only backstops target ----
                 $heatingMode = 'open_preheat';
-                $maxTemp = $this->openMaxTemp ?? ($this->poolConfig['max_temp'] ?? ($targetTemp + 1.0));
+                $maxTemp = $this->openMaxTemp ?? $this->maxTemp($targetTemp);
                 $effectiveTarget = $targetTemp;
                 $isPreheat = ($currentWaterTemp > $targetTemp + 0.1); // coasting on buffer
                 $heating = $this->openPreheatHeating($targetTemp, $maxTemp, $netRequirement, $airTemp, $currentWaterTemp, $tmr);
@@ -2129,50 +2147,6 @@ class EnergySimulator {
     // ========================================================================
 
     /**
-     * Forecast average heat demand for the next open period
-     * Simulates first 10 hours after opening to estimate demand
-     *
-     * @param int $startIdx Weather array index at opening time
-     * @param array $weatherData Array of hourly weather records
-     * @param float $startTemp Starting water temperature
-     * @return float Average demand in kW
-     */
-    private function forecastOpenPeriodDemand($startIdx, $weatherData, $startTemp) {
-        $hpCapacity = $this->equipment['heat_pump']['capacity_kw'] ?? 125;
-        $forecasts = [];
-        $simTemp = $startTemp;
-
-        // Simulate 10 hours of open period
-        for ($i = 0; $i < 10; $i++) {
-            $idx = $startIdx + $i;
-            if ($idx >= count($weatherData)) {
-                break;
-            }
-
-            $hour = $weatherData[$idx];
-            // Rows come from the validated run weather array - direct reads.
-            $airTemp = (float)$hour['air_temperature'];
-            $windSpeed = (float)$hour['wind_speed'];
-            $humidity = (float)$hour['humidity'];
-            $tunnelTemp = isset($hour['tunnel_temperature']) ? (float)$hour['tunnel_temperature'] : null;
-
-            // Calculate losses at simulated temperature (pool open)
-            $losses = $this->calculateHeatLosses($simTemp, $airTemp, $windSpeed, $humidity, true, $tunnelTemp);
-            $forecasts[] = $losses['total'];
-
-            // Update simulated temperature based on HP at full capacity
-            $qNet = $hpCapacity - $losses['total'];
-            if ($this->thermalMassRate > 0) {
-                $deltaT = $qNet / $this->thermalMassRate;
-                $simTemp = max($this->poolConfig['min_temp'] ?? 26,
-                              min($simTemp + $deltaT, $this->poolConfig['max_temp'] ?? 29));
-            }
-        }
-
-        return count($forecasts) > 0 ? array_sum($forecasts) / count($forecasts) : 0;
-    }
-
-    /**
      * Plan the closed period - determines preheating strategy.
      * Called at CLOSE transition. Gathers the hourly closed-period losses and
      * heat-pump output, estimates the coming open-period demand, then delegates
@@ -2207,10 +2181,8 @@ class EnergySimulator {
         // the next opening (period target or config default, plus offset), else
         // the same fallback. See doc §7 (schedule/config target).
         $target = $nextOpening['target_temp'] ?? $this->fallbackTarget();
-        $upperTol = $this->equipment['upper_tolerance'] ?? 1.0;
-        $lowerTol = $this->equipment['lower_tolerance'] ?? 2.0;
-        $maxTemp = $this->poolConfig['max_temp'] ?? ($target + $upperTol);
-        $minTemp = $this->poolConfig['min_temp'] ?? ($target - $lowerTol);
+        $maxTemp = $this->maxTemp($target);
+        $minTemp = $this->closedFloor($target);
         $hpCapacity = $this->equipment['heat_pump']['capacity_kw'] ?? 0;
 
         $hoursToOpen = max(1, (int)round(
@@ -2611,8 +2583,6 @@ class EnergySimulator {
         // Fallback target (config default + offset). Per closed period the
         // resolved target of the next opening is preferred.
         $baseTarget = $this->fallbackTarget();
-        $upperTol = $this->equipment['upper_tolerance'] ?? 1.0;
-        $lowerTol = $this->equipment['lower_tolerance'] ?? 2.0;
         $hpCapacity = $this->equipment['heat_pump']['capacity_kw'] ?? 0;
 
         // Strict accessor for stored inputs - no silent fallbacks. Older runs
@@ -2640,8 +2610,8 @@ class EnergySimulator {
         // Per-cycle target/min/max (schedule target of the next opening; falls
         // back to the config target). Set at each close transition.
         $cycleTarget = $baseTarget;
-        $cycleMax = $baseTarget + $upperTol;
-        $cycleMin = $baseTarget - $lowerTol;
+        $cycleMax = $this->maxTemp($baseTarget);
+        $cycleMin = $this->closedFloor($baseTarget);
 
         foreach ($rows as $i => $row) {
             $ts = $row['timestamp'];
@@ -2670,8 +2640,8 @@ class EnergySimulator {
                         }
                     }
                 }
-                $cycleMax = $cycleTarget + $upperTol;
-                $cycleMin = $cycleTarget - $lowerTol;
+                $cycleMax = $this->maxTemp($cycleTarget);
+                $cycleMin = $this->closedFloor($cycleTarget);
 
                 $closedLoss = [];
                 $closedHpOut = [];

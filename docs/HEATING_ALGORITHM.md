@@ -201,8 +201,8 @@ Boiler only runs when HP capacity exceeded.
 | control_strategy | 'reactive' or 'predictive' |
 | target_temp | Default target water temperature (°C); schedule periods may set their own |
 | target_offset | SimControl offset added to every target |
-| upper_tolerance / lower_tolerance | Max / min temperature around the target (predictive), unless the pool sets max_temp / min_temp |
-| standby_temp | Temperature held during long closures (predictive) |
+| upper_tolerance ("Max overheat") | Predictive: how far above target the water may be heated (max temp = target + this) |
+| standby_temp ("Min temp when closed") | Predictive: the lowest the water may drop while closed (nights, weekends, long closures); blank = no minimum |
 
 ---
 
@@ -210,6 +210,7 @@ Boiler only runs when HP capacity exceeded.
 
 | Version | Changes |
 |---------|---------|
+| Simulator 3.18.0 | One closed-period floor: "Min temp when closed"; lower tolerance removed |
 | Simulator 3.17.1 | Predictive, banking open hours: below target the boiler restores target |
 | Simulator 3.17.0 | Predictive: late start in every closed period, buffer sized hour by hour, banking only to the last short hour (see PREDICTIVE_CONTROL.md §8) |
 | V104 | Added cover heat loss breakdown documentation |
