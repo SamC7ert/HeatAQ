@@ -399,7 +399,7 @@ var HeatAQSim = (() => {
   };
 
   // src/engine.ts
-  var PORT_OF_VERSION = "3.16.1";
+  var PORT_OF_VERSION = "3.17.0";
   var ZERO_HEATING = () => ({
     hp_heat: 0,
     hp_electricity: 0,
@@ -410,13 +410,16 @@ var HeatAQSim = (() => {
     cost: 0,
     requested_heat: 0
   });
-  function computeClosedPlan(waterTemp, target, minTemp, maxTemp, tmr, closedLoss, closedHpOut, openDemand, openHpDeliver) {
+  function computeClosedPlan(waterTemp, target, minTemp, maxTemp, tmr, closedLoss, closedHpOut, openDeficit) {
     const hoursToOpen = closedLoss.length;
-    if (openDemand <= openHpDeliver + 1e-9) {
-      return { preheat: false, target, t_req: target, start_offset: 0, min_temp: minTemp, max_temp: maxTemp, buffer_energy: 0 };
+    let need = target;
+    let bankHours = 0;
+    for (let k = openDeficit.length - 1; k >= 0; k--) {
+      need = Math.max(target, need + openDeficit[k] / tmr);
+      if (bankHours === 0 && openDeficit[k] > 1e-9) bankHours = k + 1;
     }
-    const bufferEnergy = openDemand - openHpDeliver;
-    const tReq = Math.min(target + bufferEnergy / tmr, maxTemp);
+    const bufferEnergy = (need - target) * tmr;
+    const tReq = Math.min(need, maxTemp);
     const coast = [];
     let t = waterTemp;
     for (let i = 0; i < hoursToOpen; i++) {
@@ -435,7 +438,16 @@ var HeatAQSim = (() => {
         break;
       }
     }
-    return { preheat: true, target, t_req: tReq, start_offset: startOffset, min_temp: minTemp, max_temp: maxTemp, buffer_energy: bufferEnergy };
+    return {
+      preheat: bufferEnergy > 1e-9,
+      target,
+      t_req: tReq,
+      start_offset: startOffset,
+      min_temp: minTemp,
+      max_temp: maxTemp,
+      buffer_energy: bufferEnergy,
+      bank_hours: bankHours
+    };
   }
   var Run = class {
     constructor(inputs) {
@@ -445,6 +457,7 @@ var HeatAQSim = (() => {
       this.standbyPlanAt = null;
       this.openPreheat = false;
       this.openMaxTemp = null;
+      this.openBankEnd = 0;
       this.pool = inputs.pool_config || {};
       this.eq = inputs.equipment || {};
       this.phys = new Physics(this.pool, this.eq, num(inputs.ground_factor, 1));
@@ -617,7 +630,8 @@ var HeatAQSim = (() => {
         closedLoss.push(loss.total - this.planningSolarGain(h, false));
         closedHpOut.push(this.phys.applyHeatPump(hpCapacity, air).heat);
       }
-      let openDemand = 0, openHpDeliver = 0, openDuration = 0;
+      const openDeficit = [];
+      let openDuration = 0;
       for (let k = 0; k < 48; k++) {
         const j = openIdx + k;
         if (j >= n) break;
@@ -626,11 +640,10 @@ var HeatAQSim = (() => {
         const h = this.weather[j];
         const air = this.air(h);
         const loss = this.phys.heatLosses(target, air, this.wind(h), this.hum(h), true, this.tunnel(h));
-        openDemand += loss.total - this.planningSolarGain(h, true);
-        openHpDeliver += this.phys.applyHeatPump(hpCapacity, air).heat;
+        openDeficit.push(loss.total - this.planningSolarGain(h, true) - this.phys.applyHeatPump(hpCapacity, air).heat);
         openDuration++;
       }
-      const plan = computeClosedPlan(waterTemp, target, minTemp, maxTemp, tmr, closedLoss, closedHpOut, openDemand, openHpDeliver);
+      const plan = computeClosedPlan(waterTemp, target, minTemp, maxTemp, tmr, closedLoss, closedHpOut, openDeficit);
       plan.start_index = idx + (plan.start_offset ?? 0);
       plan.hours_to_open = closedLoss.length;
       plan.open_duration = openDuration;
@@ -806,7 +819,9 @@ var HeatAQSim = (() => {
             }
           }
           if (prevTargetTemp === null && targetTemp !== null) {
-            this.openPreheat = !!(this.closedPlan && this.closedPlan.preheat);
+            const bankHours = this.closedPlan?.bank_hours ?? 0;
+            this.openPreheat = bankHours > 0;
+            this.openBankEnd = hourIndex + bankHours;
             this.openMaxTemp = this.closedPlan?.max_temp ?? num(this.pool.max_temp, targetTemp + num(eq.upper_tolerance, 1));
             this.closedPlan = null;
             date = timestamp.slice(0, 10);
@@ -818,19 +833,13 @@ var HeatAQSim = (() => {
         let heating;
         if (controlStrategy === "predictive" && targetTemp === null && this.closedPlan !== null) {
           const plan = this.closedPlan;
-          let holdTemp;
-          if (plan.preheat) {
-            const isRamp = hourIndex >= (plan.start_index ?? hourIndex);
-            holdTemp = isRamp ? plan.t_req : plan.min_temp;
-            heatingMode = isRamp ? "preheat_ramp" : "preheat_coast";
-          } else {
-            holdTemp = plan.target;
-            heatingMode = "closed_hold";
-          }
+          const isRamp = hourIndex >= (plan.start_index ?? hourIndex);
+          const holdTemp = isRamp ? plan.t_req : plan.min_temp;
+          heatingMode = isRamp ? "preheat_ramp" : "preheat_coast";
           effectiveTarget = holdTemp;
           isPreheat = currentWaterTemp < holdTemp - 0.1;
           heating = this.heatPumpToHold(holdTemp, netRequirement, airTemp, currentWaterTemp, tmr);
-        } else if (controlStrategy === "predictive" && targetTemp !== null && this.openPreheat) {
+        } else if (controlStrategy === "predictive" && targetTemp !== null && this.openPreheat && hourIndex < this.openBankEnd) {
           heatingMode = "open_preheat";
           const maxTemp = this.openMaxTemp ?? num(this.pool.max_temp, targetTemp + 1);
           effectiveTarget = targetTemp;

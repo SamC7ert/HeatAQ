@@ -8,7 +8,7 @@ import { Physics, distributeSolarToHour } from './physics';
 import { Scheduler } from './scheduler';
 import { addHours, num, parseNaive, phpRound, unix } from './util';
 
-export const PORT_OF_VERSION = '3.16.1';
+export const PORT_OF_VERSION = '3.17.0';
 
 interface ClosedPlan {
   preheat: boolean;
@@ -18,6 +18,7 @@ interface ClosedPlan {
   min_temp: number;
   max_temp: number;
   buffer_energy: number;
+  bank_hours: number;
   start_index?: number;
   hours_to_open?: number;
   open_duration?: number;
@@ -28,15 +29,25 @@ const ZERO_HEATING = (): Heating => ({
   total_heat: 0, cost: 0, requested_heat: 0,
 });
 
-/** EnergySimulator::computeClosedPlan (pure). */
+/**
+ * EnergySimulator::computeClosedPlan (pure); see the PHP docblock and
+ * docs/PREDICTIVE_CONTROL.md §4. openDeficit: per open hour, net demand minus
+ * the heat pump at full (kW). t_req from the backward need recursion; late
+ * start always; bank_hours = open hours up to the last short hour.
+ */
 export function computeClosedPlan(waterTemp: number, target: number, minTemp: number, maxTemp: number, tmr: number,
-                                  closedLoss: number[], closedHpOut: number[], openDemand: number, openHpDeliver: number): ClosedPlan {
+                                  closedLoss: number[], closedHpOut: number[], openDeficit: number[]): ClosedPlan {
   const hoursToOpen = closedLoss.length;
-  if (openDemand <= openHpDeliver + 1e-9) {
-    return { preheat: false, target, t_req: target, start_offset: 0, min_temp: minTemp, max_temp: maxTemp, buffer_energy: 0.0 };
+
+  let need = target;
+  let bankHours = 0;
+  for (let k = openDeficit.length - 1; k >= 0; k--) {
+    need = Math.max(target, need + openDeficit[k] / tmr);
+    if (bankHours === 0 && openDeficit[k] > 1e-9) bankHours = k + 1;
   }
-  const bufferEnergy = openDemand - openHpDeliver;
-  const tReq = Math.min(target + bufferEnergy / tmr, maxTemp);
+  const bufferEnergy = (need - target) * tmr;
+  const tReq = Math.min(need, maxTemp);
+
   const coast: number[] = [];
   let t = waterTemp;
   for (let i = 0; i < hoursToOpen; i++) {
@@ -55,7 +66,8 @@ export function computeClosedPlan(waterTemp: number, target: number, minTemp: nu
       break;
     }
   }
-  return { preheat: true, target, t_req: tReq, start_offset: startOffset, min_temp: minTemp, max_temp: maxTemp, buffer_energy: bufferEnergy };
+  return { preheat: bufferEnergy > 1e-9, target, t_req: tReq, start_offset: startOffset, min_temp: minTemp, max_temp: maxTemp,
+           buffer_energy: bufferEnergy, bank_hours: bankHours };
 }
 
 class Run {
@@ -73,6 +85,7 @@ class Run {
   private standbyPlanAt: number | null = null;
   private openPreheat = false;
   private openMaxTemp: number | null = null;
+  private openBankEnd = 0;
 
   constructor(private inputs: RunInputs) {
     this.pool = inputs.pool_config || {};
@@ -233,7 +246,8 @@ class Run {
       closedHpOut.push(this.phys.applyHeatPump(hpCapacity, air).heat);
     }
 
-    let openDemand = 0.0, openHpDeliver = 0.0, openDuration = 0;
+    const openDeficit: number[] = [];
+    let openDuration = 0;
     for (let k = 0; k < 48; k++) {
       const j = openIdx + k;
       if (j >= n) break;
@@ -242,12 +256,11 @@ class Run {
       const h = this.weather[j];
       const air = this.air(h);
       const loss = this.phys.heatLosses(target, air, this.wind(h), this.hum(h), true, this.tunnel(h));
-      openDemand += loss.total - this.planningSolarGain(h, true);
-      openHpDeliver += this.phys.applyHeatPump(hpCapacity, air).heat;
+      openDeficit.push(loss.total - this.planningSolarGain(h, true) - this.phys.applyHeatPump(hpCapacity, air).heat);
       openDuration++;
     }
 
-    const plan = computeClosedPlan(waterTemp, target, minTemp, maxTemp, tmr, closedLoss, closedHpOut, openDemand, openHpDeliver);
+    const plan = computeClosedPlan(waterTemp, target, minTemp, maxTemp, tmr, closedLoss, closedHpOut, openDeficit);
     plan.start_index = idx + (plan.start_offset ?? 0);
     plan.hours_to_open = closedLoss.length;
     plan.open_duration = openDuration;
@@ -399,7 +412,9 @@ class Run {
           }
         }
         if (prevTargetTemp === null && targetTemp !== null) {
-          this.openPreheat = !!(this.closedPlan && this.closedPlan.preheat);
+          const bankHours = this.closedPlan?.bank_hours ?? 0;
+          this.openPreheat = bankHours > 0;
+          this.openBankEnd = hourIndex + bankHours;
           this.openMaxTemp = this.closedPlan?.max_temp
             ?? num(this.pool.max_temp, targetTemp + (num(eq.upper_tolerance, 1.0) as number));
           this.closedPlan = null;
@@ -414,19 +429,13 @@ class Run {
 
       if (controlStrategy === 'predictive' && targetTemp === null && this.closedPlan !== null) {
         const plan = this.closedPlan;
-        let holdTemp: number;
-        if (plan.preheat) {
-          const isRamp = hourIndex >= (plan.start_index ?? hourIndex);
-          holdTemp = isRamp ? plan.t_req : plan.min_temp;
-          heatingMode = isRamp ? 'preheat_ramp' : 'preheat_coast';
-        } else {
-          holdTemp = plan.target;
-          heatingMode = 'closed_hold';
-        }
+        const isRamp = hourIndex >= (plan.start_index ?? hourIndex);
+        const holdTemp = isRamp ? plan.t_req : plan.min_temp;
+        heatingMode = isRamp ? 'preheat_ramp' : 'preheat_coast';
         effectiveTarget = holdTemp;
         isPreheat = currentWaterTemp < holdTemp - 0.1;
         heating = this.heatPumpToHold(holdTemp, netRequirement, airTemp, currentWaterTemp, tmr);
-      } else if (controlStrategy === 'predictive' && targetTemp !== null && this.openPreheat) {
+      } else if (controlStrategy === 'predictive' && targetTemp !== null && this.openPreheat && hourIndex < this.openBankEnd) {
         heatingMode = 'open_preheat';
         const maxTemp = this.openMaxTemp ?? num(this.pool.max_temp, targetTemp + 1.0) as number;
         effectiveTarget = targetTemp;
