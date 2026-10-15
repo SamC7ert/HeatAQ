@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.17.0';   // Predictive: every closed period coasts and ramps late; buffer sized hour by hour; heat banked only until the last short open hour
+    const VERSION = '3.17.1';   // Banking open hours: below target the boiler restores target (3.17.0: late start every night, hourly buffer, banking only to the last short hour)
     const TARGET_OFFSET_LIMIT = 5.0;  // °C, max |offset| accepted from SimControl
 
     private $db;
@@ -463,6 +463,9 @@ class EnergySimulator {
 
     /** 'Y-m-d H:i:s' in UTC -> the site's local clock time. */
     private function toLocalTime($utc) {
+        if (isset($this->frozenLocalTime[$utc])) {
+            return $this->frozenLocalTime[$utc];
+        }
         $d = new DateTime($utc, new DateTimeZone('UTC'));
         $d->setTimezone($this->siteTimezone());
         return $d->format('Y-m-d H:i:s');
@@ -713,6 +716,61 @@ class EnergySimulator {
      * @return array Simulation results
      */
     /**
+     * Frozen run inputs (exportRunInputs() format) when the simulator runs
+     * without a database (fromInputs): the reference set (tests/reference)
+     * replays saved inputs so results depend on the engine version only.
+     */
+    private $frozenInputs = null;
+    private $frozenLocalTime = [];   // UTC timestamp -> local clock time, from the inputs
+
+    /**
+     * A simulator that runs on saved inputs instead of the database: weather,
+     * solar, local times, ground factor, configuration and schedule all come
+     * from $inputs (as written by exportRunInputs()). runSimulation() then
+     * gives the same results as the run the inputs were exported from.
+     */
+    public static function fromInputs(array $inputs) {
+        if (($inputs['format'] ?? null) !== 1) {
+            throw new InvalidArgumentException('Unsupported simulator inputs');
+        }
+        $sim = (new ReflectionClass(self::class))->newInstanceWithoutConstructor();
+        $sim->db = null;
+        $sim->poolSiteId = 0;
+        $sim->frozenInputs = $inputs;
+        $sim->scheduler = !empty($inputs['schedule']) ? PoolScheduler::fromState($inputs['schedule']) : null;
+        $sim->poolConfig = $inputs['pool_config'];
+        $sim->equipment = $inputs['equipment'];
+        $sim->thermalMassRate = $inputs['thermal_mass_rate'];
+        $sim->groundFactorCache[(string) ($sim->poolConfig['years_operating'] ?? 3)] = (float) $inputs['ground_factor'];
+        $sim->siteTz = new DateTimeZone('UTC');   // local times come from the inputs
+        $sim->syncSchedulerTargets();
+        return $sim;
+    }
+
+    /** loadRunData() for a simulator made by fromInputs(): the saved data, as the database would give it. */
+    private function frozenRunData() {
+        $in = $this->frozenInputs;
+        $weather = [];
+        foreach ($in['weather'] as $r) {
+            $weather[] = [
+                'timestamp' => $r[0],
+                'air_temperature' => $r[2],
+                'wind_speed' => $r[3],
+                'humidity' => $r[4],
+                'tunnel_temperature' => $r[5],
+            ];
+            $this->frozenLocalTime[$r[0]] = $r[1];
+        }
+        $solar = [];
+        foreach (($in['solar'] ?? []) as $key => $v) {
+            $solar[$key] = ($in['solar_kind'] ?? '') === 'hourly'
+                ? ['hourly_kwh_m2' => (float) $v]
+                : ['daily_total_kwh_m2' => (float) $v];
+        }
+        return ['weather' => $weather, 'solar' => $solar, 'strategy_requested' => $in['strategy_requested']];
+    }
+
+    /**
      * Everything runSimulation() reads, as plain data for the TypeScript
      * engine (assets/js/sim): the simulator state after configuration, the
      * schedule copy, and the run's weather (UTC + local time) and solar data.
@@ -768,6 +826,9 @@ class EnergySimulator {
      * start from identical data.
      */
     private function loadRunData($startDate, $endDate) {
+        if ($this->frozenInputs !== null) {
+            return $this->frozenRunData();
+        }
         // Validate configuration before running - no silent defaults allowed
         $this->validateConfigForSimulation();
         $this->refreshUnitsEnabled();
@@ -2446,11 +2507,15 @@ class EnergySimulator {
     private function openPreheatHeating($targetTemp, $maxTemp, $netRequirement, $airTemp, $waterTemp, $tmr) {
         $hpReq = max(0.0, $netRequirement + ($maxTemp - $waterTemp) * $tmr);
         $hp = $this->applyHeatPump($hpReq, $airTemp);
-        $afterHp = $netRequirement - $hp['heat'];
 
+        // At or below target the boiler supplies what the heat pump does not
+        // to bring the water back to target this hour - as when holding
+        // target (calculateHeating). Until 3.17.1 it only covered the losses
+        // the heat pump could not, so water already below target stayed there
+        // whenever the heat pump covered the losses alone.
         $boiler = ['heat' => 0, 'fuel' => 0, 'cost' => 0];
-        if ($waterTemp <= $targetTemp + 0.01 && $afterHp > 0) {
-            $boilerReq = $afterHp + max(0.0, ($targetTemp - $waterTemp) * $tmr);
+        $boilerReq = $netRequirement + max(0.0, ($targetTemp - $waterTemp) * $tmr) - $hp['heat'];
+        if ($waterTemp <= $targetTemp + 0.01 && $boilerReq > 0) {
             $boiler = $this->applyBoiler($boilerReq);
         }
         // Requested = what is needed to HOLD TARGET, not the opportunistic

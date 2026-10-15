@@ -1,6 +1,6 @@
 # HeatAQ Predictive Control Strategy
 
-**Status:** Implemented. Simulator **3.17.0**, identical in both engines
+**Status:** Implemented. Simulator **3.17.1**, identical in both engines
 (PHP `lib/EnergySimulator.php`, TypeScript `sim-ts/src/engine.ts`).
 **Last updated:** 2026-10-15
 
@@ -28,9 +28,10 @@ strategy.
 1. Make the same change in both files.
 2. Bump `EnergySimulator::VERSION` and `PORT_OF_VERSION`.
 3. Run the plan unit test: `php tests/test_closed_plan.php`.
-4. Run the PHP ↔ TypeScript comparison (18 scenarios, every hour), as
-   described in `sim-ts/README.md` ("Comparing with PHP").
-5. Rebuild the browser bundle: `cd sim-ts && npm run build`.
+4. Follow "Releasing a new simulator version" in `tests/reference/README.md`.
+   The engine reference set lists every scenario the change affects, and
+   checks that PHP and TypeScript give the same results. Every change it
+   reports must be explained.
 
 ---
 
@@ -183,7 +184,8 @@ period (`openPreheat = bank_hours > 0`, banking ends at opening index +
 IF the hour is before the end of banking  →  open_preheat:
      heat pump towards max_temp (it never throttles because the water is
      above target: the banked heat is needed for the short hour still to
-     come); boiler only if the water is at or below target.
+     come); when the water is at or below target, the boiler supplies what
+     the heat pump does not to bring it back to target this hour.
 ELSE                                      →  open_hold:
      hold target with heat pump first, boiler backup; water above target
      drifts down to it.
@@ -245,16 +247,24 @@ target.
 | Buffer sized on totals (open demand − heat pump output): no buffer when totals balanced, even with short hours, so the boiler ran. | Buffer sized hour by hour (§4a). |
 | After a preheat, the heat pump banked towards max for the **whole** open period. | Banking stops after the last short hour (§5). |
 
-Effect on the test scenarios (Røros weather, `sim-ts/test`), with the same
-comfort (no extra days below target):
+**3.17.1** fixed a fault the reference set exposed. While banking, the
+boiler only covered the losses the heat pump could not. Water already below
+target (after a night the heat pump could not keep up) stayed below it
+whenever the heat pump covered the losses alone. The boiler now restores
+target, as when holding target.
 
-| Scenario | Cost | Boiler heat |
-|---|---|---|
-| Template 13, 2024, 250 kW heat pump, target 28 | −5.4 % | −51 % |
-| Same config as run 64 in the test database | −5.0 % | −36 % |
-| Template 14, 2024, offset +1.5 °C | −5.5 % | −31 % |
-| Template 16, 2024 | −3.4 % | −26 % |
-| Undersized: 80 kW heat pump, no boiler | +0.2 % | – |
+Effect of 3.16.1 → 3.17.1 on the engine reference set (`tests/reference`,
+Røros weather; `reference.php changes 3.16.1 3.17.1`):
+
+| Scenario | Cost | Boiler heat | Days > 1 °C below target |
+|---|---|---|---|
+| Predictive, 2 years | −5.6 % | −51 % | 0 → 0 |
+| Predictive, target offset +1.5 °C | −5.4 % | −30 % | 0 → 0 |
+| Predictive, air-source heat pump | −3.1 % | −52 % | 0 → 0 |
+| Predictive with long closures | −2.0 % | −20 % | 0 → 0 |
+| Predictive without cover (plant too small in winter) | +2.7 % | +7 % | 81 → 70 |
+| Predictive, undersized (80 kW, no boiler) | +0.2 % | – | 245 → 244 |
+| Reactive, no heat pump | unchanged | unchanged | – |
 
 Earlier: 3.12.0 resolved targets per hour (§7.1). The first implementation
 of this strategy replaced an older "setback temperature" model, which
@@ -284,10 +294,16 @@ of this strategy replaced an older "setback temperature" model, which
 - **Unit test of the plan:** `php tests/test_closed_plan.php` (late start
   without buffer, cap at max, short hour first/last, too-short closure,
   coast floor).
-- **Both engines identical:** the comparison in `sim-ts/README.md`.
+- **Engine reference set:** `php tests/reference/reference.php check` and
+  `node sim-ts/test/reference.mjs` (13 scenarios with frozen inputs; see
+  `tests/reference/README.md`). In the app: Admin → System → Engine
+  Verification, which also runs on the live server.
+- **Both engines on the database:** the PHP ↔ TypeScript comparison in
+  `sim-ts/README.md`.
 - **Look at a night in the app:** Details tab, week chart (heat pump and
-  boiler bars, water temperature). With debug mode on, the hour panel
-  shows the heating mode.
+  boiler bars, water temperature). The hours are computed in the browser
+  from the run's saved inputs when they are not saved. With debug mode on,
+  the hour panel shows the heating mode.
 - **Hour by hour from the command line** (TypeScript engine, inputs from
   `get_sim_inputs`):
   ```js

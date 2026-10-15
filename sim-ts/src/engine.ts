@@ -8,7 +8,7 @@ import { Physics, distributeSolarToHour } from './physics';
 import { Scheduler } from './scheduler';
 import { addHours, num, parseNaive, phpRound, unix } from './util';
 
-export const PORT_OF_VERSION = '3.17.0';
+export const PORT_OF_VERSION = '3.17.1';
 
 interface ClosedPlan {
   preheat: boolean;
@@ -159,10 +159,10 @@ class Run {
   private openPreheatHeating(target: number, maxTemp: number, net: number, air: number, water: number, tmr: number): Heating {
     const hpReq = Math.max(0.0, net + (maxTemp - water) * tmr);
     const hp = this.phys.applyHeatPump(hpReq, air);
-    const afterHp = net - hp.heat;
+    // At or below target the boiler restores target this hour (see PHP)
     let boiler = { heat: 0, fuel: 0, cost: 0 };
-    if (water <= target + 0.01 && afterHp > 0) {
-      const boilerReq = afterHp + Math.max(0.0, (target - water) * tmr);
+    const boilerReq = net + Math.max(0.0, (target - water) * tmr) - hp.heat;
+    if (water <= target + 0.01 && boilerReq > 0) {
       boiler = this.phys.applyBoiler(boilerReq);
     }
     const requested = water <= target + 0.01

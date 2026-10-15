@@ -1131,6 +1131,53 @@ try {
             }
             break;
 
+        case 'reference_info':
+        case 'reference_check_php':
+        case 'reference_scenario':
+            // Engine reference set (tests/reference, lib/ReferenceCheck.php):
+            // frozen scenarios and the results each simulator version gives.
+            // Admin > System > Engine verification runs every scenario with
+            // this server's PHP engine and in the browser (TypeScript).
+            RequestGuard::requireRole($auth, 'admin');
+            require_once __DIR__ . '/../lib/ReferenceCheck.php';
+            $engineVersion = EnergySimulator::getVersion();
+            $baseline = ReferenceCheck::baselineVersion($engineVersion);
+
+            if ($action === 'reference_info') {
+                $versions = ReferenceCheck::versions();
+                $i = $baseline !== null ? array_search($baseline, $versions, true) : false;
+                $previous = ($i !== false && $i > 0) ? $versions[$i - 1] : null;
+                sendResponse([
+                    'engine_version' => $engineVersion,
+                    'versions' => $versions,
+                    'compared_with' => $baseline,
+                    'previous_version' => $previous,
+                    'scenarios' => ReferenceCheck::scenarios(),
+                    'changes' => $previous ? ReferenceCheck::changes($previous, $baseline) : null,
+                ]);
+            }
+
+            $id = (string) getParam('id', '');
+            ReferenceCheck::scenario($id);   // validates the id
+            if ($baseline === null) {
+                sendError('No reference results are stored', 404);
+            }
+            $expected = ReferenceCheck::results($baseline)[$id] ?? null;
+            if ($expected === null) {
+                sendError("No reference result for '$id' in $baseline", 404);
+            }
+
+            if ($action === 'reference_check_php') {
+                [$got, $ms] = ReferenceCheck::runPhp($id);
+                sendResponse(['id' => $id, 'compared_with' => $baseline, 'ms' => $ms]
+                    + ReferenceCheck::compare($expected, $got));
+            }
+
+            // reference_scenario: what the browser needs to check TypeScript
+            sendResponse(['id' => $id, 'compared_with' => $baseline,
+                          'inputs' => ReferenceCheck::inputs($id), 'expected' => $expected]);
+            break;
+
         case 'get_version':
             sendResponse([
                 'version' => EnergySimulator::getVersion(),
@@ -1492,7 +1539,7 @@ try {
             break;
 
         default:
-            sendError('Invalid action. Valid actions: run_simulation, get_sim_inputs, submit_ts_hourly, submit_ts_daily, submit_ts_results, finish_ts_hourly, fail_ts_run, set_baseline, recreate_hourly, get_runs, get_run, get_summary, get_daily_results, get_results, delete_run, get_weather_range, get_version, debug_hour, debug_week');
+            sendError('Invalid action. Valid actions: run_simulation, get_sim_inputs, submit_ts_hourly, submit_ts_daily, submit_ts_results, finish_ts_hourly, fail_ts_run, reference_info, reference_check_php, reference_scenario, set_baseline, recreate_hourly, get_runs, get_run, get_summary, get_daily_results, get_results, delete_run, get_weather_range, get_version, debug_hour, debug_week');
     }
 
 } catch (PDOException $e) {

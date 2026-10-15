@@ -29,7 +29,8 @@ heataq/
 ├── docs/               # Documentation
 ├── lib/                # PHP simulator (EnergySimulator, PoolScheduler) and helpers
 ├── sim-ts/             # TypeScript port of the simulator (built to assets/js/sim/)
-├── tests/              # Command-line tests (e.g. test_closed_plan.php)
+├── tests/              # Command-line tests (test_closed_plan.php) and the
+│                       # engine reference set (tests/reference/)
 ├── index.html         # Main application
 ├── login.html         # Authentication
 └── config.php.example # Configuration template
@@ -100,7 +101,8 @@ git pull origin main
 - [Design Guide](docs/DESIGN_GUIDE.md)
 - [Heating Algorithm](docs/HEATING_ALGORITHM.md) (reactive control, heat physics)
 - [Predictive Control](docs/PREDICTIVE_CONTROL.md) (how predictive heating plans each day, with a map of the code)
-- [TypeScript engine](sim-ts/README.md) (browser engine, PHP parity tests, how results are saved)
+- [TypeScript engine](sim-ts/README.md) (browser engine, PHP parity tests, how results are saved, hours on demand)
+- [Engine reference set](tests/reference/README.md) (verifying the simulator, releasing a new version)
 - [Roadmap](docs/ROADMAP.md)
 
 ---

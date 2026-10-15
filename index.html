@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HeatAQ Schedule Management</title>
     <link rel="icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="./assets/css/main.css?v=249">
-    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=249">
-    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=249">
-    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=249">
-    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=249">
-    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=249">
+    <link rel="stylesheet" href="./assets/css/main.css?v=250">
+    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=250">
+    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=250">
+    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=250">
+    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=250">
+    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=250">
     <style>
         /* Top bar, right: background saving panel, user card */
         .top-bar-right {
@@ -694,8 +694,8 @@
                                 </div>
                                 <div style="margin-top: 10px;">
                                     <label style="display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: #666; cursor: pointer;">
-                                        <input type="checkbox" id="sim-store-hourly" checked style="margin-top: 2px;">
-                                        <span>Save hourly data in database<br><span style="font-size: 11px; color: #888;">(Details works without it for your latest TypeScript runs in this browser; save to see the hours after a reload, of older runs, or of PHP runs)</span></span>
+                                        <input type="checkbox" id="sim-store-hourly" style="margin-top: 2px;">
+                                        <span>Save hourly data in database<br><span style="font-size: 11px; color: #888;">(Not needed for Details: it computes a run's hours from its saved inputs. Save only to keep an exact hour-by-hour record.)</span></span>
                                     </label>
                                 </div>
                             </div>
@@ -1032,7 +1032,7 @@
                                     <div style="margin-top: 10px;">
                                         <label style="display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: #666; cursor: pointer;">
                                             <input type="checkbox" id="ea-store-hourly" style="margin-top: 2px;">
-                                            <span>Save hourly data in database<br><span style="font-size: 11px; color: #888;">(Details works without it for your latest TypeScript runs in this browser)</span></span>
+                                            <span>Save hourly data in database<br><span style="font-size: 11px; color: #888;">(Not needed for Details: it computes a run's hours from its saved inputs)</span></span>
                                         </label>
                                     </div>
                                 </div>
@@ -1169,7 +1169,7 @@
                         <!-- Weekly Graph -->
                         <div class="card" style="padding: 12px; margin-bottom: 15px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                <h4 style="margin: 0; font-size: 14px;">Weekly Heat Profile (Thu-Wed)</h4>
+                                <h4 style="margin: 0; font-size: 14px;">Weekly Heat Profile (Thu-Wed) <span id="debug-hours-note" style="font-size: 11px; font-weight: normal; margin-left: 8px;"></span></h4>
                                 <div id="week-nav-buttons" style="display: none;">
                                     <button onclick="app.simulations.navigateWeek(-1)" class="btn btn-sm btn-secondary" style="padding: 2px 10px; font-size: 14px;" title="Previous week">◀</button>
                                     <button onclick="app.simulations.navigateWeek(1)" class="btn btn-sm btn-secondary" style="padding: 2px 10px; font-size: 14px; margin-left: 4px;" title="Next week">▶</button>
@@ -1465,13 +1465,24 @@
 
                     <div class="card">
                         <h3>Storage</h3>
-                        <p class="text-muted">Hourly simulation results take most of the database. They are kept for the newest 5 runs per project; older runs keep their inputs, summary and daily results (reports, charts, baselines).</p>
+                        <p class="text-muted">Hourly simulation results take most of the database. They are only saved when "Save hourly data in database" is ticked (the Details tab computes a run's hours from its saved inputs), and kept for the newest 5 runs per project. Every run keeps its inputs, summary and daily results (reports, charts, baselines). Removing old hourly data also gives the space back to the disk.</p>
                         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                             <button class="btn btn-secondary" onclick="app.admin.loadStorage()">Show Storage</button>
                             <button class="btn btn-primary" id="storage-cleanup-btn" onclick="app.admin.runStorageCleanup()" style="display: none;">Remove Old Hourly Data</button>
                             <span id="storage-status"></span>
                         </div>
                         <div id="storage-info" style="margin-top: 10px;"></div>
+                    </div>
+
+                    <div class="card">
+                        <h3>Engine Verification</h3>
+                        <p class="text-muted">A fixed set of reference scenarios (frozen weather, solar data and configuration; <code>tests/reference</code>) and the results each simulator version gives for them. Verify runs every scenario with this server's PHP engine and with the TypeScript engine in this browser, and compares both with the stored results.</p>
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <button class="btn btn-secondary" onclick="app.admin.loadReference()">Show Reference</button>
+                            <button class="btn btn-primary" id="reference-verify-btn" onclick="app.admin.verifyEngine()">Verify Engine</button>
+                            <span id="reference-status"></span>
+                        </div>
+                        <div id="reference-info" style="margin-top: 10px;"></div>
                     </div>
 
                     <div class="card">
@@ -1796,19 +1807,19 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=249"></script>
+    <script src="./assets/js/config.js?v=250"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=249"></script>
-    <script src="./assets/js/modules/navigation.js?v=249"></script>
-    <script src="./assets/js/modules/schedules.js?v=249"></script>
-    <script src="./assets/js/modules/calendar.js?v=249"></script>
-    <script src="./assets/js/modules/simengine.js?v=249"></script>
-    <script src="./assets/js/modules/simulations.js?v=249"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=249"></script>
-    <script src="./assets/js/modules/configuration.js?v=249"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=249"></script>
-    <script src="./assets/js/modules/admin.js?v=249"></script>
-    <script src="./assets/js/modules/project.js?v=249"></script>
-    <script src="./assets/js/app.js?v=249"></script>
+    <script src="./assets/js/modules/api.js?v=250"></script>
+    <script src="./assets/js/modules/navigation.js?v=250"></script>
+    <script src="./assets/js/modules/schedules.js?v=250"></script>
+    <script src="./assets/js/modules/calendar.js?v=250"></script>
+    <script src="./assets/js/modules/simengine.js?v=250"></script>
+    <script src="./assets/js/modules/simulations.js?v=250"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=250"></script>
+    <script src="./assets/js/modules/configuration.js?v=250"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=250"></script>
+    <script src="./assets/js/modules/admin.js?v=250"></script>
+    <script src="./assets/js/modules/project.js?v=250"></script>
+    <script src="./assets/js/app.js?v=250"></script>
 </body>
 </html>
