@@ -1826,6 +1826,8 @@ const SimulationsModule = {
     loadRunInfoForDebug: async function(runId) {
         const configDisplay = document.getElementById('debug-config-display');
         const ohcDisplay = document.getElementById('debug-ohc-display');
+        const runDisplay = document.getElementById('debug-run-display');
+        if (runDisplay) { runDisplay.textContent = `#${runId}`; runDisplay.title = ''; }
 
         try {
             const response = await fetch(`/api/simulation_api.php?action=get_run&run_id=${runId}`);
@@ -1841,6 +1843,23 @@ const SimulationsModule = {
             if (data.run) {
                 const config = data.run.config || {};
                 const equipment = config.equipment || {};
+
+                // Which run: number and when it was made; its name and
+                // description on mouse-over
+                if (runDisplay) {
+                    const r = data.run;
+                    const made = r.created_at ? new Date(r.created_at.replace(' ', 'T')) : null;
+                    const when = made && !isNaN(made)
+                        ? made.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                        : '';
+                    runDisplay.textContent = `#${runId}${when ? ', ' + when : ''}`;
+                    const tip = [r.scenario_name, r.description,
+                        r.start_date && r.end_date ? `Period: ${r.start_date} to ${r.end_date}` : '',
+                        r.summary?.engine === 'typescript' ? 'Engine: TypeScript' : ''].filter(Boolean).join('\n');
+                    runDisplay.title = tip;
+                    runDisplay.style.cursor = tip ? 'help' : '';
+                    runDisplay.style.borderBottom = tip ? '1px dotted #999' : '';
+                }
 
                 // Display config template name
                 if (configDisplay) {
