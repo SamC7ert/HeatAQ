@@ -960,6 +960,22 @@
     if (!inputs || inputs.format !== 1) throw new Error("Unsupported simulator inputs");
     return new Run(inputs).run(progress);
   }
+  function storedDailyRows(daily) {
+    return daily.map((d) => [
+      d.date,
+      d.hours,
+      d.open_hours,
+      phpRound(d.avg_air_temp, 2),
+      phpRound(d.avg_water_temp, 2),
+      phpRound(d.total_loss_kwh, 3),
+      phpRound(d.total_solar_kwh, 3),
+      phpRound(d.total_hp_kwh, 3),
+      phpRound(d.total_boiler_kwh, 3),
+      phpRound(d.hp_thermal_kwh ?? 0, 3),
+      phpRound(d.boiler_thermal_kwh ?? 0, 3),
+      phpRound(d.total_cost, 2)
+    ]);
+  }
 
   // src/worker.ts
   var ctx = self;
@@ -970,7 +986,7 @@
       const result = runSimulation(inputs, (period, done, total) => {
         ctx.postMessage({ id, type: "progress", period, pct: total > 0 ? Math.round(100 * done / total) : 0 });
       });
-      ctx.postMessage({ id, type: "result", result, ms: Date.now() - t0 });
+      ctx.postMessage({ id, type: "result", result, dailyRows: storedDailyRows(result.daily), ms: Date.now() - t0 });
     } catch (err) {
       ctx.postMessage({ id, type: "error", message: err instanceof Error ? err.message : String(err) });
     }

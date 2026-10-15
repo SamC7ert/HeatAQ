@@ -24,7 +24,8 @@ var HeatAQSim = (() => {
     PORT_OF_VERSION: () => PORT_OF_VERSION,
     computeClosedPlan: () => computeClosedPlan,
     phpRound: () => phpRound,
-    runSimulation: () => runSimulation
+    runSimulation: () => runSimulation,
+    storedDailyRows: () => storedDailyRows
   });
 
   // src/util.ts
@@ -986,6 +987,22 @@ var HeatAQSim = (() => {
   function runSimulation(inputs, progress) {
     if (!inputs || inputs.format !== 1) throw new Error("Unsupported simulator inputs");
     return new Run(inputs).run(progress);
+  }
+  function storedDailyRows(daily) {
+    return daily.map((d) => [
+      d.date,
+      d.hours,
+      d.open_hours,
+      phpRound(d.avg_air_temp, 2),
+      phpRound(d.avg_water_temp, 2),
+      phpRound(d.total_loss_kwh, 3),
+      phpRound(d.total_solar_kwh, 3),
+      phpRound(d.total_hp_kwh, 3),
+      phpRound(d.total_boiler_kwh, 3),
+      phpRound(d.hp_thermal_kwh ?? 0, 3),
+      phpRound(d.boiler_thermal_kwh ?? 0, 3),
+      phpRound(d.total_cost, 2)
+    ]);
   }
   return __toCommonJS(index_exports);
 })();

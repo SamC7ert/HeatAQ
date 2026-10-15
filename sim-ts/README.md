@@ -16,9 +16,13 @@ chooses:
 Requests stay under ~90 KB each (shared hosts' firewalls refuse larger
 bodies with a bare 403), so results go in pieces:
 
-1. `submit_ts_daily` (a few pieces, 3 at a time), then `submit_ts_results`
-   with the summary: the run is complete and every results view works.
-   With hourly data it is flagged `summary.hourly_saving`.
+1. The daily results as stored (`storedDailyRows()`: compact rows,
+   rounded as PHP stores them; about 30 KB a year) go with the summary in
+   one `submit_ts_results` request, or for long runs first in pieces
+   (`submit_ts_daily`, 3 at a time). The run is then complete and every
+   results view works. With hourly data it is flagged
+   `summary.hourly_saving`. The server writes each request in one
+   transaction (one commit, not one per row).
 2. The hourly rows are saved in the background (`HourlySaver` in
    `assets/js/modules/simengine.js`, progress panel in the top bar):
    `submit_ts_hourly` pieces, 3 at a time (1 while a server-side

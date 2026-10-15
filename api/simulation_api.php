@@ -1553,10 +1553,22 @@ function updateRunStatus($pdo, $runId, $status, $summary = null) {
     }
 }
 
-/** Daily rows from the TypeScript engine, cast to the stored types. */
+/**
+ * Daily rows from the TypeScript engine, cast to the stored types. Rows are
+ * compact lists of the stored values (storedDailyRows() in sim-ts):
+ * [date, hours, open_hours, avg_air_temp, avg_water_temp, total_loss_kwh,
+ *  total_solar_kwh, total_hp_kwh, total_boiler_kwh, hp_thermal_kwh,
+ *  boiler_thermal_kwh, total_cost] - or objects with these keys.
+ */
 function sanitizeDaily(array $daily) {
+    $keys = ['date', 'hours', 'open_hours', 'avg_air_temp', 'avg_water_temp', 'total_loss_kwh',
+             'total_solar_kwh', 'total_hp_kwh', 'total_boiler_kwh', 'hp_thermal_kwh',
+             'boiler_thermal_kwh', 'total_cost'];
     $out = [];
     foreach ($daily as $d) {
+        if (is_array($d) && array_key_exists(0, $d)) {
+            $d = count($d) === count($keys) ? array_combine($keys, $d) : null;
+        }
         if (!is_array($d) || !isset($d['date']) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $d['date'])) {
             sendError('Invalid daily row');
         }
@@ -1578,6 +1590,12 @@ function sanitizeDaily(array $daily) {
  *  boiler_heat_kw, hp_electricity_kwh, boiler_fuel_kwh, hp_cop, cost, ...]
  */
 function storeHourlyRows($pdo, $runId, array $rows) {
+    inTransaction($pdo, function () use ($pdo, $runId, $rows) {
+        insertHourlyRows($pdo, $runId, $rows);
+    });
+}
+
+function insertHourlyRows($pdo, $runId, array $rows) {
     foreach (array_chunk($rows, 500) as $batch) {
         $placeholders = [];
         $values = [];
@@ -1652,6 +1670,32 @@ function executeRun($pdo, $simulator, $runId, $startDate, $endDate, $storeHourly
  * Store simulation results
  */
 function storeSimulationResults($pdo, $runId, $results, $storeHourly = true) {
+    // One transaction: one commit instead of one per day (each commit waits
+    // for the disk, which on shared hosts made saving a year take seconds)
+    inTransaction($pdo, function () use ($pdo, $runId, $results, $storeHourly) {
+        insertSimulationResults($pdo, $runId, $results, $storeHourly);
+    });
+}
+
+/** Run $fn in a transaction (or in the caller's, if one is open). */
+function inTransaction($pdo, callable $fn) {
+    if ($pdo->inTransaction()) {
+        return $fn();
+    }
+    $pdo->beginTransaction();
+    try {
+        $result = $fn();
+        $pdo->commit();
+        return $result;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $e;
+    }
+}
+
+function insertSimulationResults($pdo, $runId, $results, $storeHourly = true) {
     // Check if thermal columns exist (backward compatibility)
     $hasThermalColumns = false;
     try {
