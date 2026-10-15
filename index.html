@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HeatAQ Schedule Management</title>
     <link rel="icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="./assets/css/main.css?v=247">
-    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=247">
-    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=247">
-    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=247">
-    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=247">
-    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=247">
+    <link rel="stylesheet" href="./assets/css/main.css?v=248">
+    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=248">
+    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=248">
+    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=248">
+    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=248">
+    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=248">
     <style>
         /* Top bar, right: background saving panel, user card */
         .top-bar-right {
@@ -1111,17 +1111,19 @@
                                         <button id="debug-calculate-btn" class="btn btn-success btn-sm" onclick="SimulationsModule.debugHour()" style="padding: 3px 12px; font-size: 12px;">Calculate</button>
                                         <button class="btn btn-secondary btn-sm" onclick="SimulationsModule.debugNextHour()" style="padding: 3px 10px; font-size: 12px;">▶</button>
                                     </div>
-                                    <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 11px; color: #666;">
-                                        <label style="width: 55px;">Run</label>
-                                        <span id="debug-run-display" style="flex: 1;">-</span>
-                                    </div>
-                                    <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; color: #666;">
-                                        <label style="width: 55px;">Config</label>
-                                        <span id="debug-config-display" style="flex: 1;">-</span>
-                                    </div>
-                                    <div style="display: flex; align-items: center; gap: 8px; font-size: 11px; color: #666;">
-                                        <label style="width: 55px;">Schedule</label>
-                                        <span id="debug-ohc-display" style="flex: 1;">-</span>
+                                    <div style="display: flex; align-items: flex-end; gap: 8px; margin-top: 4px; font-size: 11px; color: #666;">
+                                        <div style="flex: 1; min-width: 0;">
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <label style="width: 55px;">Config</label>
+                                                <span id="debug-config-display" style="flex: 1; min-width: 0; overflow-wrap: anywhere;">-</span>
+                                            </div>
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <label style="width: 55px;">Schedule</label>
+                                                <span id="debug-ohc-display" style="flex: 1; min-width: 0; overflow-wrap: anywhere;">-</span>
+                                            </div>
+                                        </div>
+                                        <!-- The run shown: number and when it was made (name etc. on mouse-over) -->
+                                        <div id="debug-run-display" style="text-align: right; white-space: nowrap;"></div>
                                     </div>
                                 </div>
                             </div>
@@ -1794,19 +1796,19 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=247"></script>
+    <script src="./assets/js/config.js?v=248"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=247"></script>
-    <script src="./assets/js/modules/navigation.js?v=247"></script>
-    <script src="./assets/js/modules/schedules.js?v=247"></script>
-    <script src="./assets/js/modules/calendar.js?v=247"></script>
-    <script src="./assets/js/modules/simengine.js?v=247"></script>
-    <script src="./assets/js/modules/simulations.js?v=247"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=247"></script>
-    <script src="./assets/js/modules/configuration.js?v=247"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=247"></script>
-    <script src="./assets/js/modules/admin.js?v=247"></script>
-    <script src="./assets/js/modules/project.js?v=247"></script>
-    <script src="./assets/js/app.js?v=247"></script>
+    <script src="./assets/js/modules/api.js?v=248"></script>
+    <script src="./assets/js/modules/navigation.js?v=248"></script>
+    <script src="./assets/js/modules/schedules.js?v=248"></script>
+    <script src="./assets/js/modules/calendar.js?v=248"></script>
+    <script src="./assets/js/modules/simengine.js?v=248"></script>
+    <script src="./assets/js/modules/simulations.js?v=248"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=248"></script>
+    <script src="./assets/js/modules/configuration.js?v=248"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=248"></script>
+    <script src="./assets/js/modules/admin.js?v=248"></script>
+    <script src="./assets/js/modules/project.js?v=248"></script>
+    <script src="./assets/js/app.js?v=248"></script>
 </body>
 </html>
