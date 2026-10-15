@@ -566,11 +566,9 @@ const SimControlModule = {
             overrides.control?.upper_tolerance,
             '°C', 1
         );
-        const lowerTol = withOverride(
-            equip.lower_tolerance || control.lower_tolerance || equip.temp_tolerance || control.temp_tolerance,
-            overrides.control?.lower_tolerance,
-            '°C', 1
-        );
+        // Min temp when closed (predictive): standby_temp, blank = none
+        const minClosedRaw = equip.standby_temp ?? control.standby_temp ?? null;
+        const minClosed = minClosedRaw === null || minClosedRaw === '' ? 'none' : `${escapeHtml(minClosedRaw)}°C`;
 
         // Bathers values
         const bathersPerDay = withOverride(bathers.per_day, overrides.bathers?.per_day, '', 0);
@@ -619,7 +617,8 @@ const SimControlModule = {
             <div><strong>Heat Pump:</strong> ${hpKw}, COP ${hpCop}</div>
             <div><strong>Boiler:</strong> ${boilerKw}, ${boilerEff} eff${boilerTypeText ? ', ' + escapeHtml(boilerTypeText) : ''}</div>
             <div><strong>Target:</strong> ${targetTemp}</div>
-            <div><strong>Tolerance:</strong> +${upperTol} / -${lowerTol}</div>
+            <div><strong>Max overheat:</strong> +${upperTol}</div>
+            <div><strong>Min temp when closed:</strong> ${minClosed}</div>
             <div><strong>Strategy:</strong> ${escapeHtml(strategy)}</div>
             <div><strong>Bathers/day:</strong> ${bathersPerDay}</div>
             <div><strong>Activity:</strong> ${activityFactor}</div>

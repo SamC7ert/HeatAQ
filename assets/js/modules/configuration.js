@@ -34,7 +34,6 @@ const ConfigurationModule = {
         control: {
             target_temp: 28,
             upper_tolerance: 1,     // °C above target
-            lower_tolerance: 2,     // °C below target
             strategy: 'predictive'  // reactive, predictive, cost_optimizing
         },
         bathers: {
@@ -169,9 +168,8 @@ const ConfigurationModule = {
         ['cfg-showers-hp', 'Showers use HP', false],
         ['cfg-target-temp', 'Default temp', true],
         ['cfg-upper-tolerance', 'Max overheat', true],
-        ['cfg-lower-tolerance', 'Lower tolerance', true],
         ['cfg-strategy', 'Strategy', false],
-        ['cfg-standby-temp', 'Standby temperature', false],
+        ['cfg-standby-temp', 'Min temp when closed', false],
         ['cfg-bathers', 'Bathers per day', true],
         ['cfg-refill-liters', 'Refill litres', true],
         ['cfg-shower-liters', 'Shower litres', true],
@@ -274,11 +272,6 @@ const ConfigurationModule = {
                 this.setVal('cfg-upper-tolerance', config.control.upper_tolerance);
             } else if (config.control.temp_tolerance !== undefined) {
                 this.setVal('cfg-upper-tolerance', config.control.temp_tolerance);
-            }
-            if (config.control.lower_tolerance !== undefined) {
-                this.setVal('cfg-lower-tolerance', config.control.lower_tolerance);
-            } else if (config.control.temp_tolerance !== undefined) {
-                this.setVal('cfg-lower-tolerance', config.control.temp_tolerance);
             }
             this.setVal('cfg-strategy', config.control.strategy);
             this.setVal('cfg-standby-temp', config.control.standby_temp ?? '');
@@ -390,7 +383,6 @@ const ConfigurationModule = {
         // Temperature range updates
         const targetTemp = document.getElementById('cfg-target-temp');
         const upperTol = document.getElementById('cfg-upper-tolerance');
-        const lowerTol = document.getElementById('cfg-lower-tolerance');
 
         if (targetTemp) {
             targetTemp.addEventListener('change', () => this.updateTempRange());
@@ -399,10 +391,6 @@ const ConfigurationModule = {
         if (upperTol) {
             upperTol.addEventListener('change', () => this.updateTempRange());
             upperTol.addEventListener('input', () => this.updateTempRange());
-        }
-        if (lowerTol) {
-            lowerTol.addEventListener('change', () => this.updateTempRange());
-            lowerTol.addEventListener('input', () => this.updateTempRange());
         }
     },
 
@@ -416,30 +404,22 @@ const ConfigurationModule = {
         if (solarRow) solarRow.style.display = hasCover ? '' : 'none';
     },
 
-    // Update calculated temperature range display
+    // Update the calculated max temperature (default temp + max overheat)
     updateTempRange: function() {
         const targetStr = this.getVal('cfg-target-temp');
         const target = parseFloat(targetStr);
         const upperTol = parseFloat(this.getVal('cfg-upper-tolerance')) || 1;
-        const lowerTol = parseFloat(this.getVal('cfg-lower-tolerance')) || 2;
+        const rangeEl = document.getElementById('cfg-temp-range');
+        if (!rangeEl) return;
 
         // Don't silently default - show warning if target not set
         if (!targetStr || isNaN(target)) {
-            const rangeEl = document.getElementById('cfg-temp-range');
-            if (rangeEl) {
-                rangeEl.textContent = '-- - --°C (target required)';
-                rangeEl.style.color = 'red';
-            }
+            rangeEl.textContent = '-- °C (default temp required)';
+            rangeEl.style.color = 'red';
             return;
         }
-
-        const minTemp = target - lowerTol;
-        const maxTemp = target + upperTol;
-
-        const rangeEl = document.getElementById('cfg-temp-range');
-        if (rangeEl) {
-            rangeEl.textContent = `${minTemp} - ${maxTemp}°C`;
-        }
+        rangeEl.textContent = `${target + upperTol} °C`;
+        rangeEl.style.color = '';
     },
 
     // Update all calculated fields
@@ -464,9 +444,8 @@ const ConfigurationModule = {
             control: {
                 target_temp: n('cfg-target-temp'),
                 upper_tolerance: n('cfg-upper-tolerance'),
-                lower_tolerance: n('cfg-lower-tolerance'),
                 strategy: this.getVal('cfg-strategy'),
-                // Blank = no standby minimum (null)
+                // Min temp when closed; blank = no minimum (null)
                 standby_temp: n('cfg-standby-temp')
             },
             bathers: {

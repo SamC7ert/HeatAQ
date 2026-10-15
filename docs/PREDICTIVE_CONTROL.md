@@ -1,6 +1,6 @@
 # HeatAQ Predictive Control Strategy
 
-**Status:** Implemented. Simulator **3.17.1**, identical in both engines
+**Status:** Implemented. Simulator **3.18.0**, identical in both engines
 (PHP `lib/EnergySimulator.php`, TypeScript `sim-ts/src/engine.ts`).
 **Last updated:** 2026-10-15
 
@@ -74,8 +74,8 @@ temperature whenever it is open.
 | **Open period** | Cover off, pool in use, high heat loss. Water must stay **≥ target**. |
 | **Closed period** | Cover on, low heat loss. Water may float between **min** and **max**. |
 | **Target** | The open period's temperature: schedule period target, or config default, plus the SimControl offset (§7.1). |
-| **Max temp** | `pool_config.max_temp`, else `target + upper_tolerance` (default +1). Caps the opening temperature and banking. |
-| **Min temp** | `pool_config.min_temp`, else `target − lower_tolerance` (default −2). Floor while coasting. |
+| **Max temp** | `target + Max overheat` (`upper_tolerance`, default 1 °C; `maxTemp()`). Caps the opening temperature and banking. |
+| **Min temp** | "Min temp when closed" (`standby_temp`), else the 5 °C frost floor, never above target (`closedFloor()`). The lowest the water may drop while closed: overnight, over a weekend or during a long closure. |
 | **Thermal mass rate (tmr)** | kWh to change the pool 1 °C (from volume). Converts °C ↔ kWh. |
 | **Deficit** (open hour *k*) | `demand[k] − hp_full[k]`, in kW (= kWh in the hour). Demand = losses − solar (cover off); `hp_full` = heat pump output at full capacity (hourly COP / limits). |
 | **Short hour** | An open hour with a positive deficit: the heat pump alone cannot cover it. |
@@ -206,8 +206,8 @@ target.
 | `t_req` would exceed `max_temp` | Capped at `max_temp`; the boiler backstops the open hours the buffer cannot carry. |
 | Closed period too short to reach `t_req` | Heat pump from the first closed hour; the boiler backstops at opening. |
 | Coast would drop below `min_temp` | Heat pump holds `min_temp` until the late start. |
-| Boiler during a closed period | **Never** for a buffer; only to hold `standby_temp` (below). |
-| Long closure (next opening beyond 30 days) | No plan can be made. The pool holds `standby_temp` (heat pump, boiler backup) if set, else is unheated (5 °C floor). Once a day the simulator estimates how long the heat pump needs to reach the next opening's target; when that time (+12 h) has come, the normal plan starts. |
+| Boiler during a closed period | **Never** for a buffer; only to hold the min temp during a long closure (below). |
+| Long closure (next opening beyond 30 days) | No plan can be made. The pool holds the min temp when closed (`standby_temp`; heat pump, boiler backup) if set, else is unheated (5 °C floor). Once a day the simulator estimates how long the heat pump needs to reach the next opening's target; when that time (+12 h) has come, the normal plan starts. |
 | No heat pump | No buffer is possible; the run uses reactive control (`strategy_used` in the summary). |
 | Open period longer than 48 h | The plan looks at the first 48 open hours. |
 
@@ -221,10 +221,10 @@ target.
    `EnergySimulator::syncSchedulerTargets`). Hourly control, planning,
    Details and the comfort statistics all use it. Comfort statistics count
    days with an open hour more than 1 / 2 °C below that hour's target.
-2. **Min/max representation.** The config UI shows the allowed range as
-   `target − lower_tolerance … target + upper_tolerance`. The simulator uses
-   `pool_config.max_temp` / `min_temp` when set and falls back to the same
-   tolerances otherwise. These should become one source of truth.
+2. **Min/max representation: resolved (3.18.0).** Max = target + Max
+   overheat; min while closed = "Min temp when closed". The former lower
+   tolerance (a second, relative floor) and the unused pool-level
+   `max_temp` / `min_temp` overrides are gone.
 3. **Bather loads are not in the heat balance (decided: leave for now, do
    not forget).** Bathers/day, refill and shower water are config inputs,
    but neither the hourly balance nor the planner adds the refill/shower
@@ -246,6 +246,13 @@ target.
 | When the heat pump could cover the open period's **total**, the closed period **held target all night**: it heated at once after closing and kept the pool warm. | Every closed period coasts and starts the heat pump as late as possible (§4b). |
 | Buffer sized on totals (open demand − heat pump output): no buffer when totals balanced, even with short hours, so the boiler ran. | Buffer sized hour by hour (§4a). |
 | After a preheat, the heat pump banked towards max for the **whole** open period. | Banking stops after the last short hour (§5). |
+
+**3.18.0** merged the two floors for closed hours into one setting,
+"Min temp when closed" (formerly Standby temp). The lower tolerance (target
+− 2 °C) was a second floor. With the late start it was hardly ever reached
+overnight, and on closures of several days it kept the water warmer than
+needed. Effect: long-closure scenarios −0.8 % and −1.7 % cost, everything
+else identical, same comfort.
 
 **3.17.1** fixed a fault the reference set exposed. While banking, the
 boiler only covered the losses the heat pump could not. Water already below
@@ -280,9 +287,8 @@ of this strategy replaced an older "setback temperature" model, which
 | `target_temp` | Default target for open periods whose schedule has none (§7.1). |
 | schedule period target | Target of that open period. |
 | `target_offset` | SimControl adjustment added to every resolved target (−5…+5 °C). |
-| `upper_tolerance` / `pool_config.max_temp` | Max temp: cap on the opening temperature and on banking. |
-| `lower_tolerance` / `pool_config.min_temp` | Min temp: floor while coasting. |
-| `standby_temp` | Water temperature held during long closures (blank = none). |
+| Max overheat (`upper_tolerance`) | Max temp = target + this: cap on the opening temperature and on banking. |
+| Min temp when closed (`standby_temp`) | The lowest the water may drop while closed: coast floor on every closure, held during long closures (blank = none, 5 °C frost floor). |
 | heat pump capacity / type / limits | Hourly heat pump output: decides the short hours and the late start. |
 | `boiler_capacity_kw` | Open-period backstop only. |
 | pool volume | Thermal mass rate: converts °C ↔ kWh. |

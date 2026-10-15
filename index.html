@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HeatAQ Schedule Management</title>
     <link rel="icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="./assets/css/main.css?v=252">
-    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=252">
-    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=252">
-    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=252">
-    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=252">
-    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=252">
+    <link rel="stylesheet" href="./assets/css/main.css?v=253">
+    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=253">
+    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=253">
+    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=253">
+    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=253">
+    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=253">
     <style>
         /* Top bar, right: background saving panel, user card */
         .top-bar-right {
@@ -507,17 +507,13 @@
                                     <td><label for="cfg-upper-tolerance" title="Predictive: how far above target the water may be heated, before opening or during open hours, to cover hours the heat pump cannot cover alone">Max overheat<br><span style="font-size: 11px; color: #888;">°C above target</span></label></td>
                                     <td><input type="number" id="cfg-upper-tolerance" step="0.5" value="1" min="0" max="5"></td>
                                 </tr>
-                                <tr>
-                                    <td><label for="cfg-lower-tolerance">Lower Tolerance (°C below)</label></td>
-                                    <td><input type="number" id="cfg-lower-tolerance" step="0.5" value="2" min="0" max="5"></td>
-                                </tr>
                                 <tr class="calculated">
-                                    <td>Allowed Range</td>
-                                    <td id="cfg-temp-range">26 - 29°C</td>
+                                    <td title="Default temp + max overheat. Schedule periods with their own target: that target + max overheat.">Max temperature</td>
+                                    <td id="cfg-temp-range" title="Default temp + max overheat. Schedule periods with their own target: that target + max overheat.">29 °C</td>
                                 </tr>
                                 <tr>
-                                    <td><label for="cfg-standby-temp">Standby Temp (°C)</label></td>
-                                    <td><input type="number" id="cfg-standby-temp" step="0.5" min="5" max="30" placeholder="none" title="Minimum water temperature during long closures (predictive control). Blank = no minimum: the pool is unheated until the heat pump must start for the next opening."></td>
+                                    <td><label for="cfg-standby-temp" title="Predictive: the lowest temperature the water may drop to while the pool is closed - overnight, over a weekend or during a long closure. Blank = no minimum (5 °C frost floor). The heat pump still starts in time to reach the target at opening.">Min temp<br><span style="font-size: 11px; color: #888;">when closed (°C)</span></label></td>
+                                    <td><input type="number" id="cfg-standby-temp" step="0.5" min="5" max="30" placeholder="none" title="Predictive: the lowest temperature the water may drop to while the pool is closed - overnight, over a weekend or during a long closure. Blank = no minimum (5 °C frost floor). The heat pump still starts in time to reach the target at opening."></td>
                                 </tr>
                                 <tr>
                                     <td><label for="cfg-strategy">Strategy</label></td>
@@ -754,12 +750,6 @@
                                         <td id="cfg-val-upper-tol" class="config-value" style="font-weight: bold; font-size: 14px; text-align: center;">-</td>
                                         <td><input type="text" id="sim-upper-tol-override" placeholder="-" style="text-align: center;"></td>
                                         <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-upper-tol-override')" title="Clear">&times;</button></td>
-                                    </tr>
-                                    <tr>
-                                        <td>Lower Tolerance (°C)</td>
-                                        <td id="cfg-val-lower-tol" class="config-value" style="font-weight: bold; font-size: 14px; text-align: center;">-</td>
-                                        <td><input type="text" id="sim-lower-tol-override" placeholder="-" style="text-align: center;"></td>
-                                        <td><button type="button" class="btn-clear-override" onclick="SimulationsModule.clearOverride('sim-lower-tol-override')" title="Clear">&times;</button></td>
                                     </tr>
                                     <tr>
                                         <td>Bathers/Day</td>
@@ -1807,19 +1797,19 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=252"></script>
+    <script src="./assets/js/config.js?v=253"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=252"></script>
-    <script src="./assets/js/modules/navigation.js?v=252"></script>
-    <script src="./assets/js/modules/schedules.js?v=252"></script>
-    <script src="./assets/js/modules/calendar.js?v=252"></script>
-    <script src="./assets/js/modules/simengine.js?v=252"></script>
-    <script src="./assets/js/modules/simulations.js?v=252"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=252"></script>
-    <script src="./assets/js/modules/configuration.js?v=252"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=252"></script>
-    <script src="./assets/js/modules/admin.js?v=252"></script>
-    <script src="./assets/js/modules/project.js?v=252"></script>
-    <script src="./assets/js/app.js?v=252"></script>
+    <script src="./assets/js/modules/api.js?v=253"></script>
+    <script src="./assets/js/modules/navigation.js?v=253"></script>
+    <script src="./assets/js/modules/schedules.js?v=253"></script>
+    <script src="./assets/js/modules/calendar.js?v=253"></script>
+    <script src="./assets/js/modules/simengine.js?v=253"></script>
+    <script src="./assets/js/modules/simulations.js?v=253"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=253"></script>
+    <script src="./assets/js/modules/configuration.js?v=253"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=253"></script>
+    <script src="./assets/js/modules/admin.js?v=253"></script>
+    <script src="./assets/js/modules/project.js?v=253"></script>
+    <script src="./assets/js/app.js?v=253"></script>
 </body>
 </html>

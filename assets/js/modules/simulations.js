@@ -1247,7 +1247,6 @@ const SimulationsModule = {
             'cfg-val-boiler-capacity': config.equipment?.boiler_capacity_kw,
             'cfg-val-target-temp': config.control?.target_temp,
             'cfg-val-upper-tol': config.control?.upper_tolerance ?? config.control?.temp_tolerance,
-            'cfg-val-lower-tol': config.control?.lower_tolerance ?? config.control?.temp_tolerance,
             'cfg-val-bathers': config.bathers?.per_day,
             'cfg-val-activity': config.bathers?.activity_factor,
             'cfg-val-wind': windDisplay,
@@ -1288,7 +1287,7 @@ const SimulationsModule = {
     loadSavedOverrides: async function() {
         const fields = [
             'sim-hp-override', 'sim-boiler-override', 'sim-target-offset',
-            'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
+            'sim-upper-tol-override', 'sim-bathers-override',
             'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-engine'
         ];
 
@@ -1337,7 +1336,7 @@ const SimulationsModule = {
     saveOverrides: function() {
         const fields = [
             'sim-hp-override', 'sim-boiler-override', 'sim-target-offset',
-            'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
+            'sim-upper-tol-override', 'sim-bathers-override',
             'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-engine'
         ];
         const overrides = {};
@@ -1368,7 +1367,7 @@ const SimulationsModule = {
     clearAllOverrides: function() {
         const ids = [
             'sim-hp-override', 'sim-boiler-override', 'sim-target-offset',
-            'sim-upper-tol-override', 'sim-lower-tol-override', 'sim-bathers-override',
+            'sim-upper-tol-override', 'sim-bathers-override',
             'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-engine'
         ];
         ids.forEach(id => {
@@ -1421,7 +1420,6 @@ const SimulationsModule = {
         ['sim-hp-override', 'HP capacity (kW)', 0, 100000],
         ['sim-boiler-override', 'Boiler capacity (kW)', 0, 100000],
         ['sim-upper-tol-override', 'Max overheat (°C)', 0, 5],
-        ['sim-lower-tol-override', 'Lower tolerance (°C)', 0, 10],
         ['sim-bathers-override', 'Bathers per day', 0, 100000, true],
         ['sim-activity-override', 'Activity factor', 0, 5],
         ['sim-wind-override', 'Wind exposure (%)', 0, 100],
@@ -1473,13 +1471,11 @@ const SimulationsModule = {
         // Control overrides
         const targetOffset = SimulationsModule.readTargetOffset();
         const upperTolOverride = getOverride('sim-upper-tol-override');
-        const lowerTolOverride = getOverride('sim-lower-tol-override');
         const strategy = this.readStrategy();
-        if (targetOffset !== null || upperTolOverride !== null || lowerTolOverride !== null || strategy) {
+        if (targetOffset !== null || upperTolOverride !== null || strategy) {
             override.control = {};
             if (targetOffset !== null) override.control.target_offset = targetOffset;
             if (upperTolOverride !== null) override.control.upper_tolerance = upperTolOverride;
-            if (lowerTolOverride !== null) override.control.lower_tolerance = lowerTolOverride;
             if (strategy) override.control.strategy = strategy;
         }
 
@@ -1525,7 +1521,6 @@ const SimulationsModule = {
         const boilerOverride = getOverride('sim-boiler-override');
         const targetOffset = SimulationsModule.readTargetOffset();
         const upperTolOverride = getOverride('sim-upper-tol-override');
-        const lowerTolOverride = getOverride('sim-lower-tol-override');
         const bathersOverride = getOverride('sim-bathers-override');
         const activityOverride = getOverride('sim-activity-override');
         const windOverride = getOverride('sim-wind-override');
@@ -1535,7 +1530,6 @@ const SimulationsModule = {
         if (boilerOverride !== null) config.equipment.boiler_capacity_kw = boilerOverride;
         if (targetOffset !== null) config.control.target_offset = targetOffset;
         if (upperTolOverride !== null) config.control.upper_tolerance = upperTolOverride;
-        if (lowerTolOverride !== null) config.control.lower_tolerance = lowerTolOverride;
         if (bathersOverride !== null) config.bathers.per_day = bathersOverride;
         if (activityOverride !== null) config.bathers.activity_factor = activityOverride;
         if (windOverride !== null) config.pool.wind_exposure = SimulationsModule.percentToFraction(windOverride);
