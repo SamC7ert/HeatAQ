@@ -28,18 +28,9 @@ set_error_handler(function($severity, $message, $file, $line) {
 });
 
 // Catch fatal errors
-// A fatal error (memory, time limit) mid-run must not leave the run row
-// 'running' forever: the run sets $GLOBALS['activeRunId'] while it executes.
 register_shutdown_function(function() {
     $error = error_get_last();
     if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
-        if (!empty($GLOBALS['activeRunId']) && isset($GLOBALS['pdo'])) {
-            try {
-                updateRunStatus($GLOBALS['pdo'], $GLOBALS['activeRunId'], 'failed', ['error' => 'Simulation aborted: ' . strtok($error['message'], "\n")]);
-            } catch (Throwable $e) {
-                // nothing more we can do
-            }
-        }
         $debug = class_exists('Config') && Config::isDebug();
         if (!headers_sent()) {
             http_response_code(500);
@@ -77,10 +68,9 @@ if (Config::requiresAuth() && file_exists(__DIR__ . '/../auth.php')) {
     // pool_site_id check moved to individual actions that require it
 }
 
-// Release the PHP session lock now that auth is done. A running simulation
-// holds this request open for a long time; with the lock held, the
-// get_run_progress polls (and every other request from the same browser)
-// would block until the run finishes.
+// Release the PHP session lock now that auth is done: preparing a long run
+// (loading years of weather) or saving its results takes a while, and with
+// the lock held every other request from the same browser would wait.
 if (session_status() === PHP_SESSION_ACTIVE) {
     session_write_close();
 }
@@ -754,30 +744,6 @@ try {
             sendResponse(['status' => 'success', 'run_id' => $runId]);
             break;
 
-        case 'get_run_progress':
-            // Progress of the most recent still-running simulation (the
-            // frontend polls this while the run_simulation POST is in flight
-            // and doesn't yet know the run_id).
-            $stmt = $pdo->prepare("
-                SELECT run_id, status, summary_json
-                FROM simulation_runs
-                WHERE status = 'running' AND pool_site_id = ?
-                ORDER BY run_id DESC
-                LIMIT 1
-            ");
-            $stmt->execute([$currentPoolSiteId]);
-            $running = $stmt->fetch(PDO::FETCH_ASSOC);
-            if (!$running) {
-                sendResponse(['running' => false]);
-            }
-            $sj = json_decode($running['summary_json'] ?? '{}', true) ?: [];
-            sendResponse([
-                'running' => true,
-                'run_id' => (int) $running['run_id'],
-                'progress' => $sj['progress'] ?? null
-            ]);
-            break;
-
         case 'get_runs':
             // Get all simulation runs for this site
             $limit = max(1, min(500, (int) getParam('limit', 50)));
@@ -1349,63 +1315,6 @@ try {
                 ];
             }
 
-            // ===== REPLAY SCHEDULING to cache open_plan/heating_mode for debug =====
-            // Load config from run to recreate simulator state
-            $configStmt = $pdo->prepare("SELECT config_snapshot FROM simulation_runs WHERE run_id = ?");
-            $configStmt->execute([$runId]);
-            $runConfig = $configStmt->fetch();
-            $configSnapshot = $runConfig ? json_decode($runConfig['config_snapshot'], true) : [];
-
-            // Initialize simulator with scheduler
-            $scheduleTemplateId = $configSnapshot['schedule_template_id'] ?? null;
-            $scheduler = !empty($configSnapshot['schedule_state'])
-                ? PoolScheduler::fromState($configSnapshot['schedule_state'])
-                : new PoolScheduler($pdo, $currentPoolSiteId, $scheduleTemplateId);
-            $simulator = new EnergySimulator($pdo, $currentPoolSiteId, $scheduler);
-
-            if (!empty($configSnapshot['equipment'])) {
-                $simulator->setEquipment($configSnapshot['equipment']);
-            }
-            if (!empty($configSnapshot['pool_config'])) {
-                $simulator->setPoolConfig($configSnapshot['pool_config']);
-            }
-
-            // Capture debug info about thermalMassRate
-            $debugThermalMass = [
-                'pool_config_volume' => $configSnapshot['pool_config']['volume_m3'] ?? 'NOT SET',
-                'thermal_mass_rate_after_setPoolConfig' => $simulator->getThermalMassRate(),
-            ];
-
-            // Replay scheduling using consolidated method in simulator
-            // This ensures debug uses same logic as run()
-            $replayResult = $simulator->replaySchedulingForData($rows, $centerDate);
-            $debugCache = $replayResult['cache'];
-            $debugPlanCall = $replayResult['debug_plan_call'];
-
-            // Apply control_strategy to heating modes (reactive strategy overrides planned modes)
-            $controlStrategy = $configSnapshot['equipment']['control_strategy'] ?? 'reactive';
-            if ($controlStrategy !== 'predictive') {
-                foreach ($debugCache as $ts => &$cached) {
-                    $cached['heating_mode'] = 'reactive';
-                }
-                unset($cached);
-            }
-
-            // Store in session keyed by run_id
-            if (session_status() === PHP_SESSION_NONE) {
-                session_start();
-            }
-            $_SESSION['debug_cache'][$runId] = $debugCache;
-
-            // Find first cached open_plan to debug
-            $firstOpenPlan = null;
-            foreach ($debugCache as $ts => $cached) {
-                if (!empty($cached['open_plan'])) {
-                    $firstOpenPlan = ['timestamp' => $ts, 'plan' => $cached['open_plan']];
-                    break;
-                }
-            }
-
             sendResponse([
                 'run_id' => (int)$runId,
                 'source' => 'stored', // Indicates data comes from DB, not recalculated
@@ -1414,9 +1323,6 @@ try {
                 'center_date' => $centerDate,
                 'hours' => count($hourlyData),
                 'data' => $hourlyData,
-                'debug_cache_size' => count($debugCache),  // For verification
-                'debug_thermal_mass' => $debugThermalMass,  // Debug: verify thermalMassRate
-                'debug_plan_call' => $debugPlanCall,  // Debug: inputs/outputs of first plan calculation
             ]);
             break;
 
@@ -1546,54 +1452,6 @@ function insertHourlyRows($pdo, $runId, array $rows) {
             VALUES " . implode(", ", $placeholders));
         $stmt->execute($values);
     }
-}
-
-/**
- * Run a created run: progress reporting, simulate, store results, mark it
- * completed (or failed, rethrowing), then apply hourly retention for the
- * site. Returns the simulator results.
- */
-function executeRun($pdo, $simulator, $runId, $startDate, $endDate, $storeHourly) {
-    updateRunStatus($pdo, $runId, 'running');
-    $GLOBALS['activeRunId'] = $runId;
-
-    // Live progress: once per simulated month, store the current period +
-    // percent on the run row so the frontend can poll it (get_run_progress)
-    // while this request is still executing.
-    $progressStmt = $pdo->prepare("UPDATE simulation_runs SET summary_json = ? WHERE run_id = ?");
-    $simulator->setProgressCallback(function ($period, $done, $total) use ($progressStmt, $runId) {
-        $pct = $total > 0 ? (int) round(100 * $done / $total) : 0;
-        $progressStmt->execute([
-            json_encode(['progress' => ['period' => $period, 'pct' => $pct]]),
-            $runId
-        ]);
-    });
-
-    try {
-        $results = $simulator->runSimulation($startDate, $endDate);
-        storeSimulationResults($pdo, $runId, $results, $storeHourly);
-        updateRunStatus($pdo, $runId, 'completed', $results['summary']);
-        $GLOBALS['activeRunId'] = null;
-    } catch (Throwable $e) {
-        // Errors too, e.g. a division by zero
-        $GLOBALS['activeRunId'] = null;
-        updateRunStatus($pdo, $runId, 'failed', ['error' => $e->getMessage()]);
-        throw $e;
-    }
-
-    // Keep hourly data only for the newest runs of this site (a few seconds
-    // at most here; the Admin -> Storage clean-up finishes larger backlogs).
-    // Never fails the run.
-    if ($storeHourly) {
-        try {
-            $site = $pdo->prepare("SELECT pool_site_id FROM simulation_runs WHERE run_id = ?");
-            $site->execute([$runId]);
-            RunRetention::purgeHourly($pdo, (int) $site->fetchColumn(), 5);
-        } catch (Throwable $e) {
-            error_log('[SimAPI] hourly retention failed: ' . $e->getMessage());
-        }
-    }
-    return $results;
 }
 
 /**

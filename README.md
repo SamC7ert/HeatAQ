@@ -15,7 +15,7 @@ HeatAQ is a comprehensive web-based pool energy simulation and analysis system d
 - **Frontend**: HTML5, JavaScript (ES6+), CSS3
 - **Backend**: PHP 8.2+
 - **Database**: MySQL 5.7+
-- **Simulator**: PHP (`lib/EnergySimulator.php`, runs on the server) and an identical TypeScript port (`sim-ts/`, runs in the browser); see `sim-ts/README.md`
+- **Simulator**: TypeScript (`sim-ts/`, runs in the browser); the server prepares each run's inputs (`lib/EnergySimulator.php`) and stores the results. See `sim-ts/README.md`
 
 ## Project Structure
 ```
@@ -27,10 +27,9 @@ heataq/
 │   └── js/             # JavaScript modules
 │       └── modules/
 ├── docs/               # Documentation
-├── lib/                # PHP simulator (EnergySimulator, PoolScheduler) and helpers
-├── sim-ts/             # TypeScript port of the simulator (built to assets/js/sim/)
-├── tests/              # Command-line tests (test_closed_plan.php) and the
-│                       # engine reference set (tests/reference/)
+├── lib/                # Run preparation (EnergySimulator: config, data, inputs), PoolScheduler, helpers
+├── sim-ts/             # The simulation engine (TypeScript, built to assets/js/sim/) and its tests
+├── tests/              # Engine reference set (tests/reference/)
 ├── index.html         # Main application
 ├── login.html         # Authentication
 └── config.php.example # Configuration template

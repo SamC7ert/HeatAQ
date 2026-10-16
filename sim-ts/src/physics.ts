@@ -1,4 +1,5 @@
-// Port of the heat-loss / gain / equipment physics in lib/EnergySimulator.php.
+// Heat losses, gains and equipment (heat pump, boiler). Ported from the former
+// PHP engine; docs/HEATING_ALGORITHM.md describes the physics.
 
 import type { Losses } from './types';
 import { num, truthy } from './util';

@@ -1,7 +1,8 @@
-// Port of EnergySimulator::runSimulation() and its predictive-control helpers
-// (lib/EnergySimulator.php). Runs on EnergySimulator::exportRunInputs().
-// Kept structurally parallel to the PHP so the two can be compared line by
-// line; see docs/PREDICTIVE_CONTROL.md for the control logic.
+// The simulation engine: a run hour by hour, its predictive control and its
+// totals. Runs on the inputs the server prepares (EnergySimulator::
+// exportRunInputs()). Started as a line-by-line port of the former PHP engine
+// (identical results up to 3.19.0); see docs/PREDICTIVE_CONTROL.md for the
+// control logic and src/rules.ts for the rules every hour must satisfy.
 
 import type { DailyResult, Heating, HourlyRow, Losses, ProgressFn, RunInputs, RunResult, StoredDayRow, WeatherRow } from './types';
 import { Physics, distributeSolarToHour } from './physics';

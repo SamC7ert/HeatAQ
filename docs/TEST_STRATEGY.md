@@ -6,6 +6,11 @@ standard set of **UI/config actions** that would have caught the bug classes
 found in the July 2026 review (`CODE_REVIEW_2026-07.md`). Build order:
 **physics first**, then UI actions, with cheap lint guards from day one.
 
+> **Note (October 2026, V265):** the simulation engine is now `sim-ts/` only.
+> Engine tests live there (`sim-ts/test/`: plan unit test, strategy rules,
+> reference set; `npm test`), see `tests/reference/README.md`. References
+> below to `EnergySimulator.php` physics now mean `sim-ts/src/physics.ts`.
+
 The design is organised around the four root-cause themes so each theme has
 an owning test type:
 

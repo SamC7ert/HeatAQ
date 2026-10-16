@@ -6,9 +6,9 @@
 > **Predictive control** is specified in [`PREDICTIVE_CONTROL.md`](PREDICTIVE_CONTROL.md)
 > (the authoritative description, with a map of the code). This document
 > covers the reactive hold-to-target logic and the heat physics; the
-> physics code is `lib/EnergySimulator.php` and its TypeScript port
-> `sim-ts/src/physics.ts`, which are the reference where this text and the
-> code differ.
+> physics code is `sim-ts/src/physics.ts` (the only engine since V265; the
+> former PHP engine is in git history), which is the reference where this
+> text and the code differ.
 
 ---
 

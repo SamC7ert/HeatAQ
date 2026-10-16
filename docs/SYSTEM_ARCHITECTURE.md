@@ -133,7 +133,7 @@ Purpose: Manage simulation runs
 Functions:
 - loadSites() - Get project's site
 - loadPools() - List pools for site
-- runSimulation() - Execute simulator
+- runSimulation() - Prepare a run on the server, simulate it in the browser (sim-ts)
 
 Data Flow:
 → API: get_project_site (session-based)
@@ -305,7 +305,7 @@ User Action → Validate Client-Side → api.js POST
 │      ├─ target_temp, control_strategy                                      │
 │      └─ template_name                                                      │
 │   5. Apply config_override if provided                                     │
-│   6. Initialize: PoolScheduler, EnergySimulator                           │
+│   6. Initialize: PoolScheduler, EnergySimulator (run preparation)         │
 │                            │                                                │
 │                            ▼                                                │
 │   ENERGY SIMULATOR (lib/EnergySimulator.php)                               │
@@ -320,7 +320,7 @@ User Action → Validate Client-Side → api.js POST
 │   ├─ solar: { has_tunnel }                                                 │
 │   └─ control: { target_temp, strategy }                                    │
 │                                                                             │
-│   runSimulation(startDate, endDate) returns:                               │
+│   exportRunInputs() -> the browser engine (sim-ts) simulates, returning:  │
 │   {                                                                         │
 │     meta: {                                                                 │
 │       simulator_version, start_date, end_date, site_id,                    │
@@ -382,7 +382,8 @@ User Action → Validate Client-Side → api.js POST
 | SimulationsModule | assets/js/modules/simulations.js | UI, triggers runs, displays history |
 | SimControlModule | assets/js/modules/simcontrol.js | Pool/Config selection, report display |
 | simulation_api.php | api/simulation_api.php | REST endpoint, orchestrates run |
-| EnergySimulator | lib/EnergySimulator.php | Core calculation engine |
+| EnergySimulator | lib/EnergySimulator.php | Run preparation: config, validation, data, engine inputs |
+| Simulation engine | sim-ts/ (assets/js/sim/) | The calculation, in the browser |
 | PoolScheduler | lib/PoolScheduler.php | Schedule resolution |
 | Config | config.php | Database connection |
 
