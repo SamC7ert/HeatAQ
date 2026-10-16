@@ -228,6 +228,10 @@ const SimulationsModule = {
      */
     startSimulation: async function() {
         const scenarioName = document.getElementById('sim-scenario-name').value || 'Unnamed Scenario';
+        // Remembered per project: the Simulate tab shows it again after a project switch
+        if (typeof SimControlModule !== 'undefined' && document.getElementById('sim-scenario-name').value) {
+            SimControlModule.savePreference('last_scenario_name', document.getElementById('sim-scenario-name').value);
+        }
         const startDate = document.getElementById('sim-start-date').value;
         const endDate = document.getElementById('sim-end-date').value;
         const description = document.getElementById('sim-description').value || '';
@@ -474,6 +478,44 @@ const SimulationsModule = {
             return `&run_id=${encodeURIComponent(r.run_id)}`;
         }
         return '';
+    },
+
+    /**
+     * Project switched: forget everything that belongs to the previous
+     * project's runs (selected / inspected run, run detail, Details hours,
+     * Simulate status and comparisons). The tabs reload their data for the
+     * new project when opened.
+     */
+    resetProjectState: function() {
+        this.runs = [];
+        this.selectedRunId = null;
+        this.currentRun = null;
+        this.inspectRun = null;
+        this.hoursSource = {};
+        this.hoursPending = {};
+        const clear = (id, html = '') => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+        const hide = (id) => { const el = document.getElementById(id); if (el) el.style.display = 'none'; };
+        clear('simulation-status');
+        clear('engine-compare-report');
+        hide('sim-last-run-results');
+        clear('simulation-detail');
+        hide('simulation-detail');
+        clear('comparison-results');
+        // Overrides belong to the project: the new project's are loaded with
+        // its configuration (loadSavedOverrides); the engine choice stays
+        ['sim-hp-override', 'sim-boiler-override', 'sim-target-offset', 'sim-upper-tol-override',
+         'sim-bathers-override', 'sim-activity-override', 'sim-wind-override', 'sim-solar-override',
+         'sim-strategy'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+        // Details: run info, hours note, hour panel cards and the week chart
+        clear('debug-run-display');
+        ['debug-config-display', 'debug-ohc-display'].forEach(id => clear(id, '-'));
+        clear('debug-hours-note');
+        ['debug-input', 'debug-evaporation', 'debug-convection', 'debug-radiation', 'debug-solar',
+         'debug-structural', 'debug-cover', 'debug-heatpump', 'debug-boiler', 'debug-summary'].forEach(id => clear(id));
+        hide('debug-weekly-charts');
+        hide('week-nav-buttons');
+        const placeholder = document.getElementById('debug-weekly-chart-placeholder');
+        if (placeholder) { placeholder.style.display = ''; placeholder.textContent = 'Press Calculate to load weekly data'; }
     },
 
     /** HourlySaver finished (or gave up on) a run's hours: update the run views. */
@@ -1291,43 +1333,41 @@ const SimulationsModule = {
             'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-engine'
         ];
 
-        // Try loading from server first
+        // Overrides are saved per project. Every field takes the saved value
+        // or is cleared, so one project's overrides (e.g. HP capacity) never
+        // carry over into another; the engine choice is kept when the project
+        // has none saved.
+        const apply = (overrides) => {
+            fields.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (overrides[id]) el.value = overrides[id];
+                else if (id !== 'sim-engine') el.value = '';
+            });
+        };
+        const key = this.overridesKey();
         try {
             const response = await fetch('/api/heataq_api.php?action=get_preferences');
             const data = await response.json();
-            if (data.preferences?.sim_overrides) {
-                const overrides = JSON.parse(data.preferences.sim_overrides);
-                fields.forEach(id => {
-                    const el = document.getElementById(id);
-                    if (el && overrides[id]) {
-                        el.value = overrides[id];
-                    }
-                });
-                // Update localStorage cache
-                const key = this.getUserKey('sim_overrides');
-                localStorage.setItem(key, data.preferences.sim_overrides);
-                return;
-            }
+            if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
+            const json = data.preferences?.sim_overrides || '';
+            apply(json ? JSON.parse(json) : {});
+            if (json) localStorage.setItem(key, json); else localStorage.removeItem(key);
+            return;
         } catch (e) {
-            console.log('Server preferences not available, using localStorage');
+            console.log('Server preferences not available, using this browser\'s copy');
         }
+        try {
+            apply(JSON.parse(localStorage.getItem(key) || '{}'));
+        } catch (e) {
+            console.error('Failed to load saved overrides:', e);
+        }
+    },
 
-        // Fallback to localStorage
-        const key = this.getUserKey('sim_overrides');
-        const saved = localStorage.getItem(key);
-        if (saved) {
-            try {
-                const overrides = JSON.parse(saved);
-                fields.forEach(id => {
-                    const el = document.getElementById(id);
-                    if (el && overrides[id]) {
-                        el.value = overrides[id];
-                    }
-                });
-            } catch (e) {
-                console.error('Failed to load saved overrides:', e);
-            }
-        }
+    /** Browser cache key of the overrides: per user and project (the server copy is per project too). */
+    overridesKey: function() {
+        const project = localStorage.getItem('heataq_project') || '';
+        return this.getUserKey(`sim_overrides_p${project}`);
     },
 
     /**
@@ -1350,8 +1390,7 @@ const SimulationsModule = {
         const overridesJson = JSON.stringify(overrides);
 
         // Save to localStorage (cache)
-        const key = this.getUserKey('sim_overrides');
-        localStorage.setItem(key, overridesJson);
+        localStorage.setItem(this.overridesKey(), overridesJson);
 
         // Save to server (async, don't wait)
         fetch('/api/heataq_api.php?action=save_preference', {
@@ -1375,8 +1414,7 @@ const SimulationsModule = {
             if (el) el.value = '';
         });
         // Clear saved overrides from localStorage
-        const key = this.getUserKey('sim_overrides');
-        localStorage.removeItem(key);
+        localStorage.removeItem(this.overridesKey());
 
         // Clear from server too
         fetch('/api/heataq_api.php?action=save_preference', {
@@ -3010,6 +3048,8 @@ const SimulationsModule = {
                 // No runs yet - hide the results section
                 const resultsDiv = document.getElementById('sim-last-run-results');
                 if (resultsDiv) resultsDiv.style.display = 'none';
+                const statusEl = document.getElementById('simulation-status');
+                if (statusEl && !options.keepStatus) statusEl.textContent = '';
                 return;
             }
 

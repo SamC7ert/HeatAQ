@@ -16,6 +16,10 @@ const SimControlModule = {
             this.initDateInputs();
             this.initMonthlyReport();
         } else if (this.projectChanged) {
+            // Preferences are stored per project (dates, pool, config,
+            // schedule, Details date, scenario name): load the new project's
+            await this.loadUserPreferences();
+            this.applyProjectPreferences();
             // The monthly report belongs to the project's last run: reload it
             // (it used to keep showing the previous project's run and CSV data)
             this.monthlyReportData = null;
@@ -245,11 +249,29 @@ const SimControlModule = {
         try {
             const response = await fetch('./api/heataq_api.php?action=get_preferences');
             const data = await response.json();
+            if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
             this.userPreferences = data.preferences || {};
+            this.preferencesFromServer = true;
         } catch (err) {
             console.warn('Failed to load user preferences from server:', err);
             this.userPreferences = {};
+            this.preferencesFromServer = false;
         }
+    },
+
+    /**
+     * After a project switch: the Simulate form takes the new project's saved
+     * values. The scenario name becomes the project's last one (or blank),
+     * the description is cleared; dates are kept unless the project has its own.
+     */
+    applyProjectPreferences: function() {
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+        set('sim-scenario-name', this.getPreference('last_scenario_name'));
+        set('sim-description', '');
+        const start = this.getPreference('sim_start_date');
+        const end = this.getPreference('sim_end_date');
+        if (start) set('sim-start-date', start);
+        if (end) set('sim-end-date', end);
     },
 
     // Save a preference to server (with localStorage fallback)
@@ -272,6 +294,10 @@ const SimControlModule = {
 
     // Get preference value (server preference takes priority over localStorage)
     getPreference: function(key) {
+        // Preferences are per project on the server. The browser's copy
+        // (localStorage) is not, so it is only used when the server could not
+        // be reached - it used to fill in the previous project's values.
+        if (this.preferencesFromServer) return this.userPreferences[key] || '';
         return this.userPreferences[key] || localStorage.getItem('heataq_' + key) || '';
     },
 

@@ -138,6 +138,15 @@ const EnergyAnalysis = {
         console.log('[EnergyAnalysis] Module initialized');
     },
 
+    /** Project switched: the previous project's analysis results go. */
+    resetProjectState: function() {
+        this.results = [];
+        const card = document.getElementById('ea-results-card');
+        if (card) card.style.display = 'none';
+        const status = document.getElementById('ea-status');
+        if (status) status.innerHTML = '';
+    },
+
     /**
      * Reload project-dependent dropdowns. Called when the Energy Analysis tab is
      * entered so a project switch (or a newly created site/config) is reflected
