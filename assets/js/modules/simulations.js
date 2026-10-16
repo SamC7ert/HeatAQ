@@ -267,12 +267,6 @@ const SimulationsModule = {
             return;
         }
 
-        // Engine: php (server), compare (PHP, then TypeScript on the same
-        // inputs), typescript (simulated in this browser) - see simengine.js
-        const engine = document.getElementById('sim-engine')?.value || 'php';
-        const compareEl = document.getElementById('engine-compare-report');
-        if (compareEl) compareEl.innerHTML = '';
-
         // Disable button and show progress
         const btn = document.getElementById('run-simulation-btn');
         btn.disabled = true;
@@ -291,24 +285,6 @@ const SimulationsModule = {
             statusEl.style.color = '#666';
         }
 
-        // Live progress: the run is one long POST, so poll the server-side
-        // progress (written once per simulated month) while it is in flight.
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        if (this._progressTimer) clearInterval(this._progressTimer);
-        this._progressTimer = setInterval(async () => {
-            try {
-                const r = await fetch('/api/simulation_api.php?action=get_run_progress');
-                const d = await r.json();
-                if (d.running && d.progress && d.progress.period && statusEl) {
-                    const [y, m] = d.progress.period.split('-');
-                    statusEl.textContent = `Simulating ${monthNames[parseInt(m, 10) - 1]} ${y}... (${d.progress.pct}% of period)`;
-                }
-            } catch (e) { /* polling is best-effort */ }
-        }, 3000);  // progress is written once per simulated month; 3s keeps request rate low
-        const stopProgressPoll = () => {
-            if (this._progressTimer) { clearInterval(this._progressTimer); this._progressTimer = null; }
-        };
-
         try {
             // Get pool_id from SimControl selection
             const poolId = typeof SimControlModule !== 'undefined' ? SimControlModule.currentPoolId : null;
@@ -316,7 +292,8 @@ const SimulationsModule = {
             // Get store_hourly option
             const storeHourly = document.getElementById('sim-store-hourly')?.checked ?? false;
 
-            // A server-side run: background hourly saving slows down meanwhile
+            // The server prepares the run (setup, validation, inputs); this
+            // browser simulates it and saves the results (simengine.js)
             let data;
             HourlySaver.foregroundStart();
             try {
@@ -334,32 +311,29 @@ const SimulationsModule = {
                         template_id: ohcId,
                         pool_id: poolId,
                         config_override: configOverride,
-                        store_hourly: storeHourly,
-                        engine: engine === 'typescript' ? 'typescript' : 'php'
+                        store_hourly: storeHourly
                     })
                 });
-                data = await response.json();
+                data = await api.parseJson(response);
             } finally {
                 HourlySaver.foregroundEnd();
             }
-            stopProgressPoll();
 
             if (data.error) {
                 throw new Error(data.error);
             }
 
-            // TypeScript engine: the server prepared the run and sent its
-            // inputs; simulate here and submit the results.
-            if (data.status === 'prepared') {
-                const setStatus = (t) => { if (statusEl) { statusEl.textContent = t; statusEl.style.color = '#666'; } };
-                setStatus('TypeScript engine running in this browser...');
-                const { result, ms } = await SimEngine.runPrepared(data, scenarioName, (period, pct) => {
-                    const [y, m] = period.split('-');
-                    setStatus(`TypeScript: simulating ${monthNames[parseInt(m, 10) - 1]} ${y}... (${pct}%)`);
-                }, setStatus);
-                data.simulator_version = (data.inputs.simulator_version || '') + ' (TypeScript, ' + ms + ' ms)';
-                data.summary = result.summary;
-            }
+            // Simulate here and save the results
+            if (data.status !== 'prepared') throw new Error('The server did not prepare the run');
+            const setStatus = (t) => { if (statusEl) { statusEl.textContent = t; statusEl.style.color = '#666'; } };
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            setStatus('Simulating in this browser...');
+            const { result, ms } = await SimEngine.runPrepared(data, scenarioName, (period, pct) => {
+                const [y, m] = period.split('-');
+                setStatus(`Simulating ${monthNames[parseInt(m, 10) - 1]} ${y}... (${pct}%)`);
+            }, setStatus);
+            data.simulator_version = (data.inputs.simulator_version || '') + ` (${ms} ms)`;
+            data.summary = result.summary;
 
             // DEBUG: Log schedule resolution info
             console.log('[Simulation] Run completed:', data);
@@ -379,22 +353,6 @@ const SimulationsModule = {
             if (statusEl) {
                 statusEl.textContent = `${data.run_id ? `Run #${data.run_id} · ` : ''}Simulation v${version} completed ${dateStr} - ${timeStr}`;
                 statusEl.style.color = '#28a745';
-            }
-
-            // Compare: run TypeScript on this run's inputs and report differences
-            if (engine === 'compare' && data.run_id && compareEl) {
-                compareEl.innerHTML = '<p class="text-muted" style="font-size:12px;">Comparing with the TypeScript engine...</p>';
-                try {
-                    const [inp, dailyRes] = await Promise.all([
-                        SimEngine.api(`get_sim_inputs&run_id=${encodeURIComponent(data.run_id)}`),
-                        fetch(`/api/simulation_api.php?action=get_daily_results&run_id=${encodeURIComponent(data.run_id)}`).then(r => r.json())
-                    ]);
-                    const { result, ms } = await SimEngine.run(inp.inputs);
-                    const report = SimEngine.compare(data.summary, dailyRes.daily_results || [], result);
-                    compareEl.innerHTML = SimEngine.renderComparison(report, data.summary, result, ms);
-                } catch (err) {
-                    compareEl.innerHTML = `<p class="error">Comparison failed: ${escapeHtml(err.message)}</p>`;
-                }
             }
 
             // Show the new run in the Simulate tab: report, summary cards and
@@ -428,7 +386,6 @@ const SimulationsModule = {
             }
 
         } catch (error) {
-            stopProgressPoll();
             if (statusEl) {
                 statusEl.textContent = `Error: ${error.message}`;
                 statusEl.style.color = '#dc3545';
@@ -500,13 +457,12 @@ const SimulationsModule = {
         const clear = (id, html = '') => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
         const hide = (id) => { const el = document.getElementById(id); if (el) el.style.display = 'none'; };
         clear('simulation-status');
-        clear('engine-compare-report');
         hide('sim-last-run-results');
         clear('simulation-detail');
         hide('simulation-detail');
         clear('comparison-results');
         // Overrides belong to the project: the new project's are loaded with
-        // its configuration (loadSavedOverrides); the engine choice stays
+        // its configuration (loadSavedOverrides)
         ['sim-hp-override', 'sim-boiler-override', 'sim-target-offset', 'sim-upper-tol-override',
          'sim-bathers-override', 'sim-activity-override', 'sim-wind-override', 'sim-solar-override',
          'sim-strategy', 'sim-planning-weather'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
@@ -733,10 +689,21 @@ const SimulationsModule = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ run_id: runId })
             }).finally(() => HourlySaver.foregroundEnd());
-            const data = await response.json().catch(() => ({}));
+            const data = await api.parseJson(response);
             if (!response.ok || data.error) throw new Error(data.error || `HTTP ${response.status}`);
-            const msgs = [`Hours recreated as run ${data.run_id}` + (data.matches_source ? ' - same results as the original.' : '.')]
-                .concat(data.warnings || []);
+            // Prepared as a new run from the saved inputs: simulate it here,
+            // with its hours saved
+            const { result } = await SimEngine.runPrepared(data, `Run ${runId} (hours recreated)`,
+                (period, pct) => { if (btn) btn.textContent = `Re-running ${period} (${pct}%)`; },
+                (t) => { if (btn) btn.textContent = t; });
+            // Same results as the source run? (summary totals)
+            const old = data.source_summary || {};
+            const matches = ['total_cost', 'total_heat_loss_kwh', 'hp_thermal_kwh', 'boiler_thermal_kwh'].every(k =>
+                old[k] === undefined || Math.abs((result.summary[k] ?? 0) - old[k]) <= Math.max(0.01, Math.abs(old[k]) * 1e-6));
+            data.matches_source = matches;
+            const msgs = [`Hours recreated as run ${data.run_id}` + (matches ? ' - same results as the original.' : '.')]
+                .concat(data.warnings || [])
+                .concat(matches ? [] : ['Results differ from the original run (weather/solar data or simulator changed since).']);
             await this.loadRuns();
             await this.selectRun(data.run_id);
             const newNotice = document.getElementById('run-detail-notice');
@@ -1365,19 +1332,17 @@ const SimulationsModule = {
         const fields = [
             'sim-hp-override', 'sim-boiler-override', 'sim-target-offset',
             'sim-upper-tol-override', 'sim-bathers-override',
-            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-engine', 'sim-planning-weather'
+            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-planning-weather'
         ];
 
         // Overrides are saved per project. Every field takes the saved value
         // or is cleared, so one project's overrides (e.g. HP capacity) never
-        // carry over into another; the engine choice is kept when the project
-        // has none saved.
+        // carry over into another.
         const apply = (overrides) => {
             fields.forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
-                if (overrides[id]) el.value = overrides[id];
-                else if (id !== 'sim-engine') el.value = '';
+                el.value = overrides[id] || '';
             });
         };
         const key = this.overridesKey();
@@ -1412,7 +1377,7 @@ const SimulationsModule = {
         const fields = [
             'sim-hp-override', 'sim-boiler-override', 'sim-target-offset',
             'sim-upper-tol-override', 'sim-bathers-override',
-            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-engine', 'sim-planning-weather'
+            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-planning-weather'
         ];
         const overrides = {};
         fields.forEach(id => {
@@ -1442,7 +1407,7 @@ const SimulationsModule = {
         const ids = [
             'sim-hp-override', 'sim-boiler-override', 'sim-target-offset',
             'sim-upper-tol-override', 'sim-bathers-override',
-            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-engine', 'sim-planning-weather'
+            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-planning-weather'
         ];
         ids.forEach(id => {
             const el = document.getElementById(id);

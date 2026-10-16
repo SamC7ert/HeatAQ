@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HeatAQ Schedule Management</title>
     <link rel="icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="./assets/css/main.css?v=262">
-    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=262">
-    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=262">
-    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=262">
-    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=262">
-    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=262">
+    <link rel="stylesheet" href="./assets/css/main.css?v=263">
+    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=263">
+    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=263">
+    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=263">
+    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=263">
+    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=263">
     <style>
         /* Top bar, right: background saving panel, user card */
         .top-bar-right {
@@ -680,14 +680,6 @@
                                         <input type="date" id="sim-end-date" class="form-control" value="2024-12-31">
                                     </div>
                                     <div>
-                                        <label style="font-size: 12px; color: #666;" title="PHP runs on the server; TypeScript runs in this browser; Compare runs PHP, then TypeScript on the same inputs, and reports differences">Engine</label>
-                                        <select id="sim-engine" class="form-control">
-                                            <option value="php">PHP (server)</option>
-                                            <option value="compare">Compare PHP + TypeScript</option>
-                                            <option value="typescript">TypeScript (browser)</option>
-                                        </select>
-                                    </div>
-                                    <div>
                                         <label style="font-size: 12px; color: #666;" title="Predictive control plans each night from the weather ahead. Actual: it knows the real weather (hindsight, the best case). Forecast: it plans on the newest forecast available at the time and plans again when a new one arrives, as a real controller would (forecasts: Admin → Weather).">Planning weather</label>
                                         <select id="sim-planning-weather" class="form-control">
                                             <option value="">Actual (hindsight)</option>
@@ -708,7 +700,6 @@
                                 </button>
                                 <span id="simulation-status" style="font-size: 12px; color: #28a745;"></span>
                             </div>
-                            <div id="engine-compare-report" style="margin-top: 10px;"></div>
                         </div>
 
                         <!-- Configuration with Override option -->
@@ -915,13 +906,6 @@
                                     <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Configuration</label>
                                     <select id="ea-config-select" class="form-control">
                                         <option value="">Loading...</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;" title="PHP runs each case on the server; TypeScript runs it in this browser (hourly data, if stored, is saved in the background)">Engine</label>
-                                    <select id="ea-engine" class="form-control">
-                                        <option value="php">PHP (server)</option>
-                                        <option value="typescript">TypeScript (browser)</option>
                                     </select>
                                 </div>
                             </div>
@@ -1846,20 +1830,20 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=262"></script>
+    <script src="./assets/js/config.js?v=263"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=262"></script>
-    <script src="./assets/js/modules/navigation.js?v=262"></script>
-    <script src="./assets/js/modules/schedules.js?v=262"></script>
-    <script src="./assets/js/modules/calendar.js?v=262"></script>
-    <script src="./assets/js/sim/heataq-sim.js?v=262"></script>
-    <script src="./assets/js/modules/simengine.js?v=262"></script>
-    <script src="./assets/js/modules/simulations.js?v=262"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=262"></script>
-    <script src="./assets/js/modules/configuration.js?v=262"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=262"></script>
-    <script src="./assets/js/modules/admin.js?v=262"></script>
-    <script src="./assets/js/modules/project.js?v=262"></script>
-    <script src="./assets/js/app.js?v=262"></script>
+    <script src="./assets/js/modules/api.js?v=263"></script>
+    <script src="./assets/js/modules/navigation.js?v=263"></script>
+    <script src="./assets/js/modules/schedules.js?v=263"></script>
+    <script src="./assets/js/modules/calendar.js?v=263"></script>
+    <script src="./assets/js/sim/heataq-sim.js?v=263"></script>
+    <script src="./assets/js/modules/simengine.js?v=263"></script>
+    <script src="./assets/js/modules/simulations.js?v=263"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=263"></script>
+    <script src="./assets/js/modules/configuration.js?v=263"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=263"></script>
+    <script src="./assets/js/modules/admin.js?v=263"></script>
+    <script src="./assets/js/modules/project.js?v=263"></script>
+    <script src="./assets/js/app.js?v=263"></script>
 </body>
 </html>
