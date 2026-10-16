@@ -168,7 +168,7 @@ const SimEngine = {
             }
             // The Details tab shows the latest runs' hours from this browser,
             // saved in the database or not
-            if (result.hourly.length) this.keepLocal(runId, result.hourly);
+            if (result.hourly.length) this.keepLocal(runId, result.hourly, prepared.inputs);
             if (hourlyPending) HourlySaver.add(runId, label, result.hourly);
             return { result, ms };
         } catch (err) {
@@ -181,12 +181,32 @@ const SimEngine = {
     // reads them instead of the server (also while they are being saved, or
     // when the run does not save them).
     // The newest LOCAL_RUNS are kept, and any still being saved.
-    local: new Map(),   // run_id -> { rows, index }
+    local: new Map(),   // run_id -> { rows, index, inputs }
     LOCAL_RUNS: 2,
 
-    keepLocal: function(runId, rows) {
-        this.local.set(Number(runId), { rows, index: null });
+    keepLocal: function(runId, rows, inputs) {
+        this.local.set(Number(runId), { rows, index: null, inputs: inputs || null });
         this.pruneLocal();
+    },
+
+    /**
+     * A run's inputs (exportRunInputs) for the Details hour panel: kept with
+     * its hours, else fetched (the last one is remembered). null when the
+     * run has none (made before V239).
+     */
+    inputsFor: async function(runId) {
+        const id = Number(runId);
+        const e = this.local.get(id);
+        if (e && e.inputs) return e.inputs;
+        if (this._inputs && this._inputs.id === id) return this._inputs.inputs;
+        try {
+            const d = await this.api(`get_sim_inputs&run_id=${encodeURIComponent(id)}`);
+            this._inputs = { id, inputs: d.inputs };
+            return d.inputs;
+        } catch (err) {
+            if (/no saved inputs/i.test(err.message)) return null;
+            throw err;
+        }
     },
 
     pruneLocal: function() {

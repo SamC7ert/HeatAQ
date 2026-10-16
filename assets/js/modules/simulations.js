@@ -581,7 +581,7 @@ const SimulationsModule = {
             const t0 = Date.now();
             const { result } = await SimEngine.run(inp.inputs);
             const ms = Date.now() - t0;
-            SimEngine.keepLocal(id, result.hourly);
+            SimEngine.keepLocal(id, result.hourly, inp.inputs);
             // Do the recomputed days match what the run saved?
             let check = null;
             try {
@@ -635,23 +635,54 @@ const SimulationsModule = {
         return null;
     },
 
-    /** debug_hour URL, with this browser's row of the hour (the server uses it when the hour is not saved). */
-    debugHourUrl: function(date, hour) {
-        let url = `/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}${this.debugRunParam(date)}`;
-        const runId = this.localDebugRun(date);
-        const row = runId ? SimEngine.localRow(runId, `${date} ${String(hour).padStart(2, '0')}:00:00`) : null;
-        if (row) url += `&row=${encodeURIComponent(JSON.stringify(row.slice(0, 17)))}`;
-        return url;
-    },
-
-    /** The simulated heating mode of the hour from this browser's copy (the server only knows it after a week replay). */
-    applyLocalHour: function(data, date, hour) {
-        const runId = this.localDebugRun(date);
-        const row = runId ? SimEngine.localRow(runId, `${date} ${String(hour).padStart(2, '0')}:00:00`) : null;
-        if (row && data.stored && data.stored.cache_source !== 'session') {
-            data.stored.heating_mode = row[17];
-            data.stored.cache_source = 'browser';
+    /**
+     * The Details hour panel's data. The server gives the run (the inspected
+     * one, else the newest covering the date), its settings, the day's
+     * schedule and the hour's saved row if its hours are saved; the run's
+     * values for the hour come from this browser's copy of its hours when
+     * there is one. The hour's losses, gains and heating are then computed
+     * here from the run's inputs (HeatAQSim.debugHour), at the hour's start
+     * water temperature and the run's open state.
+     */
+    loadHourData: async function(date, hour) {
+        const ts = `${date} ${String(hour).padStart(2, '0')}:00:00`;
+        const res = await fetch(`/api/simulation_api.php?action=debug_hour&date=${date}&hour=${hour}${this.debugRunParam(date)}`);
+        const info = await api.parseJson(res);
+        if (info.error) throw new Error(info.error);
+        const runId = Number(info.run_id);
+        if (!this.debugRunParam(date) && info.start_date) {
+            // No run inspected for this date: the one the server chose
+            this.inspectRun = { run_id: runId, start_date: info.start_date, end_date: info.end_date };
         }
+        await this.ensureHours(date);
+        const row = SimEngine.localRow(runId, ts);
+        let stored = info.stored;
+        if (row) {
+            // HourlyRow: [ts, air, wind, hum, solar, target, water, water_start, is_open, loss,
+            //   solar_kw, hp, boiler, hp_elec, boiler_fuel, cop, cost, mode, hold level]
+            stored = { water_temp: row[6], water_temp_start: row[7], is_open: !!row[8], total_loss_kw: row[9],
+                       solar_gain_kw: row[10], hp_heat_kw: row[11], boiler_heat_kw: row[12], hp_cop: row[15],
+                       heating_mode: row[17], hold_temp: row[18] };
+        }
+        if (!stored) throw new Error(`Run #${runId} has no hours for ${ts}`);
+        const inputs = await SimEngine.inputsFor(runId);
+        if (!inputs) {
+            throw new Error(`Run #${runId} was made before runs saved their inputs (V239): re-run it to inspect its hours.`);
+        }
+        const calc = HeatAQSim.debugHour(inputs, ts, stored.water_temp_start, stored.is_open);
+        if (calc.error) throw new Error(calc.error);
+        const data = {
+            ...calc,
+            stored: { ...stored, run_id: runId, simulator_version: info.simulator_version, source: row ? 'browser' : 'database' },
+            config_info: info.config_info,
+            schedule_debug: info.schedule_debug,
+        };
+        const storedNet = stored.total_loss_kw - stored.solar_gain_kw;
+        const diff = Math.abs(storedNet - calc.summary.net_requirement_kw);
+        if (diff > 1.0) {
+            data.validation_warning = `Recalc differs from the run: run=${storedNet.toFixed(1)} kW, recalc=${calc.summary.net_requirement_kw.toFixed(1)} kW (diff=${diff.toFixed(1)})`;
+        }
+        return data;
     },
 
     /** Download a run's saved inputs as JSON (get_sim_inputs). */
@@ -1905,18 +1936,7 @@ const SimulationsModule = {
         });
 
         try {
-            // Use stored water temp from simulation (no override)
-            await this.ensureHours(date);
-            const url = this.debugHourUrl(date, hour);
-
-            const response = await fetch(url);
-            const data = await response.json();
-
-            if (data.error) {
-                throw new Error(data.error);
-            }
-            this.applyLocalHour(data, date, hour);
-
+            const data = await this.loadHourData(date, hour);
             this.renderDebugResults(data);
 
             // Also load weekly chart automatically
@@ -2206,60 +2226,42 @@ const SimulationsModule = {
             </table>
         `);
 
-        // Predictive plan (from run config and stored data)
+        // Predictive control: the run's heating mode this hour and the level
+        // it held (docs/PREDICTIVE_CONTROL.md)
         const preheatCard = document.getElementById('debug-preheat-card');
         const strategy = hp.strategy || 'reactive';
         const isPredictive = strategy === 'predictive';
-        const isHeatingWhenClosed = !isOpen && stored.hp_heat_kw > 0;
+        const MODES = {
+            preheat_coast: 'Closed: heat pump off or holding the floor, water coasts (late start)',
+            preheat_ramp: 'Closed: heat pump heats so the water reaches the opening temperature at opening',
+            open_preheat: 'Open: heat pump at full, banking heat for a coming short hour; boiler keeps target',
+            open_hold: 'Open: hold target (heat pump first, boiler backstop)',
+            standby: 'Long closure: hold Min temp when closed',
+            reactive: 'Heat to target when needed',
+        };
 
         if (preheatCard) {
+            preheatCard.style.display = '';
             if (isPredictive) {
-                preheatCard.style.display = '';
-                const effectiveTarget = inp.pool?.target_temp;
-                // New predictive plan shape (from replay cache; see PREDICTIVE_CONTROL.md)
-                const plan = stored.open_plan || data.pool?.open_plan;
-                const mode = stored.heating_mode || '?';
-
-                let planInfo = '';
-                if (plan && plan.type === 'closed') {
-                    planInfo = `
-                        <tr style="background:#fff3e0;"><td colspan="2"><strong>Closed-period plan</strong></td></tr>
-                        <tr><td>Preheat needed</td><td><code>${plan.preheat ? 'YES' : 'no'}</code></td></tr>
-                        ${plan.preheat ? `
-                        <tr><td>Required temp</td><td><code>${escapeHtml(plan.t_req)}°C</code> (cap ${escapeHtml(plan.max_temp)}°C)</td></tr>
-                        <tr><td>Buffer energy</td><td><code>${escapeHtml(plan.buffer_energy)} kWh</code></td></tr>
-                        <tr><td>Open demand / HP</td><td><code>${escapeHtml(plan.open_demand)} / ${escapeHtml(plan.open_hp_deliver)} kWh</code></td></tr>
-                        ` : `<tr><td>Action</td><td><code>hold at target ${escapeHtml(effectiveTarget ?? '')}°C</code></td></tr>`}
-                    `;
-                } else if (plan && plan.type === 'open') {
-                    planInfo = `
-                        <tr style="background:#e3f2fd;"><td colspan="2"><strong>Open-period plan</strong></td></tr>
-                        <tr><td>Preheated</td><td><code>${plan.preheat ? 'YES — HP full, buffer coasts to target' : 'no — hold target'}</code></td></tr>
-                        <tr><td>Max cap</td><td><code>${escapeHtml(plan.max_temp)}°C</code></td></tr>
-                    `;
-                }
-
-                const actualHP = stored.hp_heat_kw || 0;
+                const mode = stored.heating_mode || null;
+                const hold = typeof stored.hold_temp === 'number' ? stored.hold_temp : null;
                 setHtml('debug-preheat', `
                     <table class="data-table compact" style="font-size: 11px;">
                         <tr><td>Strategy</td><td><code style="color:#9c27b0;"><strong>PREDICTIVE</strong></code></td></tr>
                         <tr><td>Pool State</td><td><code>${isOpen ? 'OPEN' : 'CLOSED'}</code></td></tr>
-                        <tr><td>Mode</td><td><code>${escapeHtml(mode)}</code></td></tr>
-                        <tr><td>HP Output</td><td><code>${actualHP.toFixed(1)} kW</code></td></tr>
-                        ${planInfo}
+                        <tr><td>Mode</td><td><code>${escapeHtml(mode || '?')}</code></td></tr>
+                        ${mode && MODES[mode] ? `<tr><td colspan="2" style="color:#555;">${escapeHtml(MODES[mode])}</td></tr>` : ''}
+                        ${hold !== null ? `<tr><td title="The temperature the run heated towards this hour (target, the plan's opening temperature, the floor or max)">Held towards</td><td><code>${hold.toFixed(2)}°C</code></td></tr>` : ''}
+                        <tr><td>HP Output</td><td><code>${(stored.hp_heat_kw || 0).toFixed(1)} kW</code></td></tr>
                     </table>
-                    <div style="margin-top:6px;font-size:10px;color:#888;">Single-hour view is steady-state hold; preheat coast/ramp &amp; full-HP show in the weekly profile.</div>
+                    <div style="margin-top:6px;font-size:10px;color:#888;">The cards above recompute this hour's losses; their heating is the steady-state hold. The run's own heating is in the chart and in Mode.</div>
                 `);
             } else {
-                preheatCard.style.display = '';
                 setHtml('debug-preheat', `
                     <table class="data-table compact" style="font-size: 11px;">
                         <tr><td>Strategy</td><td><code>REACTIVE</code></td></tr>
-                        <tr><td>Mode</td><td><code>Heat only when open</code></td></tr>
+                        <tr><td>Mode</td><td><code>Heat to target when needed</code></td></tr>
                     </table>
-                    <div style="margin-top: 8px; font-size: 10px; color: #888;">
-                        Reactive mode only heats during scheduled open hours
-                    </div>
                 `);
             }
         }
@@ -2281,96 +2283,33 @@ const SimulationsModule = {
             </div>
         `);
 
-        // Comparison Card: Stored vs Calculated vs Planned
-        const openPlanData = data.pool?.open_plan;  // Recalculated by debug
-        const storedOpenPlan = stored.open_plan;    // From session cache (actual plan at OPEN transition)
-        const storedCalc = stored.calc || {};  // New calc section from simulation
-        const storedNet = storedCalc.net_requirement_kw ?? ((stored.total_loss_kw || 0) - (stored.solar_gain_kw || 0));
-        const calcNet = sum.net_requirement_kw || 0;
-        // Use STORED open_plan (from session cache) as the "planned" rate
-        const plannedHP = storedOpenPlan?.hp_rate ?? openPlanData?.hp_rate ?? null;
-
-        // Compare intermediate values
-        const storedWaterTemp = storedCalc.water_temp_start ?? stored.water_temp;
-        const calcWaterTemp = data.pool?.water_temp || 0;
-        const storedLosses = storedCalc.losses_total_kw ?? stored.total_loss_kw ?? 0;
+        // Comparison card: the run's values for the hour vs this hour recomputed
+        const storedWaterTemp = stored.water_temp_start ?? stored.water_temp;
+        const calcWaterTemp = data.pool?.water_temp ?? 0;
+        const storedLosses = stored.total_loss_kw ?? 0;
         const calcLosses = sum.total_loss_kw || 0;
-        const storedSolar = storedCalc.solar_gain_kw ?? stored.solar_gain_kw ?? 0;
+        const storedSolar = stored.solar_gain_kw ?? 0;
         const calcSolar = sum.solar_gain_kw || 0;
-
-        const diffNet = Math.abs(storedNet - calcNet);
-        const diffHP = plannedHP ? Math.abs((stored.hp_heat_kw || 0) - plannedHP) : null;
-        const diffWaterTemp = Math.abs(storedWaterTemp - calcWaterTemp);
-        const diffLosses = Math.abs(storedLosses - calcLosses);
-        const diffSolar = Math.abs(storedSolar - calcSolar);
+        const storedNet = storedLosses - storedSolar;
+        const calcNet = sum.net_requirement_kw || 0;
+        const tick = (diff, tol, digits) => diff > tol ? `<span style="color:orange;">${diff.toFixed(digits)}</span>` : '✓';
 
         const comparisonCard = document.getElementById('debug-comparison');
         if (comparisonCard) {
             comparisonCard.innerHTML = `
-                <h4 style="margin: 0 0 8px 0; font-size: 12px;">Stored vs Calculated vs Planned <span style="font-weight:normal;color:#666;">(Run #${escapeHtml(stored.run_id || '?')} v${escapeHtml(stored.simulator_version || '?')})</span></h4>
+                <h4 style="margin: 0 0 8px 0; font-size: 12px;">Run vs Recalculated <span style="font-weight:normal;color:#666;">(Run #${escapeHtml(stored.run_id || '?')} v${escapeHtml(stored.simulator_version || '?')}, hour from ${stored.source === 'database' ? 'its saved hours' : 'this browser'})</span></h4>
                 <table class="data-table compact" style="font-size: 11px; width: 100%;">
-                    <tr style="background: #f5f5f5;">
-                        <th></th>
-                        <th>Stored (Sim)</th>
-                        <th>Calculated (Debug)</th>
-                        <th>Planned</th>
-                        <th>Δ</th>
-                    </tr>
-                    <tr>
-                        <td>Water Temp Start</td>
-                        <td><code>${storedWaterTemp?.toFixed(2) || '?'}°C</code></td>
-                        <td><code>${calcWaterTemp?.toFixed(2) || '?'}°C</code></td>
-                        <td>-</td>
-                        <td>${diffWaterTemp > 0.1 ? '<span style="color:orange;">' + diffWaterTemp.toFixed(2) + '</span>' : '✓'}</td>
-                    </tr>
-                    <tr>
-                        <td>Total Losses</td>
-                        <td><code>${storedLosses.toFixed(1)} kW</code></td>
-                        <td><code>${calcLosses.toFixed(1)} kW</code></td>
-                        <td>-</td>
-                        <td>${diffLosses > 2 ? '<span style="color:orange;">' + diffLosses.toFixed(1) + '</span>' : '✓'}</td>
-                    </tr>
-                    <tr>
-                        <td>Solar Gain</td>
-                        <td><code>${storedSolar.toFixed(1)} kW</code></td>
-                        <td><code>${calcSolar.toFixed(1)} kW</code></td>
-                        <td>-</td>
-                        <td>${diffSolar > 1 ? '<span style="color:orange;">' + diffSolar.toFixed(1) + '</span>' : '✓'}</td>
-                    </tr>
-                    <tr style="background: #f9f9f9;">
-                        <td><strong>Net Demand</strong></td>
-                        <td><code><strong>${storedNet.toFixed(1)} kW</strong></code></td>
-                        <td><code><strong>${calcNet.toFixed(1)} kW</strong></code></td>
-                        <td>-</td>
-                        <td>${diffNet > 5 ? '<span style="color:orange;font-weight:bold;">' + diffNet.toFixed(1) + '</span>' : '✓'}</td>
-                    </tr>
-                    <tr style="background: #f0f8ff;">
-                        <td><strong>HP Output</strong></td>
-                        <td><code><strong>${(stored.hp_heat_kw || 0).toFixed(1)} kW</strong></code></td>
-                        <td><code><strong>${(hs.hp_output_kw || 0).toFixed(1)} kW</strong></code></td>
-                        <td><code>${plannedHP ? plannedHP.toFixed(1) + ' kW' : '-'}</code></td>
-                        <td>${diffHP && diffHP > 5 ? '<span style="color:red;font-weight:bold;">' + diffHP.toFixed(0) + ' ⚠</span>' : (plannedHP ? '✓' : '-')}</td>
-                    </tr>
-                    <tr>
-                        <td>Boiler</td>
-                        <td><code>${(stored.boiler_heat_kw || 0).toFixed(1)} kW</code></td>
-                        <td><code>${(hs.boiler_output_kw || 0).toFixed(1)} kW</code></td>
-                        <td>-</td>
-                        <td>-</td>
-                    </tr>
+                    <tr style="background: #f5f5f5;"><th></th><th>Run</th><th>Recalculated</th><th>Δ</th></tr>
+                    <tr><td>Water Temp Start</td><td><code>${storedWaterTemp?.toFixed(2) ?? '?'}°C</code></td><td><code>${calcWaterTemp.toFixed(2)}°C</code></td><td>${tick(Math.abs(storedWaterTemp - calcWaterTemp), 0.1, 2)}</td></tr>
+                    <tr><td>Total Losses</td><td><code>${storedLosses.toFixed(1)} kW</code></td><td><code>${calcLosses.toFixed(1)} kW</code></td><td>${tick(Math.abs(storedLosses - calcLosses), 2, 1)}</td></tr>
+                    <tr><td>Solar Gain</td><td><code>${storedSolar.toFixed(1)} kW</code></td><td><code>${calcSolar.toFixed(1)} kW</code></td><td>${tick(Math.abs(storedSolar - calcSolar), 1, 1)}</td></tr>
+                    <tr style="background: #f9f9f9;"><td><strong>Net Demand</strong></td><td><code><strong>${storedNet.toFixed(1)} kW</strong></code></td><td><code><strong>${calcNet.toFixed(1)} kW</strong></code></td><td>${tick(Math.abs(storedNet - calcNet), 5, 1)}</td></tr>
+                    <tr style="background: #f0f8ff;"><td><strong>HP Output</strong></td><td><code><strong>${(stored.hp_heat_kw || 0).toFixed(1)} kW</strong></code></td><td><code><strong>${(hs.hp_output_kw || 0).toFixed(1)} kW</strong></code></td><td>-</td></tr>
+                    <tr><td>Boiler</td><td><code>${(stored.boiler_heat_kw || 0).toFixed(1)} kW</code></td><td><code>${(hs.boiler_output_kw || 0).toFixed(1)} kW</code></td><td>-</td></tr>
                 </table>
-                ${diffHP && diffHP > 5 ? '<div style="color:red;font-size:10px;margin-top:6px;padding:4px;background:#fff0f0;border-radius:3px;"><strong>⚠ HP not using planned rate!</strong> Stored=' + (stored.hp_heat_kw||0).toFixed(0) + ' but Plan=' + plannedHP.toFixed(0) + '</div>' : ''}
-                ${diffNet > 5 ? '<div style="color:#996600;font-size:10px;margin-top:4px;padding:4px;background:#fff8e0;border-radius:3px;">Net demand differs by ' + diffNet.toFixed(1) + ' kW - check water temp and losses</div>' : ''}
                 <div style="font-size:10px;margin-top:6px;padding:4px;background:#f0f0f0;border-radius:3px;">
-                    <strong>Sim mode:</strong> ${escapeHtml(stored.heating_mode || '?')}
-                    | <strong>Debug mode:</strong> ${escapeHtml(hs.debug_mode || '?')}
-                    ${storedOpenPlan ? ' | hp_rate=' + (storedOpenPlan.hp_rate||0).toFixed(0) + ' (case ' + escapeHtml(storedOpenPlan.case||'?') + ', buffer=' + (storedOpenPlan.buffer_kwh||storedOpenPlan.energy_buffer||0).toFixed(0) + 'kWh)' : ''}
-                    ${storedOpenPlan?.transition_water_temp ? '<br>OPEN transition temp: <strong>' + storedOpenPlan.transition_water_temp.toFixed(2) + '°C</strong>' : ''}
-                    ${stored.cache_source === 'session' ? ' <span style="color:green;">✓cached</span>' : stored.cache_source === 'browser' ? ' <span style="color:green;">✓from run</span>' : ' <span style="color:orange;">(reload week to cache)</span>'}
-                </div>
-                <div style="font-size:10px;margin-top:4px;padding:4px;background:#e8f4e8;border-radius:3px;">
-                    <strong>Thermal Mass:</strong> Stored=${(storedOpenPlan?.thermal_mass||0).toFixed(0)} | Calc=${(openPlanData?.thermal_mass||0).toFixed(0)} kWh/°C
-                    ${storedOpenPlan?.thermal_mass && openPlanData?.thermal_mass && Math.abs(storedOpenPlan.thermal_mass - openPlanData.thermal_mass) > 10 ? ' <span style="color:red;font-weight:bold;">⚠ MISMATCH!</span>' : ''}
+                    <strong>Run mode:</strong> ${escapeHtml(stored.heating_mode || '?')}
+                    | <strong>Recalculated as:</strong> ${escapeHtml(hs.debug_mode || '?')} (steady-state; heating differs from the run in coast, ramp and banking hours)
                 </div>
             `;
             comparisonCard.style.display = 'block';
@@ -3268,17 +3207,14 @@ const SimulationsModule = {
 
         try {
             // Load debug hour data
-            await this.ensureHours(date);
-            const url = this.debugHourUrl(date, hour);
-            const response = await fetch(url);
-            const data = await response.json();
-
-            if (data.error) {
-                console.log('[Debug] No stored run for this date:', data.error);
+            let data;
+            try {
+                data = await this.loadHourData(date, hour);
+            } catch (e) {
+                console.log('[Debug] No run for this date:', e.message);
                 this.setDebugButtonState('changed'); // Red - needs calculation
                 return;
             }
-            this.applyLocalHour(data, date, hour);
 
             // Render results
             this.renderDebugResults(data);
