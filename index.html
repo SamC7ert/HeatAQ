@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HeatAQ Schedule Management</title>
     <link rel="icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="./assets/css/main.css?v=256">
-    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=256">
-    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=256">
-    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=256">
-    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=256">
-    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=256">
+    <link rel="stylesheet" href="./assets/css/main.css?v=257">
+    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=257">
+    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=257">
+    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=257">
+    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=257">
+    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=257">
     <style>
         /* Top bar, right: background saving panel, user card */
         .top-bar-right {
@@ -685,6 +685,13 @@
                                             <option value="php">PHP (server)</option>
                                             <option value="compare">Compare PHP + TypeScript</option>
                                             <option value="typescript">TypeScript (browser)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style="font-size: 12px; color: #666;" title="Predictive control plans each night from the weather ahead. Actual: it knows the real weather (hindsight, the best case). Forecast: it plans on the newest forecast available at the time and plans again when a new one arrives, as a real controller would (forecasts: Admin → Weather).">Planning weather</label>
+                                        <select id="sim-planning-weather" class="form-control">
+                                            <option value="">Actual (hindsight)</option>
+                                            <option value="forecast">Forecast at the time</option>
                                         </select>
                                     </div>
                                 </div>
@@ -1384,6 +1391,18 @@
                         </div>
                     </div>
 
+                    <div class="card">
+                        <h3>Weather Forecasts</h3>
+                        <p class="text-muted" style="font-size: 13px; margin-top: 0;">Archived forecasts let a simulation plan on the weather as it was forecast at the time, instead of the actual weather (Simulate &rarr; Planning weather). Fetch them on your PC with <code>scripts/forecast/fetch_met_nordic.py</code> (see the README in that folder), using the stations file below, then import the CSV files here.</p>
+                        <div id="forecast-status"><p class="loading">Loading...</p></div>
+                        <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <button class="btn btn-sm btn-secondary" onclick="app.admin.downloadStationsCsv()" title="Station id, name, position and height, for fetch_met_nordic.py --stations">Download stations.csv</button>
+                            <input type="file" id="forecast-files" accept=".csv" multiple style="font-size: 13px;">
+                            <button id="forecast-import-btn" class="btn btn-sm btn-primary" onclick="app.admin.importForecasts()">Import</button>
+                        </div>
+                        <div id="forecast-import-progress" style="margin-top: 8px; font-size: 13px;"></div>
+                    </div>
+
                     <div class="admin-grid">
                         <div class="card">
                             <h3>Yearly Averages</h3>
@@ -1797,19 +1816,19 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=256"></script>
+    <script src="./assets/js/config.js?v=257"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=256"></script>
-    <script src="./assets/js/modules/navigation.js?v=256"></script>
-    <script src="./assets/js/modules/schedules.js?v=256"></script>
-    <script src="./assets/js/modules/calendar.js?v=256"></script>
-    <script src="./assets/js/modules/simengine.js?v=256"></script>
-    <script src="./assets/js/modules/simulations.js?v=256"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=256"></script>
-    <script src="./assets/js/modules/configuration.js?v=256"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=256"></script>
-    <script src="./assets/js/modules/admin.js?v=256"></script>
-    <script src="./assets/js/modules/project.js?v=256"></script>
-    <script src="./assets/js/app.js?v=256"></script>
+    <script src="./assets/js/modules/api.js?v=257"></script>
+    <script src="./assets/js/modules/navigation.js?v=257"></script>
+    <script src="./assets/js/modules/schedules.js?v=257"></script>
+    <script src="./assets/js/modules/calendar.js?v=257"></script>
+    <script src="./assets/js/modules/simengine.js?v=257"></script>
+    <script src="./assets/js/modules/simulations.js?v=257"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=257"></script>
+    <script src="./assets/js/modules/configuration.js?v=257"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=257"></script>
+    <script src="./assets/js/modules/admin.js?v=257"></script>
+    <script src="./assets/js/modules/project.js?v=257"></script>
+    <script src="./assets/js/app.js?v=257"></script>
 </body>
 </html>

@@ -522,6 +522,18 @@ class HeatAQAPI {
                     $this->deleteWeatherStation();
                     break;
 
+                // ADMIN: Weather forecasts (scripts/forecast)
+                case 'get_forecast_status':
+                    $this->getForecastStatus();
+                    break;
+
+                case 'import_forecasts':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied - admin only', 403);
+                    }
+                    $this->importForecasts();
+                    break;
+
                 // ADMIN: Users (admin-only operations)
                 case 'get_users':
                     if (!$this->canDelete()) {
@@ -1737,6 +1749,112 @@ class HeatAQAPI {
         $this->sendResponse([
             'yearly_averages' => $yearly
         ]);
+    }
+
+    /**
+     * Imported weather forecasts per station and source: runs, first and last
+     * run. installed = false until migration 042 has run.
+     */
+    private function getForecastStatus() {
+        try {
+            $rows = $this->db->query("
+                SELECT station_id, source,
+                       COUNT(DISTINCT issued_at) AS runs,
+                       MIN(issued_at) AS first_issued,
+                       MAX(issued_at) AS last_issued,
+                       COUNT(*) AS hours
+                FROM weather_forecasts
+                GROUP BY station_id, source
+                ORDER BY station_id, source
+            ")->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->sendResponse(['installed' => false, 'status' => []]);
+            return;
+        }
+        $this->sendResponse(['installed' => true, 'status' => $rows]);
+    }
+
+    /**
+     * Import forecast rows (from scripts/forecast/fetch_met_nordic.py CSV
+     * files, sent by the browser in chunks under the host's request limit).
+     * Each row: [station_id, source, issued_at, available_at, valid_at,
+     * air_temperature, wind_speed, humidity, cloud_cover, solar_w_m2], times
+     * UTC 'YYYY-MM-DD HH:MM:SS'. A row already present (same station,
+     * source, run and hour) is replaced, so re-importing is safe.
+     */
+    private function importForecasts() {
+        $rows = $this->postInput['rows'] ?? null;
+        if (!is_array($rows) || !$rows) {
+            $this->sendError('rows required');
+            return;
+        }
+        if (count($rows) > 5000) {
+            $this->sendError('At most 5000 rows per request');
+            return;
+        }
+
+        $stations = [];
+        foreach ($this->db->query("SELECT station_id FROM weather_stations")->fetchAll(PDO::FETCH_COLUMN) as $id) {
+            $stations[$id] = true;
+        }
+        $isTime = fn($v) => is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $v);
+        $num = fn($v, $lo, $hi) => is_numeric($v) && (float) $v >= $lo && (float) $v <= $hi;
+        $optNum = fn($v, $lo, $hi) => $v === null || $v === '' || $num($v, $lo, $hi);
+
+        $clean = [];
+        foreach ($rows as $k => $r) {
+            $line = $k + 1;
+            if (!is_array($r) || count($r) !== 10) {
+                $this->sendError("Row {$line}: expected 10 values");
+                return;
+            }
+            [$station, $source, $issued, $available, $valid, $air, $wind, $rh, $cloud, $solar] = $r;
+            if (!isset($stations[$station])) {
+                $this->sendError("Row {$line}: unknown weather station '" . (string) $station . "'");
+                return;
+            }
+            if (!is_string($source) || !preg_match('/^[a-z0-9_]{1,30}$/', $source)) {
+                $this->sendError("Row {$line}: invalid source");
+                return;
+            }
+            if (!$isTime($issued) || !$isTime($available) || !$isTime($valid)) {
+                $this->sendError("Row {$line}: times must be 'YYYY-MM-DD HH:MM:SS' (UTC)");
+                return;
+            }
+            if (!$num($air, -60, 50) || !$num($wind, 0, 80) || !$num($rh, 0, 100)
+                || !$optNum($cloud, 0, 100) || !$optNum($solar, 0, 1500)) {
+                $this->sendError("Row {$line}: value out of range");
+                return;
+            }
+            $clean[] = [$station, $source, $issued, $valid, $available,
+                        (float) $air, (float) $wind, (float) $rh,
+                        ($cloud === null || $cloud === '') ? null : (int) round((float) $cloud),
+                        ($solar === null || $solar === '') ? null : (float) $solar];
+        }
+
+        $this->db->beginTransaction();
+        try {
+            foreach (array_chunk($clean, 500) as $chunk) {
+                $sql = "INSERT INTO weather_forecasts
+                            (station_id, source, issued_at, valid_at, available_at,
+                             air_temperature, wind_speed, humidity, cloud_cover, solar_w_m2)
+                        VALUES " . implode(',', array_fill(0, count($chunk), '(?,?,?,?,?,?,?,?,?,?)')) . "
+                        ON DUPLICATE KEY UPDATE
+                            available_at = VALUES(available_at),
+                            air_temperature = VALUES(air_temperature),
+                            wind_speed = VALUES(wind_speed),
+                            humidity = VALUES(humidity),
+                            cloud_cover = VALUES(cloud_cover),
+                            solar_w_m2 = VALUES(solar_w_m2)";
+                $this->db->prepare($sql)->execute(array_merge(...$chunk));
+            }
+            $this->db->commit();
+        } catch (PDOException $e) {
+            $this->db->rollBack();
+            $this->sendError('Import failed: ' . $e->getMessage());
+            return;
+        }
+        $this->sendResponse(['success' => true, 'imported' => count($clean)]);
     }
 
     /**

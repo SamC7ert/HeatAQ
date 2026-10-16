@@ -103,3 +103,11 @@ next stored version on, or from the current one if you store it with
   temp); the lower tolerance is gone. Changed: predictive-standby-2y −0.8 %
   and predictive-new-pool −1.7 % cost (closures of several days),
   predictive-no-cover marginally; comfort unchanged everywhere.
+- **3.19.0**: Planning weather (`docs/PREDICTIVE_CONTROL.md` §11): plans can
+  read the forecasts available at the time. All 13 earlier scenarios are
+  identical to 3.18.0 (they plan on the actual weather). New scenario
+  `predictive-forecast` (January-February 2025, MET Nordic forecasts in its
+  inputs) covers planning on forecasts and re-planning. Its weather is the
+  test database's, which does not match the real Røros weather the forecasts
+  are for, so its forecast errors are large: it tests the engine, not the
+  cost of forecast error.

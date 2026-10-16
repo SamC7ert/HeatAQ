@@ -27,7 +27,7 @@
 
 class EnergySimulator {
     // Simulator version - update when calculation logic changes
-    const VERSION = '3.18.0';   // One floor for closed hours: "Min temp when closed" (standby_temp); lower tolerance and pool max/min removed
+    const VERSION = '3.19.0';   // Planning weather: plan on the forecasts available at the time (weather_forecasts), re-plan on each new forecast
     const TARGET_OFFSET_LIMIT = 5.0;  // °C, max |offset| accepted from SimControl
 
     private $db;
@@ -60,6 +60,13 @@ class EnergySimulator {
     private $openPreheat = false;        // Does the open period bank heat? (plan's bank_hours > 0, carried close->open)
     private $openMaxTemp = null;         // Max temp cap carried into the open period
     private $openBankEnd = null;         // Weather index where banking stops (first hour after the last short hour)
+
+    // Planning on forecasts (planning_weather = 'forecast'; docs/PREDICTIVE_CONTROL.md §11).
+    // null = plans read the actual weather (hindsight).
+    private $forecast = null;            // ['source', 'runs' => [[issued, available, first, air[], wind[], rh[]] (unix s)], 'available' => [unix s]]
+    private $planRun = null;             // index of the forecast run the plan being made reads (null: actual weather)
+    private $forecastStats = [];         // summary counters of a forecast run
+    private $unixCache = [];             // UTC 'Y-m-d H:i:s' -> unix seconds
 
     // Physical constants
     const WATER_DENSITY = 1000;      // kg/m³
@@ -304,6 +311,17 @@ class EnergySimulator {
             if (array_key_exists('standby_temp', $uiConfig['control'])) {
                 $sb = $uiConfig['control']['standby_temp'];
                 $this->equipment['standby_temp'] = ($sb === null || $sb === '' || !is_numeric($sb)) ? null : (float) $sb;
+            }
+            // Planning weather (predictive): 'actual' = plans read the actual
+            // weather ahead (hindsight, the best case); 'forecast' = plans read
+            // the newest forecast available at the time (weather_forecasts).
+            if (array_key_exists('planning_weather', $uiConfig['control'])) {
+                $pw = $uiConfig['control']['planning_weather'];
+                $pw = ($pw === null || $pw === '') ? 'actual' : $pw;
+                if (!in_array($pw, ['actual', 'forecast'], true)) {
+                    throw new InvalidArgumentException("Planning weather must be 'actual' or 'forecast'");
+                }
+                $this->equipment['planning_weather'] = $pw;
             }
             // For backward compat, also check temp_tolerance
             if (isset($uiConfig['control']['temp_tolerance'])) {
@@ -785,7 +803,8 @@ class EnergySimulator {
                 ? ['hourly_kwh_m2' => (float) $v]
                 : ['daily_total_kwh_m2' => (float) $v];
         }
-        return ['weather' => $weather, 'solar' => $solar, 'strategy_requested' => $in['strategy_requested']];
+        return ['weather' => $weather, 'solar' => $solar, 'strategy_requested' => $in['strategy_requested'],
+                'forecast' => $in['forecast'] ?? null];
     }
 
     /**
@@ -819,7 +838,7 @@ class EnergySimulator {
                 $solar[$key] = (float) ($row['daily_total_kwh_m2'] ?? 0);
             }
         }
-        return [
+        $inputs = [
             'format' => 1,
             'simulator_version' => self::VERSION,
             'start_date' => $startDate,
@@ -833,6 +852,174 @@ class EnergySimulator {
             'weather' => $weather,
             'solar_kind' => $solarKind,
             'solar' => (object) $solar,
+        ];
+        // Planning on forecasts: the forecast runs (only then, so other
+        // inputs stay as before)
+        if ($data['forecast'] !== null) {
+            $inputs['forecast'] = $data['forecast'];
+        }
+        return $inputs;
+    }
+
+    /** Planning on forecasts? (predictive control with planning_weather = 'forecast') */
+    private function plansOnForecasts() {
+        return ($this->equipment['control_strategy'] ?? 'reactive') === 'predictive'
+            && ($this->equipment['planning_weather'] ?? 'actual') === 'forecast';
+    }
+
+    /**
+     * The forecast runs for a run's planning, in the inputs form:
+     * ['source', 'runs' => [[issued, available, first_valid, air[], wind[],
+     * humidity[]], ...]], sorted by available time; each run's values are
+     * consecutive hours from first_valid (null where an hour is missing).
+     * Runs issued from 3 days before the first weather hour to the last.
+     * Throws when there is none: planning on forecasts without forecasts
+     * would silently fall back to hindsight.
+     */
+    private function getForecastData(array $weatherAll) {
+        $source = 'met_nordic';
+        if (!$weatherAll) {
+            return ['source' => $source, 'runs' => []];
+        }
+        $first = $weatherAll[0]['timestamp'];
+        $last = $weatherAll[count($weatherAll) - 1]['timestamp'];
+        $from = gmdate('Y-m-d H:i:s', strtotime($first . ' UTC') - 3 * 86400);
+        try {
+            $stmt = $this->db->prepare("
+                SELECT wf.issued_at, wf.available_at, wf.valid_at,
+                       wf.air_temperature, wf.wind_speed, wf.humidity
+                FROM weather_forecasts wf
+                JOIN pool_sites ps ON wf.station_id = COALESCE(ps.weather_station_id, ps.default_weather_station)
+                WHERE ps.id = ? AND wf.source = ? AND wf.issued_at BETWEEN ? AND ?
+                ORDER BY wf.available_at, wf.issued_at, wf.valid_at
+            ");
+            $stmt->execute([$this->poolSiteId, $source, $from, $last]);
+        } catch (PDOException $e) {
+            throw new RuntimeException('Planning on forecasts needs the weather_forecasts table: '
+                . 'run migration 042 (Admin -> System -> Database Migrations).');
+        }
+        $runs = [];
+        $cur = null;
+        while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            if ($cur === null || $cur[0] !== $r['issued_at']) {
+                if ($cur !== null) $runs[] = $cur;
+                $cur = [$r['issued_at'], $r['available_at'], $r['valid_at'], [], [], []];
+                $expect = $r['valid_at'];
+            }
+            // Keep the hours consecutive: a missing hour becomes null
+            while ($expect < $r['valid_at']) {
+                $cur[3][] = null; $cur[4][] = null; $cur[5][] = null;
+                $expect = gmdate('Y-m-d H:i:s', strtotime($expect . ' UTC') + 3600);
+            }
+            $cur[3][] = (float) $r['air_temperature'];
+            $cur[4][] = (float) $r['wind_speed'];
+            $cur[5][] = (float) $r['humidity'];
+            $expect = gmdate('Y-m-d H:i:s', strtotime($r['valid_at'] . ' UTC') + 3600);
+        }
+        if ($cur !== null) $runs[] = $cur;
+        if (!$runs) {
+            throw new RuntimeException("No weather forecasts for this site's weather station from {$from} to {$last} (UTC). "
+                . 'Import them (Admin -> Weather -> Weather Forecasts; see scripts/forecast/README.md), '
+                . 'or set Planning weather to Actual.');
+        }
+        return ['source' => $source, 'runs' => $runs];
+    }
+
+    /** Index the inputs-form forecast for planning (unix times), and reset the counters. */
+    private function prepareForecast($forecast) {
+        $this->forecast = null;
+        $this->planRun = null;
+        $this->forecastStats = [];
+        if ($forecast === null || !$this->plansOnForecasts()) {
+            return;
+        }
+        $runs = [];
+        $available = [];
+        foreach ($forecast['runs'] as $r) {
+            $runs[] = [
+                'issued' => $this->unixUtc($r[0]),
+                'available' => $this->unixUtc($r[1]),
+                'first' => $this->unixUtc($r[2]),
+                'air' => $r[3], 'wind' => $r[4], 'rh' => $r[5],
+            ];
+            $available[] = $this->unixUtc($r[1]);
+        }
+        $this->forecast = ['source' => $forecast['source'], 'runs' => $runs, 'available' => $available];
+        $this->forecastStats = [
+            'plans' => 0, 'plans_without' => 0, 'replans' => 0, 'age_sum' => 0.0, 'hours_beyond' => 0,
+        ];
+    }
+
+    private function unixUtc($ts) {
+        return $this->unixCache[$ts] ??= (int) strtotime($ts . ' UTC');
+    }
+
+    /**
+     * The forecast run a plan made at UTC hour $utc reads: the newest run
+     * available by then that still reaches that hour. null = none (the plan
+     * then reads the actual weather and is counted as without forecast).
+     */
+    private function newestRunAt($utc) {
+        if ($this->forecast === null) return null;
+        $t = $this->unixUtc($utc);
+        $avail = $this->forecast['available'];
+        // Last run with available <= t (sorted by available)
+        $lo = 0; $hi = count($avail) - 1; $found = -1;
+        while ($lo <= $hi) {
+            $mid = intdiv($lo + $hi, 2);
+            if ($avail[$mid] <= $t) { $found = $mid; $lo = $mid + 1; } else { $hi = $mid - 1; }
+        }
+        if ($found < 0) return null;
+        $run = $this->forecast['runs'][$found];
+        $lastHour = $run['first'] + (count($run['air']) - 1) * 3600;
+        return $lastHour >= $t ? $found : null;
+    }
+
+    /**
+     * Select the forecast run for a plan made at weather index $idx and
+     * count it. Without forecasts (hindsight) this does nothing.
+     */
+    private function selectPlanRun(array $weatherData, $idx, $count = true) {
+        $this->planRun = null;
+        if ($this->forecast === null) return;
+        $utc = $weatherData[$idx]['timestamp'];
+        $this->planRun = $this->newestRunAt($utc);
+        if (!$count) return;
+        if ($this->planRun === null) {
+            $this->forecastStats['plans_without']++;
+        } else {
+            $this->forecastStats['plans']++;
+            $this->forecastStats['age_sum'] += ($this->unixUtc($utc) - $this->forecast['runs'][$this->planRun]['issued']) / 3600;
+        }
+    }
+
+    /**
+     * The weather a plan reads for hour $idx: the actual hour (hindsight), or
+     * the selected forecast run's values for that hour. Past the run's last
+     * hour the last forecast hour is held (counted). Tunnel temperature and
+     * the hour's timestamp (solar) stay those of the actual hour.
+     */
+    private function planningRow(array $weatherData, $idx) {
+        $h = $weatherData[$idx];
+        if ($this->planRun === null) return $h;
+        $run = $this->forecast['runs'][$this->planRun];
+        $n = count($run['air']);
+        $k = intdiv($this->unixUtc($h['timestamp']) - $run['first'], 3600);
+        if ($k < 0) return $h;
+        if ($k >= $n) {
+            $k = $n - 1;
+            $this->forecastStats['hours_beyond']++;
+        }
+        while ($k >= 0 && ($run['air'][$k] === null || $run['wind'][$k] === null || $run['rh'][$k] === null)) {
+            $k--;   // a missing forecast hour: the hour before it
+        }
+        if ($k < 0) return $h;
+        return [
+            'timestamp' => $h['timestamp'],
+            'air_temperature' => $run['air'][$k],
+            'wind_speed' => $run['wind'][$k],
+            'humidity' => $run['rh'][$k],
+            'tunnel_temperature' => $h['tunnel_temperature'] ?? null,
         ];
     }
 
@@ -918,6 +1105,8 @@ class EnergySimulator {
             'weather' => $weatherData,
             'solar' => $solarData,
             'strategy_requested' => $strategyRequested,
+            // Planning on forecasts: the forecast runs covering the run
+            'forecast' => $this->plansOnForecasts() ? $this->getForecastData($weatherData) : null,
         ];
     }
 
@@ -926,6 +1115,7 @@ class EnergySimulator {
         $weatherData = $data['weather'];
         $solarData = $data['solar'];
         $strategyRequested = $data['strategy_requested'];
+        $this->prepareForecast($data['forecast'] ?? null);
 
         // Initialize results
         $results = [
@@ -1147,6 +1337,22 @@ class EnergySimulator {
                     $this->closedPlanTimestamp = $currentTimestamp;
                     $this->openPlan = null;
                     $this->openPlanTimestamp = null;
+                }
+
+                // Planning on forecasts: a newer forecast has become available
+                // during the closed period -> plan again from the current water
+                // temperature, as a live controller would (doc §11).
+                if ($this->forecast !== null && $targetTemp === null && $this->closedPlan !== null
+                    && $this->newestRunAt($utcTimestamp) !== ($this->closedPlan['forecast_run'] ?? null)) {
+                    $this->closedPlan = $this->planClosedPeriod(
+                        $currentTimestamp,
+                        $currentWaterTemp,
+                        $weatherArray,
+                        $hourIndex,
+                        $solarData
+                    );
+                    $this->closedPlanTimestamp = $currentTimestamp;
+                    $this->forecastStats['replans']++;
                 }
 
                 // Long closure: no plan exists because the next opening is
@@ -1554,6 +1760,18 @@ class EnergySimulator {
         $results['summary']['weather_coverage_pct'] = $expectedHours > 0
             ? round(100 * $results['summary']['total_hours'] / $expectedHours, 1)
             : null;
+
+        // Planning on forecasts (only then: other runs' summaries are unchanged)
+        if ($this->forecast !== null) {
+            $fs = $this->forecastStats;
+            $results['summary']['planning_weather'] = 'forecast';
+            $results['summary']['forecast_source'] = $this->forecast['source'];
+            $results['summary']['forecast_plans'] = $fs['plans'];
+            $results['summary']['forecast_replans'] = $fs['replans'];
+            $results['summary']['forecast_plans_without'] = $fs['plans_without'];
+            $results['summary']['forecast_age_h_avg'] = $fs['plans'] > 0 ? round($fs['age_sum'] / $fs['plans'], 1) : null;
+            $results['summary']['forecast_hours_beyond'] = $fs['hours_beyond'];
+        }
 
         // Round summary values
         foreach ($results['summary'] as $key => $value) {
@@ -2190,13 +2408,17 @@ class EnergySimulator {
         ));
         $openIdx = $currentIdx + $hoursToOpen;
 
+        // The weather ahead: actual (hindsight), or the newest forecast
+        // available now (planning on forecasts, doc §11)
+        $this->selectPlanRun($weatherData, $currentIdx);
+
         // Hourly closed-period losses (cover on) and heat-pump output
         $closedLoss = [];
         $closedHpOut = [];
         for ($i = 0; $i < $hoursToOpen; $i++) {
             $idx = $currentIdx + $i;
             if ($idx >= count($weatherData)) break;
-            $h = $weatherData[$idx];
+            $h = $this->planningRow($weatherData, $idx);
             // Validated run weather array - direct reads (no silent fallbacks)
             $air = (float)$h['air_temperature'];
             $loss = $this->calculateHeatLosses(
@@ -2224,7 +2446,7 @@ class EnergySimulator {
             $dt = clone $nextOpening['datetime'];
             if ($k > 0) $dt->modify("+{$k} hours");
             if ($this->scheduler->getCurrentPeriod($dt) === null) break; // closed again
-            $h = $weatherData[$idx];
+            $h = $this->planningRow($weatherData, $idx);
             // Validated run weather array - direct reads (no silent fallbacks)
             $air = (float)$h['air_temperature'];
             $loss = $this->calculateHeatLosses(
@@ -2250,6 +2472,9 @@ class EnergySimulator {
 
         // Absolute weather index at which the HP ramp should begin
         $plan['start_index'] = $currentIdx + ($plan['start_offset'] ?? 0);
+        // Forecast run the plan read (null: actual weather); a newer one re-plans
+        $plan['forecast_run'] = $this->planRun;
+        $this->planRun = null;
         $plan['hours_to_open'] = count($closedLoss);
         $plan['open_duration'] = $openDuration;
         $plan['open_demand'] = round($openDemand, 1);
@@ -2444,14 +2669,16 @@ class EnergySimulator {
 
         $needed = null;
         $w = $waterTemp;
+        $this->selectPlanRun($weatherArray, $idx, false);   // forecast (not counted as a plan)
         for ($k = 0; $k <= $hoursToOpen && $k < 14 * 24 && isset($weatherArray[$idx + $k]); $k++) {
             if ($w >= $target) { $needed = $k; break; }
-            $h = $weatherArray[$idx + $k];
+            $h = $this->planningRow($weatherArray, $idx + $k);
             $air = (float) $h['air_temperature'];
             $loss = $this->calculateHeatLosses($w, $air, (float) $h['wind_speed'], (float) $h['humidity'], false, null)['total'];
             $gain = $hpCap > 0 ? $this->applyHeatPump($hpCap, $air)['heat'] : 0;
             $w += ($gain - $loss) / $tmr;
         }
+        $this->planRun = null;
         if ($needed === null) {
             $needed = 14 * 24;
         }

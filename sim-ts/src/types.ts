@@ -74,6 +74,20 @@ export interface RunInputs {
   solar_kind: 'hourly' | 'daily' | 'none';
   /** hourly: UTC 'Y-m-d H:00:00' -> kWh/m²; daily: 'Y-m-d' -> daily total kWh/m² */
   solar: Record<string, number>;
+  /** Planning on forecasts only (equipment.planning_weather = 'forecast') */
+  forecast?: ForecastInputs;
+}
+
+/**
+ * [issued, available, first_valid (UTC 'Y-m-d H:i:s'), air[], wind[], humidity[]]:
+ * values for consecutive hours from first_valid, null where an hour is missing.
+ */
+export type ForecastRun = [string, string, string, (number | null)[], (number | null)[], (number | null)[]];
+
+export interface ForecastInputs {
+  source: string;
+  /** Sorted by available time */
+  runs: ForecastRun[];
 }
 
 export interface Heating {

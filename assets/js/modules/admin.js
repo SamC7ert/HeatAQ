@@ -438,6 +438,7 @@ const AdminModule = {
                 this.weatherStations = stationsData.stations;
                 this.renderWeatherStations();
                 this.populateStationDropdown();
+                this.loadForecastStatus();
 
                 // The dropdown was rebuilt: keep the selected station if it
                 // still exists, else default to the station linked to the open
@@ -463,6 +464,116 @@ const AdminModule = {
             if (container) {
                 container.innerHTML = '<p class="error">Failed to load weather stations</p>';
             }
+        }
+    },
+
+    // ---- Weather forecasts (scripts/forecast/fetch_met_nordic.py) ----
+
+    loadForecastStatus: async function() {
+        const el = document.getElementById('forecast-status');
+        if (!el) return;
+        try {
+            const res = await fetch('./api/heataq_api.php?action=get_forecast_status');
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            if (!data.installed) {
+                el.innerHTML = '<p class="text-muted">Not available yet: run migration 042 (System &rarr; Database Migrations).</p>';
+                return;
+            }
+            if (!data.status.length) {
+                el.innerHTML = '<p class="text-muted">No forecasts imported yet.</p>';
+                return;
+            }
+            const name = id => (this.weatherStations || []).find(s => s.station_id === id)?.name || id;
+            const day = ts => (ts || '').slice(0, 10);
+            el.innerHTML = `<table class="data-table compact" style="max-width: 700px;">
+                <thead><tr><th>Station</th><th>Source</th><th>Runs</th><th>First run</th><th>Last run</th></tr></thead>
+                <tbody>${data.status.map(r => `<tr>
+                    <td>${escapeHtml(name(r.station_id))}</td>
+                    <td>${escapeHtml(r.source)}</td>
+                    <td style="text-align: right;">${Number(r.runs).toLocaleString()}</td>
+                    <td>${escapeHtml(day(r.first_issued))}</td>
+                    <td>${escapeHtml(day(r.last_issued))}</td>
+                </tr>`).join('')}</tbody></table>`;
+        } catch (err) {
+            el.innerHTML = `<p class="error">Could not read forecast status: ${escapeHtml(err.message)}</p>`;
+        }
+    },
+
+    /** Stations file for fetch_met_nordic.py --stations. */
+    downloadStationsCsv: function() {
+        const rows = (this.weatherStations || []).filter(s => s.latitude && s.longitude);
+        if (!rows.length) {
+            alert('No stations with a position.');
+            return;
+        }
+        const clean = v => String(v ?? '').replace(/[,\r\n]/g, ' ').trim();
+        const csv = 'station_id,name,latitude,longitude,elevation\n' + rows.map(s =>
+            [clean(s.station_id), clean(s.name), s.latitude, s.longitude, s.elevation ?? 0].join(',')
+        ).join('\n') + '\n';
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+        a.download = 'stations.csv';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    },
+
+    /**
+     * Import forecast CSV files: read in the browser and sent in chunks small
+     * enough for the host's request limit. Re-importing replaces rows.
+     */
+    importForecasts: async function() {
+        const input = document.getElementById('forecast-files');
+        const progress = document.getElementById('forecast-import-progress');
+        const btn = document.getElementById('forecast-import-btn');
+        const files = Array.from(input?.files || []);
+        if (!files.length) {
+            alert('Choose one or more forecasts_*.csv files first.');
+            return;
+        }
+        const columns = ['station_id', 'source', 'issued_at', 'available_at', 'valid_at',
+                         'air_temperature', 'wind_speed', 'humidity', 'cloud_cover', 'solar_w_m2'];
+        const CHUNK = 500;  // about 67 KB of JSON (host limit about 128 KB a request)
+        btn.disabled = true;
+        let total = 0;
+        try {
+            for (const [f, file] of files.entries()) {
+                const lines = (await file.text()).split(/\r?\n/).filter(l => l.trim() !== '');
+                const header = (lines.shift() || '').split(',').map(h => h.trim());
+                const idx = columns.map(c => header.indexOf(c));
+                const missing = columns.filter((c, k) => idx[k] < 0 && c !== 'cloud_cover' && c !== 'solar_w_m2');
+                if (missing.length) {
+                    throw new Error(`${file.name}: missing column(s) ${missing.join(', ')}`);
+                }
+                const rows = lines.map(l => {
+                    const v = l.split(',');
+                    return idx.map(i => (i < 0 || v[i] === undefined || v[i] === '') ? null : v[i].trim());
+                });
+                for (let k = 0; k < rows.length; k += CHUNK) {
+                    progress.style.color = '#666';
+                    progress.textContent = `File ${f + 1}/${files.length} (${file.name}): `
+                        + `${Math.min(k + CHUNK, rows.length).toLocaleString()} / ${rows.length.toLocaleString()} rows`;
+                    const res = await fetch('./api/heataq_api.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'import_forecasts', rows: rows.slice(k, k + CHUNK) })
+                    });
+                    const data = await res.json();
+                    if (!res.ok || data.error) {
+                        throw new Error(`${file.name}, rows ${k + 1}-${k + CHUNK}: ${data.error || res.status}`);
+                    }
+                    total += data.imported;
+                }
+            }
+            progress.style.color = '#28a745';
+            progress.textContent = `Imported ${total.toLocaleString()} forecast hours from ${files.length} file(s).`;
+            input.value = '';
+        } catch (err) {
+            progress.style.color = '#dc3545';
+            progress.textContent = `Import stopped: ${err.message}` + (total ? ` (${total.toLocaleString()} rows imported before)` : '');
+        } finally {
+            btn.disabled = false;
+            this.loadForecastStatus();
         }
     },
 

@@ -509,7 +509,7 @@ const SimulationsModule = {
         // its configuration (loadSavedOverrides); the engine choice stays
         ['sim-hp-override', 'sim-boiler-override', 'sim-target-offset', 'sim-upper-tol-override',
          'sim-bathers-override', 'sim-activity-override', 'sim-wind-override', 'sim-solar-override',
-         'sim-strategy'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+         'sim-strategy', 'sim-planning-weather'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
         // Details: run info, hours note, hour panel cards and the week chart
         clear('debug-run-display');
         ['debug-config-display', 'debug-ohc-display'].forEach(id => clear(id, '-'));
@@ -1334,7 +1334,7 @@ const SimulationsModule = {
         const fields = [
             'sim-hp-override', 'sim-boiler-override', 'sim-target-offset',
             'sim-upper-tol-override', 'sim-bathers-override',
-            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-engine'
+            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-engine', 'sim-planning-weather'
         ];
 
         // Overrides are saved per project. Every field takes the saved value
@@ -1381,7 +1381,7 @@ const SimulationsModule = {
         const fields = [
             'sim-hp-override', 'sim-boiler-override', 'sim-target-offset',
             'sim-upper-tol-override', 'sim-bathers-override',
-            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-engine'
+            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-engine', 'sim-planning-weather'
         ];
         const overrides = {};
         fields.forEach(id => {
@@ -1411,7 +1411,7 @@ const SimulationsModule = {
         const ids = [
             'sim-hp-override', 'sim-boiler-override', 'sim-target-offset',
             'sim-upper-tol-override', 'sim-bathers-override',
-            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-engine'
+            'sim-activity-override', 'sim-wind-override', 'sim-solar-override', 'sim-strategy', 'sim-engine', 'sim-planning-weather'
         ];
         ids.forEach(id => {
             const el = document.getElementById(id);
@@ -1514,11 +1514,13 @@ const SimulationsModule = {
         const targetOffset = SimulationsModule.readTargetOffset();
         const upperTolOverride = getOverride('sim-upper-tol-override');
         const strategy = this.readStrategy();
-        if (targetOffset !== null || upperTolOverride !== null || strategy) {
+        const planningWeather = document.getElementById('sim-planning-weather')?.value || null;
+        if (targetOffset !== null || upperTolOverride !== null || strategy || planningWeather) {
             override.control = {};
             if (targetOffset !== null) override.control.target_offset = targetOffset;
             if (upperTolOverride !== null) override.control.upper_tolerance = upperTolOverride;
             if (strategy) override.control.strategy = strategy;
+            if (planningWeather) override.control.planning_weather = planningWeather;
         }
 
         // Bathers overrides
