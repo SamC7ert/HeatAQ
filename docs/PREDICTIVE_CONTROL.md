@@ -342,9 +342,11 @@ of forecast error (e.g. extra electricity) for that site and period.
 
 **Data.** Archived MET Nordic forecasts (MET Norway, 1 km, runs at 00, 06,
 12 and 18 UTC, hourly steps), interpolated to the site's weather station and
-stored in `weather_forecasts` (migration 042). Fetched locally with
-`scripts/forecast/fetch_met_nordic.py` and imported in Admin → Weather →
-Weather Forecasts; see `scripts/forecast/README.md`. Each run has an
+stored in `weather_forecasts` (migration 042). Fetched by the server from
+MET's archive in Admin → Weather → Weather Forecasts
+(`lib/MetNordicForecast.php`), or on a PC with
+`scripts/forecast/fetch_met_nordic.py` and imported there; see
+`scripts/forecast/README.md`. Each run has an
 **available_at** time (its file's creation time, about 30 minutes after the
 nominal run time).
 

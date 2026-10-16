@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HeatAQ Schedule Management</title>
     <link rel="icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="./assets/css/main.css?v=257">
-    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=257">
-    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=257">
-    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=257">
-    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=257">
-    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=257">
+    <link rel="stylesheet" href="./assets/css/main.css?v=258">
+    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=258">
+    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=258">
+    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=258">
+    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=258">
+    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=258">
     <style>
         /* Top bar, right: background saving panel, user card */
         .top-bar-right {
@@ -1393,14 +1393,28 @@
 
                     <div class="card">
                         <h3>Weather Forecasts</h3>
-                        <p class="text-muted" style="font-size: 13px; margin-top: 0;">Archived forecasts let a simulation plan on the weather as it was forecast at the time, instead of the actual weather (Simulate &rarr; Planning weather). Fetch them on your PC with <code>scripts/forecast/fetch_met_nordic.py</code> (see the README in that folder), using the stations file below, then import the CSV files here.</p>
+                        <p class="text-muted" style="font-size: 13px; margin-top: 0;">Archived forecasts let a simulation plan on the weather as it was forecast at the time, instead of the actual weather (Simulate &rarr; Planning weather). Source: MET Nordic forecasts from MET Norway (1 km, 4 runs a day, from 28 Nov 2019), read for the station's position.</p>
                         <div id="forecast-status"><p class="loading">Loading...</p></div>
-                        <div style="margin-top: 10px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                            <button class="btn btn-sm btn-secondary" onclick="app.admin.downloadStationsCsv()" title="Station id, name, position and height, for fetch_met_nordic.py --stations">Download stations.csv</button>
-                            <input type="file" id="forecast-files" accept=".csv" multiple style="font-size: 13px;">
-                            <button id="forecast-import-btn" class="btn btn-sm btn-primary" onclick="app.admin.importForecasts()">Import</button>
+                        <div style="margin-top: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <label style="font-size: 13px;">Station</label>
+                            <select id="forecast-station" class="form-control" style="width: 220px;" onchange="app.admin.planForecastFetch()"></select>
+                            <label style="font-size: 13px;">From</label>
+                            <input type="date" id="forecast-from" class="form-control" style="width: 150px;" onchange="app.admin.planForecastFetch()">
+                            <label style="font-size: 13px;">To</label>
+                            <input type="date" id="forecast-to" class="form-control" style="width: 150px;" onchange="app.admin.planForecastFetch()">
+                            <button id="forecast-fetch-btn" class="btn btn-sm btn-primary" onclick="app.admin.fetchForecasts()">Fetch from MET Norway</button>
+                            <button id="forecast-stop-btn" class="btn btn-sm btn-secondary" onclick="app.admin.stopForecastFetch()" style="display: none;">Stop</button>
                         </div>
-                        <div id="forecast-import-progress" style="margin-top: 8px; font-size: 13px;"></div>
+                        <div id="forecast-fetch-progress" style="margin-top: 8px; font-size: 13px;"></div>
+                        <details style="margin-top: 12px; font-size: 13px;">
+                            <summary style="cursor: pointer; color: #666;">Import CSV files instead (fetched on a PC with scripts/forecast/fetch_met_nordic.py)</summary>
+                            <div style="margin-top: 8px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                                <button class="btn btn-sm btn-secondary" onclick="app.admin.downloadStationsCsv()" title="Station id, name, position and height, for fetch_met_nordic.py --stations">Download stations.csv</button>
+                                <input type="file" id="forecast-files" accept=".csv" multiple style="font-size: 13px;">
+                                <button id="forecast-import-btn" class="btn btn-sm btn-primary" onclick="app.admin.importForecasts()">Import</button>
+                            </div>
+                            <div id="forecast-import-progress" style="margin-top: 8px;"></div>
+                        </details>
                     </div>
 
                     <div class="admin-grid">
@@ -1816,19 +1830,19 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=257"></script>
+    <script src="./assets/js/config.js?v=258"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=257"></script>
-    <script src="./assets/js/modules/navigation.js?v=257"></script>
-    <script src="./assets/js/modules/schedules.js?v=257"></script>
-    <script src="./assets/js/modules/calendar.js?v=257"></script>
-    <script src="./assets/js/modules/simengine.js?v=257"></script>
-    <script src="./assets/js/modules/simulations.js?v=257"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=257"></script>
-    <script src="./assets/js/modules/configuration.js?v=257"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=257"></script>
-    <script src="./assets/js/modules/admin.js?v=257"></script>
-    <script src="./assets/js/modules/project.js?v=257"></script>
-    <script src="./assets/js/app.js?v=257"></script>
+    <script src="./assets/js/modules/api.js?v=258"></script>
+    <script src="./assets/js/modules/navigation.js?v=258"></script>
+    <script src="./assets/js/modules/schedules.js?v=258"></script>
+    <script src="./assets/js/modules/calendar.js?v=258"></script>
+    <script src="./assets/js/modules/simengine.js?v=258"></script>
+    <script src="./assets/js/modules/simulations.js?v=258"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=258"></script>
+    <script src="./assets/js/modules/configuration.js?v=258"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=258"></script>
+    <script src="./assets/js/modules/admin.js?v=258"></script>
+    <script src="./assets/js/modules/project.js?v=258"></script>
+    <script src="./assets/js/app.js?v=258"></script>
 </body>
 </html>

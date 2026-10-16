@@ -439,6 +439,7 @@ const AdminModule = {
                 this.renderWeatherStations();
                 this.populateStationDropdown();
                 this.loadForecastStatus();
+                this.initForecastFetch();
 
                 // The dropdown was rebuilt: keep the selected station if it
                 // still exists, else default to the station linked to the open
@@ -498,6 +499,141 @@ const AdminModule = {
         } catch (err) {
             el.innerHTML = `<p class="error">Could not read forecast status: ${escapeHtml(err.message)}</p>`;
         }
+    },
+
+    // ---- Fetch from MET Norway on the server, day by day ----
+
+    /** Fill the station list and default dates (once), then preview. */
+    initForecastFetch: function() {
+        const sel = document.getElementById('forecast-station');
+        if (!sel) return;
+        const stations = (this.weatherStations || []).filter(s => s.latitude && s.longitude);
+        const previous = sel.value;
+        sel.innerHTML = stations.map(s =>
+            `<option value="${escapeHtml(s.station_id)}">${escapeHtml(s.name)}</option>`).join('');
+        const projStation = (typeof ProjectModule !== 'undefined') ? ProjectModule.currentSite?.weather_station_id : null;
+        const pick = [previous, projStation].find(id => id && stations.some(s => s.station_id === id));
+        if (pick) sel.value = pick;
+        const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+        const from = document.getElementById('forecast-from');
+        const to = document.getElementById('forecast-to');
+        if (from && !from.value) from.value = '2019-11-28';
+        if (to && !to.value) to.value = yesterday;
+        if (from) { from.min = '2019-11-28'; from.max = yesterday; }
+        if (to) { to.min = '2019-11-28'; to.max = yesterday; }
+        this.planForecastFetch();
+    },
+
+    /** Days of the chosen period that still lack runs (4 per day). */
+    forecastDaysToFetch: async function() {
+        const station = document.getElementById('forecast-station')?.value;
+        const from = document.getElementById('forecast-from')?.value;
+        const to = document.getElementById('forecast-to')?.value;
+        if (!station || !from || !to || to < from) return null;
+        const q = new URLSearchParams({ action: 'get_forecast_days', station_id: station, from, to });
+        const data = await (await fetch(`./api/heataq_api.php?${q}`)).json();
+        if (data.error) throw new Error(data.error);
+        const have = data.days || {};
+        const days = [];
+        for (let d = new Date(from + 'T00:00:00Z'); d <= new Date(to + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + 1)) {
+            const iso = d.toISOString().slice(0, 10);
+            if ((have[iso] || 0) < 4) days.push(iso);
+        }
+        return { station, days };
+    },
+
+    planForecastFetch: async function() {
+        const el = document.getElementById('forecast-fetch-progress');
+        if (!el || this._forecastFetching) return;
+        try {
+            const plan = await this.forecastDaysToFetch();
+            if (!plan) { el.textContent = ''; return; }
+            el.style.color = '#666';
+            el.textContent = plan.days.length
+                ? `${plan.days.length.toLocaleString()} day(s) to fetch (about ${Math.max(1, Math.round(plan.days.length * 10 / 60))} min with this page open; can be stopped and resumed).`
+                : 'All days of this period are fetched.';
+        } catch (err) {
+            el.style.color = '#dc3545';
+            el.textContent = err.message;
+        }
+    },
+
+    stopForecastFetch: function() {
+        this._forecastStop = true;
+    },
+
+    /**
+     * Fetch the missing days: the server reads each day's 4 runs from MET
+     * Norway's archive and stores them. 3 days at a time; resumable.
+     */
+    fetchForecasts: async function() {
+        const el = document.getElementById('forecast-fetch-progress');
+        const btn = document.getElementById('forecast-fetch-btn');
+        const stopBtn = document.getElementById('forecast-stop-btn');
+        let plan;
+        try {
+            plan = await this.forecastDaysToFetch();
+        } catch (err) {
+            el.style.color = '#dc3545';
+            el.textContent = err.message;
+            return;
+        }
+        if (!plan || !plan.days.length) { this.planForecastFetch(); return; }
+
+        this._forecastFetching = true;
+        this._forecastStop = false;
+        btn.disabled = true;
+        stopBtn.style.display = 'inline-block';
+        const days = plan.days.slice();
+        const total = days.length;
+        let done = 0, runs = 0, missing = 0, failures = 0, lastError = '';
+        const t0 = Date.now();
+        const show = () => {
+            const rate = done / Math.max(1, (Date.now() - t0) / 1000);
+            const left = rate > 0 ? Math.round((total - done) / rate / 60) : '?';
+            el.style.color = '#666';
+            el.textContent = `Fetching: ${done.toLocaleString()} / ${total.toLocaleString()} days, ${runs.toLocaleString()} runs`
+                + (missing ? `, ${missing} run(s) not in the archive` : '') + ` (about ${left} min left)`;
+        };
+        const worker = async () => {
+            while (days.length && !this._forecastStop && failures < 3) {
+                const date = days.shift();
+                try {
+                    const res = await fetch('./api/heataq_api.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'fetch_forecasts_day', station_id: plan.station, date })
+                    });
+                    const data = await res.json();
+                    if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+                    runs += data.runs;
+                    missing += (data.missing || []).length;
+                    failures = 0;
+                } catch (err) {
+                    failures++;
+                    lastError = err.message;
+                    days.push(date);   // try again later in this pass
+                    continue;
+                }
+                done++;
+                show();
+            }
+        };
+        show();
+        await Promise.all([worker(), worker(), worker()]);
+        this._forecastFetching = false;
+        btn.disabled = false;
+        stopBtn.style.display = 'none';
+        if (failures >= 3) {
+            el.style.color = '#dc3545';
+            el.textContent = `Stopped after repeated errors: ${lastError} (${done} days fetched; press Fetch to continue).`;
+        } else {
+            el.style.color = this._forecastStop ? '#666' : '#28a745';
+            el.textContent = (this._forecastStop ? 'Stopped' : 'Done')
+                + `: ${done.toLocaleString()} days, ${runs.toLocaleString()} runs`
+                + (missing ? ` (${missing} run(s) not in MET's archive)` : '') + '.';
+        }
+        this.loadForecastStatus();
     },
 
     /** Stations file for fetch_met_nordic.py --stations. */

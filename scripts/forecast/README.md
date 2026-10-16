@@ -21,9 +21,25 @@ MET Norway archives every MET Nordic forecast it has issued:
 Archive: `https://thredds.met.no/thredds/catalog/metpparchive/` (OPeNDAP;
 licence CC BY 4.0, credit MET Norway).
 
-## fetch_met_nordic.py
+## Fetching in the app (normal way)
 
-Runs locally (Python 3.8+, standard library only, no installs):
+Admin → Weather → Weather Forecasts: choose the station and period, press
+**Fetch from MET Norway**. The server reads each day's 4 runs from MET's
+archive (`lib/MetNordicForecast.php`, same method as below) and stores them;
+the page sends 3 days at a time and shows progress. Days already fetched are
+skipped, so it can be stopped and continued later. MET's server is the limit:
+about 10 seconds a day, so about an hour per year, with the page open.
+
+The app fetches what the planner uses: temperature, wind and humidity, 36
+hours ahead of each run (a plan looks at most about 35 hours ahead of the
+forecast it uses). Cloud and solar are left empty.
+
+## fetch_met_nordic.py (alternative: on a PC)
+
+For fetching without the app (e.g. overnight on a PC), with cloud and solar
+and 48 hours ahead. Runs locally (Python 3.8+, standard library only, no
+installs), and the CSV files are imported in the same card ("Import CSV
+files instead"):
 
 ```
 python fetch_met_nordic.py --stations stations.csv --from 2023-10-01 --to 2024-04-30
@@ -68,7 +84,6 @@ year is about 1,460 runs). The whole archive since 2019 takes one night.
 
 ## In HeatAQ
 
-Admin → Weather forecasts imports the CSV files into `weather_forecasts`.
-The simulation then has a **Planning weather** choice (Configuration):
-actual weather (hindsight) or forecast. See `docs/PREDICTIVE_CONTROL.md`
-§ Planning on forecasts.
+Forecasts are stored in `weather_forecasts`. The simulation then has a
+**Planning weather** choice (Simulate tab): actual weather (hindsight) or
+forecast. See `docs/PREDICTIVE_CONTROL.md` §11.
