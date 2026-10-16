@@ -243,6 +243,10 @@ const SimulationsModule = {
             alert('Please select start and end dates');
             return;
         }
+        if (!ohcId) {
+            alert('Please select a schedule (Open Hours Calendar). If the list is empty, create one under Schedules first.');
+            return;
+        }
 
         if (new Date(endDate) < new Date(startDate)) {
             alert('End date must be after start date');
