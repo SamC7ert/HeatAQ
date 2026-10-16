@@ -1,15 +1,9 @@
-// Simulation engines: the PHP engine (server) and the TypeScript port
-// (assets/js/sim, built from sim-ts/), which runs in a Web Worker.
-//
-// Engine setting on the Simulate tab:
-//   php        - run on the server (as before)
-//   compare    - run PHP, then TypeScript on the same inputs, and report
-//                any difference (PHP's results are the ones stored)
-//   typescript - the server prepares the run; this browser simulates and
-//                submits the results: summary and daily rows first (the run
-//                is then complete), hourly rows in the background
-//                (HourlySaver, below) while the Details tab uses this
-//                browser's copy
+// The simulation engine (assets/js/sim, built from sim-ts/), run in this
+// browser in a Web Worker. The server prepares each run (setup, validation,
+// inputs: run_simulation); this browser simulates it and submits the
+// results: summary and daily rows first (the run is then complete), hourly
+// rows in the background (HourlySaver, below) when the run saves them,
+// while the Details tab uses this browser's copy.
 
 const SimEngine = {
     // Same cache-busting version as this script
@@ -259,21 +253,13 @@ const SimEngine = {
                  center_date: centerDate, hours: data.length, data };
     },
 
-    // Summary values shown in the comparison (all numeric keys are checked)
-    COMPARE_KEYS: [
-        ['total_cost', 'Total cost'], ['total_heat_loss_kwh', 'Heat loss'], ['total_solar_gain_kwh', 'Solar gain'],
-        ['hp_thermal_kwh', 'HP heat'], ['boiler_thermal_kwh', 'Boiler heat'], ['total_electricity_kwh', 'Electricity'],
-        ['unmet_kwh', 'Unmet'], ['avg_water_temp_open', 'Avg temp (open)'], ['min_water_temp_open', 'Min temp (open)'],
-        ['days_below_27', 'Days >1°C below'], ['days_below_26', 'Days >2°C below'], ['open_hours', 'Open hours']
-    ],
-
     // Values are rounded to 2 decimals (summary) / 2-3 (stored daily rows)
     same: function(a, b, absTol) {
         if (typeof a !== 'number' || typeof b !== 'number') return a === b || (a == null && b == null);
         return Math.abs(a - b) <= absTol + 1e-6 * Math.max(Math.abs(a), Math.abs(b));
     },
 
-    /** Compare PHP's stored summary/daily rows with a TypeScript result. */
+    /** Compare a run's saved summary/daily rows with a recomputed result (Details hours check). */
     compare: function(phpSummary, phpDaily, ts) {
         const diffs = [];
         for (const [k, v] of Object.entries(phpSummary || {})) {
@@ -295,34 +281,6 @@ const SimEngine = {
             diffs.push({ key: 'days', php: (phpDaily || []).length, ts: ts.daily.length });
         }
         return { ok: diffs.length === 0 && daysDiffering === 0, diffs, daysDiffering, firstDay, days: ts.daily.length };
-    },
-
-    renderComparison: function(report, phpSummary, ts, tsMs) {
-        const fmt = v => typeof v === 'number' ? v.toLocaleString('en-GB', { maximumFractionDigits: 2 }) : String(v ?? '-');
-        const rows = this.COMPARE_KEYS.map(([k, label]) => {
-            const ok = this.same(phpSummary?.[k], ts.summary[k], 0.011);
-            return `<tr><td>${escapeHtml(label)}</td><td style="text-align:right;">${escapeHtml(fmt(phpSummary?.[k]))}</td>
-                    <td style="text-align:right;">${escapeHtml(fmt(ts.summary[k]))}</td><td>${ok ? '✓' : '<strong style="color:#dc3545;">differs</strong>'}</td></tr>`;
-        }).join('');
-        const head = report.ok
-            ? `<p style="color:#28a745; margin:4px 0;"><strong>✓ TypeScript matches PHP</strong>: all summary values and all ${escapeHtml(report.days)} days (TypeScript ${escapeHtml(tsMs)} ms).</p>`
-            : `<p style="color:#dc3545; margin:4px 0;"><strong>TypeScript differs from PHP</strong>: ${escapeHtml(report.diffs.length)} summary value(s), ${escapeHtml(report.daysDiffering)} of ${escapeHtml(report.days)} days.</p>`;
-        let detail = '';
-        if (!report.ok && report.firstDay) {
-            const f = report.firstDay;
-            detail = `<p style="font-size:12px; margin:4px 0;">First differing day: <strong>${escapeHtml(f.date)}</strong> -
-                PHP avg ${escapeHtml(fmt(parseFloat(f.php.avg_water_temp)))} °C, cost ${escapeHtml(fmt(parseFloat(f.php.total_cost)))};
-                TypeScript ${f.ts ? `avg ${escapeHtml(fmt(f.ts.avg_water_temp))} °C, cost ${escapeHtml(fmt(f.ts.total_cost))}` : 'no such day'}.</p>`;
-        }
-        const other = report.diffs.filter(d => !this.COMPARE_KEYS.some(([k]) => k === d.key));
-        if (other.length) {
-            detail += `<p style="font-size:12px; margin:4px 0;">Other differing values: ${other.slice(0, 8).map(d =>
-                `${escapeHtml(d.key)} (PHP ${escapeHtml(fmt(d.php))}, TS ${escapeHtml(fmt(d.ts))})`).join(', ')}</p>`;
-        }
-        return `<div style="padding:8px 10px; border:1px solid #dee2e6; border-radius:6px; background:#fafafa;">
-            ${head}${detail}
-            <table class="data-table compact" style="margin-top:6px;"><thead><tr><th>Engine comparison</th><th style="text-align:right;">PHP</th><th style="text-align:right;">TypeScript</th><th></th></tr></thead>
-            <tbody>${rows}</tbody></table></div>`;
     }
 };
 

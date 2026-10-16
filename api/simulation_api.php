@@ -228,12 +228,9 @@ try {
             $templateId = getParam('template_id', null);
             $poolId = getParam('pool_id', null);
 
-            // Engine: 'php' (run here), or 'typescript' (prepare the run and
-            // return its inputs; the browser simulates and submits results)
-            $engine = getParam('engine', 'php');
-            if (!in_array($engine, ['php', 'typescript'], true)) {
-                sendError('Invalid engine');
-            }
+            // The run is prepared here (setup, validation, inputs) and simulated
+            // in the browser by the TypeScript engine (assets/js/sim), which
+            // submits the results (submit_ts_results, submit_ts_hourly).
 
             // Store hourly data? Default true for backward compatibility
             // Set to false for faster analysis runs that only need summary
@@ -501,59 +498,29 @@ try {
                     // Copy of the schedule as used, so the run can be re-run
                     // exactly (recreate_hourly) after the schedule is edited
                     'schedule_state' => $scheduler->exportState(),
-                    'engine' => $engine,
+                    'engine' => 'typescript',
                     'store_hourly' => $storeHourly,
                 ]),
             ]);
 
-            if ($engine === 'typescript') {
-                // Same setup and validation as a PHP run; the browser runs the
-                // TypeScript engine on these inputs and posts the results back
-                // (submit_ts_hourly, submit_ts_results).
-                updateRunStatus($pdo, $runId, 'running');
-                try {
-                    $inputs = $simulator->exportRunInputs($startDate, $endDate);
-                } catch (Throwable $e) {
-                    updateRunStatus($pdo, $runId, 'failed', ['error' => $e->getMessage()]);
-                    throw $e;
-                }
-                sendResponse([
-                    'status' => 'prepared',
-                    'run_id' => $runId,
-                    'store_hourly' => $storeHourly,
-                    'inputs' => $inputs,
-                    'meta' => [
-                        'schedule_template_id' => $scheduleTemplate['template_id'] ?? null,
-                        'schedule_template_name' => $scheduleTemplate['name'] ?? null,
-                        'config_template_name' => $configTemplateName,
-                    ],
-                ]);
-            }
-
+            updateRunStatus($pdo, $runId, 'running');
             try {
-                $results = executeRun($pdo, $simulator, $runId, $startDate, $endDate, $storeHourly);
-
-                // Add schedule info to meta (so frontend can display it)
-                $results['meta']['schedule_template_id'] = $scheduleTemplate['template_id'] ?? null;
-                $results['meta']['schedule_template_name'] = $scheduleTemplate['name'] ?? null;
-                $results['meta']['config_template_name'] = $configTemplateName;
-                $results['meta']['schedule_debug'] = $debugScheduleInfo;  // Add debug info
-
-                sendResponse([
-                    'status' => 'success',
-                    'run_id' => $runId,
-                    'simulator_version' => EnergySimulator::getVersion(),
-                    'summary' => $results['summary'],
-                    'meta' => $results['meta'],
-                    'daily_count' => count($results['daily']),
-                    'hourly_count' => $storeHourly ? count($results['hourly']) : 0,
-                    'hourly_stored' => $storeHourly
-                ]);
-
+                $inputs = $simulator->exportRunInputs($startDate, $endDate);
             } catch (Throwable $e) {
-                // executeRun marked the run failed
+                updateRunStatus($pdo, $runId, 'failed', ['error' => $e->getMessage()]);
                 throw $e;
             }
+            sendResponse([
+                'status' => 'prepared',
+                'run_id' => $runId,
+                'store_hourly' => $storeHourly,
+                'inputs' => $inputs,
+                'meta' => [
+                    'schedule_template_id' => $scheduleTemplate['template_id'] ?? null,
+                    'schedule_template_name' => $scheduleTemplate['name'] ?? null,
+                    'config_template_name' => $configTemplateName,
+                ],
+            ]);
             break;
 
         case 'set_baseline':
@@ -615,6 +582,8 @@ try {
             $newSnap = $snap;
             $newSnap['simulator_version'] = EnergySimulator::getVersion();
             $newSnap['recreated_from_run_id'] = $sourceId;
+            $newSnap['engine'] = 'typescript';
+            $newSnap['store_hourly'] = true;
             $newRunId = createSimulationRun($pdo, [
                 'pool_site_id' => $currentPoolSiteId,
                 'pool_id' => $source['pool_id'],
@@ -627,27 +596,23 @@ try {
                 'end_date' => $source['end_date'],
                 'config_snapshot' => json_encode($newSnap),
             ]);
-            $results = executeRun($pdo, $simulator, $newRunId, $source['start_date'], $source['end_date'], true);
-
-            // Same results as the source run? (summary totals)
-            $old = json_decode($source['summary_json'] ?? '', true) ?: [];
-            $same = true;
-            foreach (['total_cost', 'total_heat_loss_kwh', 'hp_thermal_kwh', 'boiler_thermal_kwh'] as $k) {
-                if (isset($old[$k]) && abs(($results['summary'][$k] ?? 0) - $old[$k]) > max(0.01, abs($old[$k]) * 1e-6)) {
-                    $same = false;
-                }
+            // Simulated in the browser like any run, with its hours saved;
+            // the page compares the result with the source run
+            updateRunStatus($pdo, $newRunId, 'running');
+            try {
+                $inputs = $simulator->exportRunInputs($source['start_date'], $source['end_date']);
+            } catch (Throwable $e) {
+                updateRunStatus($pdo, $newRunId, 'failed', ['error' => $e->getMessage()]);
+                throw $e;
             }
-            if (!$same) {
-                $warnings[] = 'Results differ from the original run (weather/solar data or simulator changed since).';
-            }
-
             sendResponse([
-                'status' => 'success',
+                'status' => 'prepared',
                 'run_id' => $newRunId,
+                'store_hourly' => true,
+                'inputs' => $inputs,
                 'source_run_id' => $sourceId,
-                'matches_source' => $same,
+                'source_summary' => json_decode($source['summary_json'] ?? '', true) ?: [],
                 'warnings' => $warnings,
-                'simulator_version' => EnergySimulator::getVersion(),
             ]);
             break;
 
