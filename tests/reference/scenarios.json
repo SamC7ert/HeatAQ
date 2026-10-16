@@ -1,93 +1,100 @@
 [
-  {
-    "id": "predictive-2y",
-    "title": "Predictive, 2 years",
-    "description": "Template 13, 250 kW heat pump, electric boiler, 2024-2025: the standard winter/summer cycle over two years.",
-    "start": "2024-01-01",
-    "end": "2025-12-31"
-  },
-  {
-    "id": "predictive-standby-2y",
-    "title": "Predictive with long closures",
-    "description": "Template 16 (seasonal closures), standby 10 °C, 2024-2025: standby holding and the restart before reopening.",
-    "start": "2024-01-01",
-    "end": "2025-12-31"
-  },
-  {
-    "id": "predictive-offset",
-    "title": "Predictive, target offset +1.5 °C",
-    "description": "Template 14 with SimControl offset +1.5 °C, 2024.",
-    "start": "2024-01-01",
-    "end": "2024-12-31"
-  },
-  {
-    "id": "predictive-no-cover",
-    "title": "Predictive without cover",
-    "description": "Template 15, no pool cover, 2024: high closed-period losses.",
-    "start": "2024-01-01",
-    "end": "2024-12-31"
-  },
-  {
-    "id": "predictive-undersized",
-    "title": "Predictive, undersized plant",
-    "description": "Template 13, 80 kW heat pump, no boiler, 2024: targets cannot always be held.",
-    "start": "2024-01-01",
-    "end": "2024-12-31"
-  },
-  {
-    "id": "predictive-air-source",
-    "title": "Predictive, air-source heat pump",
-    "description": "Template 13, air-source heat pump (COP and operating limits from air temperature), 2024.",
-    "start": "2024-01-01",
-    "end": "2024-12-31"
-  },
-  {
-    "id": "predictive-new-pool",
-    "title": "Predictive, first year, no wind",
-    "description": "Template 16, years operating 1 (cold ground), wind exposure 0, 2024.",
-    "start": "2024-01-01",
-    "end": "2024-12-31"
-  },
-  {
-    "id": "reactive-fuel-boiler",
-    "title": "Reactive, fuel boiler",
-    "description": "Template 13, reactive strategy, boiler priced as fuel, 2024.",
-    "start": "2024-01-01",
-    "end": "2024-12-31"
-  },
-  {
-    "id": "no-heat-pump",
-    "title": "No heat pump",
-    "description": "Template 15, heat pump capacity 0: predictive falls back to reactive, boiler only, 2024.",
-    "start": "2024-01-01",
-    "end": "2024-12-31"
-  },
-  {
-    "id": "dst-spring",
-    "title": "Daylight saving starts",
-    "description": "Template 13, 30 Mar - 2 Apr 2024 (clocks go forward 31 Mar).",
-    "start": "2024-03-30",
-    "end": "2024-04-02"
-  },
-  {
-    "id": "dst-autumn-standby",
-    "title": "Daylight saving ends, standby",
-    "description": "Template 16, 26-28 Oct 2024 (clocks go back 27 Oct), standby 12 °C.",
-    "start": "2024-10-26",
-    "end": "2024-10-28"
-  },
-  {
-    "id": "daily-solar",
-    "title": "Daily solar data only",
-    "description": "Template 13, predictive, 2024, solar from daily totals spread over the day.",
-    "start": "2024-01-01",
-    "end": "2024-12-31"
-  },
-  {
-    "id": "no-solar",
-    "title": "No solar data",
-    "description": "Template 13, predictive, 2024, site without solar data.",
-    "start": "2024-01-01",
-    "end": "2024-12-31"
-  }
+    {
+        "id": "predictive-2y",
+        "title": "Predictive, 2 years",
+        "description": "Template 13, 250 kW heat pump, electric boiler, 2024-2025: the standard winter/summer cycle over two years.",
+        "start": "2024-01-01",
+        "end": "2025-12-31"
+    },
+    {
+        "id": "predictive-standby-2y",
+        "title": "Predictive with long closures",
+        "description": "Template 16 (seasonal closures), standby 10 °C, 2024-2025: standby holding and the restart before reopening.",
+        "start": "2024-01-01",
+        "end": "2025-12-31"
+    },
+    {
+        "id": "predictive-offset",
+        "title": "Predictive, target offset +1.5 °C",
+        "description": "Template 14 with SimControl offset +1.5 °C, 2024.",
+        "start": "2024-01-01",
+        "end": "2024-12-31"
+    },
+    {
+        "id": "predictive-no-cover",
+        "title": "Predictive without cover",
+        "description": "Template 15, no pool cover, 2024: high closed-period losses.",
+        "start": "2024-01-01",
+        "end": "2024-12-31"
+    },
+    {
+        "id": "predictive-undersized",
+        "title": "Predictive, undersized plant",
+        "description": "Template 13, 80 kW heat pump, no boiler, 2024: targets cannot always be held.",
+        "start": "2024-01-01",
+        "end": "2024-12-31"
+    },
+    {
+        "id": "predictive-air-source",
+        "title": "Predictive, air-source heat pump",
+        "description": "Template 13, air-source heat pump (COP and operating limits from air temperature), 2024.",
+        "start": "2024-01-01",
+        "end": "2024-12-31"
+    },
+    {
+        "id": "predictive-new-pool",
+        "title": "Predictive, first year, no wind",
+        "description": "Template 16, years operating 1 (cold ground), wind exposure 0, 2024.",
+        "start": "2024-01-01",
+        "end": "2024-12-31"
+    },
+    {
+        "id": "reactive-fuel-boiler",
+        "title": "Reactive, fuel boiler",
+        "description": "Template 13, reactive strategy, boiler priced as fuel, 2024.",
+        "start": "2024-01-01",
+        "end": "2024-12-31"
+    },
+    {
+        "id": "no-heat-pump",
+        "title": "No heat pump",
+        "description": "Template 15, heat pump capacity 0: predictive falls back to reactive, boiler only, 2024.",
+        "start": "2024-01-01",
+        "end": "2024-12-31"
+    },
+    {
+        "id": "dst-spring",
+        "title": "Daylight saving starts",
+        "description": "Template 13, 30 Mar - 2 Apr 2024 (clocks go forward 31 Mar).",
+        "start": "2024-03-30",
+        "end": "2024-04-02"
+    },
+    {
+        "id": "dst-autumn-standby",
+        "title": "Daylight saving ends, standby",
+        "description": "Template 16, 26-28 Oct 2024 (clocks go back 27 Oct), standby 12 °C.",
+        "start": "2024-10-26",
+        "end": "2024-10-28"
+    },
+    {
+        "id": "daily-solar",
+        "title": "Daily solar data only",
+        "description": "Template 13, predictive, 2024, solar from daily totals spread over the day.",
+        "start": "2024-01-01",
+        "end": "2024-12-31"
+    },
+    {
+        "id": "no-solar",
+        "title": "No solar data",
+        "description": "Template 13, predictive, 2024, site without solar data.",
+        "start": "2024-01-01",
+        "end": "2024-12-31"
+    },
+    {
+        "id": "predictive-forecast",
+        "title": "Predictive, planning on forecasts",
+        "description": "Template 13, 250 kW heat pump, January-February 2025, Planning weather = Forecast: MET Nordic forecasts for Røros (236 runs) in the inputs. Plans read the newest forecast available at each hour and plan again on each new one. The weather is the test database's and does not match the forecasts, so forecast errors are large: tests the engine, not the cost of forecast error.",
+        "start": "2025-01-01",
+        "end": "2025-02-28"
+    }
 ]
