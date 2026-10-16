@@ -809,6 +809,7 @@ const AdminModule = {
             this.renderWeatherSummary({});
             this.renderYearlyAverages([]);
             this.renderMonthlyAverages([]);
+            this.loadWeatherDayNight();
             return;
         }
 
@@ -841,7 +842,7 @@ const AdminModule = {
             if (monthlyData.monthly_averages) {
                 this.renderMonthlyAverages(monthlyData.monthly_averages);
             }
-            await this.loadForecastAccuracy();
+            await Promise.all([this.loadForecastAccuracy(), this.loadWeatherDayNight()]);
         } catch (err) {
             console.error('Failed to load weather data:', err);
         }
@@ -855,7 +856,7 @@ const AdminModule = {
      */
     loadForecastAccuracy: async function() {
         this.forecastAccuracy = null;
-        const ids = ['forecast-acc-year', 'forecast-acc-month', 'forecast-acc-lead'];
+        const ids = ['forecast-acc-year', 'forecast-acc-month', 'forecast-acc-lead', 'forecast-acc-day', 'forecast-acc-night'];
         if (!this.selectedStationId) {
             ids.forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = '<p class="text-muted">Select a station</p>'; });
             return;
@@ -880,6 +881,71 @@ const AdminModule = {
         set('forecast-acc-year', acc?.by_year, 'Year', 'year', v => v);
         set('forecast-acc-month', acc?.by_month, 'Month', 'month', v => months[v - 1]);
         set('forecast-acc-lead', acc?.by_lead, 'Hours ahead', 'lead_from', v => `${v}-${v + 5} h`);
+        // Day and night side by side; the all-months row (month 0) last
+        const allLast = rows => rows && [...rows.filter(r => r.month !== 0), ...rows.filter(r => r.month === 0)];
+        const monthOrAll = v => (v === 0 ? 'All' : months[v - 1]);
+        for (const part of ['day', 'night']) {
+            const el = document.getElementById(`forecast-acc-${part}`);
+            if (!el) continue;
+            if (acc && acc.day_night === null && acc.by_month?.length) {
+                el.innerHTML = '<p class="text-muted">The station has no position (latitude, longitude): day and night cannot be told apart.</p>';
+            } else {
+                set(`forecast-acc-${part}`, allLast(acc?.day_night?.[part]), 'Month', 'month', monthOrAll);
+            }
+        }
+    },
+
+    /**
+     * Observed weather by day and night per month (sun above / below the
+     * horizon at the station), all years.
+     */
+    loadWeatherDayNight: async function() {
+        const el = document.getElementById('weather-day-night');
+        if (!el) return;
+        if (!this.selectedStationId) {
+            el.innerHTML = '<p class="text-muted">Select a station</p>';
+            return;
+        }
+        let data;
+        try {
+            const q = new URLSearchParams({ action: 'get_weather_day_night', station_id: this.selectedStationId });
+            data = await (await fetch(`./api/heataq_api.php?${q}`)).json();
+            if (data.error) throw new Error(data.error);
+        } catch (err) {
+            console.error('Failed to load day and night weather:', err);
+            el.innerHTML = '<p class="text-muted">Could not load day and night averages.</p>';
+            return;
+        }
+        if (!data.positioned) {
+            el.innerHTML = '<p class="text-muted">The station has no position (latitude, longitude): day and night cannot be told apart.</p>';
+            return;
+        }
+        const rows = data.months || [];
+        if (!rows.length) {
+            el.innerHTML = '<p class="text-muted">No data available</p>';
+            return;
+        }
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const ordered = [...rows.filter(r => r.month !== 0), ...rows.filter(r => r.month === 0)];
+        const v = x => (x === null || x === undefined ? '-' : Number(x).toFixed(1));
+        const diff = (a, b) => (a === null || b === null ? '-' : ((a - b) > 0 ? '+' : '') + (a - b).toFixed(1));
+        const num = 'style="text-align: right;"';
+        el.innerHTML = `<table class="data-table compact">
+            <thead>
+                <tr><th rowspan="2">Month</th>
+                    <th rowspan="2" title="Share of the month's hours with the sun above the horizon">Day %</th>
+                    <th colspan="3" style="text-align: center;">Air °C</th>
+                    <th colspan="3" style="text-align: center;">Wind m/s</th>
+                    <th colspan="3" style="text-align: center;" title="Relative humidity">RH %</th></tr>
+                <tr>${'<th>Day</th><th>Night</th><th title="Day - night">Diff</th>'.repeat(3)}</tr>
+            </thead>
+            <tbody>${ordered.map(r => `<tr${r.month === 0 ? ' style="font-weight: 600; border-top: 2px solid var(--border, #ccc);"' : ''}>
+                <td${r.month === 0 ? ' title="Average of the 12 months"' : ''}>${r.month === 0 ? 'Year' : months[r.month - 1]}</td>
+                <td ${num}>${r.day_share === null ? '-' : r.day_share + '%'}</td>
+                <td ${num}>${v(r.day.t)}</td><td ${num}>${v(r.night.t)}</td><td ${num}>${diff(r.day.t, r.night.t)}</td>
+                <td ${num}>${v(r.day.w)}</td><td ${num}>${v(r.night.w)}</td><td ${num}>${diff(r.day.w, r.night.w)}</td>
+                <td ${num}>${v(r.day.h)}</td><td ${num}>${v(r.night.h)}</td><td ${num}>${diff(r.day.h, r.night.h)}</td>
+            </tr>`).join('')}</tbody></table>`;
     },
 
     /** Forecast column of the yearly table: share of the year's runs fetched. */
@@ -912,7 +978,7 @@ const AdminModule = {
                     <th colspan="2" style="text-align: center;" title="Relative humidity">RH %</th></tr>
                 <tr>${'<th title="Average of forecast - observed (+ = forecast too high)">Bias</th><th title="Mean absolute error: average size of the error">MAE</th>'.repeat(3)}</tr>
             </thead>
-            <tbody>${rows.map(r => `<tr>
+            <tbody>${rows.map(r => `<tr${key === 'month' && r[key] === 0 ? ' style="font-weight: 600; border-top: 2px solid var(--border, #ccc);"' : ''}>
                 <td>${escapeHtml(fmtKey(r[key]))}</td>
                 <td style="text-align: right;">${Number(r.hours).toLocaleString()}</td>
                 <td style="text-align: right;">${sign(r.t_bias)}</td><td style="text-align: right;">${mae(r.t_mae)}</td>

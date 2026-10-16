@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HeatAQ Schedule Management</title>
     <link rel="icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="./assets/css/main.css?v=265">
-    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=265">
-    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=265">
-    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=265">
-    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=265">
-    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=265">
+    <link rel="stylesheet" href="./assets/css/main.css?v=266">
+    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=266">
+    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=266">
+    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=266">
+    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=266">
+    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=266">
     <style>
         /* Top bar, right: background saving panel, user card */
         .top-bar-right {
@@ -1417,6 +1417,12 @@
                         </div>
                     </div>
 
+                    <div class="card">
+                        <h3>Day and Night by Month (All Years)</h3>
+                        <p class="text-muted" style="font-size: 13px; margin: 0 0 8px;">Observed averages with the sun above the horizon at the station (day) and below it (night), from the station's position; filled hours left out. Day % = share of the month's hours that are day. Year = the average of the 12 months (day hours are mostly summer hours, so an average of all hours would mix the season into the day&ndash;night difference).</p>
+                        <div id="weather-day-night" style="max-width: 760px;"><p class="loading">Loading...</p></div>
+                    </div>
+
                     <p class="text-muted" style="font-size: 13px; margin: 18px 0 8px;">Forecast accuracy: MET Nordic forecasts against this station's observations (filled hours left out). Bias = average of forecast &minus; observed (+ = forecast too high); MAE = average size of the error. By year and month: forecast hours 1&ndash;24 h ahead, the range a night's plan mostly uses.</p>
                     <div class="admin-grid">
                         <div class="card">
@@ -1426,6 +1432,18 @@
                         <div class="card">
                             <h3>Forecast Accuracy by Month (All Years)</h3>
                             <div id="forecast-acc-month"><p class="loading">Loading...</p></div>
+                        </div>
+                    </div>
+                    <div class="admin-grid">
+                        <div class="card">
+                            <h3>Forecast Accuracy by Month: Day</h3>
+                            <p class="text-muted" style="font-size: 13px; margin: 0 0 8px;">Hours with the sun above the horizon at the station.</p>
+                            <div id="forecast-acc-day"><p class="loading">Loading...</p></div>
+                        </div>
+                        <div class="card">
+                            <h3>Forecast Accuracy by Month: Night</h3>
+                            <p class="text-muted" style="font-size: 13px; margin: 0 0 8px;">Hours with the sun below the horizon at the station.</p>
+                            <div id="forecast-acc-night"><p class="loading">Loading...</p></div>
                         </div>
                     </div>
                     <div class="card">
@@ -1830,20 +1848,20 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=265"></script>
+    <script src="./assets/js/config.js?v=266"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=265"></script>
-    <script src="./assets/js/modules/navigation.js?v=265"></script>
-    <script src="./assets/js/modules/schedules.js?v=265"></script>
-    <script src="./assets/js/modules/calendar.js?v=265"></script>
-    <script src="./assets/js/sim/heataq-sim.js?v=265"></script>
-    <script src="./assets/js/modules/simengine.js?v=265"></script>
-    <script src="./assets/js/modules/simulations.js?v=265"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=265"></script>
-    <script src="./assets/js/modules/configuration.js?v=265"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=265"></script>
-    <script src="./assets/js/modules/admin.js?v=265"></script>
-    <script src="./assets/js/modules/project.js?v=265"></script>
-    <script src="./assets/js/app.js?v=265"></script>
+    <script src="./assets/js/modules/api.js?v=266"></script>
+    <script src="./assets/js/modules/navigation.js?v=266"></script>
+    <script src="./assets/js/modules/schedules.js?v=266"></script>
+    <script src="./assets/js/modules/calendar.js?v=266"></script>
+    <script src="./assets/js/sim/heataq-sim.js?v=266"></script>
+    <script src="./assets/js/modules/simengine.js?v=266"></script>
+    <script src="./assets/js/modules/simulations.js?v=266"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=266"></script>
+    <script src="./assets/js/modules/configuration.js?v=266"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=266"></script>
+    <script src="./assets/js/modules/admin.js?v=266"></script>
+    <script src="./assets/js/modules/project.js?v=266"></script>
+    <script src="./assets/js/app.js?v=266"></script>
 </body>
 </html>

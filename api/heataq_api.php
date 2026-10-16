@@ -542,6 +542,10 @@ class HeatAQAPI {
                     $this->getForecastAccuracy();
                     break;
 
+                case 'get_weather_day_night':
+                    $this->getWeatherDayNight();
+                    break;
+
                 case 'fetch_forecasts_day':
                     if (!$this->canDelete()) {
                         $this->sendError('Permission denied - admin only', 403);
@@ -1968,6 +1972,50 @@ class HeatAQAPI {
             }
             return $out;
         };
+        // Day and night (sun above / below the horizon at the station):
+        // forecast hours 1-24 h ahead, per month; month 0 = all months
+        $dayNight = null;
+        $stmt = $this->db->prepare("SELECT latitude, longitude FROM weather_stations WHERE station_id = ?");
+        $stmt->execute([$stationId]);
+        $pos = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($pos && $pos['latitude'] !== null && $pos['longitude'] !== null) {
+            $lat = (float) $pos['latitude'];
+            $lon = (float) $pos['longitude'];
+            $stmt = $this->db->prepare("
+                SELECT MONTH(f.valid_at) AS m, DAYOFMONTH(f.valid_at) AS d, HOUR(f.valid_at) AS h,
+                       COUNT(*) AS n,
+                       SUM(f.air_temperature - w.temperature) AS t_sum,
+                       SUM(ABS(f.air_temperature - w.temperature)) AS t_abs,
+                       SUM(f.wind_speed - w.wind_speed) AS w_sum,
+                       SUM(ABS(f.wind_speed - w.wind_speed)) AS w_abs,
+                       SUM(f.humidity - w.humidity) AS h_sum,
+                       SUM(ABS(f.humidity - w.humidity)) AS h_abs
+                FROM weather_forecasts f
+                JOIN weather_data w ON w.station_id = f.station_id AND w.timestamp = f.valid_at
+                WHERE f.station_id = ? AND f.source = 'met_nordic'
+                  AND TIMESTAMPDIFF(HOUR, f.issued_at, f.valid_at) BETWEEN 1 AND 24
+                  AND w.temperature IS NOT NULL AND w.wind_speed IS NOT NULL AND w.humidity IS NOT NULL
+                  {$notFilled}
+                GROUP BY m, d, h
+            ");
+            $stmt->execute([$stationId]);
+            $day = $night = [];
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $g) {
+                $up = self::sunUp($lat, $lon, (int) $g['m'], (int) $g['d'], (int) $g['h']);
+                if ($up) {
+                    $add($day[(int) $g['m']], $g);
+                    $add($day[0], $g);
+                } else {
+                    $add($night[(int) $g['m']], $g);
+                    $add($night[0], $g);
+                }
+            }
+            $dayNight = [
+                'day' => $finish($day, 'month'),
+                'night' => $finish($night, 'month'),
+            ];
+        }
+
         require_once __DIR__ . '/../lib/MetNordicForecast.php';
         $this->sendResponse([
             'installed' => true,
@@ -1976,7 +2024,108 @@ class HeatAQAPI {
             'by_year' => $finish($byYear, 'year'),
             'by_month' => $finish($byMonth, 'month'),
             'by_lead' => $finish($byLead, 'lead_from'),
+            'day_night' => $dayNight,
         ]);
+    }
+
+    /**
+     * Observed weather by day and night (sun above / below the horizon at
+     * the station), per month over all years; month 0 = the year. Each
+     * row: hours and averages of air (t), wind (w) and humidity (h) for day
+     * and night, and the share of the month's hours that are day.
+     */
+    private function getWeatherDayNight() {
+        $stationId = $_GET['station_id'] ?? '';
+        if ($stationId === '') {
+            $this->sendError('station_id required');
+        }
+        $stmt = $this->db->prepare("SELECT latitude, longitude FROM weather_stations WHERE station_id = ?");
+        $stmt->execute([$stationId]);
+        $pos = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$pos || $pos['latitude'] === null || $pos['longitude'] === null) {
+            $this->sendResponse(['positioned' => false, 'months' => []]);
+            return;
+        }
+        $notFilled = $this->columnExists('weather_data', 'is_interpolated')
+            ? 'AND COALESCE(is_interpolated, 0) = 0' : '';
+        // Weather timestamps are UTC (as the forecasts' valid times)
+        $stmt = $this->db->prepare("
+            SELECT MONTH(timestamp) AS m, DAYOFMONTH(timestamp) AS d, HOUR(timestamp) AS h,
+                   COUNT(temperature) AS t_n, SUM(temperature) AS t_sum,
+                   COUNT(wind_speed) AS w_n, SUM(wind_speed) AS w_sum,
+                   COUNT(humidity) AS h_n, SUM(humidity) AS h_sum
+            FROM weather_data
+            WHERE station_id = ? {$notFilled}
+            GROUP BY m, d, h
+        ");
+        $stmt->execute([$stationId]);
+        $lat = (float) $pos['latitude'];
+        $lon = (float) $pos['longitude'];
+        $keys = ['t_n', 't_sum', 'w_n', 'w_sum', 'h_n', 'h_sum'];
+        $b = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $g) {
+            $part = self::sunUp($lat, $lon, (int) $g['m'], (int) $g['d'], (int) $g['h']) ? 'day' : 'night';
+            foreach ($keys as $k) {
+                $b[(int) $g['m']][$part][$k] = ($b[(int) $g['m']][$part][$k] ?? 0) + (float) $g[$k];
+            }
+        }
+        ksort($b);
+        $avg = function ($s, $p) {
+            return ($s && $s[$p . '_n'] > 0) ? round($s[$p . '_sum'] / $s[$p . '_n'], 1) : null;
+        };
+        $months = [];
+        foreach ($b as $m => $parts) {
+            $d = $parts['day'] ?? null;
+            $n = $parts['night'] ?? null;
+            $dh = $d ? (int) $d['t_n'] : 0;
+            $nh = $n ? (int) $n['t_n'] : 0;
+            $months[] = [
+                'month' => $m,
+                'day_hours' => $dh, 'night_hours' => $nh,
+                'day_share' => ($dh + $nh) > 0 ? round(100 * $dh / ($dh + $nh)) : null,
+                'day' => ['t' => $avg($d, 't'), 'w' => $avg($d, 'w'), 'h' => $avg($d, 'h')],
+                'night' => ['t' => $avg($n, 't'), 'w' => $avg($n, 'w'), 'h' => $avg($n, 'h')],
+            ];
+        }
+        // The year: the average of the months, not of all hours (day hours
+        // are mostly summer hours, so an hourly average would mix the season
+        // into the day-night difference)
+        if ($months) {
+            $mean = function ($part, $p) use ($months) {
+                $v = array_filter(array_map(fn($r) => $r[$part][$p], $months), fn($x) => $x !== null);
+                return $v ? round(array_sum($v) / count($v), 1) : null;
+            };
+            $dh = array_sum(array_column($months, 'day_hours'));
+            $nh = array_sum(array_column($months, 'night_hours'));
+            $months[] = [
+                'month' => 0,
+                'day_hours' => $dh, 'night_hours' => $nh,
+                'day_share' => ($dh + $nh) > 0 ? round(100 * $dh / ($dh + $nh)) : null,
+                'day' => ['t' => $mean('day', 't'), 'w' => $mean('day', 'w'), 'h' => $mean('day', 'h')],
+                'night' => ['t' => $mean('night', 't'), 'w' => $mean('night', 'w'), 'h' => $mean('night', 'h')],
+            ];
+        }
+        $this->sendResponse(['positioned' => true, 'months' => $months]);
+    }
+
+    /**
+     * Is the sun above the horizon at the station at this UTC hour (on the
+     * hour)? NOAA's approximation (declination, equation of time), within a
+     * few minutes of sunrise and sunset; a non-leap year's day number.
+     */
+    private static function sunUp($lat, $lon, $month, $day, $hour) {
+        static $cum = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+        $doy = $cum[$month - 1] + $day;
+        $g = 2 * M_PI / 365 * ($doy - 1 + ($hour - 12) / 24);
+        $decl = 0.006918 - 0.399912 * cos($g) + 0.070257 * sin($g)
+              - 0.006758 * cos(2 * $g) + 0.000907 * sin(2 * $g)
+              - 0.002697 * cos(3 * $g) + 0.00148 * sin(3 * $g);
+        $eqTime = 229.18 * (0.000075 + 0.001868 * cos($g) - 0.032077 * sin($g)
+                - 0.014615 * cos(2 * $g) - 0.040849 * sin(2 * $g));
+        $solarMin = $hour * 60 + $eqTime + 4 * $lon;
+        $ha = deg2rad($solarMin / 4 - 180);
+        $phi = deg2rad($lat);
+        return sin($phi) * sin($decl) + cos($phi) * cos($decl) * cos($ha) > 0;
     }
 
     /**
