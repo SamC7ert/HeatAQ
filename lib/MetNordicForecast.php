@@ -55,14 +55,9 @@ class MetNordicForecast {
             $have = array_values(array_intersect($variables, $layout['variables']));
             if (array_diff(self::REQUIRED, $have)) { $result['skipped'][] = $hh; continue; }
             $last = min($hours, $layout['steps'] - 1);
-            $i = $cell['i'];
-            $j = $cell['j'];
-            $sl = "[0:{$last}][{$j}:" . ($j + 1) . "][{$i}:" . ($i + 1) . "]";
-            $parts = ["time[0:{$last}]"];
-            foreach ($have as $v) $parts[] = $v . $sl;
             $runs[$hh] = ['path' => $path, 'last' => $last,
                           'das' => self::dapUrl($path, 'das'),
-                          'data' => self::dapUrl($path, 'ascii', implode(',', $parts))];
+                          'data' => self::dataUrl($path, $cell, $have, $last)];
         }
         $urls = [];
         foreach ($runs as $hh => $r) { $urls["das{$hh}"] = $r['das']; $urls["data{$hh}"] = $r['data']; }
@@ -70,6 +65,17 @@ class MetNordicForecast {
         foreach ($runs as $hh => $r) {
             $das = $bodies["das{$hh}"];
             $data = $bodies["data{$hh}"];
+            if ($data === false) {
+                // Refused (HTTP 400): this file differs from its month's
+                // layout (e.g. a run with only 35 hours): read its own and ask again
+                $layout = self::layout($r['path'], true);
+                if ($layout === null) { $result['missing'][] = $hh; continue; }
+                $have = array_values(array_intersect($variables, $layout['variables']));
+                if (array_diff(self::REQUIRED, $have)) { $result['skipped'][] = $hh; continue; }
+                $r['last'] = min($hours, $layout['steps'] - 1);
+                $data = self::httpGet(self::dataUrl($r['path'], $cell, $have, $r['last']));
+            }
+            if ($das === false) $das = '';   // no creation time: available_at falls back to run + 1 h
             if ($das === null || $data === null) { $result['missing'][] = $hh; continue; }
             $issued = sprintf('%s %02d:00:00', $date, $hh);
             $rows = array_merge($rows, self::runRows($station, $cell, $issued, $das, $data, $r['last'], $lapse));
@@ -169,17 +175,31 @@ class MetNordicForecast {
     }
 
     /** Variables and number of steps of a run file (read once per month and run hour). */
-    private static function layout(string $path) {
+    /** OPeNDAP request for the 4 corner points of a run, hours 0..$last. */
+    private static function dataUrl(string $path, array $cell, array $have, int $last) {
+        $i = $cell['i'];
+        $j = $cell['j'];
+        $sl = "[0:{$last}][{$j}:" . ($j + 1) . "][{$i}:" . ($i + 1) . "]";
+        $parts = ["time[0:{$last}]"];
+        foreach ($have as $v) $parts[] = $v . $sl;
+        return self::dapUrl($path, 'ascii', implode(',', $parts));
+    }
+
+    /**
+     * Variables and number of steps of a run file: the month's (cached per
+     * month and run hour), or with $own this file's own (not cached).
+     */
+    private static function layout(string $path, bool $own = false) {
         $key = substr($path, 0, 7) . substr($path, -7);
         self::loadCache();
-        if (isset(self::$cache['layouts'][$key])) return self::$cache['layouts'][$key];
+        if (!$own && isset(self::$cache['layouts'][$key])) return self::$cache['layouts'][$key];
         $dds = self::httpGet(self::dapUrl($path, 'dds'));
         if ($dds === null) return null;
         preg_match_all('/Float32 (\w+)\[time = \d+\]/', $dds, $m);
         $steps = preg_match('/time\[time = (\d+)\]/', $dds, $t) ? (int) $t[1] : 0;
         $layout = ['variables' => array_values(array_unique($m[1])), 'steps' => $steps];
         // Only cache complete layouts: an early or odd file is read again
-        if (!array_diff(self::REQUIRED, $layout['variables'])) {
+        if (!$own && !array_diff(self::REQUIRED, $layout['variables'])) {
             self::$cache['layouts'][$key] = $layout;
         }
         return $layout;
@@ -350,8 +370,9 @@ class MetNordicForecast {
     }
 
     /**
-     * Several GETs in parallel: [key => body | null (404)]. A request that
-     * fails is tried again on its own (httpGet: retries, then an exception).
+     * Several GETs in parallel: [key => body | null (404) | false (400)].
+     * Any other failure is tried again on its own (httpGet: retries, then
+     * an exception).
      */
     private static function httpGetMulti(array $urls) {
         $mh = curl_multi_init();
@@ -383,6 +404,8 @@ class MetNordicForecast {
                 $out[$key] = $body;
             } elseif ($code === 404) {
                 $out[$key] = null;
+            } elseif ($code === 400) {
+                $out[$key] = false;        // request not valid for this file (caller decides)
             } else {
                 $out[$key] = self::httpGet($urls[$key]);
             }
