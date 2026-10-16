@@ -17,6 +17,17 @@ export const T_REF_LOW = 5;
 export const T_REF_HIGH = 28;
 
 export interface HeatPumpResult { heat: number; electricity: number; cop: number; cost: number; }
+
+/** In-between values of heatLosses() for the Details hour panel (filled when passed). */
+export interface LossDetail {
+  p_water_pa?: number;
+  p_air_pa?: number;
+  delta_p_pa?: number;
+  v_eff_ms?: number;
+  activity_factor?: number;
+  temp_diff_k?: number;
+  bowen_ratio?: number;
+}
 export interface BoilerResult { heat: number; fuel: number; cost: number; }
 
 /** Physics bound to one run's pool configuration and equipment. */
@@ -78,10 +89,20 @@ export class Physics {
   }
 
   get boilerIsElectric(): boolean { return this.boilerElectric; }
+  /** Settings shown by the Details hour panel */
+  get settings() {
+    return {
+      hasCover: this.hasCover, coverU: this.coverU, windFactor: this.windFactor,
+      absorptivity: this.absorptivity, coverTransmittance: this.coverTransmittance,
+      length: this.length, width: this.width, depth: this.depth,
+      hpEnabled: this.hpEnabled, hpType: this.hpType, hpCapacity: this.hpCapacity, hpMinOp: this.hpMinOp,
+      boilerEnabled: this.boilerEnabled, boilerCapacity: this.boilerCapacity, boilerEfficiency: this.boilerEfficiency,
+    };
+  }
   get boilerOn(): boolean { return this.boilerEnabled; }
 
   heatLosses(waterTemp: number, airTemp: number, windSpeed: number, humidity: number,
-             isOpen: boolean, tunnelTemp: number | null): Losses {
+             isOpen: boolean, tunnelTemp: number | null, detail?: LossDetail): Losses {
     const isCovered = this.hasCover && !isOpen;
     const [floor, walls] = this.structural(waterTemp, tunnelTemp);
     let evap = 0, conv = 0, rad = 0, cover = 0;
@@ -90,8 +111,18 @@ export class Physics {
     } else {
       const e = this.evaporation(waterTemp, airTemp, humidity, windSpeed, isOpen);
       evap = e.loss;
-      conv = this.convection(waterTemp, airTemp, e.deltaP, e.lossRaw);
+      const c = this.convection(waterTemp, airTemp, e.deltaP, e.lossRaw);
+      conv = c.loss;
       rad = this.radiation(waterTemp, airTemp);
+      if (detail) {
+        detail.p_water_pa = e.pWater;
+        detail.p_air_pa = e.pAirActual;
+        detail.delta_p_pa = e.deltaP;
+        detail.v_eff_ms = e.vEff;
+        detail.activity_factor = e.activity;
+        detail.temp_diff_k = c.tempDiff;
+        detail.bowen_ratio = c.bowen;
+      }
     }
     const total = evap + conv + rad + cover + floor + walls;
     return {
@@ -131,17 +162,17 @@ export class Physics {
     const activity = isOpen ? (this.activityFactor ?? 1.0) : 1.0;
     evapPerM2 *= activity;
     const lossRaw = evapPerM2 * this.area * LATENT_HEAT_VAPORIZATION / 1000;
-    return { loss: Math.max(0, lossRaw), lossRaw, deltaP };
+    return { loss: Math.max(0, lossRaw), lossRaw, deltaP, pWater, pAirActual, vEff, activity };
   }
 
-  private convection(waterTemp: number, airTemp: number, deltaPIn: number, evapLoss: number): number {
+  private convection(waterTemp: number, airTemp: number, deltaPIn: number, evapLoss: number) {
     const tempDiff = waterTemp - airTemp;
     let deltaP = deltaPIn;
     if (Math.abs(deltaP) < 1.0) deltaP = deltaP >= 0 ? 1.0 : -1.0;
     const numr = AIR_SPECIFIC_HEAT * ATM_PRESSURE * tempDiff;
     const den = MOLECULAR_RATIO * LATENT_HEAT_VAPORIZATION * deltaP;
     const bowen = den !== 0 ? numr / den : 0;
-    return Math.max(0, bowen * evapLoss);
+    return { loss: Math.max(0, bowen * evapLoss), bowen, tempDiff };
   }
 
   private radiation(waterTemp: number, airTemp: number): number {

@@ -25,6 +25,7 @@ var HeatAQSim = (() => {
     PORT_OF_VERSION: () => PORT_OF_VERSION,
     compareReference: () => compareReference,
     computeClosedPlan: () => computeClosedPlan,
+    debugHour: () => debugHour,
     phpRound: () => phpRound,
     referenceResult: () => referenceResult,
     runSimulation: () => runSimulation,
@@ -130,10 +131,30 @@ var HeatAQSim = (() => {
     get boilerIsElectric() {
       return this.boilerElectric;
     }
+    /** Settings shown by the Details hour panel */
+    get settings() {
+      return {
+        hasCover: this.hasCover,
+        coverU: this.coverU,
+        windFactor: this.windFactor,
+        absorptivity: this.absorptivity,
+        coverTransmittance: this.coverTransmittance,
+        length: this.length,
+        width: this.width,
+        depth: this.depth,
+        hpEnabled: this.hpEnabled,
+        hpType: this.hpType,
+        hpCapacity: this.hpCapacity,
+        hpMinOp: this.hpMinOp,
+        boilerEnabled: this.boilerEnabled,
+        boilerCapacity: this.boilerCapacity,
+        boilerEfficiency: this.boilerEfficiency
+      };
+    }
     get boilerOn() {
       return this.boilerEnabled;
     }
-    heatLosses(waterTemp, airTemp, windSpeed, humidity, isOpen, tunnelTemp) {
+    heatLosses(waterTemp, airTemp, windSpeed, humidity, isOpen, tunnelTemp, detail) {
       const isCovered = this.hasCover && !isOpen;
       const [floor, walls] = this.structural(waterTemp, tunnelTemp);
       let evap = 0, conv = 0, rad = 0, cover = 0;
@@ -142,8 +163,18 @@ var HeatAQSim = (() => {
       } else {
         const e = this.evaporation(waterTemp, airTemp, humidity, windSpeed, isOpen);
         evap = e.loss;
-        conv = this.convection(waterTemp, airTemp, e.deltaP, e.lossRaw);
+        const c = this.convection(waterTemp, airTemp, e.deltaP, e.lossRaw);
+        conv = c.loss;
         rad = this.radiation(waterTemp, airTemp);
+        if (detail) {
+          detail.p_water_pa = e.pWater;
+          detail.p_air_pa = e.pAirActual;
+          detail.delta_p_pa = e.deltaP;
+          detail.v_eff_ms = e.vEff;
+          detail.activity_factor = e.activity;
+          detail.temp_diff_k = c.tempDiff;
+          detail.bowen_ratio = c.bowen;
+        }
       }
       const total = evap + conv + rad + cover + floor + walls;
       return {
@@ -181,7 +212,7 @@ var HeatAQSim = (() => {
       const activity = isOpen ? this.activityFactor ?? 1 : 1;
       evapPerM2 *= activity;
       const lossRaw = evapPerM2 * this.area * LATENT_HEAT_VAPORIZATION / 1e3;
-      return { loss: Math.max(0, lossRaw), lossRaw, deltaP };
+      return { loss: Math.max(0, lossRaw), lossRaw, deltaP, pWater, pAirActual, vEff, activity };
     }
     convection(waterTemp, airTemp, deltaPIn, evapLoss) {
       const tempDiff = waterTemp - airTemp;
@@ -190,7 +221,7 @@ var HeatAQSim = (() => {
       const numr = AIR_SPECIFIC_HEAT * ATM_PRESSURE * tempDiff;
       const den = MOLECULAR_RATIO * LATENT_HEAT_VAPORIZATION * deltaP;
       const bowen = den !== 0 ? numr / den : 0;
-      return Math.max(0, bowen * evapLoss);
+      return { loss: Math.max(0, bowen * evapLoss), bowen, tempDiff };
     }
     radiation(waterTemp, airTemp) {
       const tW = waterTemp + 273.15;
@@ -462,7 +493,7 @@ var HeatAQSim = (() => {
       this.openPreheat = false;
       this.openMaxTemp = null;
       this.openBankEnd = 0;
-      // Planning on forecasts (doc §9); null = plans read the actual weather
+      // Planning on forecasts (doc §11); null = plans read the actual weather
       this.forecast = null;
       this.planRun = null;
       this.fs = { plans: 0, plans_without: 0, replans: 0, age_sum: 0, hours_beyond: 0 };
@@ -750,6 +781,172 @@ var HeatAQSim = (() => {
       this.planRun = null;
       if (needed === null) needed = 14 * 24;
       return openTs - (needed + 12) * 3600;
+    }
+    // ---- Details: one hour, recomputed (was EnergySimulator::debugSingleHour) ----
+    /**
+     * The losses, gains and heating of one hour (site local time, as in the
+     * results), at the given water temperature (the hour's start) and open
+     * state (the run's). Heating is the steady-state view: hold the target
+     * (closed predictive: heat pump only); the run's own mode is in its row.
+     */
+    debugHour(localTs, waterTempIn, isOpenOverride) {
+      const row = this.weather.find((r2) => r2[1] === localTs);
+      if (!row) return { error: `No weather data for ${localTs} in this run's inputs` };
+      if (row[2] === null || row[3] === null || row[4] === null) {
+        throw new Error(`Weather for ${localTs} is missing a value (air, wind or humidity)`);
+      }
+      const utc = row[0];
+      const tsMs = parseNaive(localTs);
+      const hourlySolar = this.solarForHour(utc.slice(0, 10), +utc.slice(11, 13));
+      const solarSource = this.inputs.solar_kind === "none" || !this.hasSolar ? "none" : this.inputs.solar_kind;
+      let isOpen = false;
+      let targetTemp = null;
+      if (isOpenOverride !== null) {
+        isOpen = isOpenOverride;
+        targetTemp = this.fallbackTarget();
+        const period = this.sched ? this.sched.getCurrentPeriod(tsMs) : null;
+        if (period && period.target_temp !== void 0 && period.target_temp !== null) targetTemp = period.target_temp;
+      } else if (this.sched) {
+        const period = this.sched.getCurrentPeriod(tsMs);
+        if (period) {
+          isOpen = true;
+          targetTemp = period.target_temp ?? 28;
+        }
+      }
+      const poolTemp = waterTempIn ?? 28.59;
+      const air = this.air(row), wind = this.wind(row), hum = this.hum(row), tunnel = this.tunnel(row);
+      const detail = {};
+      const losses = this.phys.heatLosses(poolTemp, air, wind, hum, isOpen, tunnel, detail);
+      const solarGain = this.phys.solarGain(hourlySolar, isOpen);
+      const net = losses.total - solarGain;
+      const st = this.phys.settings;
+      const strategy = this.strategy();
+      const tmr = this.tmr && this.tmr > 0 ? this.tmr : 1;
+      let heating;
+      let mode;
+      if (strategy === "predictive" && !isOpen) {
+        heating = this.heatPumpToHold(targetTemp ?? this.fallbackTarget(), net, air, poolTemp, tmr);
+        mode = "closed_hold";
+      } else {
+        heating = this.calculateHeating(net, air, targetTemp, poolTemp);
+        mode = strategy === "predictive" ? "open_hold" : "reactive";
+      }
+      const b = this.eq.bathers || {};
+      const bathers = num(b.per_day, null), perVisit = num(b.kwh_per_visit, null), openH = num(b.open_hours, null);
+      const waterHeating = bathers !== null && perVisit !== null && openH !== null && openH > 0 ? bathers * perVisit / openH : 0;
+      const r = (v, d) => phpRound(v, d);
+      const perimeter = num(this.pool.perimeter_m, 2 * (st.length + st.width));
+      const isCovered = st.hasCover && !isOpen;
+      const tempDiff = (targetTemp ?? 28) - poolTemp;
+      const heatToRaise = this.phys.heatForTempRise(Math.max(0, tempDiff), 1);
+      const totalHeating = heating.hp_heat + heating.boiler_heat;
+      return {
+        timestamp: localTs,
+        input: {
+          date: localTs.slice(0, 10),
+          hour: +localTs.slice(11, 13),
+          weather: {
+            air_temp_c: r(air, 2),
+            wind_speed_ms: r(wind, 2),
+            humidity_pct: r(hum, 1),
+            solar_ghi_wm2: r(hourlySolar * 1e3, 2),
+            tunnel_temp_c: tunnel
+          },
+          pool: {
+            water_temp_c: r(poolTemp, 4),
+            area_m2: this.phys.area,
+            volume_m3: this.phys.volume,
+            depth_m: st.depth,
+            perimeter_m: r(perimeter, 1),
+            wall_area_m2: r(perimeter * st.depth, 1),
+            floor_area_m2: this.phys.area,
+            target_temp: targetTemp
+          },
+          config: {
+            wind_factor: st.windFactor,
+            years_operating: this.pool.years_operating ?? 3,
+            has_cover: st.hasCover,
+            cover_u_value: st.coverU,
+            solar_absorption: st.absorptivity,
+            is_open: isOpen,
+            target_temp: targetTemp
+          }
+        },
+        losses: {
+          evaporation_kw: r(losses.evaporation, 3),
+          convection_kw: r(losses.convection, 3),
+          radiation_kw: r(losses.radiation, 3),
+          cover_kw: r(losses.cover, 3),
+          floor_kw: r(losses.floor, 3),
+          walls_kw: r(losses.walls, 3),
+          total_kw: r(losses.total, 3)
+        },
+        evaporation: {
+          p_water_pa: r(detail.p_water_pa ?? 0, 1),
+          p_air_pa: r(detail.p_air_pa ?? 0, 1),
+          delta_p_pa: r(detail.delta_p_pa ?? 0, 1),
+          v_eff_ms: r(detail.v_eff_ms ?? 0, 2),
+          activity_factor: detail.activity_factor ?? 1,
+          loss_kw: r(losses.evaporation, 3)
+        },
+        convection: { temp_diff_k: r(detail.temp_diff_k ?? 0, 2), bowen_ratio: r(detail.bowen_ratio ?? 0, 3), loss_kw: r(losses.convection, 3) },
+        radiation: { water_temp_k: r(poolTemp + 273.15, 1), sky_temp_k: r(air - 10 + 273.15, 1), loss_kw: r(losses.radiation, 3) },
+        cover: { has_cover: st.hasCover, is_covered: isCovered, u_value: st.coverU, transmittance: st.coverTransmittance, loss_kw: r(losses.cover, 3) },
+        solar_gain: { source: solarSource, hourly_kwh_m2: r(hourlySolar, 4), solar_gain_kw: r(solarGain, 3) },
+        structural: { floor_kw: r(losses.floor, 3), walls_kw: r(losses.walls, 3), total_kw: r(losses.floor + losses.walls, 3) },
+        water_heating: { bathers_per_day: bathers, kwh_per_visit: perVisit, open_hours: openH, water_heating_kw: r(waterHeating, 3) },
+        heat_pump: {
+          strategy,
+          type: st.hpType,
+          capacity_kw: st.hpCapacity,
+          enabled: st.hpEnabled,
+          min_temp_c: st.hpMinOp ?? -20,
+          cop: r(heating.hp_cop, 2),
+          output_kw: r(heating.hp_heat, 3),
+          electricity_kw: r(heating.hp_electricity, 3)
+        },
+        boiler: {
+          capacity_kw: st.boilerCapacity,
+          enabled: st.boilerEnabled,
+          efficiency: st.boilerEfficiency,
+          type: this.phys.boilerIsElectric ? "electric" : "fuel",
+          output_kw: r(heating.boiler_heat, 3),
+          fuel_kw: r(heating.boiler_fuel, 3)
+        },
+        heating_summary: {
+          net_demand_kw: r(Math.max(0, net), 3),
+          hp_output_kw: r(heating.hp_heat, 3),
+          boiler_output_kw: r(heating.boiler_heat, 3),
+          total_heating_kw: r(totalHeating, 3),
+          unmet_kw: r(Math.max(0, net - totalHeating), 3),
+          debug_mode: mode
+        },
+        heating_calc_debug: {
+          net_requirement_kw: r(net, 2),
+          air_temp_c: r(air, 2),
+          target_temp_c: r(targetTemp ?? 28, 2),
+          water_temp_c: r(poolTemp, 2),
+          volume_m3: this.phys.volume,
+          temp_diff_c: r(tempDiff, 2),
+          heat_to_raise_kw: r(heatToRaise, 2),
+          required_heat_kw: r(net + heatToRaise, 2),
+          hp_output_kw: r(heating.hp_heat, 2),
+          boiler_output_kw: r(heating.boiler_heat, 2)
+        },
+        summary: {
+          evaporation_kw: r(losses.evaporation, 3),
+          convection_kw: r(losses.convection, 3),
+          radiation_kw: r(losses.radiation, 3),
+          cover_loss_kw: r(losses.cover, 3),
+          wall_loss_kw: r(losses.walls, 3),
+          floor_loss_kw: r(losses.floor, 3),
+          water_heating_kw: r(waterHeating, 3),
+          total_loss_kw: r(losses.total, 3),
+          solar_gain_kw: r(solarGain, 3),
+          net_requirement_kw: r(net, 3)
+        },
+        pool: { water_temp: poolTemp, thermal_mass: this.tmr }
+      };
     }
     // ---- main loop ----
     run(progress) {
@@ -1084,6 +1281,9 @@ var HeatAQSim = (() => {
       return { version: PORT_OF_VERSION, summary: s, daily, hourly };
     }
   };
+  function debugHour(inputs, localTs, waterTemp, isOpen) {
+    return new Run(inputs).debugHour(localTs, waterTemp, isOpen);
+  }
   function runSimulation(inputs, progress) {
     if (!inputs || inputs.format !== 1) throw new Error("Unsupported simulator inputs");
     return new Run(inputs).run(progress);

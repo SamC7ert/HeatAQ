@@ -140,7 +140,9 @@ function getParam($name, $default = null) {
  * completed run of this site that covers $date AND stored hourly rows
  * (summary-only runs cannot be inspected). Used by debug_hour and debug_week.
  */
-function defaultDebugRunId($pdo, $poolSiteId, $date) {
+function defaultDebugRunId($pdo, $poolSiteId, $date, $needHourly = true) {
+    $hourly = $needHourly
+        ? 'AND EXISTS (SELECT 1 FROM simulation_hourly_results h WHERE h.run_id = r.run_id)' : '';
     $stmt = $pdo->prepare("
         SELECT r.run_id
         FROM simulation_runs r
@@ -148,7 +150,7 @@ function defaultDebugRunId($pdo, $poolSiteId, $date) {
           AND r.status = 'completed'
           AND r.start_date <= ?
           AND r.end_date >= ?
-          AND EXISTS (SELECT 1 FROM simulation_hourly_results h WHERE h.run_id = r.run_id)
+          {$hourly}
         ORDER BY r.created_at DESC, r.run_id DESC
         LIMIT 1
     ");
@@ -1193,11 +1195,11 @@ try {
             break;
 
         case 'debug_hour':
-            // Debug a single hour - reads from stored simulation data + detailed recalc
+            // Details hour panel: the run's saved row for the hour (if its
+            // hours are saved), its settings and the day's schedule
             $date = getParam('date');
             $hour = (int) getParam('hour', 0);
             $runId = getParam('run_id'); // Optional: specific run
-            $waterTempOverride = getParam('water_temp'); // Optional manual override
 
             if (!$date) {
                 sendError('date parameter required (YYYY-MM-DD)');
@@ -1224,13 +1226,16 @@ try {
             }
             if (!$runId) {
                 $poolSiteId = $currentPoolSiteId;
-                $runId = defaultDebugRunId($pdo, $poolSiteId, $date);
+                // Newest completed run covering the date: its hours are
+                // computed in the browser when they are not saved
+                $runId = defaultDebugRunId($pdo, $poolSiteId, $date, false);
                 if (!$runId) {
-                    sendError("No simulation run with stored hourly data covers $date. Run a simulation with 'Store hourly' on first.", 404);
+                    sendError("No simulation run covers $date: run one (or open one in History) first.", 404);
                 }
             }
 
-            // Get stored hourly data for this timestamp
+            // The hour as the run saved it, if its hours are in the database
+            // (the browser has them otherwise: computed or kept from the run)
             $stmt = $pdo->prepare("
                 SELECT *
                 FROM simulation_hourly_results
@@ -1238,135 +1243,48 @@ try {
                 LIMIT 1
             ");
             $stmt->execute([$runId, $timestamp]);
-            $stored = $stmt->fetch(PDO::FETCH_ASSOC);
+            $stored = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 
-            if (!$stored && getParam('row')) {
-                // A TypeScript run whose hours are not (yet) in the database:
-                // the browser sends this hour's row (the stored values) itself.
-                // Only shown back to this user; nothing is written.
-                $r = json_decode((string) getParam('row'), true);
-                if (is_array($r) && count($r) >= 17 && $r[0] === $timestamp) {
-                    $stored = [
-                        'water_temp' => (float) $r[6], 'water_temp_start' => (float) $r[7], 'is_open' => $r[8] ? 1 : 0,
-                        'total_loss_kw' => (float) $r[9], 'solar_gain_kw' => (float) $r[10], 'hp_heat_kw' => (float) $r[11],
-                        'boiler_heat_kw' => (float) $r[12], 'hp_cop' => (float) $r[15],
-                    ];
-                }
-            }
-
-            if (!$stored) {
-                $anyStmt = $pdo->prepare("SELECT 1 FROM simulation_hourly_results WHERE run_id = ? LIMIT 1");
-                $anyStmt->execute([$runId]);
-                if (isHourlySaving($pdo, $runId)) {
-                    sendError("The hourly data of run $runId is still being saved (or its saving was interrupted: use Recreate hours).", 404);
-                }
-                if (!$anyStmt->fetchColumn()) {
-                    sendError("Run $runId was saved without hourly data, so its hours cannot be inspected. Re-run it with 'Store hourly' on.", 404);
-                }
-                sendError("No stored data found for $timestamp in run $runId", 404);
-            }
-
-            // Use stored water temp unless overridden.
-            // Prefer the START-of-hour temp (what the simulation used to compute this
-            // hour's losses) so the debug recompute reconciles with stored total_loss_kw.
-            // Falls back to water_temp (end-of-hour) for runs predating migration 032.
-            $storedStartTemp = isset($stored['water_temp_start']) && $stored['water_temp_start'] !== null
-                ? (float)$stored['water_temp_start']
-                : (float)$stored['water_temp'];
-            $waterTemp = $waterTempOverride ? (float)$waterTempOverride : $storedStartTemp;
-
-            // Load config_snapshot from the simulation run to use the same settings
-            $configStmt = $pdo->prepare("SELECT config_snapshot FROM simulation_runs WHERE run_id = ?");
+            $configStmt = $pdo->prepare("SELECT config_snapshot, start_date, end_date FROM simulation_runs WHERE run_id = ?");
             $configStmt->execute([$runId]);
-            $runConfig = $configStmt->fetch();
-            $configSnapshot = $runConfig ? json_decode($runConfig['config_snapshot'], true) : [];
-
-            // Initialize scheduler with the stored schedule template
-            $scheduleTemplateId = $configSnapshot['schedule_template_id'] ?? null;
-            $poolSiteIdForDebug = $currentPoolSiteId;
-            // The run's own copy of its schedule when saved (runs since 3.16)
+            $runRow = $configStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+            $configSnapshot = json_decode((string) ($runRow['config_snapshot'] ?? ''), true) ?: [];
             $scheduler = !empty($configSnapshot['schedule_state'])
                 ? PoolScheduler::fromState($configSnapshot['schedule_state'])
-                : new PoolScheduler($pdo, $poolSiteIdForDebug, $scheduleTemplateId);
-            $simulator = new EnergySimulator($pdo, $poolSiteIdForDebug, $scheduler);
+                : new PoolScheduler($pdo, $currentPoolSiteId, $configSnapshot['schedule_template_id'] ?? null);
 
-            // Apply the stored config from the run (equipment settings, pool config, etc.)
-            if (!empty($configSnapshot['equipment'])) {
-                $simulator->setEquipment($configSnapshot['equipment']);
-            }
-            if (!empty($configSnapshot['pool_config'])) {
-                $simulator->setPoolConfig($configSnapshot['pool_config']);
-            }
-
-            // Run detailed debug calculation using stored/specified water temp and is_open
-            $storedIsOpen = (bool)$stored['is_open'];
-            $debug = $simulator->debugSingleHour($date, $hour, $waterTemp, $storedIsOpen);
-
-            // Add stored values for comparison
-            $debug['stored'] = [
-                'run_id' => (int)$runId,
+            // The hour's losses, gains and heating are computed in the browser
+            // from the run's inputs (sim-ts debugHour); this gives the run's
+            // saved values for the hour and its settings and schedule.
+            $out = [
+                'run_id' => (int) $runId,
+                'start_date' => $runRow['start_date'] ?? null,
+                'end_date' => $runRow['end_date'] ?? null,
                 'simulator_version' => $configSnapshot['simulator_version'] ?? 'unknown',
-                'water_temp' => (float)$stored['water_temp'],
-                'is_open' => (bool)$stored['is_open'],
-                'total_loss_kw' => (float)$stored['total_loss_kw'],
-                'solar_gain_kw' => (float)$stored['solar_gain_kw'],
-                'hp_heat_kw' => (float)$stored['hp_heat_kw'],
-                'boiler_heat_kw' => (float)$stored['boiler_heat_kw'],
-                'hp_cop' => (float)$stored['hp_cop'],
-                // calc block lets the reconciler compare like-for-like: the losses
-                // were computed at the start-of-hour temp, so surface that (not the
-                // stored end-of-hour water_temp) as the comparison temperature.
-                'calc' => [
-                    'water_temp_start' => $storedStartTemp,
-                    'losses_total_kw' => (float)$stored['total_loss_kw'],
-                    'solar_gain_kw' => (float)$stored['solar_gain_kw'],
-                    'net_requirement_kw' => (float)$stored['total_loss_kw'] - (float)$stored['solar_gain_kw'],
+                'has_schedule_copy' => !empty($configSnapshot['schedule_state']),
+                'stored' => $stored ? [
+                    'water_temp' => (float) $stored['water_temp'],
+                    'water_temp_start' => isset($stored['water_temp_start']) && $stored['water_temp_start'] !== null
+                        ? (float) $stored['water_temp_start'] : (float) $stored['water_temp'],
+                    'is_open' => (bool) $stored['is_open'],
+                    'total_loss_kw' => (float) $stored['total_loss_kw'],
+                    'solar_gain_kw' => (float) $stored['solar_gain_kw'],
+                    'hp_heat_kw' => (float) $stored['hp_heat_kw'],
+                    'boiler_heat_kw' => (float) $stored['boiler_heat_kw'],
+                    'hp_cop' => (float) $stored['hp_cop'],
+                    'heating_mode' => $stored['heating_mode'] ?? null,
+                ] : null,
+                'config_info' => [
+                    'config_template_name' => $configSnapshot['config_template_name'] ?? null,
+                    'schedule_template_name' => $configSnapshot['schedule_template_name'] ?? null,
+                    'schedule_template_id_stored' => $configSnapshot['schedule_template_id'] ?? 'not stored',
+                    'schedule_template_id_used' => $scheduler->getTemplate()['template_id'] ?? null,
+                    'hp_capacity_kw' => $configSnapshot['equipment']['heat_pump']['capacity_kw'] ?? $configSnapshot['equipment']['hp_capacity_kw'] ?? null,
+                    'boiler_capacity_kw' => $configSnapshot['equipment']['boiler']['capacity_kw'] ?? $configSnapshot['equipment']['boiler_capacity_kw'] ?? null,
                 ],
+                'schedule_debug' => $scheduler->getScheduleDebugInfo($date),
             ];
-
-            // Check session cache for open_plan/heating_mode (populated by debug_week)
-            // Ensure session is started (auth.php may or may not have started it)
-            if (session_status() === PHP_SESSION_NONE) {
-                session_start();
-            }
-            if (isset($_SESSION['debug_cache'][$runId][$timestamp])) {
-                $cached = $_SESSION['debug_cache'][$runId][$timestamp];
-                $debug['stored']['heating_mode'] = $cached['heating_mode'] ?? null;
-                $debug['stored']['open_plan'] = $cached['open_plan'] ?? null;
-                $debug['stored']['cache_source'] = 'session';
-            } else {
-                $debug['stored']['heating_mode'] = null;
-                $debug['stored']['open_plan'] = null;
-                $debug['stored']['cache_source'] = 'not_cached';
-            }
-
-            // Add config info from the run
-            $scheduleDebug = $scheduler->getScheduleDebugInfo($date);
-            $debug['config_info'] = [
-                'config_template_name' => $configSnapshot['config_template_name'] ?? null,
-                'schedule_template_name' => $configSnapshot['schedule_template_name'] ?? null,
-                'schedule_template_id_stored' => $configSnapshot['schedule_template_id'] ?? 'not stored',
-                'schedule_template_id_used' => $scheduler->getTemplate()['template_id'] ?? null,
-                'hp_capacity_kw' => $configSnapshot['equipment']['heat_pump']['capacity_kw'] ?? $configSnapshot['equipment']['hp_capacity_kw'] ?? null,
-                'boiler_capacity_kw' => $configSnapshot['equipment']['boiler']['capacity_kw'] ?? $configSnapshot['equipment']['boiler_capacity_kw'] ?? null,
-            ];
-            $debug['schedule_debug'] = $scheduleDebug;
-
-            // Validation: check if recalc matches stored (warn if different)
-            $storedNetDemand = (float)$stored['total_loss_kw'] - (float)$stored['solar_gain_kw'];
-            // Compare signed values: net_demand_kw is clamped at 0, so every
-            // hour with a solar surplus used to warn although both matched.
-            $recalcNetDemand = $debug['summary']['net_requirement_kw'] ?? $debug['heating_summary']['net_requirement_kw'] ?? 0;
-            $demandDiff = abs($storedNetDemand - $recalcNetDemand);
-
-            if ($demandDiff > 1.0) { // More than 1 kW difference
-                $debug['validation_warning'] = sprintf(
-                    'Recalc differs from stored: stored=%.1f kW, recalc=%.1f kW (diff=%.1f)',
-                    $storedNetDemand, $recalcNetDemand, $demandDiff
-                );
-            }
-
-            sendResponse($debug);
+            sendResponse($out);
             break;
 
         case 'debug_week':
