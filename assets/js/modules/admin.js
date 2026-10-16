@@ -564,7 +564,7 @@ const AdminModule = {
 
     /**
      * Fetch the missing days: the server reads each day's 4 runs from MET
-     * Norway's archive and stores them. 3 days at a time; resumable.
+     * Norway's archive and stores them. Up to 3 days at a time; resumable.
      */
     fetchForecasts: async function() {
         const el = document.getElementById('forecast-fetch-progress');
@@ -587,29 +587,35 @@ const AdminModule = {
         const days = plan.days.slice();
         const total = days.length;
         let done = 0, runs = 0, missing = 0, failures = 0, lastError = '';
-        // The web host may answer a long series of requests with its own
-        // page (rate limit, resource limit, bot check) instead of data: then
-        // wait, carry on one day at a time, and give up only after 6
-        // failures in a row.
+        // MET's archive is sometimes slow, and the web host may answer a long
+        // series of requests with its own page (rate limit, resource limit,
+        // bot check) instead of data: after a failure wait and fetch one day
+        // fewer at a time; back up by one after 10 days in a row without
+        // failure. Give up only after 6 failures in a row.
         const WAITS = [15, 30, 60, 120, 240];
         const MAX_FAILURES = 6;
-        let parallel = 3;
+        const MAX_PARALLEL = 3;
+        let parallel = MAX_PARALLEL;
+        let streak = 0;                               // days fetched since the last failure
         let pauseUntil = 0;
-        let notice = '';                              // last host refusal, until the next success
+        let notice = '';                              // last refusal, until the next success
+        const recent = [];                            // times of the last 30 days fetched (speed now)
         const t0 = Date.now();
         const sleep = ms => new Promise(r => setTimeout(r, ms));
         const show = () => {
-            const rate = done / Math.max(1, (Date.now() - t0) / 1000);
-            const left = rate > 0 ? Math.round((total - done) / rate / 60) : '?';
+            const span = recent.length > 5 ? (recent[recent.length - 1] - recent[0]) / 1000 : 0;
+            const rate = span > 0 ? (recent.length - 1) / span : done / Math.max(1, (Date.now() - t0) / 1000);
+            const left = rate > 0 ? Math.max(1, Math.round((total - done) / rate / 60)) : '?';
             el.style.color = notice ? '#b8860b' : '#666';
             el.textContent = `Fetching: ${done.toLocaleString()} / ${total.toLocaleString()} days, ${runs.toLocaleString()} runs`
-                + (missing ? `, ${missing} run(s) not in the archive` : '') + ` (about ${left} min left)`
+                + (missing ? `, ${missing} run(s) not in the archive` : '') + ` (about ${left} min left`
+                + (parallel < MAX_PARALLEL ? `, ${parallel} day${parallel > 1 ? 's' : ''} at a time` : '') + ')'
                 + (notice ? `. ${notice}` : '');
         };
         const worker = async (n) => {
             while (days.length && !this._forecastStop && failures < MAX_FAILURES) {
-                if (n >= parallel) return;            // fewer at a time after a failure
-                if (Date.now() < pauseUntil) { await sleep(1000); continue; }
+                // Idle while paused, or while fewer days at a time are fetched
+                if (n >= parallel || Date.now() < pauseUntil) { await sleep(1000); continue; }
                 const date = days.shift();
                 try {
                     const res = await fetch('./api/heataq_api.php', {
@@ -623,25 +629,29 @@ const AdminModule = {
                     missing += (data.missing || []).length;
                     failures = 0;
                     notice = '';
+                    if (++streak >= 10 && parallel < MAX_PARALLEL) { parallel++; streak = 0; }
                 } catch (err) {
                     failures++;
+                    streak = 0;
                     lastError = `${date}: ${err.message}`;
                     days.unshift(date);                   // this day again, after the wait
-                    parallel = 1;
+                    parallel = Math.max(1, parallel - 1);
                     if (failures < MAX_FAILURES) {
                         const wait = WAITS[Math.min(failures, WAITS.length) - 1];
-                        pauseUntil = Date.now() + wait * 1000;
-                        notice = `Refused (${lastError}); waiting ${wait} s, then one day at a time`;
+                        pauseUntil = Math.max(pauseUntil, Date.now() + wait * 1000);
+                        notice = `Refused (${lastError}); waiting ${wait} s`;
                         show();
                     }
                     continue;
                 }
                 done++;
+                recent.push(Date.now());
+                if (recent.length > 30) recent.shift();
                 show();
             }
         };
         show();
-        await Promise.all([worker(0), worker(1), worker(2)]);
+        await Promise.all(Array.from({ length: MAX_PARALLEL }, (_, n) => worker(n)));
         this._forecastFetching = false;
         btn.disabled = false;
         stopBtn.style.display = 'none';

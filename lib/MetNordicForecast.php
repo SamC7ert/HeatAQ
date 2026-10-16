@@ -22,6 +22,7 @@ class MetNordicForecast {
     const FIRST_DAY = '2019-11-28';   // first day with all variables
     const LAND_THRESHOLD = 0.5;
     const FILL_LIMIT = 1e20;
+    const TIMEOUT = 60;               // s per request (one point's run takes 4-10 s, more when MET is busy)
     const SHORTWAVE = 'integral_of_surface_downwelling_shortwave_flux_in_air_wrt_time';
     const VARIABLES = ['air_temperature_2m', 'wind_speed_10m', 'relative_humidity_2m',
                        'cloud_area_fraction', self::SHORTWAVE];
@@ -341,15 +342,15 @@ class MetNordicForecast {
     }
 
     /** GET with retries; null for 404. */
-    private static function httpGet(string $url) {
+    private static function httpGet(string $url, int $attempts = 3) {
         $delay = 1;
         $err = '';
-        for ($attempt = 1; $attempt <= 3; $attempt++) {
+        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
             $ch = curl_init();
             curl_setopt_array($ch, [
                 CURLOPT_URL => $url,
                 CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT => 30,
+                CURLOPT_TIMEOUT => self::TIMEOUT,
                 CURLOPT_CONNECTTIMEOUT => 10,
                 CURLOPT_USERAGENT => self::USER_AGENT,
                 CURLOPT_FOLLOWLOCATION => true,
@@ -363,7 +364,7 @@ class MetNordicForecast {
             if ($code >= 400 && $code < 500 && $code !== 429) {
                 throw new RuntimeException("MET archive answered HTTP {$code}");
             }
-            if ($attempt < 3) { sleep($delay); $delay *= 2; }
+            if ($attempt < $attempts) { sleep($delay); $delay *= 2; }
             $err = $err ?: "HTTP {$code}";
         }
         throw new RuntimeException("MET archive not reachable ({$err})");
@@ -371,8 +372,9 @@ class MetNordicForecast {
 
     /**
      * Several GETs in parallel: [key => body | null (404) | false (400)].
-     * Any other failure is tried again on its own (httpGet: retries, then
-     * an exception).
+     * Any other failure (often a timeout: MET's server is sometimes slow)
+     * is tried once more on its own, then throws; the page tries the day
+     * again later. One request stays within about 2 minutes.
      */
     private static function httpGetMulti(array $urls) {
         $mh = curl_multi_init();
@@ -382,7 +384,7 @@ class MetNordicForecast {
             curl_setopt_array($ch, [
                 CURLOPT_URL => $url,
                 CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT => 60,
+                CURLOPT_TIMEOUT => self::TIMEOUT,
                 CURLOPT_CONNECTTIMEOUT => 10,
                 CURLOPT_USERAGENT => self::USER_AGENT,
                 CURLOPT_FOLLOWLOCATION => true,
@@ -407,7 +409,7 @@ class MetNordicForecast {
             } elseif ($code === 400) {
                 $out[$key] = false;        // request not valid for this file (caller decides)
             } else {
-                $out[$key] = self::httpGet($urls[$key]);
+                $out[$key] = self::httpGet($urls[$key], 1);
             }
         }
         curl_multi_close($mh);
