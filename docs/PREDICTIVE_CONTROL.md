@@ -1,8 +1,8 @@
 # HeatAQ Predictive Control Strategy
 
-**Status:** Implemented. Simulator **3.18.0**, identical in both engines
-(PHP `lib/EnergySimulator.php`, TypeScript `sim-ts/src/engine.ts`).
-**Last updated:** 2026-10-15
+**Status:** Implemented. Simulator **3.19.0** (`sim-ts/src/engine.ts`, the
+only engine; it runs in the browser).
+**Last updated:** 2026-10-16
 
 This is the reference for how the **predictive** control strategy behaves and
 why. Read §0 first if you are going to change the code.
@@ -13,25 +13,31 @@ strategy.
 
 ## 0. Where the code is
 
-| What | PHP (`lib/EnergySimulator.php`) | TypeScript (`sim-ts/src/engine.ts`) |
-|------|------|------|
-| Hourly loop, close/open transitions, choice of heating mode | `runSimulation()` | `Run.run()` |
-| Collect planning inputs at a close | `planClosedPeriod()` | `Run.planClosedPeriod()` |
-| **The plan itself (pure math)** | `computeClosedPlan()` (static) | `computeClosedPlan()` (exported) |
-| Closed hour: heat pump to a hold level | `heatPumpToHold()` | `Run.heatPumpToHold()` |
-| Open hour while banking | `openPreheatHeating()` | `Run.openPreheatHeating()` |
-| Open hour, hold target (also reactive) | `calculateHeating()` | `Run.calculateHeating()` |
-| Long closure | `standbyHeating()`, `standbyPlanStart()` | same names |
-| Details tab: re-label the modes of a run's stored hours | `replaySchedulingForData()` | – (a run still in the browser carries its modes) |
+All in `sim-ts/src/engine.ts` (until 3.19.0 a PHP engine,
+`lib/EnergySimulator.php`, mirrored it; it now only prepares runs: data
+loading, validation, `exportRunInputs()`).
 
-**Rules for changing it.** The two engines must stay identical:
-1. Make the same change in both files.
-2. Bump `EnergySimulator::VERSION` and `PORT_OF_VERSION`.
-3. Run the plan unit test: `php tests/test_closed_plan.php`.
-4. Follow "Releasing a new simulator version" in `tests/reference/README.md`.
+| What | Where |
+|------|------|
+| Hourly loop, close/open transitions, choice of heating mode | `Run.run()` |
+| Collect planning inputs at a close | `Run.planClosedPeriod()` |
+| **The plan itself (pure math)** | `computeClosedPlan()` (exported) |
+| Closed hour: heat pump to a hold level | `Run.heatPumpToHold()` |
+| Open hour while banking | `Run.openPreheatHeating()` |
+| Open hour, hold target (also reactive) | `Run.calculateHeating()` |
+| Long closure | `Run.standbyHeating()`, `Run.standbyPlanStart()` |
+| Planning on forecasts (§11) | `Run.newestRunAt()`, `selectPlanRun()`, `planningRow()` |
+| Details hour panel | `debugHour()` (exported) |
+| Strategy rules every hour must satisfy | `sim-ts/src/rules.ts` |
+
+**Rules for changing it.**
+1. Make the change in `sim-ts/src/` and bump `PORT_OF_VERSION`.
+2. Run the plan unit test: `node sim-ts/test/closed_plan.mjs`.
+3. Follow "Releasing a new simulator version" in `tests/reference/README.md`.
    The engine reference set lists every scenario the change affects, and
-   checks that PHP and TypeScript give the same results. Every change it
-   reports must be explained.
+   checks the strategy rules on every hour. Every change it reports must be
+   explained; a change meant to alter a rule changes the rule
+   (`rules.ts`) in the same commit, with the reason.
 
 ---
 
@@ -162,7 +168,7 @@ totals balanced it planned nothing, yet a single cold hour can still exceed
 the heat pump while other hours have spare capacity. That hour then fell
 below target and the boiler came on.
 
-**Worked example** (`tests/test_closed_plan.php`, cases C3/C4): tmr = 100
+**Worked example** (`sim-ts/test/closed_plan.mjs`, cases C3/C4): tmr = 100
 kWh/°C, target 27 °C, an open period of two hours whose totals balance.
 
 | Open hours (deficit, kW) | need at opening | t_req | bank hours | Why |
@@ -304,15 +310,14 @@ of this strategy replaced an older "setback temperature" model, which
 
 ## 10. Checking the behaviour
 
-- **Unit test of the plan:** `php tests/test_closed_plan.php` (late start
+- **Unit test of the plan:** `node sim-ts/test/closed_plan.mjs` (late start
   without buffer, cap at max, short hour first/last, too-short closure,
   coast floor).
-- **Engine reference set:** `php tests/reference/reference.php check` and
-  `node sim-ts/test/reference.mjs` (13 scenarios with frozen inputs; see
-  `tests/reference/README.md`). In the app: Admin → System → Engine
-  Verification, which also runs on the live server.
-- **Both engines on the database:** the PHP ↔ TypeScript comparison in
-  `sim-ts/README.md`.
+- **Engine reference set and strategy rules:** `node sim-ts/test/reference.mjs
+  check` (scenarios with frozen inputs, and the strategy rules checked on
+  every hour; `node sim-ts/test/rules.mjs` checks each rule catches a broken
+  run; see `tests/reference/README.md`). In the app: Admin → System → Engine
+  Verification, in the browser on the live site.
 - **Look at a night in the app:** Details tab, week chart (heat pump and
   boiler bars, water temperature). The hours are computed in the browser
   from the run's saved inputs when they are not saved. With debug mode on,
@@ -350,9 +355,9 @@ MET's archive in Admin → Weather → Weather Forecasts
 **available_at** time (its file's creation time, about 30 minutes after the
 nominal run time).
 
-**What changes in the engine** (`EnergySimulator`: `getForecastData`,
-`newestRunAt`, `selectPlanRun`, `planningRow`; mirrored in
-`sim-ts/src/engine.ts`):
+**What changes in the engine** (`sim-ts/src/engine.ts`: `newestRunAt`,
+`selectPlanRun`, `planningRow`; the forecasts are loaded by
+`EnergySimulator::getForecastData` when the run is prepared):
 
 1. **Which forecast.** A plan made at hour T reads the newest run with
    `available_at <= T` whose hours still reach T. If there is none (a gap
@@ -383,10 +388,8 @@ quality warning. Summary fields: `planning_weather`, `forecast_source`,
 `forecast_age_h_avg`, `forecast_hours_beyond` (only on forecast runs).
 
 **Saved runs.** The setting is saved with the run (configuration snapshot),
-and the frozen inputs (`exportRunInputs`, used by the TypeScript engine,
-Details and the reference set) include the forecast runs. Details
-recomputes the hours with the forecasts in the database at that time: a
-re-import that changes them makes the recomputed hours differ from the
-stored days (the hours-on-demand check reports it). The server-side
-scheduling replay of stored hours (`replaySchedulingForData`, Details with
-saved hourly data) still reconstructs plans from the actual weather.
+and the run's inputs (`exportRunInputs`: what the engine runs on, Details
+and the reference set) include the forecast runs. Details recomputes the
+hours with the forecasts in the database at that time: a re-import that
+changes them makes the recomputed hours differ from the stored days (the
+hours-on-demand check reports it).

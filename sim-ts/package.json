@@ -5,7 +5,7 @@
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node build.mjs && node test/rules.mjs && node test/reference.mjs check"
+    "test": "node build.mjs && node test/closed_plan.mjs && node test/rules.mjs && node test/reference.mjs check"
   },
   "devDependencies": {
     "esbuild": "0.24.2",

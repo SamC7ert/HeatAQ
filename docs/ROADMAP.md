@@ -2,6 +2,11 @@
 
 **Last Updated:** July 2026 (Session: Climate verification, report & project-switch fixes)
 
+> **Note (October 2026, V265):** the simulation engine is now `sim-ts/`
+> (TypeScript, in the browser) only. References below to physics or control
+> code in `EnergySimulator.php` now mean `sim-ts/src/physics.ts` /
+> `sim-ts/src/engine.ts`; `EnergySimulator.php` only prepares runs.
+
 Long-term architectural improvements and technical debt items.
 
 ---

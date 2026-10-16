@@ -1,5 +1,6 @@
-// Inputs exported by EnergySimulator::exportRunInputs() (PHP) and the result
-// shape of EnergySimulator::runSimulation(), which this port reproduces.
+// Inputs exported by EnergySimulator::exportRunInputs() (the server) and the result
+// of a run (the same shape the former PHP engine returned, so stored results and
+// the reference set stay comparable).
 
 /** [utcTimestamp, localTimestamp, air °C, wind m/s, humidity %, tunnel °C] */
 export type WeatherRow = [string, string, number | null, number | null, number | null, number | null];

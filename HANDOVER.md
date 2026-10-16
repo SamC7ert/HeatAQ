@@ -8,8 +8,10 @@
 > release a new simulator version), `scripts/forecast/README.md` (archived
 > weather forecasts for planning on forecasts, `PREDICTIVE_CONTROL.md` §11),
 > `docs/DATABASE_STRUCTURE.md`. App
-> version: `?v=` in `index.html`; simulator version:
-> `EnergySimulator::VERSION` (= `PORT_OF_VERSION` in `sim-ts`).
+> version: `?v=` in `index.html`; simulator version: `PORT_OF_VERSION` in
+> `sim-ts/src/engine.ts` (the build writes it to `assets/js/sim/version.json`
+> for the server). Since V265 the TypeScript engine is the only one: the
+> server prepares runs (`lib/EnergySimulator.php`) and stores results.
 
 **Current Version:** V133 (December 2024)
 
@@ -337,7 +339,8 @@ Both Archive and Export use **branch-then-merge** pattern for clean git history.
 | File | Purpose |
 |------|---------|
 | `assets/js/config.js` | App version and configuration |
-| `lib/EnergySimulator.php` | Core simulation logic (v3.10.43) |
+| `sim-ts/src/` | The simulation engine (runs in the browser) |
+| `lib/EnergySimulator.php` | Run preparation: configuration, validation, data, engine inputs |
 | `api/simulation_api.php` | Simulation endpoints |
 | `api/heataq_api.php` | General API (configs, users, projects) |
 | `assets/js/modules/simulations.js` | Simulation UI |

@@ -1,4 +1,5 @@
-"""Synthetic test data for the PHP/TypeScript engine comparison.
+"""Synthetic test data for a local test database (made for the former
+PHP/TypeScript engine comparison; still useful for local testing).
 
 Writes SQL to stdout: two years (2023-12-31 .. 2025-12-31) of hourly weather
 for station SN10380 and hourly solar for pool site 5, plus a 'Season'

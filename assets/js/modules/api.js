@@ -20,7 +20,7 @@
     const nativeFetch = window.fetch.bind(window);
     const RETRIES = 3;
     const SHARE_MS = 3000;
-    const NEVER_SHARE = ['get_run_progress'];  // live polling must stay fresh
+    const NEVER_SHARE = [];  // actions whose answers must never be shared (live polling)
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     const shared = new Map();  // url -> { promise, expires (null while in flight) }
 
