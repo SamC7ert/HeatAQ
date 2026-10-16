@@ -8,7 +8,7 @@ import { Physics, distributeSolarToHour } from './physics';
 import { Scheduler } from './scheduler';
 import { addHours, num, parseNaive, phpRound, unix } from './util';
 
-export const PORT_OF_VERSION = '3.18.0';
+export const PORT_OF_VERSION = '3.19.0';
 
 interface ClosedPlan {
   preheat: boolean;
@@ -22,7 +22,22 @@ interface ClosedPlan {
   start_index?: number;
   hours_to_open?: number;
   open_duration?: number;
+  /** Forecast run the plan read (null: actual weather) */
+  forecast_run?: number | null;
 }
+
+/** A forecast run indexed for planning (unix seconds); see EnergySimulator::prepareForecast */
+interface PlanRun {
+  issued: number;
+  available: number;
+  first: number;
+  air: (number | null)[];
+  wind: (number | null)[];
+  rh: (number | null)[];
+}
+
+/** UTC 'Y-m-d H:i:s' -> unix seconds (PHP strtotime($ts . ' UTC')) */
+const unixUtc = (ts: string): number => unix(parseNaive(ts));
 
 const ZERO_HEATING = (): Heating => ({
   hp_heat: 0, hp_electricity: 0, hp_cop: 0, boiler_heat: 0, boiler_fuel: 0,
@@ -87,6 +102,11 @@ class Run {
   private openMaxTemp: number | null = null;
   private openBankEnd = 0;
 
+  // Planning on forecasts (doc §11); null = plans read the actual weather
+  private forecast: { source: string; runs: PlanRun[]; available: number[] } | null = null;
+  private planRun: number | null = null;
+  private fs = { plans: 0, plans_without: 0, replans: 0, age_sum: 0, hours_beyond: 0 };
+
   constructor(private inputs: RunInputs) {
     this.pool = inputs.pool_config || {};
     this.eq = inputs.equipment || {};
@@ -96,6 +116,58 @@ class Run {
     this.weather = inputs.weather;
     this.solar = inputs.solar || {};
     this.hasSolar = Object.keys(this.solar).length > 0;
+    // EnergySimulator::prepareForecast
+    if (inputs.forecast && this.strategy() === 'predictive' && (this.eq.planning_weather ?? 'actual') === 'forecast') {
+      const runs = inputs.forecast.runs.map(r => ({
+        issued: unixUtc(r[0]), available: unixUtc(r[1]), first: unixUtc(r[2]), air: r[3], wind: r[4], rh: r[5],
+      }));
+      this.forecast = { source: inputs.forecast.source, runs, available: runs.map(r => r.available) };
+    }
+  }
+
+  // ---- planning on forecasts (EnergySimulator::newestRunAt / selectPlanRun / planningRow) ----
+  private newestRunAt(utc: string): number | null {
+    if (this.forecast === null) return null;
+    const t = unixUtc(utc);
+    const avail = this.forecast.available;
+    let lo = 0, hi = avail.length - 1, found = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (avail[mid] <= t) { found = mid; lo = mid + 1; } else { hi = mid - 1; }
+    }
+    if (found < 0) return null;
+    const run = this.forecast.runs[found];
+    return run.first + (run.air.length - 1) * 3600 >= t ? found : null;
+  }
+
+  private selectPlanRun(idx: number, count = true): void {
+    this.planRun = null;
+    if (this.forecast === null) return;
+    const utc = this.weather[idx][0];
+    this.planRun = this.newestRunAt(utc);
+    if (!count) return;
+    if (this.planRun === null) {
+      this.fs.plans_without++;
+    } else {
+      this.fs.plans++;
+      this.fs.age_sum += (unixUtc(utc) - this.forecast.runs[this.planRun].issued) / 3600;
+    }
+  }
+
+  private planningRow(idx: number): WeatherRow {
+    const h = this.weather[idx];
+    if (this.planRun === null || this.forecast === null) return h;
+    const run = this.forecast.runs[this.planRun];
+    const n = run.air.length;
+    let k = Math.trunc((unixUtc(h[0]) - run.first) / 3600);
+    if (k < 0) return h;
+    if (k >= n) {
+      k = n - 1;
+      this.fs.hours_beyond++;
+    }
+    while (k >= 0 && (run.air[k] === null || run.wind[k] === null || run.rh[k] === null)) k--;
+    if (k < 0) return h;
+    return [h[0], h[1], run.air[k], run.wind[k], run.rh[k], h[5]];
   }
 
   // ---- targets ----
@@ -238,13 +310,14 @@ class Run {
     const hoursToOpen = Math.max(1, phpRound((unix(next.datetime) - unix(nowMs)) / 3600));
     const openIdx = idx + hoursToOpen;
     const n = this.weather.length;
+    this.selectPlanRun(idx);
 
     const closedLoss: number[] = [];
     const closedHpOut: number[] = [];
     for (let i = 0; i < hoursToOpen; i++) {
       const j = idx + i;
       if (j >= n) break;
-      const h = this.weather[j];
+      const h = this.planningRow(j);
       const air = this.air(h);
       const loss = this.phys.heatLosses(target, air, this.wind(h), this.hum(h), false, this.tunnel(h));
       closedLoss.push(loss.total - this.planningSolarGain(h, false));
@@ -258,7 +331,7 @@ class Run {
       if (j >= n) break;
       const dt = k > 0 ? addHours(next.datetime, k) : next.datetime;
       if (this.sched.getCurrentPeriod(dt) === null) break;
-      const h = this.weather[j];
+      const h = this.planningRow(j);
       const air = this.air(h);
       const loss = this.phys.heatLosses(target, air, this.wind(h), this.hum(h), true, this.tunnel(h));
       openDeficit.push(loss.total - this.planningSolarGain(h, true) - this.phys.applyHeatPump(hpCapacity, air).heat);
@@ -269,6 +342,8 @@ class Run {
     plan.start_index = idx + (plan.start_offset ?? 0);
     plan.hours_to_open = closedLoss.length;
     plan.open_duration = openDuration;
+    plan.forecast_run = this.planRun;
+    this.planRun = null;
     return plan;
   }
 
@@ -283,14 +358,16 @@ class Run {
     const hoursToOpen = Math.floor((openTs - unix(nowMs)) / 3600);
     let needed: number | null = null;
     let w = waterTemp;
+    this.selectPlanRun(idx, false);
     for (let k = 0; k <= hoursToOpen && k < 14 * 24 && this.weather[idx + k] !== undefined; k++) {
       if (w >= target) { needed = k; break; }
-      const h = this.weather[idx + k];
+      const h = this.planningRow(idx + k);
       const air = this.air(h);
       const loss = this.phys.heatLosses(w, air, this.wind(h), this.hum(h), false, null).total;
       const gain = hpCap > 0 ? this.phys.applyHeatPump(hpCap, air).heat : 0;
       w += (gain - loss) / tmr;
     }
+    this.planRun = null;
     if (needed === null) needed = 14 * 24;
     return openTs - (needed + 12) * 3600;
   }
@@ -405,6 +482,12 @@ class Run {
         }
         if (prevTargetTemp !== null && targetTemp === null) {
           this.closedPlan = this.planClosedPeriod(tsMs, currentWaterTemp, hourIndex);
+        }
+        // Planning on forecasts: a newer forecast -> plan again (see PHP)
+        if (this.forecast !== null && targetTemp === null && this.closedPlan !== null
+            && this.newestRunAt(utc) !== (this.closedPlan.forecast_run ?? null)) {
+          this.closedPlan = this.planClosedPeriod(tsMs, currentWaterTemp, hourIndex);
+          this.fs.replans++;
         }
         if (targetTemp === null && this.closedPlan === null) {
           if (this.standbyCheckDate !== date) {
@@ -566,6 +649,17 @@ class Run {
     const expected = (Math.trunc((Date.parse(inp.end_date + 'T00:00:00Z') - Date.parse(inp.start_date + 'T00:00:00Z')) / 86400000) + 1) * 24;
     s.expected_hours = expected;
     s.weather_coverage_pct = expected > 0 ? phpRound(100 * s.total_hours / expected, 1) : null;
+
+    if (this.forecast !== null) {
+      const fs = this.fs;
+      s.planning_weather = 'forecast';
+      s.forecast_source = this.forecast.source;
+      s.forecast_plans = fs.plans;
+      s.forecast_replans = fs.replans;
+      s.forecast_plans_without = fs.plans_without;
+      s.forecast_age_h_avg = fs.plans > 0 ? phpRound(fs.age_sum / fs.plans, 1) : null;
+      s.forecast_hours_beyond = fs.hours_beyond;
+    }
 
     for (const k of Object.keys(s)) {
       if (typeof s[k] === 'number') s[k] = phpRound(s[k], 2);

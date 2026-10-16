@@ -5,7 +5,9 @@
 > `docs/PREDICTIVE_CONTROL.md` (predictive heating, code map, tests),
 > `sim-ts/README.md` (TypeScript engine, PHP parity, saving results, hours
 > on demand), `tests/reference/README.md` (engine reference set and how to
-> release a new simulator version), `docs/DATABASE_STRUCTURE.md`. App
+> release a new simulator version), `scripts/forecast/README.md` (archived
+> weather forecasts for planning on forecasts, `PREDICTIVE_CONTROL.md` §11),
+> `docs/DATABASE_STRUCTURE.md`. App
 > version: `?v=` in `index.html`; simulator version:
 > `EnergySimulator::VERSION` (= `PORT_OF_VERSION` in `sim-ts`).
 
@@ -405,6 +407,7 @@ After changes, verify:
 | `docs/HEATING_ALGORITHM.md` | Reactive control, heat physics |
 | `docs/PREDICTIVE_CONTROL.md` | Predictive control: design, code map, tests |
 | `sim-ts/README.md` | TypeScript engine, PHP parity tests, saving results |
+| `scripts/forecast/README.md` | Fetching archived MET Nordic forecasts (Python, run locally) |
 | `docs/ROADMAP.md` | Priorities, known issues, planned features |
 | `docs/DESIGN_GUIDE.md` | UI/UX guidelines |
 

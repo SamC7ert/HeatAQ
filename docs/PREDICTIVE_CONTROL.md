@@ -232,12 +232,18 @@ target.
 4. **Planning approximations.** The plan computes losses at the target
    temperature, while the water is warmer while banking. Losses are
    therefore slightly underestimated, and the boiler may make up a small
-   remainder. The simulation knows the weather exactly; a live controller
-   would plan on a forecast.
+   remainder. With Planning weather = Actual the plan knows the weather
+   exactly (hindsight, the best case); with Forecast it plans on the
+   forecasts available at the time, as a live controller would (§11).
 
 ---
 
 ## 8. History of the strategy
+
+**3.19.0** added Planning weather (§11): plans can read the forecasts that
+were available at the time instead of the actual weather, and plan again
+when a newer forecast arrives. With Planning weather = Actual (the default)
+every result is identical to 3.18.0.
 
 **3.17.0 (October 2026)** fixed three faults found on cold winter nights:
 
@@ -292,6 +298,7 @@ of this strategy replaced an older "setback temperature" model, which
 | heat pump capacity / type / limits | Hourly heat pump output: decides the short hours and the late start. |
 | `boiler_capacity_kw` | Open-period backstop only. |
 | pool volume | Thermal mass rate: converts °C ↔ kWh. |
+| Planning weather (`planning_weather`) | `actual` (default): plans read the actual weather ahead. `forecast`: the forecasts available at the time (§11). Set per run on the Simulate tab; saved with the run. |
 
 ---
 
@@ -319,3 +326,65 @@ of this strategy replaced an older "setback temperature" model, which
   //   water_start, is_open, loss_kw, solar_kw, hp_kw, boiler_kw, hp_elec,
   //   boiler_fuel, cop, cost, heating_mode, effective_target]
   ```
+
+---
+
+## 11. Planning on forecasts
+
+A plan looks at the weather of the hours ahead (§4): the closed hours until
+opening and the coming open period. With **Planning weather = Actual** it
+reads the actual weather of those hours. A real controller cannot: it only
+has the forecast. Actual is therefore the best case (hindsight). With
+**Planning weather = Forecast** the plan reads the forecast that was
+available at the time, so the result shows what a real controller would
+achieve. Comparing two runs that differ only in this setting gives the cost
+of forecast error (e.g. extra electricity) for that site and period.
+
+**Data.** Archived MET Nordic forecasts (MET Norway, 1 km, runs at 00, 06,
+12 and 18 UTC, hourly steps), interpolated to the site's weather station and
+stored in `weather_forecasts` (migration 042). Fetched locally with
+`scripts/forecast/fetch_met_nordic.py` and imported in Admin → Weather →
+Weather Forecasts; see `scripts/forecast/README.md`. Each run has an
+**available_at** time (its file's creation time, about 30 minutes after the
+nominal run time).
+
+**What changes in the engine** (`EnergySimulator`: `getForecastData`,
+`newestRunAt`, `selectPlanRun`, `planningRow`; mirrored in
+`sim-ts/src/engine.ts`):
+
+1. **Which forecast.** A plan made at hour T reads the newest run with
+   `available_at <= T` whose hours still reach T. If there is none (a gap
+   in the archive), the plan reads the actual weather and is counted as
+   "without forecast" in the report.
+2. **What it replaces.** Air temperature, wind and humidity of the planned
+   hours. Solar gain and the tunnel temperature are still the actual ones
+   (the solar data are NASA values, and the forecast's solar is not used
+   yet). Past the run's last hour the last forecast hour is held (counted).
+3. **Re-planning.** During a closed period, when a newer run becomes
+   available, the plan is made again from the current water temperature
+   (§4: coast, late start, t_req, bank_hours), as a live controller would.
+   The last plan before opening decides the opening temperature and
+   bank_hours.
+4. **Long closures.** The daily check of when to start planning
+   (`standbyPlanStart`) reads the newest forecast too.
+5. **Everything else** (losses, heat pump, boiler, water temperature of
+   each hour) uses the actual weather, as before.
+
+With Planning weather = Actual, none of this runs: results are identical to
+3.18.0 (all reference scenarios).
+
+**Report.** Simulation Report → "Planning weather: Forecast (MET Nordic)";
+the mouse-over gives the number of plans, re-plans, average forecast age
+and hours past a forecast's end. Plans without a forecast appear as a data
+quality warning. Summary fields: `planning_weather`, `forecast_source`,
+`forecast_plans`, `forecast_replans`, `forecast_plans_without`,
+`forecast_age_h_avg`, `forecast_hours_beyond` (only on forecast runs).
+
+**Saved runs.** The setting is saved with the run (configuration snapshot),
+and the frozen inputs (`exportRunInputs`, used by the TypeScript engine,
+Details and the reference set) include the forecast runs. Details
+recomputes the hours with the forecasts in the database at that time: a
+re-import that changes them makes the recomputed hours differ from the
+stored days (the hours-on-demand check reports it). The server-side
+scheduling replay of stored hours (`replaySchedulingForData`, Details with
+saved hourly data) still reconstructs plans from the actual weather.

@@ -637,6 +637,22 @@ const SimControlModule = {
         if (summary.weather_hours_missing_humidity > 0) dq.push(`${summary.weather_hours_missing_humidity} h missing humidity (fallback 70%)`);
         if (summary.weather_hours_missing_air_temp > 0) dq.push(`${summary.weather_hours_missing_air_temp} h missing air temp (treated as 0°C!)`);
         if (summary.solar_days_missing > 0) dq.push(`${summary.solar_days_missing} days missing solar (treated as 0 gain)`);
+        if (summary.forecast_plans_without > 0) {
+            const n = summary.forecast_plans_without;
+            dq.push(`${n} plan${n === 1 ? '' : 's'} had no forecast (none available yet or recent enough; planned on the actual weather)`);
+        }
+        // Planning weather (predictive): actual weather ahead (hindsight) or
+        // the forecasts available at the time
+        const forecastPlanning = summary.planning_weather === 'forecast';
+        const sourceNames = { met_nordic: 'MET Nordic' };
+        const planningWeather = forecastPlanning
+            ? `Forecast (${sourceNames[summary.forecast_source] || summary.forecast_source})`
+            : 'Actual (hindsight)';
+        const planningTitle = forecastPlanning
+            ? `${summary.forecast_plans} plans on a forecast, ${summary.forecast_replans} of them re-plans on a newer forecast; `
+              + `forecasts ${summary.forecast_age_h_avg ?? '-'} h old on average when used`
+              + (summary.forecast_hours_beyond > 0 ? `; ${summary.forecast_hours_beyond} planned hours past a forecast's end (last hour held)` : '')
+            : 'Plans read the actual weather ahead: the best case';
         // A schedule that never opens: the cover stays on all the time, so
         // there are no evaporation, convection or radiation losses and the
         // "open" temperatures are just the overall ones. Say so plainly.
@@ -660,6 +676,7 @@ const SimControlModule = {
             <div><strong>Max overheat:</strong> +${upperTol}</div>
             <div><strong>Min temp when closed:</strong> ${minClosed}</div>
             <div><strong>Strategy:</strong> ${escapeHtml(strategy)}</div>
+            ${summary.strategy_used === 'predictive' ? `<div title="${escapeHtml(planningTitle)}"><strong>Planning weather:</strong> ${escapeHtml(planningWeather)}</div>` : ''}
             <div><strong>Bathers/day:</strong> ${bathersPerDay}</div>
             <div><strong>Activity:</strong> ${activityFactor}</div>
             <div><strong>Schedule:</strong> ${escapeHtml(scheduleName)}</div>

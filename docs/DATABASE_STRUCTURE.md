@@ -134,6 +134,13 @@ All schedule tables connect **ONLY through project_id**. This provides clean acc
 - Temperature, wind speed/direction, humidity
 - Tunnel temperature included
 
+#### weather_forecasts (migration 042)
+- Archived MET Nordic forecasts per station, one row per run and forecast hour (UTC)
+- Key: station_id, source, issued_at, valid_at; available_at = when the run could first be used
+- Air temperature, wind, humidity, cloud cover, solar
+- Filled by `scripts/forecast/fetch_met_nordic.py` + Admin → Weather → Weather Forecasts;
+  read when a run plans on forecasts (`docs/PREDICTIVE_CONTROL.md` §11)
+
 #### solar_daily_data (3,653 records)
 - Daily solar irradiance (10 years)
 - Includes: total kWh/m², clear sky values
