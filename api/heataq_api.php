@@ -538,6 +538,10 @@ class HeatAQAPI {
                     $this->getForecastDays();
                     break;
 
+                case 'get_forecast_accuracy':
+                    $this->getForecastAccuracy();
+                    break;
+
                 case 'fetch_forecasts_day':
                     if (!$this->canDelete()) {
                         $this->sendError('Permission denied - admin only', 403);
@@ -1882,6 +1886,97 @@ class HeatAQAPI {
         }
         require_once __DIR__ . '/../lib/MetNordicForecast.php';
         $this->sendResponse(['days' => (object) $days, 'first_day' => MetNordicForecast::FIRST_DAY]);
+    }
+
+    /**
+     * Forecast completeness and accuracy for a station (MET Nordic vs the
+     * station's observations, interpolated hours left out):
+     * - runs_by_year: forecast runs stored per year (4 a day when complete);
+     * - by_year, by_month: forecast hours 1-24 h ahead;
+     * - by_lead: per 6 hours ahead.
+     * Each row: hours, and per parameter the bias (forecast - observed,
+     * mean) and MAE (mean absolute error): t_ air °C, w_ wind m/s, h_ humidity %.
+     */
+    private function getForecastAccuracy() {
+        $stationId = $_GET['station_id'] ?? '';
+        if ($stationId === '') {
+            $this->sendError('station_id required');
+        }
+        // Interpolated (filled) observations are not observations: left out
+        $notFilled = $this->columnExists('weather_data', 'is_interpolated')
+            ? 'AND COALESCE(w.is_interpolated, 0) = 0' : '';
+        try {
+            $stmt = $this->db->prepare("
+                SELECT YEAR(issued_at) AS y, COUNT(DISTINCT issued_at) AS runs
+                FROM weather_forecasts
+                WHERE station_id = ? AND source = 'met_nordic'
+                GROUP BY YEAR(issued_at)
+            ");
+            $stmt->execute([$stationId]);
+            $runsByYear = [];
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $runsByYear[$r['y']] = (int) $r['runs'];
+            }
+            $stmt = $this->db->prepare("
+                SELECT YEAR(f.valid_at) AS y, MONTH(f.valid_at) AS m,
+                       TIMESTAMPDIFF(HOUR, f.issued_at, f.valid_at) AS lead_h,
+                       COUNT(*) AS n,
+                       SUM(f.air_temperature - w.temperature) AS t_sum,
+                       SUM(ABS(f.air_temperature - w.temperature)) AS t_abs,
+                       SUM(f.wind_speed - w.wind_speed) AS w_sum,
+                       SUM(ABS(f.wind_speed - w.wind_speed)) AS w_abs,
+                       SUM(f.humidity - w.humidity) AS h_sum,
+                       SUM(ABS(f.humidity - w.humidity)) AS h_abs
+                FROM weather_forecasts f
+                JOIN weather_data w ON w.station_id = f.station_id AND w.timestamp = f.valid_at
+                WHERE f.station_id = ? AND f.source = 'met_nordic'
+                  AND w.temperature IS NOT NULL AND w.wind_speed IS NOT NULL AND w.humidity IS NOT NULL
+                  {$notFilled}
+                GROUP BY y, m, lead_h
+            ");
+            $stmt->execute([$stationId]);
+            $groups = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (PDOException $e) {
+            $this->sendResponse(['installed' => false]);
+            return;
+        }
+
+        $sums = ['n', 't_sum', 't_abs', 'w_sum', 'w_abs', 'h_sum', 'h_abs'];
+        $add = function (&$bucket, $g) use ($sums) {
+            foreach ($sums as $k) $bucket[$k] = ($bucket[$k] ?? 0) + (float) $g[$k];
+        };
+        $byYear = $byMonth = $byLead = [];
+        foreach ($groups as $g) {
+            $lead = (int) $g['lead_h'];
+            if ($lead >= 1 && $lead <= 24) {
+                $add($byYear[(int) $g['y']], $g);
+                $add($byMonth[(int) $g['m']], $g);
+            }
+            $add($byLead[intdiv(max(0, $lead), 6) * 6], $g);
+        }
+        $finish = function (array $buckets, $keyName) {
+            ksort($buckets);
+            $out = [];
+            foreach ($buckets as $key => $b) {
+                $n = max(1, $b['n']);
+                $out[] = [
+                    $keyName => $key, 'hours' => (int) $b['n'],
+                    't_bias' => round($b['t_sum'] / $n, 2), 't_mae' => round($b['t_abs'] / $n, 2),
+                    'w_bias' => round($b['w_sum'] / $n, 2), 'w_mae' => round($b['w_abs'] / $n, 2),
+                    'h_bias' => round($b['h_sum'] / $n, 1), 'h_mae' => round($b['h_abs'] / $n, 1),
+                ];
+            }
+            return $out;
+        };
+        require_once __DIR__ . '/../lib/MetNordicForecast.php';
+        $this->sendResponse([
+            'installed' => true,
+            'first_day' => MetNordicForecast::FIRST_DAY,
+            'runs_by_year' => (object) $runsByYear,
+            'by_year' => $finish($byYear, 'year'),
+            'by_month' => $finish($byMonth, 'month'),
+            'by_lead' => $finish($byLead, 'lead_from'),
+        ]);
     }
 
     /**

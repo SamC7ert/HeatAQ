@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HeatAQ Schedule Management</title>
     <link rel="icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="./assets/css/main.css?v=258">
-    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=258">
-    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=258">
-    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=258">
-    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=258">
-    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=258">
+    <link rel="stylesheet" href="./assets/css/main.css?v=259">
+    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=259">
+    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=259">
+    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=259">
+    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=259">
+    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=259">
     <style>
         /* Top bar, right: background saving panel, user card */
         .top-bar-right {
@@ -1432,6 +1432,22 @@
                             </div>
                         </div>
                     </div>
+
+                    <p class="text-muted" style="font-size: 13px; margin: 18px 0 8px;">Forecast accuracy: MET Nordic forecasts against this station's observations (filled hours left out). Bias = average of forecast &minus; observed (+ = forecast too high); MAE = average size of the error. By year and month: forecast hours 1&ndash;24 h ahead, the range a night's plan mostly uses.</p>
+                    <div class="admin-grid">
+                        <div class="card">
+                            <h3>Forecast Accuracy by Year</h3>
+                            <div id="forecast-acc-year"><p class="loading">Loading...</p></div>
+                        </div>
+                        <div class="card">
+                            <h3>Forecast Accuracy by Month (All Years)</h3>
+                            <div id="forecast-acc-month"><p class="loading">Loading...</p></div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>Forecast Accuracy by Hours Ahead</h3>
+                        <div id="forecast-acc-lead" style="max-width: 640px;"><p class="loading">Loading...</p></div>
+                    </div>
                 </section>
 
                 <!-- Admin: User Management -->
@@ -1830,19 +1846,19 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=258"></script>
+    <script src="./assets/js/config.js?v=259"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=258"></script>
-    <script src="./assets/js/modules/navigation.js?v=258"></script>
-    <script src="./assets/js/modules/schedules.js?v=258"></script>
-    <script src="./assets/js/modules/calendar.js?v=258"></script>
-    <script src="./assets/js/modules/simengine.js?v=258"></script>
-    <script src="./assets/js/modules/simulations.js?v=258"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=258"></script>
-    <script src="./assets/js/modules/configuration.js?v=258"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=258"></script>
-    <script src="./assets/js/modules/admin.js?v=258"></script>
-    <script src="./assets/js/modules/project.js?v=258"></script>
-    <script src="./assets/js/app.js?v=258"></script>
+    <script src="./assets/js/modules/api.js?v=259"></script>
+    <script src="./assets/js/modules/navigation.js?v=259"></script>
+    <script src="./assets/js/modules/schedules.js?v=259"></script>
+    <script src="./assets/js/modules/calendar.js?v=259"></script>
+    <script src="./assets/js/modules/simengine.js?v=259"></script>
+    <script src="./assets/js/modules/simulations.js?v=259"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=259"></script>
+    <script src="./assets/js/modules/configuration.js?v=259"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=259"></script>
+    <script src="./assets/js/modules/admin.js?v=259"></script>
+    <script src="./assets/js/modules/project.js?v=259"></script>
+    <script src="./assets/js/app.js?v=259"></script>
 </body>
 </html>
