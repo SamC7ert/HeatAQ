@@ -14,8 +14,10 @@
  *   hours:   per hour water temperature, heat pump and boiler heat (2
  *            decimals) and the heating mode (one letter, MODE_CODES)
  *
- * The TypeScript engine builds the same form (sim-ts/src/reference.ts) and
- * compares with the same rules, so both engines are checked against one set.
+ * The engine builds this form and checks it (sim-ts/src/reference.ts,
+ * sim-ts/test/reference.mjs, Admin > Engine Verification). This class serves
+ * the files to the Admin page and compares stored results of two versions
+ * ("what changed"), with the same rules as compareReference().
  */
 class ReferenceCheck {
     const MODE_CODES = [
@@ -83,45 +85,9 @@ class ReferenceCheck {
         return $best;
     }
 
-    /** Run one scenario with the PHP engine; returns [reference result, ms]. */
-    public static function runPhp($id) {
-        $inputs = self::inputs($id);
-        $t0 = microtime(true);
-        $r = EnergySimulator::fromInputs($inputs)->runSimulation($inputs['start_date'], $inputs['end_date']);
-        $ms = (int) round(1000 * (microtime(true) - $t0));
-        return [self::fromPhpResult($r), $ms];
-    }
-
-    /** The reference form of a runSimulation() result. */
-    public static function fromPhpResult(array $r) {
-        $summary = [];
-        foreach ($r['summary'] as $k => $v) {
-            if (is_scalar($v) || $v === null) $summary[$k] = $v;
-        }
-        $days = [];
-        foreach ($r['daily'] as $d) {
-            $days[] = [
-                $d['date'], (int) $d['hours'], (int) $d['open_hours'],
-                round($d['avg_air_temp'], 2), round($d['avg_water_temp'], 2),
-                round($d['total_loss_kwh'], 3), round($d['total_solar_kwh'], 3),
-                round($d['total_hp_kwh'], 3), round($d['total_boiler_kwh'], 3),
-                round($d['hp_thermal_kwh'] ?? 0, 3), round($d['boiler_thermal_kwh'] ?? 0, 3),
-                round($d['total_cost'], 2),
-            ];
-        }
-        $hours = ['water' => [], 'hp' => [], 'boiler' => [], 'mode' => ''];
-        foreach ($r['hourly'] as $h) {
-            $hours['water'][] = round($h['pool']['water_temp'], 2);
-            $hours['hp'][] = round($h['gains']['heat_pump_kw'], 2);
-            $hours['boiler'][] = round($h['gains']['boiler_kw'], 2);
-            $hours['mode'] .= self::MODE_CODES[$h['pool']['heating_mode']] ?? '?';
-        }
-        return ['summary' => $summary, 'days' => $days, 'hours' => $hours];
-    }
-
     /**
-     * Compare a reference result with the expected one. Same rules as
-     * compareReference() in sim-ts/src/reference.ts.
+     * Compare two reference results. Same rules as compareReference() in
+     * sim-ts/src/reference.ts.
      * @return array {status: identical|rounding|differs, summary_diffs, days_differing, first_day, hours_differing, first_hour}
      */
     public static function compare(array $expected, array $got) {

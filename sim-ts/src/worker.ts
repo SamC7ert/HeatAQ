@@ -5,9 +5,11 @@
 //        { id, type: 'result', result, dailyRows, ms } or { id, type: 'error', message }
 //        (dailyRows: the daily results as stored, for upload)
 //   With `expected` (a reference result, tests/reference) the run is a
-//   reference check instead: { id, type: 'reference', comparison, ms }
+//   reference check instead: { id, type: 'reference', comparison, rules, ms }
+//   (rules: the strategy rules, src/rules.ts)
 import { runSimulation, storedDailyRows } from './engine';
 import { compareReference, referenceResult } from './reference';
+import { checkRules } from './rules';
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
@@ -20,7 +22,8 @@ ctx.onmessage = (e: MessageEvent) => {
     });
     const ms = Date.now() - t0;
     if (expected) {
-      ctx.postMessage({ id, type: 'reference', comparison: compareReference(expected, referenceResult(result)), ms });
+      ctx.postMessage({ id, type: 'reference', comparison: compareReference(expected, referenceResult(result)),
+                        rules: checkRules(inputs, result), ms });
     } else {
       ctx.postMessage({ id, type: 'result', result, dailyRows: storedDailyRows(result.daily), ms });
     }

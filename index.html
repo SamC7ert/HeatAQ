@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HeatAQ Schedule Management</title>
     <link rel="icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="./assets/css/main.css?v=263">
-    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=263">
-    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=263">
-    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=263">
-    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=263">
-    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=263">
+    <link rel="stylesheet" href="./assets/css/main.css?v=264">
+    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=264">
+    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=264">
+    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=264">
+    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=264">
+    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=264">
     <style>
         /* Top bar, right: background saving panel, user card */
         .top-bar-right {
@@ -1499,7 +1499,7 @@
 
                     <div class="card">
                         <h3>Engine Verification</h3>
-                        <p class="text-muted">A fixed set of reference scenarios (frozen weather, solar data and configuration; <code>tests/reference</code>) and the results each simulator version gives for them. Verify runs every scenario with this server's PHP engine and with the TypeScript engine in this browser, and compares both with the stored results.</p>
+                        <p class="text-muted">A fixed set of reference scenarios (frozen weather, solar data and configuration; <code>tests/reference</code>) and the results each simulator version gives for them. Verify runs every scenario with the engine in this browser, compares it with the stored results, and checks the strategy rules on every hour (late start, boiler last, no overshoot, banking first, energy balance...).</p>
                         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                             <button class="btn btn-secondary" onclick="app.admin.loadReference()">Show Reference</button>
                             <button class="btn btn-primary" id="reference-verify-btn" onclick="app.admin.verifyEngine()">Verify Engine</button>
@@ -1830,20 +1830,20 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=263"></script>
+    <script src="./assets/js/config.js?v=264"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=263"></script>
-    <script src="./assets/js/modules/navigation.js?v=263"></script>
-    <script src="./assets/js/modules/schedules.js?v=263"></script>
-    <script src="./assets/js/modules/calendar.js?v=263"></script>
-    <script src="./assets/js/sim/heataq-sim.js?v=263"></script>
-    <script src="./assets/js/modules/simengine.js?v=263"></script>
-    <script src="./assets/js/modules/simulations.js?v=263"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=263"></script>
-    <script src="./assets/js/modules/configuration.js?v=263"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=263"></script>
-    <script src="./assets/js/modules/admin.js?v=263"></script>
-    <script src="./assets/js/modules/project.js?v=263"></script>
-    <script src="./assets/js/app.js?v=263"></script>
+    <script src="./assets/js/modules/api.js?v=264"></script>
+    <script src="./assets/js/modules/navigation.js?v=264"></script>
+    <script src="./assets/js/modules/schedules.js?v=264"></script>
+    <script src="./assets/js/modules/calendar.js?v=264"></script>
+    <script src="./assets/js/sim/heataq-sim.js?v=264"></script>
+    <script src="./assets/js/modules/simengine.js?v=264"></script>
+    <script src="./assets/js/modules/simulations.js?v=264"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=264"></script>
+    <script src="./assets/js/modules/configuration.js?v=264"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=264"></script>
+    <script src="./assets/js/modules/admin.js?v=264"></script>
+    <script src="./assets/js/modules/project.js?v=264"></script>
+    <script src="./assets/js/app.js?v=264"></script>
 </body>
 </html>
