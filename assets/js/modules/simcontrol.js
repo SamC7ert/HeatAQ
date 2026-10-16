@@ -637,14 +637,21 @@ const SimControlModule = {
         if (summary.weather_hours_missing_humidity > 0) dq.push(`${summary.weather_hours_missing_humidity} h missing humidity (fallback 70%)`);
         if (summary.weather_hours_missing_air_temp > 0) dq.push(`${summary.weather_hours_missing_air_temp} h missing air temp (treated as 0°C!)`);
         if (summary.solar_days_missing > 0) dq.push(`${summary.solar_days_missing} days missing solar (treated as 0 gain)`);
-        const dqHtml = dq.length
+        // A schedule that never opens: the cover stays on all the time, so
+        // there are no evaporation, convection or radiation losses and the
+        // "open" temperatures are just the overall ones. Say so plainly.
+        const openHours = summary.open_hours;
+        const neverOpen = hours > 0 && openHours !== undefined && openHours !== null && Number(openHours) === 0;
+        const dqHtml = (neverOpen
+            ? `<div style="grid-column:1/-1;margin-top:8px;padding:6px 10px;background:#f8d7da;border:1px solid #dc3545;border-radius:4px;color:#842029;font-size:12px;"><strong>&#9888; The pool is never open in this period:</strong> schedule "${escapeHtml(scheduleName)}" has no open hours here, so the cover is on all the time (no evaporation, convection or radiation losses, and the open-hour temperatures are the overall ones). Check the schedule (Schedules tab) or pick another one.</div>`
+            : '') + (dq.length
             ? `<div style="grid-column:1/-1;margin-top:8px;padding:6px 10px;background:#fff3cd;border:1px solid #ffc107;border-radius:4px;color:#664d03;font-size:12px;"><strong>&#9888; Data quality:</strong> ${dq.map(d => escapeHtml(d)).join(' &middot; ')}</div>`
-            : '';
+            : '');
 
         // Build config HTML with clear sections
         const configHtml = `
             <div style="grid-column:1/-1;border-bottom:1px solid #dee2e6;padding-bottom:8px;margin-bottom:8px;">
-                <strong>Period:</strong> ${escapeHtml(startDate)} to ${escapeHtml(endDate)} (${days} days, ${escapeHtml(hours.toLocaleString())} hours)
+                <strong>Period:</strong> ${escapeHtml(startDate)} to ${escapeHtml(endDate)} (${days} days, ${escapeHtml(hours.toLocaleString())} hours${openHours !== undefined && openHours !== null ? `, ${escapeHtml(Number(openHours).toLocaleString())} open` : ''})
             </div>
             <div><strong>Pool:</strong> ${escapeHtml(area)} m², ${escapeHtml(volume)} m³, ${escapeHtml(depth)}m deep</div>
             <div><strong>Heat Pump:</strong> ${hpKw}, COP ${hpCop}</div>
