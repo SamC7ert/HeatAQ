@@ -2000,6 +2000,11 @@ class HeatAQAPI {
             $this->sendError('The station has no position (latitude, longitude)');
         }
         $station['elevation'] = (float) ($station['elevation'] ?? 0);
+        // Release the session lock: this request waits on MET for seconds,
+        // and the page sends several at once (with the lock they queue up)
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();
+        }
         require_once __DIR__ . '/../lib/MetNordicForecast.php';
         if (!is_string($date) || $date < MetNordicForecast::FIRST_DAY || $date >= gmdate('Y-m-d')) {
             $this->sendError('Date must be from ' . MetNordicForecast::FIRST_DAY . ' to yesterday (UTC)');

@@ -587,16 +587,29 @@ const AdminModule = {
         const days = plan.days.slice();
         const total = days.length;
         let done = 0, runs = 0, missing = 0, failures = 0, lastError = '';
+        // The web host may answer a long series of requests with its own
+        // page (rate limit, resource limit, bot check) instead of data: then
+        // wait, carry on one day at a time, and give up only after 6
+        // failures in a row.
+        const WAITS = [15, 30, 60, 120, 240];
+        const MAX_FAILURES = 6;
+        let parallel = 3;
+        let pauseUntil = 0;
+        let notice = '';                              // last host refusal, until the next success
         const t0 = Date.now();
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
         const show = () => {
             const rate = done / Math.max(1, (Date.now() - t0) / 1000);
             const left = rate > 0 ? Math.round((total - done) / rate / 60) : '?';
-            el.style.color = '#666';
+            el.style.color = notice ? '#b8860b' : '#666';
             el.textContent = `Fetching: ${done.toLocaleString()} / ${total.toLocaleString()} days, ${runs.toLocaleString()} runs`
-                + (missing ? `, ${missing} run(s) not in the archive` : '') + ` (about ${left} min left)`;
+                + (missing ? `, ${missing} run(s) not in the archive` : '') + ` (about ${left} min left)`
+                + (notice ? `. ${notice}` : '');
         };
-        const worker = async () => {
-            while (days.length && !this._forecastStop && failures < 3) {
+        const worker = async (n) => {
+            while (days.length && !this._forecastStop && failures < MAX_FAILURES) {
+                if (n >= parallel) return;            // fewer at a time after a failure
+                if (Date.now() < pauseUntil) { await sleep(1000); continue; }
                 const date = days.shift();
                 try {
                     const res = await fetch('./api/heataq_api.php', {
@@ -604,15 +617,23 @@ const AdminModule = {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ action: 'fetch_forecasts_day', station_id: plan.station, date })
                     });
-                    const data = await res.json();
+                    const data = await api.parseJson(res);   // names a host page's status and text
                     if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
                     runs += data.runs;
                     missing += (data.missing || []).length;
                     failures = 0;
+                    notice = '';
                 } catch (err) {
                     failures++;
-                    lastError = err.message;
-                    days.push(date);   // try again later in this pass
+                    lastError = `${date}: ${err.message}`;
+                    days.unshift(date);                   // this day again, after the wait
+                    parallel = 1;
+                    if (failures < MAX_FAILURES) {
+                        const wait = WAITS[Math.min(failures, WAITS.length) - 1];
+                        pauseUntil = Date.now() + wait * 1000;
+                        notice = `Refused (${lastError}); waiting ${wait} s, then one day at a time`;
+                        show();
+                    }
                     continue;
                 }
                 done++;
@@ -620,13 +641,14 @@ const AdminModule = {
             }
         };
         show();
-        await Promise.all([worker(), worker(), worker()]);
+        await Promise.all([worker(0), worker(1), worker(2)]);
         this._forecastFetching = false;
         btn.disabled = false;
         stopBtn.style.display = 'none';
-        if (failures >= 3) {
+        if (failures >= MAX_FAILURES) {
             el.style.color = '#dc3545';
-            el.textContent = `Stopped after repeated errors: ${lastError} (${done} days fetched; press Fetch to continue).`;
+            el.textContent = `Stopped after ${MAX_FAILURES} errors in a row. Last: ${lastError} `
+                + `(${done.toLocaleString()} days fetched; press Fetch to continue later).`;
         } else {
             el.style.color = this._forecastStop ? '#666' : '#28a745';
             el.textContent = (this._forecastStop ? 'Stopped' : 'Done')
