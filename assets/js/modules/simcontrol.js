@@ -368,14 +368,21 @@ const SimControlModule = {
 
             const select = document.getElementById('sim-ohc-select');
             if (select && data.templates) {
-                select.innerHTML = data.templates.map(t =>
-                    `<option value="${escapeHtml(t.template_id)}">${escapeHtml(t.name)}</option>`
-                ).join('');
+                select.innerHTML = data.templates.length
+                    ? data.templates.map(t =>
+                        `<option value="${escapeHtml(t.template_id)}">${escapeHtml(t.name)}</option>`
+                    ).join('')
+                    : '<option value="">-- No schedules in this project --</option>';
 
-                // Restore saved selection (from server or localStorage)
+                // Restore the saved selection - only a schedule of THIS
+                // project: a remembered id that is not in the list (deleted,
+                // or from another project) used to blank the dropdown, and the
+                // run then failed with "PoolScheduler requires templateId".
                 const savedOHC = this.getPreference('selected_ohc');
-                if (savedOHC) {
+                if (savedOHC && data.templates.some(t => String(t.template_id) === String(savedOHC))) {
                     select.value = savedOHC;
+                } else if (data.templates.length) {
+                    select.value = String(data.templates[0].template_id);
                 }
 
                 // Save selection on change (attach listener only once to avoid
