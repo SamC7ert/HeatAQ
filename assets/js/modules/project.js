@@ -1600,6 +1600,18 @@ const ProjectModule = {
                 if (typeof SimControlModule !== 'undefined') {
                     SimControlModule.projectChanged = true;
                 }
+                // ...and nothing of the previous project's runs, analyses or
+                // Simulate form stays on screen meanwhile
+                if (typeof SimulationsModule !== 'undefined' && SimulationsModule.resetProjectState) {
+                    SimulationsModule.resetProjectState();
+                }
+                if (typeof EnergyAnalysis !== 'undefined' && EnergyAnalysis.resetProjectState) {
+                    EnergyAnalysis.resetProjectState();
+                }
+                ['sim-scenario-name', 'sim-description'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = '';
+                });
 
                 // Update projects dropdown to show new selection
                 await this.loadProjectsList();
