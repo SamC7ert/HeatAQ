@@ -138,7 +138,8 @@ All schedule tables connect **ONLY through project_id**. This provides clean acc
 - Archived MET Nordic forecasts per station, one row per run and forecast hour (UTC)
 - Key: station_id, source, issued_at, valid_at; available_at = when the run could first be used
 - Air temperature, wind, humidity, cloud cover, solar
-- Filled by `scripts/forecast/fetch_met_nordic.py` + Admin → Weather → Weather Forecasts;
+- Filled in Admin → Weather → Weather Forecasts (server fetch, `lib/MetNordicForecast.php`,
+  or CSV import from `scripts/forecast/fetch_met_nordic.py`);
   read when a run plans on forecasts (`docs/PREDICTIVE_CONTROL.md` §11)
 
 #### solar_daily_data (3,653 records)

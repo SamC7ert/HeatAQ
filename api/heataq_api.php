@@ -534,6 +534,17 @@ class HeatAQAPI {
                     $this->importForecasts();
                     break;
 
+                case 'get_forecast_days':
+                    $this->getForecastDays();
+                    break;
+
+                case 'fetch_forecasts_day':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied - admin only', 403);
+                    }
+                    $this->fetchForecastsDay();
+                    break;
+
                 // ADMIN: Users (admin-only operations)
                 case 'get_users':
                     if (!$this->canDelete()) {
@@ -1832,29 +1843,81 @@ class HeatAQAPI {
                         ($solar === null || $solar === '') ? null : (float) $solar];
         }
 
-        $this->db->beginTransaction();
+        require_once __DIR__ . '/../lib/MetNordicForecast.php';
         try {
-            foreach (array_chunk($clean, 500) as $chunk) {
-                $sql = "INSERT INTO weather_forecasts
-                            (station_id, source, issued_at, valid_at, available_at,
-                             air_temperature, wind_speed, humidity, cloud_cover, solar_w_m2)
-                        VALUES " . implode(',', array_fill(0, count($chunk), '(?,?,?,?,?,?,?,?,?,?)')) . "
-                        ON DUPLICATE KEY UPDATE
-                            available_at = VALUES(available_at),
-                            air_temperature = VALUES(air_temperature),
-                            wind_speed = VALUES(wind_speed),
-                            humidity = VALUES(humidity),
-                            cloud_cover = VALUES(cloud_cover),
-                            solar_w_m2 = VALUES(solar_w_m2)";
-                $this->db->prepare($sql)->execute(array_merge(...$chunk));
-            }
-            $this->db->commit();
+            MetNordicForecast::store($this->db, $clean);
         } catch (PDOException $e) {
-            $this->db->rollBack();
             $this->sendError('Import failed: ' . $e->getMessage());
             return;
         }
         $this->sendResponse(['success' => true, 'imported' => count($clean)]);
+    }
+
+    /**
+     * Forecast runs stored per UTC day for a station (MET Nordic): which days
+     * of a period still need fetching. days = {date: runs}.
+     */
+    private function getForecastDays() {
+        $stationId = $_GET['station_id'] ?? '';
+        $from = $_GET['from'] ?? '';
+        $to = $_GET['to'] ?? '';
+        if ($stationId === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
+            $this->sendError('station_id, from and to (YYYY-MM-DD) required');
+        }
+        try {
+            $stmt = $this->db->prepare("
+                SELECT DATE(issued_at) AS d, COUNT(DISTINCT issued_at) AS runs
+                FROM weather_forecasts
+                WHERE station_id = ? AND source = 'met_nordic'
+                  AND issued_at >= ? AND issued_at < DATE_ADD(?, INTERVAL 1 DAY)
+                GROUP BY DATE(issued_at)
+            ");
+            $stmt->execute([$stationId, $from, $to]);
+        } catch (PDOException $e) {
+            $this->sendError('Run migration 042 first (weather_forecasts table)');
+        }
+        $days = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $days[$r['d']] = (int) $r['runs'];
+        }
+        require_once __DIR__ . '/../lib/MetNordicForecast.php';
+        $this->sendResponse(['days' => (object) $days, 'first_day' => MetNordicForecast::FIRST_DAY]);
+    }
+
+    /**
+     * Fetch one UTC day of MET Nordic forecast runs for a station from MET
+     * Norway's archive and store them (lib/MetNordicForecast.php). The
+     * browser calls this day by day (Admin -> Weather -> Weather Forecasts).
+     */
+    private function fetchForecastsDay() {
+        $stationId = $this->postInput['station_id'] ?? '';
+        $date = $this->postInput['date'] ?? '';
+        $stmt = $this->db->prepare("
+            SELECT station_id, latitude, longitude, elevation_m AS elevation
+            FROM weather_stations WHERE station_id = ?
+        ");
+        $stmt->execute([$stationId]);
+        $station = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$station) {
+            $this->sendError('Station not found');
+        }
+        if ($station['latitude'] === null || $station['longitude'] === null) {
+            $this->sendError('The station has no position (latitude, longitude)');
+        }
+        $station['elevation'] = (float) ($station['elevation'] ?? 0);
+        require_once __DIR__ . '/../lib/MetNordicForecast.php';
+        if (!is_string($date) || $date < MetNordicForecast::FIRST_DAY || $date >= gmdate('Y-m-d')) {
+            $this->sendError('Date must be from ' . MetNordicForecast::FIRST_DAY . ' to yesterday (UTC)');
+        }
+        @set_time_limit(180);
+        try {
+            $res = MetNordicForecast::fetchDay($this->db, $station, $date);
+            $cell = MetNordicForecast::stationCell($station);
+        } catch (Throwable $e) {
+            $this->sendError('Fetch failed for ' . $date . ': ' . $e->getMessage(), 502);
+        }
+        $this->sendResponse(['success' => true, 'date' => $date, 'cell_method' => $cell['method'],
+                             'grid_altitude' => $cell['grid_altitude']] + $res);
     }
 
     /**
