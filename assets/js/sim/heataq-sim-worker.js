@@ -1348,6 +1348,101 @@
     };
   }
 
+  // src/rules.ts
+  var TS = 0;
+  var TARGET = 5;
+  var WATER = 6;
+  var START = 7;
+  var OPEN = 8;
+  var LOSS = 9;
+  var SOLAR = 10;
+  var HP = 11;
+  var BOILER = 12;
+  var COP = 15;
+  var MODE = 17;
+  var HOLD = 18;
+  var T_TOL = 0.011;
+  var KW_TOL = 2e-3;
+  function checkRules(inputs, result) {
+    const eq = inputs.equipment || {};
+    const pool = inputs.pool_config || {};
+    const rows = result.hourly;
+    const predictive = (result.summary.strategy_used ?? eq.control_strategy) === "predictive";
+    const hindsight = (eq.planning_weather ?? "actual") !== "forecast";
+    const hpOn = truthy(eq.heat_pump?.enabled);
+    const hpCap = num(eq.heat_pump?.capacity_kw, 0);
+    const upperTol = num(eq.upper_tolerance, 1);
+    const volume = num(pool.volume_m3, 0);
+    const kwhPerDegree = volume * 4186 / 3600;
+    const rules = {};
+    const rule = (id, title) => rules[id] = { id, title, checked: 0, violations: 0, first: null };
+    const fail = (r, h, what) => {
+      r.violations++;
+      if (r.first === null) r.first = `${h[TS]}: ${what}`;
+    };
+    const hpAtLimit = (h) => !hpOn || h[HP] >= hpCap - KW_TOL || h[HP] === 0 && h[COP] === 0;
+    const balance = rule("energy-balance", "Water temperature follows the hour's heat balance");
+    const boilerLast = rule("boiler-last", "The boiler runs only when the heat pump is at full output");
+    const noOvershoot = rule("no-overshoot", "Heating never takes the water above the level it heads for");
+    const closedNoBoiler = rule("closed-no-boiler", "Closed (coast or ramp): no boiler");
+    const lateStart = rule("late-start", "Closed: once the ramp starts it continues until opening (actual weather)");
+    const bankFirst = rule("bank-first", "Open: banking (heat pump at full) only before holding target, never after");
+    const opening = rule("opening-temp", "Opening below target only when the heat pump ran at full before (actual weather)");
+    for (let i = 0; i < rows.length; i++) {
+      const h = rows[i];
+      const mode = h[MODE];
+      const heat = h[HP] + h[BOILER];
+      if (kwhPerDegree > 0 && h[WATER] > 5 + T_TOL && h[WATER] < 35 - T_TOL) {
+        balance.checked++;
+        const expected = h[START] + (h[SOLAR] + heat - h[LOSS]) / kwhPerDegree;
+        if (Math.abs(expected - h[WATER]) > T_TOL) {
+          fail(balance, h, `water ${h[WATER]} \xB0C, balance gives ${expected.toFixed(3)} \xB0C`);
+        }
+      }
+      if (h[BOILER] > KW_TOL) {
+        boilerLast.checked++;
+        if (!hpAtLimit(h)) fail(boilerLast, h, `boiler ${h[BOILER]} kW with heat pump at ${h[HP]} of ${hpCap} kW`);
+      }
+      if (heat > KW_TOL) {
+        const limit = mode === "open_preheat" ? (h[TARGET] ?? 0) + upperTol : h[HOLD];
+        if (limit !== null && limit !== void 0) {
+          noOvershoot.checked++;
+          if (h[WATER] > limit + T_TOL) {
+            fail(noOvershoot, h, `water ${h[WATER]} \xB0C above ${limit} \xB0C (${mode})`);
+          }
+        }
+      }
+      if (!predictive) continue;
+      if (mode === "preheat_coast" || mode === "preheat_ramp") {
+        closedNoBoiler.checked++;
+        if (h[BOILER] > KW_TOL) fail(closedNoBoiler, h, `boiler ${h[BOILER]} kW in ${mode}`);
+      }
+      const prev = i > 0 ? rows[i - 1] : null;
+      if (hindsight && prev && !h[OPEN] && !prev[OPEN]) {
+        if (prev[MODE] === "preheat_ramp" && mode !== "preheat_ramp") {
+          lateStart.checked++;
+          fail(lateStart, h, `${mode} after preheat_ramp before opening`);
+        } else if (mode === "preheat_ramp") {
+          lateStart.checked++;
+        }
+      }
+      if (prev && h[OPEN] && prev[OPEN]) {
+        bankFirst.checked++;
+        if (mode === "open_preheat" && prev[MODE] === "open_hold") {
+          fail(bankFirst, h, "open_preheat after open_hold in the same open period");
+        }
+      }
+      if (hindsight && prev && h[OPEN] && !prev[OPEN] && (prev[MODE] === "preheat_coast" || prev[MODE] === "preheat_ramp")) {
+        opening.checked++;
+        const target = h[TARGET] ?? 0;
+        if (h[START] < target - 0.05 && !(prev[MODE] === "preheat_ramp" && hpAtLimit(prev))) {
+          fail(opening, h, `opened at ${h[START].toFixed(2)} \xB0C (target ${target}) after ${prev[MODE]} with heat pump ${prev[HP]} kW`);
+        }
+      }
+    }
+    return Object.values(rules);
+  }
+
   // src/worker.ts
   var ctx = self;
   ctx.onmessage = (e) => {
@@ -1359,7 +1454,13 @@
       });
       const ms = Date.now() - t0;
       if (expected) {
-        ctx.postMessage({ id, type: "reference", comparison: compareReference(expected, referenceResult(result)), ms });
+        ctx.postMessage({
+          id,
+          type: "reference",
+          comparison: compareReference(expected, referenceResult(result)),
+          rules: checkRules(inputs, result),
+          ms
+        });
       } else {
         ctx.postMessage({ id, type: "result", result, dailyRows: storedDailyRows(result.daily), ms });
       }

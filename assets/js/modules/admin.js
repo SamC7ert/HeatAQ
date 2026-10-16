@@ -2348,11 +2348,11 @@ const AdminModule = {
                    ${own ? '' : `<br><span style="color:#b8860b;">No results stored for ${escapeHtml(ref.engine_version)} yet: it is checked against ${escapeHtml(ref.compared_with)}, so differences are expected.</span>`}</p>
                 ${last ? `<p class="text-muted" style="margin:4px 0;">Last verified in this browser: ${escapeHtml(new Date(last.at).toLocaleString('en-GB'))}, engine ${escapeHtml(last.version)}: ${escapeHtml(last.text)}</p>` : ''}
                 <table class="data-table compact" id="reference-table" style="margin-top:6px;">
-                    <thead><tr><th>Scenario</th><th>Period</th><th>PHP (server)</th><th>TypeScript (browser)</th></tr></thead>
+                    <thead><tr><th>Scenario</th><th>Period</th><th title="The engine in this browser against the stored results">Results</th><th title="Properties every hour must have (sim-ts/src/rules.ts): late start, boiler last, no overshoot, banking first, energy balance...">Strategy rules</th></tr></thead>
                     <tbody>${ref.scenarios.map(s => `<tr data-id="${escapeHtml(s.id)}">
                         <td title="${escapeHtml(s.description)}">${escapeHtml(s.title)}</td>
                         <td>${escapeHtml(s.start)} – ${escapeHtml(s.end)}</td>
-                        <td class="ref-php">-</td><td class="ref-ts">-</td></tr>`).join('')}</tbody>
+                        <td class="ref-ts">-</td><td class="ref-rules">-</td></tr>`).join('')}</tbody>
                 </table>
                 ${ref.previous_version && changes ? `
                 <p style="margin:12px 0 4px;"><strong>What ${escapeHtml(ref.compared_with)} changed compared with ${escapeHtml(ref.previous_version)}</strong> (stored results)</p>
@@ -2380,6 +2380,16 @@ const AdminModule = {
         return `<span style="color:${own ? '#dc3545' : '#b8860b'};" title="${escapeHtml(detail)}">${own ? '✗ differs' : 'changed'}</span>${ms}`;
     },
 
+    /** The strategy rules of one scenario as a table cell. */
+    rulesCell: function(rules) {
+        if (!rules) return '-';
+        const bad = rules.filter(r => r.violations);
+        const list = rules.map(r => `${r.violations ? '✗' : '✓'} ${r.title} (${r.checked} checked${r.violations ? `, ${r.violations} broken; first ${r.first}` : ''})`).join('\n');
+        return bad.length
+            ? `<span style="color:#dc3545;" title="${escapeHtml(list)}">✗ ${escapeHtml(bad.map(r => r.id).join(', '))}</span>`
+            : `<span style="color:#28a745;" title="${escapeHtml(list)}">✓ all ${rules.length} hold</span>`;
+    },
+
     verifyEngine: async function() {
         const btn = document.getElementById('reference-verify-btn');
         const status = document.getElementById('reference-status');
@@ -2387,29 +2397,31 @@ const AdminModule = {
         if (!ref) return;
         const own = ref.compared_with === ref.engine_version;
         if (btn) btn.disabled = true;
-        let bad = 0, done = 0;
+        let bad = 0, ruleBad = 0, done = 0;
         const n = ref.scenarios.length;
         for (const s of ref.scenarios) {
             const row = document.querySelector(`#reference-table tr[data-id="${CSS.escape(s.id)}"]`);
-            const php = row?.querySelector('.ref-php'), ts = row?.querySelector('.ref-ts');
+            const ts = row?.querySelector('.ref-ts'), rulesEl = row?.querySelector('.ref-rules');
             if (status) status.textContent = `Checking ${done + 1} of ${n}: ${s.title}...`;
-            let p, t;
-            if (php) php.textContent = 'running...';
-            try { p = await SimEngine.api(`reference_check_php&id=${encodeURIComponent(s.id)}`); } catch (e) { p = { error: e.message }; }
-            if (php) php.innerHTML = this.referenceCell(p, own);
+            let t;
             if (ts) ts.textContent = 'running...';
             try {
                 const sc = await SimEngine.api(`reference_scenario&id=${encodeURIComponent(s.id)}`);
                 t = await SimEngine.checkReference(sc.inputs, sc.expected);
             } catch (e) { t = { error: e.message }; }
             if (ts) ts.innerHTML = this.referenceCell(t, own);
-            if (!p || p.error || p.status === 'differs' || !t || t.error || t.status === 'differs') bad++;
+            if (rulesEl) rulesEl.innerHTML = this.rulesCell(t && t.rules);
+            if (!t || t.error || t.status === 'differs') bad++;
+            if (t && t.rules && t.rules.some(r => r.violations)) ruleBad++;
             done++;
         }
-        const text = bad === 0
-            ? `all ${n} scenarios match on both engines`
-            : own ? `${bad} of ${n} scenarios differ` : `${bad} of ${n} scenarios changed compared with ${ref.compared_with}`;
-        if (status) status.innerHTML = `<span style="color:${bad === 0 ? '#28a745' : own ? '#dc3545' : '#b8860b'};">${bad === 0 ? '✓' : own ? '✗' : '!'} ${escapeHtml(text[0].toUpperCase() + text.slice(1))}.</span>`;
+        const parts = [];
+        parts.push(bad === 0 ? `all ${n} scenarios match` : own ? `${bad} of ${n} scenarios differ` : `${bad} of ${n} scenarios changed compared with ${ref.compared_with}`);
+        parts.push(ruleBad === 0 ? 'all strategy rules hold' : `${ruleBad} scenario(s) break a strategy rule`);
+        const text = parts.join('; ');
+        const okAll = bad === 0 && ruleBad === 0;
+        const color = okAll ? '#28a745' : (own || ruleBad) ? '#dc3545' : '#b8860b';
+        if (status) status.innerHTML = `<span style="color:${color};">${okAll ? '✓' : (own || ruleBad) ? '✗' : '!'} ${escapeHtml(text[0].toUpperCase() + text.slice(1))}.</span>`;
         try {
             localStorage.setItem(this.REFERENCE_LAST_KEY, JSON.stringify({ at: Date.now(), version: ref.engine_version, text }));
         } catch (e) { /* private mode */ }

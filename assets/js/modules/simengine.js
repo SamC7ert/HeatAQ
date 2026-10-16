@@ -38,7 +38,7 @@ const SimEngine = {
                     resolve({ result: m.result, ms: m.ms, dailyRows: m.dailyRows });
                 } else if (m.type === 'reference') {
                     worker.terminate();
-                    resolve({ ...m.comparison, ms: m.ms });
+                    resolve({ ...m.comparison, rules: m.rules, ms: m.ms });
                 } else if (m.type === 'error') {
                     worker.terminate();
                     reject(new Error(m.message));
