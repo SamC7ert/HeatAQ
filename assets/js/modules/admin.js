@@ -634,6 +634,7 @@ const AdminModule = {
                 + (missing ? ` (${missing} run(s) not in MET's archive)` : '') + '.';
         }
         this.loadForecastStatus();
+        if (plan.station === this.selectedStationId) this.loadForecastAccuracy();
     },
 
     /** Stations file for fetch_met_nordic.py --stations. */
@@ -710,6 +711,7 @@ const AdminModule = {
         } finally {
             btn.disabled = false;
             this.loadForecastStatus();
+            this.loadForecastAccuracy();
         }
     },
 
@@ -817,9 +819,84 @@ const AdminModule = {
             if (monthlyData.monthly_averages) {
                 this.renderMonthlyAverages(monthlyData.monthly_averages);
             }
+            await this.loadForecastAccuracy();
         } catch (err) {
             console.error('Failed to load weather data:', err);
         }
+    },
+
+    // ---- Forecast completeness and accuracy (selected station) ----
+
+    /**
+     * Forecast runs per year and forecast-vs-observed accuracy; re-renders
+     * the yearly table (Forecast column) and the accuracy panels.
+     */
+    loadForecastAccuracy: async function() {
+        this.forecastAccuracy = null;
+        const ids = ['forecast-acc-year', 'forecast-acc-month', 'forecast-acc-lead'];
+        if (!this.selectedStationId) {
+            ids.forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = '<p class="text-muted">Select a station</p>'; });
+            return;
+        }
+        try {
+            const q = new URLSearchParams({ action: 'get_forecast_accuracy', station_id: this.selectedStationId });
+            const data = await (await fetch(`./api/heataq_api.php?${q}`)).json();
+            if (data.error) throw new Error(data.error);
+            this.forecastAccuracy = data.installed ? data : null;
+        } catch (err) {
+            console.error('Failed to load forecast accuracy:', err);
+        }
+        if (this.weatherYearly) this.renderYearlyAverages(this.weatherYearly);
+        const acc = this.forecastAccuracy;
+        const none = '<p class="text-muted">No forecasts for this station yet (Weather Forecasts card above).</p>';
+        const set = (id, rows, label, key, fmtKey) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.innerHTML = (acc && rows && rows.length) ? this.forecastAccuracyTable(rows, label, key, fmtKey) : none;
+        };
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        set('forecast-acc-year', acc?.by_year, 'Year', 'year', v => v);
+        set('forecast-acc-month', acc?.by_month, 'Month', 'month', v => months[v - 1]);
+        set('forecast-acc-lead', acc?.by_lead, 'Hours ahead', 'lead_from', v => `${v}-${v + 5} h`);
+    },
+
+    /** Forecast column of the yearly table: share of the year's runs fetched. */
+    forecastCompletenessCell: function(year) {
+        const acc = this.forecastAccuracy;
+        if (!acc) return '-';
+        const runs = Number(acc.runs_by_year?.[year] || 0);
+        // Runs available: 4 a day from the archive's first day to yesterday
+        const first = new Date((acc.first_day || '2019-11-28') + 'T00:00:00Z');
+        const start = new Date(Math.max(Date.UTC(year, 0, 1), first.getTime()));
+        const end = new Date(Math.min(Date.UTC(year, 11, 31), Date.now() - 86400000));
+        const days = end >= start ? Math.floor((end - start) / 86400000) + 1 : 0;
+        if (days === 0) return '<span class="text-muted" title="No forecasts in MET\'s archive for this year">n/a</span>';
+        const expected = days * 4;
+        if (runs === 0) return '<span class="text-muted">0%</span>';
+        const pct = Math.min(100, Math.floor(100 * runs / expected));
+        const color = runs >= expected ? 'var(--success)' : '#b8860b';
+        return `<span style="color: ${color};" title="${runs.toLocaleString()} of ${expected.toLocaleString()} runs">${pct}%${runs >= expected ? ' ✓' : ''}</span>`;
+    },
+
+    /** Accuracy table: per row hours, then bias and MAE of air, wind and RH. */
+    forecastAccuracyTable: function(rows, label, key, fmtKey) {
+        const sign = v => (v > 0 ? '+' : '') + Number(v).toFixed(1);
+        const mae = v => Number(v).toFixed(1);
+        return `<table class="data-table compact">
+            <thead>
+                <tr><th rowspan="2">${escapeHtml(label)}</th><th rowspan="2" title="Forecast hours compared with an observation">Hours</th>
+                    <th colspan="2" style="text-align: center;">Air °C</th>
+                    <th colspan="2" style="text-align: center;">Wind m/s</th>
+                    <th colspan="2" style="text-align: center;" title="Relative humidity">RH %</th></tr>
+                <tr>${'<th title="Average of forecast - observed (+ = forecast too high)">Bias</th><th title="Mean absolute error: average size of the error">MAE</th>'.repeat(3)}</tr>
+            </thead>
+            <tbody>${rows.map(r => `<tr>
+                <td>${escapeHtml(fmtKey(r[key]))}</td>
+                <td style="text-align: right;">${Number(r.hours).toLocaleString()}</td>
+                <td style="text-align: right;">${sign(r.t_bias)}</td><td style="text-align: right;">${mae(r.t_mae)}</td>
+                <td style="text-align: right;">${sign(r.w_bias)}</td><td style="text-align: right;">${mae(r.w_mae)}</td>
+                <td style="text-align: right;">${sign(r.h_bias)}</td><td style="text-align: right;">${mae(r.h_mae)}</td>
+            </tr>`).join('')}</tbody></table>`;
     },
 
     renderWeatherStations: function() {
@@ -1607,9 +1684,10 @@ const AdminModule = {
                 <th>Min °C</th>
                 <th>Max °C</th>
                 <th>Wind m/s</th>
-                <th>Humidity %</th>
+                <th title="Relative humidity">RH %</th>
                 <th title="Missing rows + hours with NULL temp/wind/humidity, within the station's data range. Click to see details.">Missing h</th>
                 <th title="Hours reconstructed by interpolation (flagged is_interpolated)">Filled h</th>
+                <th title="Forecast runs fetched for this year, of the 4 a day available (MET Nordic, from 28 Nov 2019)">Forecast</th>
             </tr></thead><tbody>`;
 
         data.forEach(row => {
@@ -1635,6 +1713,7 @@ const AdminModule = {
                 <td>${escapeHtml(row.avg_humidity)}</td>
                 <td style="text-align: right;">${missCell}</td>
                 <td style="text-align: right;">${interp}</td>
+                <td style="text-align: right;">${this.forecastCompletenessCell(row.year)}</td>
             </tr>`;
         });
 
@@ -1821,7 +1900,7 @@ const AdminModule = {
                 <th>Min °C</th>
                 <th>Max °C</th>
                 <th>Wind m/s</th>
-                <th>Humidity %</th>
+                <th title="Relative humidity">RH %</th>
             </tr></thead><tbody>`;
 
         data.forEach(row => {
