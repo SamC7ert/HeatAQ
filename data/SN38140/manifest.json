@@ -1,6 +1,6 @@
 {
     "station_id": "SN38140",
-    "exported_at": "2026-10-17 08:56:07 UTC",
+    "exported_at": "2026-10-17 21:00:43 UTC",
     "simulator_version": "3.19.0",
     "app_commit": "d4debbb9a089c052a280dd9e97e64319b4a28f41",
     "files": {
@@ -13,12 +13,12 @@
             "bytes": 902441
         },
         "forecasts.csv.gz": {
-            "rows": 0,
-            "bytes": 112
+            "rows": 369595,
+            "bytes": 4378387
         },
         "forecast_misses.csv": {
-            "rows": 0,
-            "bytes": 51
+            "rows": 70,
+            "bytes": 4601
         },
         "solar_site_1.csv.gz": {
             "rows": 96432,
