@@ -908,6 +908,8 @@ const AdminModule = {
         const noStationMsg = document.getElementById('no-station-message');
         const updateDataBtn = document.getElementById('update-data-btn');
         const interpolateBtn = document.getElementById('interpolate-missing-btn');
+        const exportStatus = document.getElementById('station-export-status');
+        if (exportStatus) exportStatus.textContent = '';
 
         if (this.selectedStationId) {
             // Show station details and update data button
@@ -951,6 +953,40 @@ const AdminModule = {
         }
 
         await this.loadWeatherData();
+    },
+
+    /**
+     * Export the selected station's dataset (observations, forecasts, the
+     * linked sites' solar data) to the data-exports branch on GitHub
+     * (lib/DatasetExporter.php).
+     */
+    exportStationDataset: async function() {
+        const stationId = this.selectedStationId;
+        const btn = document.getElementById('station-export-btn');
+        const el = document.getElementById('station-export-status');
+        if (!stationId || !el) return;
+        if (!confirm(`Export the dataset of ${stationId} (observations, forecasts, solar) to the branch data-exports on GitHub?`)) return;
+        btn.disabled = true;
+        el.style.color = '#666';
+        el.textContent = 'Exporting (can take a minute)...';
+        try {
+            const res = await fetch('./api/heataq_api.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'export_station_dataset', station_id: stationId })
+            });
+            const data = await api.parseJson(res);
+            if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
+            const files = Object.entries(data.files || {})
+                .map(([name, f]) => `${name} ${Number(f.rows).toLocaleString()} rows`).join(', ');
+            el.style.color = '#28a745';
+            el.textContent = `Exported to ${data.branch}: ${data.path}/ (commit ${String(data.commit).slice(0, 7)}). ${files}.`;
+        } catch (err) {
+            el.style.color = '#dc3545';
+            el.textContent = err.message;
+        } finally {
+            btn.disabled = false;
+        }
     },
 
     loadWeatherData: async function() {

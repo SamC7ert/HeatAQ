@@ -5,12 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HeatAQ Schedule Management</title>
     <link rel="icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="./assets/css/main.css?v=269">
-    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=269">
-    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=269">
-    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=269">
-    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=269">
-    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=269">
+    <link rel="stylesheet" href="./assets/css/main.css?v=270">
+    <link rel="stylesheet" href="./assets/css/bootstrap-utilities.css?v=270">
+    <link rel="stylesheet" href="./assets/css/components/sidebar.css?v=270">
+    <link rel="stylesheet" href="./assets/css/components/schedules.css?v=270">
+    <link rel="stylesheet" href="./assets/css/components/calendar.css?v=270">
+    <link rel="stylesheet" href="./assets/css/components/simulations.css?v=270">
     <style>
         /* Top bar, right: background saving panel, user card */
         .top-bar-right {
@@ -1360,8 +1360,10 @@
                                     </table>
                                     <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: space-between; max-width: 500px;">
                                         <button class="btn btn-danger btn-sm" onclick="app.admin.deleteSelectedStation()">Delete</button>
+                                        <button id="station-export-btn" class="btn btn-secondary btn-sm" onclick="app.admin.exportStationDataset()" title="Observations, forecasts and the linked sites' solar data, to the data-exports branch on GitHub (for analysis outside the app)">Export dataset to git</button>
                                         <button class="btn btn-primary btn-sm" onclick="app.admin.saveStationInline()">Save</button>
                                     </div>
+                                    <div id="station-export-status" style="margin-top: 8px; font-size: 12px; max-width: 500px;"></div>
                                 </div>
                                 <div style="flex: 1 1 300px; min-width: 260px;">
                                     <div id="station-map" style="width: 100%; height: 260px; border: 1px solid var(--neutral-200); border-radius: 4px; overflow: hidden; isolation: isolate;"></div>
@@ -1849,20 +1851,20 @@
 
     <!-- Load JavaScript modules -->
     <!-- Core configuration -->
-    <script src="./assets/js/config.js?v=269"></script>
+    <script src="./assets/js/config.js?v=270"></script>
     <!-- Application modules -->
-    <script src="./assets/js/modules/api.js?v=269"></script>
-    <script src="./assets/js/modules/navigation.js?v=269"></script>
-    <script src="./assets/js/modules/schedules.js?v=269"></script>
-    <script src="./assets/js/modules/calendar.js?v=269"></script>
-    <script src="./assets/js/sim/heataq-sim.js?v=269"></script>
-    <script src="./assets/js/modules/simengine.js?v=269"></script>
-    <script src="./assets/js/modules/simulations.js?v=269"></script>
-    <script src="./assets/js/modules/simcontrol.js?v=269"></script>
-    <script src="./assets/js/modules/configuration.js?v=269"></script>
-    <script src="./assets/js/modules/energy-analysis.js?v=269"></script>
-    <script src="./assets/js/modules/admin.js?v=269"></script>
-    <script src="./assets/js/modules/project.js?v=269"></script>
-    <script src="./assets/js/app.js?v=269"></script>
+    <script src="./assets/js/modules/api.js?v=270"></script>
+    <script src="./assets/js/modules/navigation.js?v=270"></script>
+    <script src="./assets/js/modules/schedules.js?v=270"></script>
+    <script src="./assets/js/modules/calendar.js?v=270"></script>
+    <script src="./assets/js/sim/heataq-sim.js?v=270"></script>
+    <script src="./assets/js/modules/simengine.js?v=270"></script>
+    <script src="./assets/js/modules/simulations.js?v=270"></script>
+    <script src="./assets/js/modules/simcontrol.js?v=270"></script>
+    <script src="./assets/js/modules/configuration.js?v=270"></script>
+    <script src="./assets/js/modules/energy-analysis.js?v=270"></script>
+    <script src="./assets/js/modules/admin.js?v=270"></script>
+    <script src="./assets/js/modules/project.js?v=270"></script>
+    <script src="./assets/js/app.js?v=270"></script>
 </body>
 </html>

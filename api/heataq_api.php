@@ -546,6 +546,13 @@ class HeatAQAPI {
                     $this->getWeatherDayNight();
                     break;
 
+                case 'export_station_dataset':
+                    if (!$this->canDelete()) {
+                        $this->sendError('Permission denied - admin only', 403);
+                    }
+                    $this->exportStationDataset();
+                    break;
+
                 case 'get_forecast_cell':
                     $this->getForecastCell();
                     break;
@@ -2170,6 +2177,29 @@ class HeatAQAPI {
         $ha = deg2rad($solarMin / 4 - 180);
         $phi = deg2rad($lat);
         return sin($phi) * sin($decl) + cos($phi) * cos($decl) * cos($ha) > 0;
+    }
+
+    /**
+     * Export a station's dataset (observations, forecasts, linked sites'
+     * solar) to the data-exports branch on GitHub, for analysis outside the
+     * app (lib/DatasetExporter.php).
+     */
+    private function exportStationDataset() {
+        $stationId = $this->postInput['station_id'] ?? '';
+        if (!is_string($stationId) || $stationId === '') {
+            $this->sendError('station_id required');
+        }
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();                    // can take a minute
+        }
+        @set_time_limit(600);
+        require_once __DIR__ . '/../lib/DatasetExporter.php';
+        try {
+            $res = DatasetExporter::export($this->db, $stationId);
+        } catch (Throwable $e) {
+            $this->sendError('Export failed: ' . $e->getMessage(), 500);
+        }
+        $this->sendResponse($res);
     }
 
     /**

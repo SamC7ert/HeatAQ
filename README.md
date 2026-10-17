@@ -94,6 +94,18 @@ cd /public_html/heataq
 git pull origin main
 ```
 
+### Dataset exports (for analysis outside the app)
+Admin → Weather → Weather Data → **Export dataset to git** writes the selected
+station's data to the branch `data-exports` on GitHub (never merged into
+master), in `data/<station_id>/`: `station.json` (the station and the pool
+sites using it), `weather.csv.gz` (hourly observations), `forecasts.csv.gz`
+and `forecast_misses.csv`, `solar_site_<id>.csv.gz`, `manifest.json`. A new
+export of a station replaces its folder. The commit is built without a
+checkout, so the live site's files are not touched (`lib/DatasetExporter.php`);
+it pushes with the same credentials as the schema export
+(`config_heataq/git_credentials.php`, else `origin`). Read it with
+`git fetch origin data-exports` and `git show origin/data-exports:data/<id>/manifest.json`.
+
 ## Documentation
 - [System Architecture](docs/SYSTEM_ARCHITECTURE.md)
 - [Database Structure](docs/DATABASE_STRUCTURE.md)
