@@ -351,7 +351,8 @@ stored in `weather_forecasts` (migration 042). Fetched by the server from
 MET's archive in Admin → Weather → Weather Forecasts
 (`lib/MetNordicForecast.php`), or on a PC with
 `scripts/forecast/fetch_met_nordic.py` and imported there; see
-`scripts/forecast/README.md`. Each run has an
+`scripts/forecast/README.md` (also for runs missing from the archive,
+`weather_forecast_misses`). Each run has an
 **available_at** time (its file's creation time, about 30 minutes after the
 nominal run time).
 

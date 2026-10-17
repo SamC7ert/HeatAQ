@@ -1790,7 +1790,27 @@ class HeatAQAPI {
             $this->sendResponse(['installed' => false, 'status' => []]);
             return;
         }
-        $this->sendResponse(['installed' => true, 'status' => $rows]);
+        // Runs not in the archive (tried MAX_ATTEMPTS times; migration 043)
+        require_once __DIR__ . '/../lib/MetNordicForecast.php';
+        $absent = [];
+        try {
+            $stmt = $this->db->prepare("
+                SELECT station_id, source, COUNT(*) AS n FROM weather_forecast_misses
+                WHERE attempts >= ? GROUP BY station_id, source
+            ");
+            $stmt->execute([MetNordicForecast::MAX_ATTEMPTS]);
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $absent[$r['station_id'] . '|' . $r['source']] = (int) $r['n'];
+            }
+        } catch (PDOException $e) {
+            // migration 043 not run yet
+        }
+        foreach ($rows as &$r) {
+            $r['not_in_archive'] = $absent[$r['station_id'] . '|' . $r['source']] ?? 0;
+        }
+        unset($r);
+        $this->sendResponse(['installed' => true, 'status' => $rows,
+                             'max_attempts' => MetNordicForecast::MAX_ATTEMPTS]);
     }
 
     /**
@@ -1862,8 +1882,9 @@ class HeatAQAPI {
     }
 
     /**
-     * Forecast runs stored per UTC day for a station (MET Nordic): which days
-     * of a period still need fetching. days = {date: runs}.
+     * Forecast runs per UTC day for a station (MET Nordic): which days of a
+     * period still need fetching. days = {date: runs stored + runs not in
+     * the archive}; a day is complete at 4.
      */
     private function getForecastDays() {
         $stationId = $_GET['station_id'] ?? '';
@@ -1888,8 +1909,27 @@ class HeatAQAPI {
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
             $days[$r['d']] = (int) $r['runs'];
         }
+        // Runs not in the archive (tried MAX_ATTEMPTS times) count as done
         require_once __DIR__ . '/../lib/MetNordicForecast.php';
-        $this->sendResponse(['days' => (object) $days, 'first_day' => MetNordicForecast::FIRST_DAY]);
+        $absent = 0;
+        try {
+            $stmt = $this->db->prepare("
+                SELECT DATE(issued_at) AS d, COUNT(*) AS runs FROM weather_forecast_misses
+                WHERE station_id = ? AND source = 'met_nordic' AND attempts >= ?
+                  AND issued_at >= ? AND issued_at < DATE_ADD(?, INTERVAL 1 DAY)
+                GROUP BY DATE(issued_at)
+            ");
+            $stmt->execute([$stationId, MetNordicForecast::MAX_ATTEMPTS, $from, $to]);
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $days[$r['d']] = ($days[$r['d']] ?? 0) + (int) $r['runs'];
+                $absent += (int) $r['runs'];
+            }
+        } catch (PDOException $e) {
+            // migration 043 not run yet: such runs are asked for on every fetch
+        }
+        $this->sendResponse(['days' => (object) $days, 'not_in_archive' => $absent,
+                             'max_attempts' => MetNordicForecast::MAX_ATTEMPTS,
+                             'first_day' => MetNordicForecast::FIRST_DAY]);
     }
 
     /**
@@ -2159,14 +2199,75 @@ class HeatAQAPI {
             $this->sendError('Date must be from ' . MetNordicForecast::FIRST_DAY . ' to yesterday (UTC)');
         }
         @set_time_limit(180);
+        // Only the runs still needed: not stored, and not yet tried
+        // MAX_ATTEMPTS times (weather_forecast_misses, migration 043)
+        $stmt = $this->db->prepare("
+            SELECT DISTINCT HOUR(issued_at) FROM weather_forecasts
+            WHERE station_id = ? AND source = 'met_nordic'
+              AND issued_at >= ? AND issued_at < DATE_ADD(?, INTERVAL 1 DAY)
+        ");
+        $stmt->execute([$stationId, $date, $date]);
+        $stored = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+        $attempts = [];
+        $tracked = true;
         try {
-            $res = MetNordicForecast::fetchDay($this->db, $station, $date);
+            $stmt = $this->db->prepare("
+                SELECT HOUR(issued_at) AS hh, attempts FROM weather_forecast_misses
+                WHERE station_id = ? AND source = 'met_nordic'
+                  AND issued_at >= ? AND issued_at < DATE_ADD(?, INTERVAL 1 DAY)
+            ");
+            $stmt->execute([$stationId, $date, $date]);
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                $attempts[(int) $r['hh']] = (int) $r['attempts'];
+            }
+        } catch (PDOException $e) {
+            $tracked = false;                         // migration 043 not run yet
+        }
+        $want = array_values(array_filter([0, 6, 12, 18], fn($hh) =>
+            !in_array($hh, $stored, true) && ($attempts[$hh] ?? 0) < MetNordicForecast::MAX_ATTEMPTS));
+        $res = ['runs' => 0, 'rows' => 0, 'missing' => [], 'skipped' => []];
+        try {
+            if ($want) {
+                $res = MetNordicForecast::fetchDay($this->db, $station, $date, 36, 0.0065,
+                                                   MetNordicForecast::REQUIRED, $want);
+            }
             $cell = MetNordicForecast::stationCell($station);
         } catch (Throwable $e) {
             $this->sendError('Fetch failed for ' . $date . ': ' . $e->getMessage(), 502);
         }
+        // Record the misses (a run without the needed variables counts as one)
+        $missed = array_merge($res['missing'], $res['skipped']);
+        if ($tracked && $want) {
+            $issued = fn($hh) => sprintf('%s %02d:00:00', $date, $hh);
+            $now = gmdate('Y-m-d H:i:s');
+            $add = $this->db->prepare("
+                INSERT INTO weather_forecast_misses (station_id, source, issued_at, attempts, last_tried_at)
+                VALUES (?, 'met_nordic', ?, 1, ?)
+                ON DUPLICATE KEY UPDATE attempts = attempts + 1, last_tried_at = VALUES(last_tried_at)
+            ");
+            $del = $this->db->prepare("
+                DELETE FROM weather_forecast_misses WHERE station_id = ? AND source = 'met_nordic' AND issued_at = ?
+            ");
+            foreach ($want as $hh) {
+                if (in_array($hh, $missed, true)) {
+                    $add->execute([$stationId, $issued($hh), $now]);
+                    $attempts[$hh] = ($attempts[$hh] ?? 0) + 1;
+                } elseif (isset($attempts[$hh])) {
+                    $del->execute([$stationId, $issued($hh)]);
+                    unset($attempts[$hh]);
+                }
+            }
+        }
+        // missing: this day's runs not stored, with their tries so far
+        $missing = [];
+        foreach ([0, 6, 12, 18] as $hh) {
+            if (in_array($hh, $stored, true) || (in_array($hh, $want, true) && !in_array($hh, $missed, true))) continue;
+            $missing[] = ['hour' => $hh, 'attempts' => $tracked ? ($attempts[$hh] ?? 0) : null];
+        }
         $this->sendResponse(['success' => true, 'date' => $date, 'cell_method' => $cell['method'],
-                             'grid_altitude' => $cell['grid_altitude']] + $res);
+                             'grid_altitude' => $cell['grid_altitude'],
+                             'tried' => count($want), 'runs' => $res['runs'], 'rows' => $res['rows'],
+                             'missing' => $missing, 'max_attempts' => MetNordicForecast::MAX_ATTEMPTS]);
     }
 
     /**

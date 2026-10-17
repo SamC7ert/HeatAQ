@@ -142,6 +142,13 @@ All schedule tables connect **ONLY through project_id**. This provides clean acc
   or CSV import from `scripts/forecast/fetch_met_nordic.py`);
   read when a run plans on forecasts (`docs/PREDICTIVE_CONTROL.md` §11)
 
+#### weather_forecast_misses (migration 043)
+- Forecast runs MET's archive did not have when fetched: station_id, source, issued_at,
+  attempts, last_tried_at
+- A run not found in `MetNordicForecast::MAX_ATTEMPTS` (5) tries counts as not in the
+  archive and is not fetched again; a run fetched later is removed
+  (`scripts/forecast/README.md`)
+
 #### solar_daily_data (3,653 records)
 - Daily solar irradiance (10 years)
 - Includes: total kWh/m², clear sky values
