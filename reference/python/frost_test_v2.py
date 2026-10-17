@@ -7,10 +7,22 @@ Uses CF standard element codes with proper sensor level handling
 import requests
 import sys
 import json
+import os
 import numpy as np
 from datetime import datetime
 
-CLIENT_ID = 'e33548a8-dd28-4828-a87e-39b4f7eb88ce'
+# Frost API client ID: CLIENT_ID argument or FROST_CLIENT_ID environment variable
+# Get one at https://frost.met.no/auth/requestCredentials.html
+CLIENT_ID = os.environ.get('FROST_CLIENT_ID')
+
+def require_client_id(client_id):
+    """Exit with a clear message if no client ID was given"""
+    if not client_id:
+        print("ERROR: Frost API client ID missing. Set the FROST_CLIENT_ID environment variable "
+              "or pass CLIENT_ID as the last argument. "
+              "Get one at https://frost.met.no/auth/requestCredentials.html", file=sys.stderr)
+        sys.exit(1)
+    return client_id
 
 def print_header(title):
     print("=" * 70)
@@ -255,6 +267,7 @@ def main():
         print("  <number>  - Specific level (e.g. 2, 10)")
         print("  default   - Standard level only")
         print("  (omit)    - All available levels")
+        print("\nClient ID: set FROST_CLIENT_ID in the environment, or pass CLIENT_ID as the last argument")
         print()
         sys.exit(0)
     
@@ -277,6 +290,7 @@ def main():
             client_id = level
             level = None
         
+        require_client_id(client_id)
         values = fetch_frost_observations(station, element, start_date, end_date, level, client_id)
         print_statistics(values, element)
     
@@ -294,6 +308,7 @@ def main():
             client_id = element
             element = None
         
+        require_client_id(client_id)
         list_available_timeseries(station, element, client_id)
     
     elif command == 'lookup':
@@ -304,6 +319,7 @@ def main():
         old_code = sys.argv[2]
         client_id = sys.argv[3] if len(sys.argv) > 3 else CLIENT_ID
         
+        require_client_id(client_id)
         lookup_old_code(old_code, client_id)
     
     else:

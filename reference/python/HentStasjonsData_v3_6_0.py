@@ -10,9 +10,16 @@ import pandas as pd
 from datetime import datetime, timedelta
 import time
 import argparse
+import os
+import sys
 
-# Default client ID
-DEFAULT_CLIENT_ID = '2fb113fd-5312-484c-86df-c57c7eaaa943'
+# Frost API client ID: --client-id argument or FROST_CLIENT_ID environment variable
+# Get one at https://frost.met.no/auth/requestCredentials.html
+CLIENT_ID_ENV = 'FROST_CLIENT_ID'
+MISSING_CLIENT_ID_MSG = (
+    f"Frost API client ID missing. Set the {CLIENT_ID_ENV} environment variable "
+    "or pass --client-id. Get one at https://frost.met.no/auth/requestCredentials.html"
+)
 
 # Known Norwegian weather stations
 KNOWN_STATIONS = {
@@ -166,11 +173,15 @@ def test_wind_sensor_level(station_id, test_date, client_id):
     print("  WARNING: No wind data found in test, but will try for full download")
     return (None, None, 'wind (assumed available)')
 
-def fetch_weather_data(station_id='SN38140', date_range='10', client_id=DEFAULT_CLIENT_ID):
+def fetch_weather_data(station_id='SN38140', date_range='10', client_id=None):
     """
     Fetch weather data from Norwegian Meteorological Institute
     Uses sensor level testing to determine optimal wind measurement
     """
+    
+    client_id = client_id or os.environ.get(CLIENT_ID_ENV)
+    if not client_id:
+        raise ValueError(MISSING_CLIENT_ID_MSG)
     
     endpoint = 'https://frost.met.no/observations/v0.jsonld'
     
@@ -424,8 +435,8 @@ Output:
                        help='Station name or ID (default: landvik)')
     parser.add_argument('--date', '-d', default='10',
                        help='Period: "10"=10y back, "2024"=year, "2015-2024"=range')
-    parser.add_argument('--client-id', '-c', default=DEFAULT_CLIENT_ID,
-                       help='Frost API client ID')
+    parser.add_argument('--client-id', '-c', default=os.environ.get(CLIENT_ID_ENV),
+                       help=f'Frost API client ID (default: ${CLIENT_ID_ENV})')
     parser.add_argument('--list-stations', '-l', action='store_true',
                        help='List known stations')
     
@@ -434,6 +445,10 @@ Output:
     if args.list_stations:
         list_stations()
         return
+    
+    if not args.client_id:
+        print(f"ERROR: {MISSING_CLIENT_ID_MSG}", file=sys.stderr)
+        sys.exit(1)
     
     # Parse station ID
     if args.station.lower() in KNOWN_STATIONS:
