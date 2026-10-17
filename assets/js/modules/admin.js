@@ -49,17 +49,98 @@ const AdminModule = {
         return Number.isFinite(h) && h > 0 && Number.isFinite(z0) && z0 > 0;
     },
 
-    // Render a location map for the selected station (self-contained OSM embed,
-    // so it doesn't depend on the project module being loaded). Terrain-level
-    // zoom; longitude window widens toward the poles to stay roughly square.
-    renderStationMap: function(lat, lng) {
+    // Leaflet (map library), loaded the first time a map is shown
+    loadLeaflet: function() {
+        if (window.L) return Promise.resolve(window.L);
+        if (this._leafletLoading) return this._leafletLoading;
+        this._leafletLoading = new Promise((resolve, reject) => {
+            const css = document.createElement('link');
+            css.rel = 'stylesheet';
+            css.href = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
+            document.head.appendChild(css);
+            const js = document.createElement('script');
+            js.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
+            js.onload = () => resolve(window.L);
+            js.onerror = () => { this._leafletLoading = null; reject(new Error('map library not reachable')); };
+            document.head.appendChild(js);
+        });
+        return this._leafletLoading;
+    },
+
+    // Location map of the selected station, with the 4 MET Nordic grid points
+    // its forecasts are interpolated from (get_forecast_cell): marker size =
+    // weight; filled green = land, blue = sea.
+    renderStationMap: async function(lat, lng, stationId = this.selectedStationId) {
         const el = document.getElementById('station-map');
+        const note = document.getElementById('station-map-note');
         if (!el) return;
+        if (note) note.textContent = '';
+        if (this._stationMap) { this._stationMap.remove(); this._stationMap = null; }
+        const token = this._mapToken = (this._mapToken || 0) + 1;   // a newer call wins
         const la = parseFloat(lat), lo = parseFloat(lng);
         if (!Number.isFinite(la) || !Number.isFinite(lo)) {
             el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--neutral-400);font-size:12px;">No coordinates</div>';
             return;
         }
+        let L;
+        try {
+            L = await this.loadLeaflet();
+        } catch (err) {
+            if (token === this._mapToken) this.renderStationMapEmbed(el, la, lo);
+            return;
+        }
+        if (token !== this._mapToken) return;
+        el.innerHTML = '';
+        const map = L.map(el, { scrollWheelZoom: false }).setView([la, lo], 12);
+        this._stationMap = map;
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 18,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        L.circleMarker([la, lo], { radius: 7, color: '#fff', weight: 2, fillColor: '#dc3545', fillOpacity: 1 })
+            .bindTooltip('Weather station').addTo(map);
+        setTimeout(() => map.invalidateSize(), 0);
+
+        let cell;
+        try {
+            const q = new URLSearchParams({ action: 'get_forecast_cell', station_id: stationId });
+            cell = await (await fetch(`./api/heataq_api.php?${q}`)).json();
+            if (cell.error) throw new Error(cell.error);
+        } catch (err) {
+            if (note && token === this._mapToken) note.textContent = `Forecast grid points not shown: ${err.message}`;
+            return;
+        }
+        if (token !== this._mapToken || !Array.isArray(cell.corners)) return;
+        const c = cell.corners;                       // [j][i], [j][i+1], [j+1][i], [j+1][i+1]
+        L.polygon([0, 1, 3, 2].map(k => [c[k].lat, c[k].lon]),
+            { color: '#1565c0', weight: 1, dashArray: '4 4', fill: false, interactive: false }).addTo(map);
+        const pct = w => `${Math.round(w * 100)}%`;
+        c.forEach(p => {
+            const land = p.land >= cell.land_threshold;
+            const radius = 4 + 10 * p.weight;
+            L.circleMarker([p.lat, p.lon], {
+                radius, color: '#fff', weight: 2,
+                fillColor: land ? '#2e7d32' : '#1e88e5', fillOpacity: 0.9
+            })
+                .bindTooltip(pct(p.weight), { permanent: true, direction: 'right', offset: [radius, 0], className: 'grid-point-label' })
+                .bindPopup(`<b>Forecast grid point</b><br>${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}`
+                    + `<br>Height ${Math.round(p.alt)} m, ${land ? 'land' : 'sea'}`
+                    + `<br>Weight ${pct(p.weight)}, ${p.km.toFixed(2)} km from the station`)
+                .addTo(map);
+        });
+        map.fitBounds(L.latLngBounds([[la, lo], ...c.map(p => [p.lat, p.lon])]), { padding: [30, 30], maxZoom: 13 });
+        if (note) {
+            const st = cell.station.elevation;
+            const corr = Number(cell.air_correction);
+            note.innerHTML = `<span style="color:#2e7d32;">&#9679;</span> Forecast grid points (MET Nordic, 1 km), size = weight `
+                + `(${escapeHtml(cell.method)}). Grid height ${Math.round(cell.grid_altitude)} m`
+                + (st === null ? '' : `, station ${Math.round(st)} m: forecast air temperature ${corr >= 0 ? '+' : '&minus;'}${Math.abs(corr).toFixed(1)} °C`
+                    + ` (${Number(cell.lapse_per_100m).toFixed(2)} °C per 100 m)`) + '.';
+        }
+    },
+
+    // Fallback without the map library: OpenStreetMap's embed (no grid points)
+    renderStationMapEmbed: function(el, la, lo) {
         const dLat = 0.06;
         const cos = Math.max(Math.cos(la * Math.PI / 180), 0.15);
         const dLng = dLat / cos;

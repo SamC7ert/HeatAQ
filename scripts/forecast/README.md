@@ -39,6 +39,11 @@ recorded per run (`weather_forecast_misses`, migration 043); a run not found
 in 5 tries counts as not in the archive (the "Not in archive" column) and is
 not asked for again. A retry fetches only the runs a day still lacks.
 
+The station map (Admin → Weather → Weather Data) shows the 4 grid points a
+station's forecasts are interpolated from, sized by weight (green = land,
+blue = sea; click one for its height and distance), and the height
+correction of the air temperature (grid height to station height).
+
 The app fetches what the planner uses: temperature, wind and humidity, 36
 hours ahead of each run (a plan looks at most about 35 hours ahead of the
 forecast it uses). Cloud and solar are left empty.

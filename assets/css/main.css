@@ -853,3 +853,13 @@ input[type="date"].inline-edit {
 body.debug-mode-on .debug-only {
     display: block !important;
 }
+
+/* Station map (Admin -> Weather): weight labels of the forecast grid points */
+.leaflet-tooltip.grid-point-label {
+    font-size: 11px;
+    padding: 0 4px;
+    box-shadow: none;
+}
+.leaflet-tooltip.grid-point-label::before {
+    display: none;
+}
