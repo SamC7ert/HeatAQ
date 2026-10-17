@@ -41,6 +41,19 @@ class MetNordicForecast {
      */
     public static function fetchDay(PDO $db, array $station, string $date, int $hours = 36, float $lapse = 0.0065,
                                     array $variables = self::REQUIRED, array $runHours = [0, 6, 12, 18]) {
+        $result = self::readDay($station, $date, $hours, $lapse, $variables, $runHours);
+        $rows = $result['rows'];
+        $result['rows'] = $rows ? self::store($db, $rows) : 0;
+        return $result;
+    }
+
+    /**
+     * Read one UTC day of runs for a station, without storing: as fetchDay,
+     * but 'rows' holds the rows themselves (store()'s format). Also used by
+     * scripts/forecast/check_app_values.php (the check workbook).
+     */
+    public static function readDay(array $station, string $date, int $hours = 36, float $lapse = 0.0065,
+                                   array $variables = self::REQUIRED, array $runHours = [0, 6, 12, 18]) {
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             throw new InvalidArgumentException('Date must be YYYY-MM-DD');
         }
@@ -85,7 +98,7 @@ class MetNordicForecast {
             $rows = array_merge($rows, self::runRows($station, $cell, $issued, $das, $data, $r['last'], $lapse));
             $result['runs']++;
         }
-        $result['rows'] = $rows ? self::store($db, $rows) : 0;
+        $result['rows'] = $rows;
         self::saveCache();
         return $result;
     }

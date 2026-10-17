@@ -96,6 +96,30 @@ hours are kept per run; `--workers` (default 4) the parallel requests.
 year is about 1,460 runs). The whole archive since 2019 takes one night.
 `--limit 10` tests a few runs first.
 
+## check_workbook.py (checking by hand in Excel)
+
+An Excel workbook that documents every step for one station and two days,
+for checking HeatAQ's forecasts by hand:
+
+- **Grid:** the station's position on the grid (projection formulas), the 4
+  grid points, their weights and the height correction.
+- **Runs:** each run's available time, with links to the raw data in MET's
+  archive (open them in a browser to verify the numbers).
+- **Forecast:** every forecast hour recomputed by formulas from the grid
+  points' raw values, next to HeatAQ's value (OK when equal within rounding).
+- **Night plan:** which run the predictive controller plans a night with,
+  and when it plans again.
+
+    pip install openpyxl
+    python check_workbook.py --name "Røros lufthavn" --lat 62.5781 --lon 11.3487 \
+        --elevation 625 --date 2024-01-04 [--close 21:00 --open 07:00]
+
+The raw values are fetched by this script (with fetch_met_nordic.py's code,
+independently of HeatAQ); HeatAQ's values come from running the app's own
+code, `check_app_values.php` (needs `php` with curl, no database). Use the
+station's position and height as in HeatAQ. Excel computes the formulas when
+the file is opened; in LibreOffice use Data → Calculate → Recalculate Hard.
+
 ## In HeatAQ
 
 Forecasts are stored in `weather_forecasts`. The simulation then has a
