@@ -22,6 +22,7 @@ class MetNordicForecast {
     const FIRST_DAY = '2019-11-28';   // first day with all variables
     const LAND_THRESHOLD = 0.5;
     const FILL_LIMIT = 1e20;
+    const MAX_ATTEMPTS = 5;           // tries (first + 4 retries) before a run counts as not in the archive (weather_forecast_misses)
     const TIMEOUT = 60;               // s per request (one point's run takes 4-10 s, more when MET is busy)
     const SHORTWAVE = 'integral_of_surface_downwelling_shortwave_flux_in_air_wrt_time';
     const VARIABLES = ['air_temperature_2m', 'wind_speed_10m', 'relative_humidity_2m',
@@ -34,10 +35,11 @@ class MetNordicForecast {
     /**
      * Fetch and store one UTC day of runs for a station.
      * @param array $station station_id, latitude, longitude, elevation
+     * @param array $runHours the runs to fetch (UTC hours; default all 4)
      * @return array ['runs' => fetched, 'rows' => stored, 'missing' => [run hours not in the archive], 'skipped' => [...]]
      */
     public static function fetchDay(PDO $db, array $station, string $date, int $hours = 36, float $lapse = 0.0065,
-                                    array $variables = self::REQUIRED) {
+                                    array $variables = self::REQUIRED, array $runHours = [0, 6, 12, 18]) {
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             throw new InvalidArgumentException('Date must be YYYY-MM-DD');
         }
@@ -45,10 +47,10 @@ class MetNordicForecast {
         $rows = [];
         $result = ['runs' => 0, 'rows' => 0, 'missing' => [], 'skipped' => []];
 
-        // The day's 4 runs: layout (variables, steps; cached per month), then
-        // their creation time (DAS) and data, all 8 requests in parallel.
+        // The day's runs: layout (variables, steps; cached per month), then
+        // their creation time (DAS) and data, all requests in parallel.
         $runs = [];
-        foreach ([0, 6, 12, 18] as $hh) {
+        foreach ($runHours as $hh) {
             $path = sprintf('%s/met_forecast_1_0km_nordic_%sT%02dZ.nc',
                 str_replace('-', '/', $date), str_replace('-', '', $date), $hh);
             $layout = self::layout($path);

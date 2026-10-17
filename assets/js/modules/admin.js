@@ -488,11 +488,14 @@ const AdminModule = {
             const name = id => (this.weatherStations || []).find(s => s.station_id === id)?.name || id;
             const day = ts => (ts || '').slice(0, 10);
             el.innerHTML = `<table class="data-table compact" style="max-width: 700px;">
-                <thead><tr><th>Station</th><th>Source</th><th>Runs</th><th>First run</th><th>Last run</th></tr></thead>
+                <thead><tr><th>Station</th><th>Source</th><th>Runs</th>
+                    <th title="Runs MET's archive did not have in ${Number(data.max_attempts || 5)} tries; not asked for again">Not in archive</th>
+                    <th>First run</th><th>Last run</th></tr></thead>
                 <tbody>${data.status.map(r => `<tr>
                     <td>${escapeHtml(name(r.station_id))}</td>
                     <td>${escapeHtml(r.source)}</td>
                     <td style="text-align: right;">${Number(r.runs).toLocaleString()}</td>
+                    <td style="text-align: right;">${Number(r.not_in_archive || 0).toLocaleString()}</td>
                     <td>${escapeHtml(day(r.first_issued))}</td>
                     <td>${escapeHtml(day(r.last_issued))}</td>
                 </tr>`).join('')}</tbody></table>`;
@@ -539,7 +542,7 @@ const AdminModule = {
             const iso = d.toISOString().slice(0, 10);
             if ((have[iso] || 0) < 4) days.push(iso);
         }
-        return { station, days };
+        return { station, days, notInArchive: data.not_in_archive || 0, maxAttempts: data.max_attempts || 5 };
     },
 
     planForecastFetch: async function() {
@@ -549,9 +552,11 @@ const AdminModule = {
             const plan = await this.forecastDaysToFetch();
             if (!plan) { el.textContent = ''; return; }
             el.style.color = '#666';
-            el.textContent = plan.days.length
+            const absent = plan.notInArchive
+                ? ` ${plan.notInArchive.toLocaleString()} run(s) of this period are not in MET's archive (${plan.maxAttempts} tries) and are skipped.` : '';
+            el.textContent = (plan.days.length
                 ? `${plan.days.length.toLocaleString()} day(s) to fetch (about ${Math.max(1, Math.round(plan.days.length * 10 / 60))} min with this page open; can be stopped and resumed).`
-                : 'All days of this period are fetched.';
+                : 'All days of this period are fetched.') + absent;
         } catch (err) {
             el.style.color = '#dc3545';
             el.textContent = err.message;
@@ -563,8 +568,16 @@ const AdminModule = {
     },
 
     /**
-     * Fetch the missing days: the server reads each day's 4 runs from MET
+     * Fetch the missing days: the server reads each day's runs from MET
      * Norway's archive and stores them. Up to 3 days at a time; resumable.
+     *
+     * MET's archive sometimes answers "not found" for a run it has. Days
+     * with runs not found are fetched again during the fetch, spread over
+     * time: when a fifth, two fifths ... of the days are done, and at the
+     * end (after a pause) until every such run has been tried MAX_TRIES
+     * times. The server records the tries (weather_forecast_misses); a run
+     * not found in MAX_TRIES tries counts as not in the archive and is not
+     * asked for again.
      */
     fetchForecasts: async function() {
         const el = document.getElementById('forecast-fetch-progress');
@@ -586,7 +599,15 @@ const AdminModule = {
         stopBtn.style.display = 'inline-block';
         const days = plan.days.slice();
         const total = days.length;
-        let done = 0, runs = 0, missing = 0, failures = 0, lastError = '';
+        const MAX_TRIES = plan.maxAttempts;
+        // Retry points: after each fifth of the days (then at the end)
+        const checkpoints = [1, 2, 3, 4].map(k => Math.ceil(total * k / 5));
+        let done = 0, runs = 0, recovered = 0, failures = 0, lastError = '';
+        const retry = new Set();                      // days with runs not found that get another try
+        const retrying = new Set();                   // days queued as a retry
+        const tries = {};                             // tries per day in this fetch (when the server does not record them)
+        const missingByDay = {};                      // runs not found per day, now
+        const missingNow = () => Object.values(missingByDay).reduce((a, b) => a + b, 0);
         // MET's archive is sometimes slow, and the web host may answer a long
         // series of requests with its own page (rate limit, resource limit,
         // bot check) instead of data: after a failure wait and fetch one day
@@ -595,6 +616,7 @@ const AdminModule = {
         const WAITS = [15, 30, 60, 120, 240];
         const MAX_FAILURES = 6;
         const MAX_PARALLEL = 3;
+        const END_PAUSE = 60;                         // s before each retry round at the end
         let parallel = MAX_PARALLEL;
         let streak = 0;                               // days fetched since the last failure
         let pauseUntil = 0;
@@ -602,15 +624,26 @@ const AdminModule = {
         const recent = [];                            // times of the last 30 days fetched (speed now)
         const t0 = Date.now();
         const sleep = ms => new Promise(r => setTimeout(r, ms));
-        const show = () => {
+        const show = (extra = '') => {
             const span = recent.length > 5 ? (recent[recent.length - 1] - recent[0]) / 1000 : 0;
             const rate = span > 0 ? (recent.length - 1) / span : done / Math.max(1, (Date.now() - t0) / 1000);
-            const left = rate > 0 ? Math.max(1, Math.round((total - done) / rate / 60)) : '?';
+            const left = done >= total ? 0 : rate > 0 ? Math.max(1, Math.round((total - done) / rate / 60)) : '?';
+            const missing = missingNow();
             el.style.color = notice ? '#b8860b' : '#666';
             el.textContent = `Fetching: ${done.toLocaleString()} / ${total.toLocaleString()} days, ${runs.toLocaleString()} runs`
-                + (missing ? `, ${missing} run(s) not in the archive` : '') + ` (about ${left} min left`
-                + (parallel < MAX_PARALLEL ? `, ${parallel} day${parallel > 1 ? 's' : ''} at a time` : '') + ')'
+                + (recovered ? `, ${recovered} recovered on retry` : '')
+                + (missing ? `, ${missing} not found so far` : '')
+                + (left ? ` (about ${left} min left` + (parallel < MAX_PARALLEL ? `, ${parallel} day${parallel > 1 ? 's' : ''} at a time` : '') + ')' : '')
+                + (extra ? `. ${extra}` : '')
                 + (notice ? `. ${notice}` : '');
+        };
+        // Queue the days to retry, first in line
+        const queueRetries = () => {
+            const list = [...retry];
+            retry.clear();
+            list.forEach(d => retrying.add(d));
+            days.unshift(...list);
+            return list.length;
         };
         const worker = async (n) => {
             while (days.length && !this._forecastStop && failures < MAX_FAILURES) {
@@ -626,10 +659,26 @@ const AdminModule = {
                     const data = await api.parseJson(res);   // names a host page's status and text
                     if (!res.ok || data.error) throw new Error(data.error || `HTTP ${res.status}`);
                     runs += data.runs;
-                    missing += (data.missing || []).length;
+                    const wasRetry = retrying.delete(date);
+                    if (wasRetry) recovered += data.runs;
+                    tries[date] = (tries[date] || 0) + 1;
+                    const missing = data.missing || [];
+                    missingByDay[date] = missing.length;
+                    if (missing.some(m => (m.attempts ?? tries[date]) < MAX_TRIES)) retry.add(date);
                     failures = 0;
                     notice = '';
                     if (++streak >= 10 && parallel < MAX_PARALLEL) { parallel++; streak = 0; }
+                    if (!wasRetry) {
+                        done++;
+                        recent.push(Date.now());
+                        if (recent.length > 30) recent.shift();
+                        if (checkpoints.length && done >= checkpoints[0]) {
+                            while (checkpoints.length && done >= checkpoints[0]) checkpoints.shift();
+                            const n = queueRetries();
+                            if (n) show(`Retrying ${n} day(s) with runs not found`);
+                            continue;
+                        }
+                    }
                 } catch (err) {
                     failures++;
                     streak = 0;
@@ -644,26 +693,39 @@ const AdminModule = {
                     }
                     continue;
                 }
-                done++;
-                recent.push(Date.now());
-                if (recent.length > 30) recent.shift();
                 show();
             }
         };
         show();
-        await Promise.all(Array.from({ length: MAX_PARALLEL }, (_, n) => worker(n)));
+        for (;;) {
+            await Promise.all(Array.from({ length: MAX_PARALLEL }, (_, n) => worker(n)));
+            if (this._forecastStop || failures >= MAX_FAILURES || !retry.size) break;
+            // At the end: retry the runs not found, after a pause, until each
+            // has had MAX_TRIES tries
+            for (let s = END_PAUSE; s > 0 && !this._forecastStop; s--) {
+                show(`${missingNow()} run(s) not found: trying ${retry.size} day(s) again in ${s} s`);
+                await sleep(1000);
+            }
+            if (this._forecastStop) break;
+            queueRetries();
+        }
         this._forecastFetching = false;
         btn.disabled = false;
         stopBtn.style.display = 'none';
+        const missing = missingNow();
+        const summary = `${done.toLocaleString()} days, ${runs.toLocaleString()} runs`
+            + (recovered ? ` (${recovered} recovered on retry)` : '');
         if (failures >= MAX_FAILURES) {
             el.style.color = '#dc3545';
             el.textContent = `Stopped after ${MAX_FAILURES} errors in a row. Last: ${lastError} `
-                + `(${done.toLocaleString()} days fetched; press Fetch to continue later).`;
+                + `(${summary} fetched; press Fetch to continue later).`;
+        } else if (this._forecastStop) {
+            el.style.color = '#666';
+            el.textContent = `Stopped: ${summary}.`;
         } else {
-            el.style.color = this._forecastStop ? '#666' : '#28a745';
-            el.textContent = (this._forecastStop ? 'Stopped' : 'Done')
-                + `: ${done.toLocaleString()} days, ${runs.toLocaleString()} runs`
-                + (missing ? ` (${missing} run(s) not in MET's archive)` : '') + '.';
+            el.style.color = '#28a745';
+            el.textContent = `Done: ${summary}.`
+                + (missing ? ` ${missing} run(s) not in MET's archive (${MAX_TRIES} tries each).` : '');
         }
         this.loadForecastStatus();
         if (plan.station === this.selectedStationId) this.loadForecastAccuracy();
