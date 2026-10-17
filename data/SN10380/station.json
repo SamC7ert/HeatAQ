@@ -1,0 +1,30 @@
+{
+    "station": {
+        "station_id": "SN10380",
+        "station_name": "RØROS LUFTHAVN",
+        "source": null,
+        "latitude": "62.578100",
+        "longitude": "11.348700",
+        "elevation_m": 625,
+        "wind_height_m": "10.0",
+        "temperature_height_m": null,
+        "active_from": null,
+        "active_to": null,
+        "notes": null,
+        "created_at": "2026-10-14 08:26:44",
+        "terrain_roughness": "0.1000"
+    },
+    "pool_sites": [
+        {
+            "id": 5,
+            "name": "Røros Site",
+            "latitude": "62.576700",
+            "longitude": "11.366300",
+            "elevation_m": null,
+            "weather_station_id": "SN10380",
+            "default_weather_station": null,
+            "solar_latitude": "62.576700",
+            "solar_longitude": "11.366300"
+        }
+    ]
+}

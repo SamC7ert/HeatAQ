@@ -1,0 +1,29 @@
+{
+    "station_id": "SN10380",
+    "exported_at": "2026-10-17 12:35:28 UTC",
+    "simulator_version": "3.19.0",
+    "app_commit": "d4debbb9a089c052a280dd9e97e64319b4a28f41",
+    "files": {
+        "station.json": {
+            "rows": 2,
+            "bytes": 842
+        },
+        "weather.csv.gz": {
+            "rows": 103304,
+            "bytes": 963600
+        },
+        "forecasts.csv.gz": {
+            "rows": 369558,
+            "bytes": 4374760
+        },
+        "forecast_misses.csv": {
+            "rows": 70,
+            "bytes": 4601
+        },
+        "solar_site_5.csv.gz": {
+            "rows": 87672,
+            "bytes": 451007
+        }
+    },
+    "notes": "Times are UTC as stored (weather_data.timestamp, weather_forecasts.*_at). CSV files: header row, comma separated, NULL as empty."
+}
