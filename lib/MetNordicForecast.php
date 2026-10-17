@@ -22,6 +22,7 @@ class MetNordicForecast {
     const FIRST_DAY = '2019-11-28';   // first day with all variables
     const LAND_THRESHOLD = 0.5;
     const FILL_LIMIT = 1e20;
+    const LAPSE = 0.0065;             // °C per m: air temperature from grid height to station height
     const MAX_ATTEMPTS = 5;           // tries (first + 4 retries) before a run counts as not in the archive (weather_forecast_misses)
     const TIMEOUT = 60;               // s per request (one point's run takes 4-10 s, more when MET is busy)
     const SHORTWAVE = 'integral_of_surface_downwelling_shortwave_flux_in_air_wrt_time';
@@ -212,7 +213,12 @@ class MetNordicForecast {
     // Grid and station cell
     // ------------------------------------------------------------------
 
-    /** The 4 grid points around the station and their weights (cached). */
+    /**
+     * The 4 grid points around the station and their weights (cached):
+     * i, j (grid index of the first corner), weights, method,
+     * grid_altitude (weighted), and corners: lat, lon, alt (m), land (0-1),
+     * weight, km (distance from the station).
+     */
     public static function stationCell(array $station) {
         foreach (['station_id', 'latitude', 'longitude'] as $f) {
             if (!isset($station[$f]) || $station[$f] === '' || $station[$f] === null) {
@@ -223,7 +229,7 @@ class MetNordicForecast {
         $lon = (float) $station['longitude'];
         $key = $station['station_id'] . '|' . round($lat, 5) . '|' . round($lon, 5);
         self::loadCache();
-        if (isset(self::$cache['cells'][$key])) return self::$cache['cells'][$key];
+        if (isset(self::$cache['cells'][$key]['corners'])) return self::$cache['cells'][$key];
 
         $g = self::grid();
         [$x, $y] = self::project($g, $lat, $lon);
@@ -272,8 +278,15 @@ class MetNordicForecast {
         $weights = array_map(fn($w) => $w / $sum, $weights);
         $alt = 0.0;
         foreach ($corners as $k => $c) $alt += $c['alt'] * $weights[$k];
+        $cornerInfo = [];
+        foreach ($corners as $k => $c) {
+            $cornerInfo[] = ['lat' => round($c['lat'], 5), 'lon' => round($c['lon'], 5),
+                             'alt' => round($c['alt'], 1), 'land' => round($c['land'], 2),
+                             'weight' => round($weights[$k], 4),
+                             'km' => round(self::kmBetween($c['lat'], $c['lon'], $lat, $lon), 3)];
+        }
         $cell = ['i' => $i, 'j' => $j, 'weights' => $weights, 'method' => $method,
-                 'grid_altitude' => round($alt, 1)];
+                 'grid_altitude' => round($alt, 1), 'corners' => $cornerInfo];
         self::$cache['cells'][$key] = $cell;
         self::saveCache();
         return $cell;

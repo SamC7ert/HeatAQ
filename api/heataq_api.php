@@ -546,6 +546,10 @@ class HeatAQAPI {
                     $this->getWeatherDayNight();
                     break;
 
+                case 'get_forecast_cell':
+                    $this->getForecastCell();
+                    break;
+
                 case 'fetch_forecasts_day':
                     if (!$this->canDelete()) {
                         $this->sendError('Permission denied - admin only', 403);
@@ -2169,6 +2173,49 @@ class HeatAQAPI {
     }
 
     /**
+     * The 4 MET Nordic grid points a station's forecasts are interpolated
+     * from (Admin -> Weather -> Weather Forecasts, grid points): position,
+     * height, land or sea, weight; and the height correction of the air
+     * temperature (grid height -> station height).
+     */
+    private function getForecastCell() {
+        $stationId = $_GET['station_id'] ?? '';
+        $stmt = $this->db->prepare("
+            SELECT station_id, station_name AS name, latitude, longitude, elevation_m AS elevation
+            FROM weather_stations WHERE station_id = ?
+        ");
+        $stmt->execute([$stationId]);
+        $station = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$station) {
+            $this->sendError('Station not found');
+        }
+        if ($station['latitude'] === null || $station['longitude'] === null) {
+            $this->sendError('The station has no position (latitude, longitude)');
+        }
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_write_close();                    // the first call for a station asks MET
+        }
+        require_once __DIR__ . '/../lib/MetNordicForecast.php';
+        try {
+            $cell = MetNordicForecast::stationCell($station);
+        } catch (Throwable $e) {
+            $this->sendError('Could not read the grid points: ' . $e->getMessage(), 502);
+        }
+        $elevation = $station['elevation'] === null ? null : (float) $station['elevation'];
+        $this->sendResponse([
+            'station' => ['station_id' => $station['station_id'], 'name' => $station['name'],
+                          'latitude' => (float) $station['latitude'], 'longitude' => (float) $station['longitude'],
+                          'elevation' => $elevation],
+            'method' => $cell['method'],
+            'grid_altitude' => $cell['grid_altitude'],
+            'corners' => $cell['corners'],
+            'lapse_per_100m' => MetNordicForecast::LAPSE * 100,
+            'air_correction' => round(MetNordicForecast::LAPSE * ($cell['grid_altitude'] - ($elevation ?? 0)), 2),
+            'land_threshold' => MetNordicForecast::LAND_THRESHOLD,
+        ]);
+    }
+
+    /**
      * Fetch one UTC day of MET Nordic forecast runs for a station from MET
      * Norway's archive and store them (lib/MetNordicForecast.php). The
      * browser calls this day by day (Admin -> Weather -> Weather Forecasts).
@@ -2228,7 +2275,7 @@ class HeatAQAPI {
         $res = ['runs' => 0, 'rows' => 0, 'missing' => [], 'skipped' => []];
         try {
             if ($want) {
-                $res = MetNordicForecast::fetchDay($this->db, $station, $date, 36, 0.0065,
+                $res = MetNordicForecast::fetchDay($this->db, $station, $date, 36, MetNordicForecast::LAPSE,
                                                    MetNordicForecast::REQUIRED, $want);
             }
             $cell = MetNordicForecast::stationCell($station);
